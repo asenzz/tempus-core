@@ -1,0 +1,37 @@
+app-config=../config/paramtune.app.config
+
+user-name=svrwave
+autotune-task-id=0
+
+dataset-id = 0
+dataset-name = Dataset1
+svr-max-lookback-time-gap = 1,00:02:00
+result-dataset-id = 0
+
+svr-parameters = {
+"transformation_levels":"8", "transformation_name":"oemd",
+"svr_c_0":"10..500000", "svr_epsilon_0":"0.000001","svr_kernel_param_0":"0.1..10", "svr_kernel_param2_0":"0.01..1", "svr_decremental_distance_0":"500", "svr_adjacent_levels_ratio_0":"0.0001", "svr_kernel_type_0":"6", "lag_count_0":"20",
+"svr_c_1":"10..500000",  "svr_epsilon_1":"0.000001", "svr_kernel_param_1":"0.1..10", "svr_kernel_param2_1":"0.01..1", "svr_decremental_distance_1":"500", "svr_adjacent_levels_ratio_1":"0.4", "svr_kernel_type_1":"6", "lag_count_1": "20",
+"svr_c_2":"10..500000",  "svr_epsilon_2":"0.000001", "svr_kernel_param_2":"0.1..10", "svr_kernel_param2_2":"0.01..1", "svr_decremental_distance_2":"500", "svr_adjacent_levels_ratio_2":"0.4", "svr_kernel_type_2":"6", "lag_count_2": "20",
+"svr_c_3":"10..500000",  "svr_epsilon_3":"0.000001", "svr_kernel_param_3":"0.1..10", "svr_kernel_param2_3":"0.01..1", "svr_decremental_distance_3":"500", "svr_adjacent_levels_ratio_3":"0.4", "svr_kernel_type_3":"6", "lag_count_3": "20",
+"svr_c_4":"10..500000",  "svr_epsilon_4":"0.000001", "svr_kernel_param_4":"0.1..10", "svr_kernel_param2_4":"0.01..1", "svr_decremental_distance_4":"500", "svr_adjacent_levels_ratio_4":"0.4", "svr_kernel_type_4":"6", "lag_count_4": "20",
+"svr_c_5":"10..500000", "svr_epsilon_5":"0.000001", "svr_kernel_param_5":"0.1..10", "svr_kernel_param2_5":"0.01..1", "svr_decremental_distance_5":"500", "svr_adjacent_levels_ratio_5":"0.4", "svr_kernel_type_5":"6", "lag_count_5": "20",
+"svr_c_6":"10..500000", "svr_epsilon_6":"0.000001", "svr_kernel_param_6":"0.1..10", "svr_kernel_param2_6":"0.01..1", "svr_decremental_distance_6":"500", "svr_adjacent_levels_ratio_6":"0.4", "svr_kernel_type_6":"6", "lag_count_6": "20",
+"svr_c_7":"10..500000", "svr_epsilon_7":"0.000001", "svr_kernel_param_7":"0.1..10", "svr_kernel_param2_7":"0.01..1", "svr_decremental_distance_7":"500", "svr_adjacent_levels_ratio_7":"0.4", "svr_kernel_type_7":"6", "lag_count_7": "20",
+"svr_c_8":"10..500000", "svr_epsilon_8":"0.000001",  "svr_kernel_param_8":"0.1..10", "svr_kernel_param2_8":"0.01..1", "svr_decremental_distance_8":"500", "svr_adjacent_levels_ratio_8":"0.4", "svr_kernel_type_8":"6", "lag_count_8": "20"
+}
+
+table-name=q_svrwave_eurusd_60
+
+start-training-time=2017.04.19,02:00:00
+end-training-time=2017.04.25,21:00
+start-validation-time=2017.04.25,21:00
+end-validation-time=2017.04.25,21:01
+validation-slide-count=16
+validation-slide-direction=forward
+validation-slide-period=0,0:15:00
+
+pso-particle-count=32
+pso-iteration-count=64
+
+

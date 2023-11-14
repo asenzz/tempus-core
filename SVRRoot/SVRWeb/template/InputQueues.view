@@ -1,0 +1,20 @@
+<% c++ #include "view/InputQueueView.hpp" %>
+<% skin SVRWebSkin %>
+<% view InputQueues uses content::Main extends Main %>
+
+<% template page_head() %>
+<script src="/js/InputQueues.js" type="text/javascript" language="JavaScript"></script>
+<% end template %>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+        <table id="inputQueues"></table>
+        <div id="jqGridPager"></div>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>

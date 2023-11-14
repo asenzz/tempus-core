@@ -1,0 +1,17 @@
+#pragma once
+
+#include "UserService.hpp"
+#include "InputQueueService.hpp"
+#include "DatasetService.hpp"
+#include "DeconQueueService.hpp"
+#include "EnsembleService.hpp"
+#include "ModelService.hpp"
+#include "LocalAuthenticationProvider.hpp"
+#include "RequestService.hpp"
+#include "PredictionTaskService.hpp"
+#include "ScalingFactorsTaskService.hpp"
+#include "AutotuneTaskService.hpp"
+#include "DecrementTaskService.hpp"
+#include "IQScalingFactorService.hpp"
+#include "DQScalingFactorService.hpp"
+#include "SVRParametersService.hpp"

@@ -1,0 +1,10 @@
+app-config=../config/paramtune.app.config
+
+user-name=svrwave
+scaling-factors-task-id=0
+
+dataset-id = 90
+
+table-name=q_svrwave_eurusd_300
+
+force-recalculate-scaling-factors=true

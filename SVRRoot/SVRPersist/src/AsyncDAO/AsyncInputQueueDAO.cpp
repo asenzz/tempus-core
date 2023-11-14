@@ -1,0 +1,234 @@
+#include "AsyncInputQueueDAO.hpp"
+
+#include "../PgDAO/PgInputQueueDAO.hpp"
+#include <model/DBTable.hpp>
+#include <model/InputQueue.hpp>
+#include "AsyncImplBase.hpp"
+
+using svr::datamodel::InputQueue;
+
+namespace svr {
+namespace dao {
+
+namespace
+{
+bool cmp_primary_key(InputQueue_ptr const & lhs, InputQueue_ptr const & rhs)
+{
+    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+            && lhs->get_table_name() == rhs->get_table_name();
+}
+bool cmp_whole_value(InputQueue_ptr const & lhs, InputQueue_ptr const & rhs)
+{
+    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+            && lhs->get_table_name() == rhs->get_table_name();
+}
+}
+
+struct AsyncInputQueueDAO::AsyncImpl
+    : AsyncImplBase<InputQueue_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgInputQueueDAO>
+{
+    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
+    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 100)
+    {}
+
+};
+
+AsyncInputQueueDAO::AsyncInputQueueDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
+: InputQueueDAO(sqlProperties, dataSource), pImpl(*new AsyncImpl(sqlProperties, dataSource))
+{}
+
+AsyncInputQueueDAO::~AsyncInputQueueDAO()
+{
+    delete & pImpl;
+}
+
+InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name,
+                                                      const bpt::time_duration &resolution)
+{
+    return get_queue_metadata(
+            svr::datamodel::InputQueue::make_queue_table_name(user_name, logical_name, resolution)
+    );
+}
+
+InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::string &tableName)
+{
+    InputQueue_ptr queue( new InputQueue() );
+    queue->set_table_name(tableName);
+
+    if(pImpl.cached(queue))
+        return InputQueue_ptr( new InputQueue(queue->get_copy_metadata() ) );
+
+    std::scoped_lock lg(pImpl.pgMutex);
+    queue = pImpl.pgDao.get_queue_metadata(tableName);
+    pImpl.cache_no_store(queue);
+    return queue;
+}
+
+std::deque<DataRow_ptr> AsyncInputQueueDAO::get_queue_data_by_table_name(
+        const std::string &table_name,
+        const bpt::ptime &time_from,
+        const bpt::ptime &time_to,
+        size_t limit)
+{
+    pImpl.flush();
+
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_queue_data_by_table_name(table_name, time_from, time_to);
+}
+
+std::deque<DataRow_ptr> AsyncInputQueueDAO::get_latest_queue_data_by_table_name(
+        const std::string &table_name,
+        const size_t limit,
+        const bpt::ptime &last_time)
+{
+    pImpl.flush();
+
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_latest_queue_data_by_table_name(table_name, limit, last_time);
+}
+
+DataRow_ptr AsyncInputQueueDAO::get_nth_last_row(const std::string &table_name, const size_t position, const bpt::ptime target_time)
+{
+    pImpl.flush();
+
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_nth_last_row(table_name, position, target_time);
+}
+
+
+size_t AsyncInputQueueDAO::get_count_from_start(
+        const std::string &table_name,
+        const bpt::ptime target_time)
+{
+    pImpl.flush();
+
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_count_from_start(table_name, target_time);
+}
+
+size_t AsyncInputQueueDAO::save(const InputQueue_ptr& inputQueue, const boost::posix_time::ptime &start_time)
+{
+    long ret = 0;
+
+    bool exist = exists(inputQueue);
+
+    if(inputQueue->get_data().size() > 0)
+    {
+            ret = save_data(inputQueue, start_time);
+    }
+    else
+    {
+        if (exist)
+            ret = update_metadata(inputQueue);
+        else
+            ret = save_metadata(inputQueue);
+    }
+
+    return ret;
+}
+
+size_t AsyncInputQueueDAO::save_metadata(const InputQueue_ptr& queue)
+{
+    InputQueue_ptr md( new InputQueue(queue->get_copy_metadata() ) );
+    pImpl.cache(md);
+    return 1;
+}
+
+size_t AsyncInputQueueDAO::save_data(const InputQueue_ptr& queue, const boost::posix_time::ptime &last_time)
+{
+    pImpl.cache(queue);
+    return queue->get_data().size();
+}
+
+size_t AsyncInputQueueDAO::update_metadata(const InputQueue_ptr& queue)
+{
+    return save_metadata(queue);
+}
+
+bool AsyncInputQueueDAO::exists(const std::string &table_name)
+{
+    InputQueue_ptr queue( new InputQueue() );
+    queue->set_table_name(table_name);
+
+    if(pImpl.cached(queue))
+        return true;
+
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.exists(table_name);
+}
+
+bool AsyncInputQueueDAO::exists(const std::string &user_name, const std::string &logical_name,
+                                const bpt::time_duration &resolution)
+{
+    return exists(svr::datamodel::InputQueue::make_queue_table_name(user_name, logical_name, resolution));
+}
+
+bool AsyncInputQueueDAO::exists(const InputQueue_ptr& p_input_queue)
+{
+    p_input_queue->set_table_name(p_input_queue->get_table_name());
+    return exists(p_input_queue->get_table_name());
+}
+
+size_t AsyncInputQueueDAO::remove(const InputQueue_ptr& queue)
+{
+    return pImpl.remove(queue);
+}
+
+size_t AsyncInputQueueDAO::clear(const InputQueue_ptr& queue)
+{
+    return pImpl.pgDao.clear(queue);
+}
+
+DataRow_ptr AsyncInputQueueDAO::find_oldest_record(const InputQueue_ptr& queue)
+{
+    pImpl.flush();
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.find_oldest_record(queue);
+}
+
+DataRow_ptr AsyncInputQueueDAO::find_newest_record(const InputQueue_ptr& queue)
+{
+    pImpl.flush();
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.find_newest_record(queue);
+}
+
+std::vector<std::shared_ptr<std::string>> AsyncInputQueueDAO::get_db_table_column_names(const InputQueue_ptr& queue)
+{
+    pImpl.flush();
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_db_table_column_names(queue);
+}
+
+std::vector<InputQueue_ptr> AsyncInputQueueDAO::get_all_user_queues(const std::string &user_name)
+{
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_all_user_queues(user_name);
+}
+
+
+std::vector<InputQueue_ptr> AsyncInputQueueDAO::get_all_queues_with_sign(bool uses_fix_connection)
+{
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_all_queues_with_sign(uses_fix_connection);
+}
+
+
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+
+OptionalTimeRange AsyncInputQueueDAO::get_missing_hours(InputQueue_ptr const &queue, TimeRange const & from_range)
+{
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_missing_hours(queue, from_range);
+}
+
+void AsyncInputQueueDAO::purge_missing_hours(InputQueue_ptr const & queue)
+{
+    std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.purge_missing_hours(queue);
+}
+
+}
+}

@@ -1,0 +1,11 @@
+/******************************************************************************/
+/*                                                                            */
+/*                              COMMANDS                                      */
+/*                                                                            */
+/******************************************************************************/
+
+#include "commands/help.cmm"
+#include "commands/mirror.cmm"
+#include "commands/quit.cmm"
+#include "commands/cycle.cmm"
+#include "commands/bar.cmm"

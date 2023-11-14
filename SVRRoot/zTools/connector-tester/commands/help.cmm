@@ -1,0 +1,40 @@
+struct Help : Command
+{
+    Help()
+    : Command("help")
+    {}
+
+    char const * getBriefDescription()
+    {
+        return "Tempus connector tester utility. Use ""help [command, [command]]"" to display help on the command(s).";
+    }
+
+    char const * getDetailedDescription()
+    {
+        return getBriefDescription();
+    }
+
+    bool execute(CommandText const & command, std::string & message)
+    {
+        if(command.parameters.empty())
+        {
+            message = getBriefDescription(); message += "\n";
+            for(auto const & command : exposure->commands)
+                if(command.second != this)
+                    message += command.second->getBriefDescription(), message += "\n";
+
+            return true;
+        }
+
+        for(auto const & param : command.parameters)
+            message = CommandRegistry::inst().getCommand(param).getDetailedDescription();
+        message += "\n";
+
+        return true;
+    }
+};
+
+namespace {
+    Help * h __attribute__((unused)) = new Help();
+}
+

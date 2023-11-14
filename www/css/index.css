@@ -1,0 +1,60 @@
+table#input_queue {
+    height: 300px;
+    width: 95%;
+}
+table#input_queue > tbody > tr {
+    height: 100%;
+    width: 100%;
+}
+textarea {
+    height: 100%;
+    width: 95%;
+}
+
+#popup-wrapper
+{
+	width:500px;
+	height:400px;
+	background-color:#ccc;
+	padding:10px;
+
+}
+body
+{
+    padding:10px;
+}
+
+.popup-form
+{
+	margin:auto;
+	width:80%;				
+}
+
+div.block{
+  overflow:hidden;
+}
+div.block label{
+  width:160px;
+  display:block;
+  float:left;
+  text-align:left;
+}
+div.block .input{
+  margin-left:4px;
+  float:left;
+}
+
+h2{
+	text-align: center;
+}
+
+p a{
+	float: left;
+    text-align: center;
+    width: 160px;
+}
+
+label span{
+	color:#909090; 
+	font-size: 8px;
+}

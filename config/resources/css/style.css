@@ -1,0 +1,179 @@
+/***************************************************************************
+*                                                                          *
+* contented3 - An open source xhtml/css website template by Contented      *
+* Designs.  You're free to modify it and use it for any purpose without    *
+* cost or obligation. We'd prefer that you leave the link to our website   *
+* in the footer but it's not required.                                     *
+*                                                                          *
+* If you have comments or questions, please contact us at                  *
+* http://www.ContentedDesigns.com. Thanks!                                 *
+*                                                                          *
+* Version: 1.01 (May 17, 2006)                                             *
+***************************************************************************/
+
+* {
+    padding: 0;
+    margin: 0;
+}
+
+body {
+    color: #333333;
+    background-color: #FFFFFF;
+    font-family: Arial, sans-serif;
+    font-size: 83%;
+    margin: 20px auto;
+    width: 900px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+h1, h2, h3, h4, h5, h6, p, pre, blockquote, label, ul, ol, dl,
+fieldset, address {
+    margin: 0.75em 0;
+}
+
+h1 {
+    font-size: 167%;
+}
+
+h2 {
+    font-size: 139%;
+}
+
+h3 {
+    font-size: 120%;
+}
+
+h4 {
+    font-size: 100%;
+}
+
+li, dd {
+    margin-left: 2em;
+}
+
+a {
+    color: #3366CC;
+    background-color: #FFFFFF;
+    font-weight: normal;
+    text-decoration: none;
+    outline: none;
+}
+
+a:hover {
+    color: #0033CC;
+    background-color: #FFFFFF;
+    font-weight: normal;
+    text-decoration: underline;
+}
+
+.image_paragraph_right {
+    float: right;
+    margin-top: 0px;
+    margin-left: 20px;
+    margin-bottom: 5px;
+}
+
+.image_paragraph_left {
+    float: left;
+    margin-top: 0px;
+    margin-right: 20px;
+    margin-bottom: 5px;
+}
+
+.image_section_right {
+    float: right;
+    margin-top: 20px;
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+
+.image_section_left {
+    float: left;
+    margin-top: 20px;
+    margin-right: 20px;
+    margin-bottom: 10px;
+}
+
+#title {
+    color: #3366CC;
+    background-color: #FFFFFF;
+    font-size: 300%;
+    font-weight: normal;
+    margin: 0px 0px 10px 0px;
+    width: 100%;
+    vertical-align: top;
+    position: relative;
+}
+
+#slogan {
+    color: #000000;
+    background-color: #FFFFFF;
+    font-size: small;
+    font-weight: bold;
+    padding: 18px 0px 0px 50px;
+    float: left;
+    margin: 0px 0px 10px 0px;
+}
+
+#menu {
+    position: relative;
+}
+
+#maincontent {
+    font-size: 100%;
+    padding: 0px 5px 5px 0px;
+    margin: 10px 50px 10px 0px;
+    width: 650px;
+    float: left;
+}
+
+#footer {
+    color: #000000;
+    background-color: #FFFFFF;
+    border-top: 1px solid #0033CC;
+    font-size: 80%;
+    line-height: 1.5em;
+    width: 650px;
+    clear: both;
+}
+
+#footer a {
+    color: #3366CC;
+    background-color: #FFFFFF;
+    text-decoration: none;
+}
+
+#footer a:hover {
+    color: #0033CC;
+    background-color: #FFFFFF;
+    font-weight: normal;
+    text-decoration: underline;
+}
+
+#copyright {
+    color: #000000;
+    background-color: #FFFFFF;
+    padding: 5px 20px 5px 0px;
+    float: left;
+}
+
+#footercontact {
+    color: #0033CC;
+    background-color: #FFFFFF;
+    padding: 5px 0px 5px 0px;
+    float: right;
+}
+
+.cppcms_form_input {
+    float: right;
+}
+
+.cppcms_form_help {
+    font-size: 70%;
+}
+
+.cppcms_form_error{
+    font-size: 70%;
+    color: red;
+}

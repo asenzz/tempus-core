@@ -1,0 +1,27 @@
+struct Quit : Command
+{
+    Quit()
+    : Command("q")
+    {}
+
+    char const * getBriefDescription()
+    {
+        return "q\t\t\t\t\t\t\t- quits the utility";
+    }
+
+    char const * getDetailedDescription()
+    {
+        return getBriefDescription();
+    }
+
+    bool execute(CommandText const & command, std::string & message)
+    {
+        exit(0);
+    }
+};
+
+namespace {
+    Quit * q __attribute__((unused)) = new Quit();
+}
+
+

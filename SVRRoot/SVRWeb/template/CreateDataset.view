@@ -1,0 +1,18 @@
+<% c++ #include "view/DatasetView.hpp" %>
+<% skin SVRWebSkin %>
+<% view CreateDataset uses content::DatasetWithForm extends Main%>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+        <form action="" method="post">
+            <% form as_p form %>
+        </form>
+    <% end %>
+
+<% end template %>
+
+<% end view %>
+<% end skin %>

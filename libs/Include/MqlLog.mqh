@@ -1,0 +1,71 @@
+//+------------------------------------------------------------------+
+//|                                                       MqlLog.mqh |
+//|                                                     Papakaya LTD |
+//|                                         https://www.papakaya.com |
+//+------------------------------------------------------------------+
+#property copyright "Papakaya LTD"
+#property link      "https://www.papakaya.com"
+#property strict
+
+
+//#define LOG_TO_FILE
+
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void SetPerfLogging(bool value)
+{
+    LogPerfEnabled = value;
+}
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void SetDebugLogging(bool value)
+{
+    LogDebugEnabled = value;
+}
+
+// Logging options ordered in priority
+bool LogErrorEnabled = true;
+bool LogInfoEnabled = true;
+bool LogDebugEnabled = true;
+bool LogVerboseEnabled = false;
+
+
+bool LogPerfEnabled = true;
+bool LogLineEnabled = true;
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void LOG_MESSAGE(const string type, const string method, const string file, const string line, const string message)
+{
+    const string strMsg = TimeToString(TimeLocal(), TIME_SECONDS|TIME_DATE) + ": " + type + method + (LogLineEnabled ? "(" + file + "." + string(line) + ")" : "") + (StringLen(method) > 0 ? ":" : "") + " " + message;
+#ifdef LOG_TO_FILE
+    static int file_handle = FileOpen("connector.log", FILE_SHARE_WRITE | FILE_CSV);
+    if(file_handle != INVALID_HANDLE) {
+        FileSeek(file_handle, 0, SEEK_END);
+        FileWrite(file_handle, strMsg);
+        //FileFlush(file_handle);
+        //FileClose(file_handle);
+    }
+#endif
+    Print(strMsg);
+}
+
+#define LOG_ERROR(method, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message )
+#define LOG_SYS_ERR(method, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message + " Sys: " + ErrorDescription(GetLastError()))
+
+#define LOG_INFO(method, message) if (LogInfoEnabled || LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("INFO: ", __FUNCTION__, __FILE__, string(__LINE__), message )
+
+#define LOG_DEBUG(method, message) if (LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("DEBUG: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+
+#define LOG_VERBOSE(method, message) if (LogVerboseEnabled) LOG_MESSAGE("VERBS: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+
+#define LOG_PERF(method, message) if (LogPerfEnabled) LOG_MESSAGE("PERF: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+
+//+------------------------------------------------------------------+

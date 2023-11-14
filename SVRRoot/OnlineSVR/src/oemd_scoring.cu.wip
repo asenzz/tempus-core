@@ -1,0 +1,1041 @@
+//
+// Created by zarko on 10/3/22.
+//
+#include <cstdlib>
+#include <iostream>
+#include <cmath>
+#include <algorithm>
+#include <vector>
+#include <queue>
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+#include <complex>
+#include <semaphore.h>
+#include <iomanip>
+#include <omp.h>
+#include <filesystem>
+#include <thrust/execution_policy.h>
+
+#include "optimizer.hpp"
+#include "oemd_coefficients_search.hpp"
+// #include "../../SVRCommon/include/util/inv_form.h"
+#include "common/gpu_handler.hpp"
+#include "../../SVRCommon/include/common/cuda_util.cuh"
+#include "util/TimeUtils.hpp"
+#include "firefly.hpp"
+//#pragma diag_suppress 550
+#include "common/parallelism.hpp"
+#include "common/Logging.hpp"
+
+namespace svr::oemd_search {
+
+constexpr double C_lambda1 = .30;
+constexpr double C_lambda2 = .33;
+constexpr double C_smooth_factor = 1000.;
+constexpr double C_b_factor = 1000;
+constexpr size_t C_mask_expander = 2;
+constexpr size_t C_parallelism = 48;
+constexpr size_t C_NUM_TRIES = 100000;
+constexpr size_t C_filter_count = 100;
+
+std::atomic<double> best_quality = 1;
+std::atomic<double> best_result = std::numeric_limits<double>::max();
+static std::mutex best_mtx;
+
+
+static sem_t sem_fft;
+static std::mutex current_mask_mutex;
+
+// TODO Do a GPU handler and ctx from a queue
+bool is_file_exist(const std::string &filename)
+{
+    return std::ifstream(filename).good();
+}
+
+
+double drander(t_drand48_data_ptr buffer)
+{
+    double result;
+    drand48_r(buffer, &result);
+    return result;
+}
+
+int
+save_mask(
+        const std::vector<double> &mask,
+        const std::string &log_prefix,
+        const size_t level,
+        const size_t levels)
+{
+    auto rev_mask = mask;
+    std::reverse(rev_mask.begin(), rev_mask.end());
+    size_t ctr = 0;
+    while (is_file_exist(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels))) { ++ctr; }
+    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels));
+    if (myfile.is_open()) {
+        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels));
+        myfile << std::setprecision(std::numeric_limits<double>::max_digits10);
+        for (auto it = rev_mask.cbegin(); it != rev_mask.cend(); ++it)
+            if (it != std::prev(rev_mask.cend()))
+                myfile << *it << ",";
+            else
+                myfile << *it;
+        myfile.close();
+    } else
+        LOG4_ERROR("Aborting saving! Unable to open file " << std::filesystem::current_path() << "/" << MASK_FILE_NAME(ctr, level, levels) << " for writing.");
+    return 0;
+}
+
+#if 0
+double get_std(double *x, const size_t input_size)
+{
+    double sum = 0.;
+    for (size_t i = 0; i < input_size - 1; ++i) {
+        sum += pow(x[i] - x[i + 1], 2);
+    }
+    return sqrt(sum / (double) input_size);
+}
+#endif
+
+void fft_acquire()
+{
+    sem_wait(&sem_fft);
+}
+
+
+void fft_release()
+{
+    sem_post(&sem_fft);
+}
+
+
+void
+fill_auto_matrix(
+        const size_t M,
+        const size_t siftings,
+        const size_t N,
+        double *__restrict__ x,
+        thrust::device_vector<double> &d_global_sift_matrix,
+        const size_t gpu_id)
+{
+    cudaSetDevice(gpu_id);
+    std::vector<double> diff(N - 1);
+    __tbb_pfor_i(0, N - 1, diff[i] = x[i + 1] - x[i])
+
+    const size_t Msift = M * siftings;
+    std::vector<double> global_sift_matrix(Msift);
+    __tbb_pfor_i(0, Msift,
+        double sum = 0;
+        for (size_t j = N / 2; j < N - 1 - i; ++j)
+            sum += diff[j] * diff[j + i];
+        global_sift_matrix[i] = sum / double(N - 1. - i - N / 2.);
+    )
+    d_global_sift_matrix.resize(Msift);
+    cudaMemcpy(thrust::raw_pointer_cast(d_global_sift_matrix.data()), global_sift_matrix.data(), sizeof(double) * Msift, cudaMemcpyHostToDevice);
+}
+
+
+void
+expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask)
+{
+    cu_errchk(cudaMemset(dev_expanded_mask + mask_size, 0, sizeof(double) * std::max<size_t>(0, input_size - mask_size)));
+    cu_errchk(cudaMemcpy(dev_expanded_mask, dev_mask, sizeof(double) * mask_size, cudaMemcpyDeviceToDevice));
+}
+
+__global__ void
+gpu_multiply_complex(
+        const size_t input_size,
+        const cufftDoubleComplex *__restrict__ multiplier,
+        cufftDoubleComplex *__restrict__ output)
+{
+    const auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto total_block_size = blockDim.x * gridDim.x;
+
+    cufftDoubleComplex new_output;
+    for (auto j = thread_idx; j < input_size / 2 + 1; j += total_block_size) {//because it is D2Z transform
+        new_output.x = output[j].x * multiplier[j].x - output[j].y * multiplier[j].y;
+        new_output.y = output[j].x * multiplier[j].y + output[j].y * multiplier[j].x;
+        output[j].x = new_output.x / double(input_size); // because of inverse FFT
+        output[j].y = new_output.y / double(input_size);
+    }
+}
+
+__global__ void
+gpu_multiply_smooth(
+        const size_t input_size,
+        const double coeff,
+        cufftDoubleComplex *__restrict__ output)
+{
+    const auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto total_block_size = blockDim.x * gridDim.x;
+    for (auto j = thread_idx; j < input_size / 2 + 1; j += total_block_size) { // Because it is D2Z transform
+        const double mult = std::exp(-coeff * double(j) / double(input_size));
+        output[j].x *= mult;
+        output[j].y *= mult;
+    }
+}
+
+
+__global__ void
+vec_subtract_inplace(
+        double *__restrict__ x,
+        const double *__restrict__ y,
+        const size_t x_size)
+{
+    for (auto j = blockIdx.x * blockDim.x + threadIdx.x; j < x_size; j += blockDim.x * gridDim.x) x[j] -= y[j];
+}
+
+
+__global__ void
+vec_power(
+        const cufftDoubleComplex *__restrict__ x,
+        cufftDoubleComplex *__restrict__ y,
+        const size_t x_size,
+        const size_t siftings)
+{
+    const auto ix = blockIdx.x * blockDim.x + threadIdx.x;
+    double px, py;
+    for (auto j = ix; j < x_size / 2 + 1; j += blockDim.x * gridDim.x) {
+        px = 1. - x[j].x;
+        py = -x[j].y;
+        for (size_t i = 1; i < siftings; ++i) {
+            px = px * (1. - x[j].x) - py * (-x[j].y);
+            py = px * (-x[j].y) + py * (1. - x[j].x);
+        }
+        y[j].x = px;
+        y[j].y = py;
+    }
+}
+
+
+__global__ void
+vec_sift(
+        const size_t x_size,
+        const size_t siftings,
+        const cufftDoubleComplex *__restrict__ x,
+        cufftDoubleComplex *__restrict__ imf,
+        cufftDoubleComplex *__restrict__ rem)
+{
+    double px, py;
+    for (size_t j = blockIdx.x * blockDim.x + threadIdx.x; j < x_size / 2 + 1; j += blockDim.x * gridDim.x) {
+        px = 1. - x[j].x;
+        py = -x[j].y;
+        for (size_t i = 1; i < siftings; ++i) {
+            px = px * (1. - x[j].x) - py * (-x[j].y);
+            py = px * (-x[j].y) + py * (1. - x[j].x);
+        }
+        imf[j].x = px;
+        imf[j].y = py;
+        rem[j].x = 1. - px;
+        rem[j].y = -py;
+    }
+}
+
+__global__ void
+sum_expanded(
+        double *__restrict__ d_sum_imf,
+        double *__restrict__ d_sum_rem,
+        double *__restrict__ d_sum_corr,
+        const double *__restrict__ d_imf_mask,
+        const double *__restrict__ d_rem_mask,
+        const size_t expand_size,
+        const double *__restrict__ d_global_sift_matrix)
+{
+    const size_t thr_ix = threadIdx.x;
+    const size_t g_thr_ix = thr_ix + blockIdx.x * CUDA_BLOCK_SIZE;
+    const size_t grid_size = CUDA_BLOCK_SIZE * gridDim.x;
+    const auto d_expand_size = double(expand_size);
+
+    double _sum_imf = 0;
+    double _sum_rem = 0;
+    double _sum_corr = 0;
+    // TODO Optimize code here!
+    for (size_t i = g_thr_ix; i < expand_size; i += grid_size) {
+        double sum1 = 0, sum2 = 0;
+        for (size_t j = 0; j < expand_size; ++j) {
+            sum1 += d_global_sift_matrix[labs(i - j)] * d_imf_mask[j];
+            sum2 += d_global_sift_matrix[labs(i - j)] * d_rem_mask[j];
+        }
+        _sum_imf += sum1 * d_imf_mask[i] / d_expand_size / d_expand_size;
+        _sum_rem += sum2 * d_rem_mask[i] / d_expand_size / d_expand_size;
+        _sum_corr += sum1 * d_rem_mask[i] / d_expand_size / d_expand_size;
+    }
+    __shared__ double _sh_sum_imf[CUDA_BLOCK_SIZE];
+    __shared__ double _sh_sum_rem[CUDA_BLOCK_SIZE];
+    __shared__ double _sh_sum_corr[CUDA_BLOCK_SIZE];
+    _sh_sum_imf[thr_ix] = _sum_imf;
+    _sh_sum_rem[thr_ix] = _sum_rem;
+    _sh_sum_corr[thr_ix] = _sum_corr;
+
+    __syncthreads();
+
+    for (size_t size = CUDA_BLOCK_SIZE / 2; size > 0; size /= 2) { // uniform
+        if (thr_ix >= size) continue;
+        _sh_sum_imf[thr_ix] += _sh_sum_imf[thr_ix + size];
+        _sh_sum_rem[thr_ix] += _sh_sum_rem[thr_ix + size];
+        _sh_sum_corr[thr_ix] += _sh_sum_corr[thr_ix + size];
+        __syncthreads();
+    }
+    if (thr_ix == 0) {
+        *d_sum_imf = _sh_sum_imf[0];
+        *d_sum_rem = _sh_sum_rem[0];
+        *d_sum_corr = _sh_sum_corr[0];
+    }
+}
+
+
+void
+transform_values(double *d_values, double *h_mask, const size_t input_size, const size_t mask_size, const size_t siftings, double *d_temp, const size_t gpu_id)
+{
+    //probably these sizes are not important
+    cudaSetDevice(gpu_id);
+    cufftHandle plan_forward;
+    cufftHandle plan_backward;
+    thrust::device_vector<double> d_mask(mask_size);
+    thrust::device_vector<double> d_expanded_mask(input_size);
+    cudaMemcpy(thrust::raw_pointer_cast(d_mask.data()), h_mask, sizeof(double) * mask_size, cudaMemcpyHostToDevice);
+    expand_the_mask(mask_size, input_size, thrust::raw_pointer_cast(d_mask.data()), thrust::raw_pointer_cast(d_expanded_mask.data()));
+    thrust::device_vector<cufftDoubleComplex> d_expanded_mask_fft(input_size / 2 + 1);
+    thrust::device_vector<cufftDoubleComplex> d_input_fft(input_size / 2 + 1);
+    cufftDoubleComplex *dev_expanded_mask_fft = thrust::raw_pointer_cast(d_expanded_mask_fft.data());
+    const int n_batch = 1;
+    fft_acquire();
+    cufft_errchk(cufftPlan1d(&plan_forward, input_size, CUFFT_D2Z, n_batch));
+    cufft_errchk(cufftPlan1d(&plan_backward, input_size, CUFFT_Z2D, n_batch));
+    cufft_errchk(cufftExecD2Z(plan_forward, thrust::raw_pointer_cast(d_expanded_mask.data()), dev_expanded_mask_fft));
+    fft_release();
+
+    cufftDoubleComplex *dev_input_fft = thrust::raw_pointer_cast(d_input_fft.data());
+    //cudaDeviceSynchronize();
+    for (size_t i = 0; i < siftings; ++i) {
+//        cudaSetDevice(gpu_id);
+        fft_acquire();
+        cufft_errchk(cufftExecD2Z(plan_forward, d_values, dev_input_fft));
+        fft_release();
+        gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(input_size / 2 + 1) >>>(input_size, dev_expanded_mask_fft, dev_input_fft);
+        cu_errchk(cudaPeekAtLastError());
+        //cu_errchk(cudaDeviceSynchronize());
+        fft_acquire();
+        cufft_errchk(cufftExecZ2D(plan_backward, dev_input_fft, d_temp));
+        fft_release();
+        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input_size)>>>(d_values, d_temp, input_size);
+        cu_errchk(cudaPeekAtLastError());
+        //cu_errchk(cudaDeviceSynchronize());
+    }
+
+    cufftDestroy(plan_forward);
+    cufftDestroy(plan_backward);
+}
+
+
+void
+first_matrix(
+        const size_t mask_size, const size_t fft_size, const double lambda, const double gamma,
+        const double smooth_factor, std::vector<double> &A_x, std::vector<double> &F_x)
+{
+    thrust::host_vector<double> h_mask(mask_size);
+    const double smooth_factor_sqrt = sqrt(smooth_factor);
+    for (size_t i = 0; i < mask_size; ++i) h_mask[i] = drand48();
+    fix_mask(mask_size, thrust::raw_pointer_cast(h_mask.data()));
+    A_x.clear();
+    A_x.resize(2 * (fft_size / 2 + 1) * mask_size, 0.);
+    F_x.clear();
+    F_x.resize(mask_size, 0.);
+
+    const double two_M_PI_fft_size = (2. * M_PI) / double(fft_size);
+    for (size_t i = 0; i < fft_size / 2 + 1; ++i) {
+        for (size_t j = 0; j < mask_size; ++j) {
+            double real_val, imag_val;
+            sincos(two_M_PI_fft_size * double(i) * double(j), &imag_val, &real_val);
+            if (i < size_t(fft_size * lambda))
+                F_x[j] += -2. * real_val;
+            else if (i >= size_t(fft_size * gamma))
+                real_val *= smooth_factor_sqrt;
+            A_x[(2 * i + 0) * mask_size + j] = real_val;
+            if (i >= size_t(fft_size * lambda) && i >= size_t(fft_size * gamma))
+                imag_val *= smooth_factor_sqrt;
+            A_x[(2 * i + 1) * mask_size + j] = imag_val;
+        }
+    }
+}
+
+
+constexpr double allowed_eps_up = 0.1;
+constexpr double norm_thresh = 1. + allowed_eps_up;
+
+int do_filter(const cufftDoubleComplex *h_mask_fft, const size_t fft_size)
+{
+    for (size_t i = 0; i < fft_size; ++i)
+        if (std::norm<double>({h_mask_fft[i].x, h_mask_fft[i].y}) > norm_thresh)
+            return 1;
+    return 0;
+}
+
+
+void
+sift_the_mask(
+    const size_t mask_size,
+    const size_t siftings,
+    const double *d_mask,
+    const cufftHandle plan_sift_forward,
+    const cufftHandle plan_sift_backward,
+    double &sum_full,
+    double &sum_imf,
+    double &sum_rem,
+    double &sum_corr,
+    thrust::device_vector<double> &d_global_sift_matrix,
+    const size_t gpu_id)
+{
+    cudaSetDevice(gpu_id);
+    const size_t expand_size = siftings * mask_size;
+    thrust::device_vector<double> d_zm_mask(expand_size);
+    thrust::device_vector<double> d_imf_mask(expand_size);
+    thrust::device_vector<double> d_rem_mask(expand_size);
+
+    double *d_expanded_mask_ptr = thrust::raw_pointer_cast(d_zm_mask.data());
+
+    expand_the_mask(mask_size, expand_size, d_mask, d_expanded_mask_ptr);
+
+    thrust::device_vector<cufftDoubleComplex> d_fzm_mask(expand_size / 2 + 1);
+    thrust::device_vector<cufftDoubleComplex> d_mask_imf_fft(expand_size / 2 + 1);
+    thrust::device_vector<cufftDoubleComplex> d_mask_rem_fft(expand_size / 2 + 1);
+    cufftDoubleComplex *d_expanded_mask_fft = thrust::raw_pointer_cast(d_fzm_mask.data());
+    cufft_errchk(cufftExecD2Z(plan_sift_forward, d_expanded_mask_ptr, d_expanded_mask_fft));
+    vec_sift<<<CUDA_THREADS_BLOCKS(expand_size / 2 + 1)>>>(
+            expand_size, siftings, d_expanded_mask_fft, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_mask_rem_fft.data()));
+
+    cufft_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_imf_mask.data())));
+    cufft_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_rem_fft.data()), thrust::raw_pointer_cast(d_rem_mask.data())));
+
+    auto d_sum_imf = (double *) cuda_calloc(sizeof(double), 1);
+    auto d_sum_rem = (double *) cuda_calloc(sizeof(double), 1);
+    auto d_sum_corr = (double *) cuda_calloc(sizeof(double), 1);
+    sum_expanded<<<CUDA_THREADS_BLOCKS(expand_size)>>>(
+            d_sum_imf, d_sum_rem, d_sum_corr, thrust::raw_pointer_cast(d_imf_mask.data()), thrust::raw_pointer_cast(d_rem_mask.data()),
+            expand_size, thrust::raw_pointer_cast(d_global_sift_matrix.data()));
+    cudaMemcpy(&sum_imf, d_sum_imf, sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&sum_rem, d_sum_rem, sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&sum_corr, d_sum_corr, sizeof(double), cudaMemcpyDeviceToHost);
+    cudaFree(d_sum_imf);
+    cudaFree(d_sum_rem);
+    cudaFree(d_sum_corr);
+    cudaMemcpy(&sum_full, thrust::raw_pointer_cast(d_global_sift_matrix.data()), sizeof(double), cudaMemcpyDeviceToHost);
+}
+
+
+double
+evaluate_mask(
+        const size_t mask_size, const size_t expanded_size, const size_t siftings, double *h_mask, const double *dev_values,
+        const cufftDoubleComplex *dev_values_fft, const size_t val_start, const size_t full_input_size,
+        const cufftHandle plan_expanded_forward, const cufftHandle plan_expanded_backward, const cufftHandle plan_mask_forward, const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
+        bool &filter, thrust::device_vector<double> &d_mask, thrust::device_vector<double> &d_expanded_mask, thrust::device_vector<double> &d_global_sift_matrix, const size_t current_level, const size_t gpu_id)
+{
+    double result = 0;
+    cudaSetDevice(gpu_id);
+    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_mask.data()), h_mask, mask_size * sizeof(double), cudaMemcpyHostToDevice));
+
+    std::vector<cufftDoubleComplex> h_mask_fft(expanded_size / 2 + 1);
+    double *d_expanded_mask_ptr = thrust::raw_pointer_cast(d_expanded_mask.data());
+    expand_the_mask(mask_size, expanded_size, thrust::raw_pointer_cast(d_mask.data()), d_expanded_mask_ptr);
+    thrust::device_vector<cufftDoubleComplex> d_expanded_mask_fft(expanded_size / 2 + 1);
+    cufftDoubleComplex *dev_expanded_mask_fft = thrust::raw_pointer_cast(d_expanded_mask_fft.data());
+    cufft_errchk(cufftExecD2Z(plan_mask_forward, d_expanded_mask_ptr, dev_expanded_mask_fft));
+    cu_errchk(cudaMemcpy(h_mask_fft.data(), dev_expanded_mask_fft, (expanded_size / 2 + 1) * sizeof(cufftDoubleComplex), cudaMemcpyDeviceToHost));
+    if (filter && do_filter(h_mask_fft.data(), expanded_size / 2 + 1) == 1) {
+        filter = false;
+        return 0;
+    }
+    const auto quality = do_quality(h_mask_fft.data(), expanded_size / 2 + 1, siftings);
+    result += quality;
+    if (filter && quality > 1.5 * best_quality.load()) {
+        filter = false;
+        return 0;
+    }
+
+    double sum_full, sum_imf, sum_rem, sum_corr;
+    sift_the_mask(mask_size, siftings, thrust::raw_pointer_cast(d_mask.data()), plan_sift_forward, plan_sift_backward, sum_full, sum_imf, sum_rem, sum_corr, d_global_sift_matrix, gpu_id);
+
+    thrust::device_vector<double> d_zm(full_input_size);
+
+    double *d_zm_ptr = thrust::raw_pointer_cast(d_zm.data());
+    expand_the_mask(mask_size, full_input_size, thrust::raw_pointer_cast(d_mask.data()), d_zm_ptr);
+    thrust::device_vector<cufftDoubleComplex> d_zm_fft(full_input_size / 2 + 1);
+    thrust::device_vector<cufftDoubleComplex> d_zm_convert(full_input_size / 2 + 1);
+    cufftDoubleComplex *d_zm_fft_ptr = thrust::raw_pointer_cast(d_zm_fft.data());
+    cufftDoubleComplex *d_zm_convert_ptr = thrust::raw_pointer_cast(d_zm_convert.data());
+    cufft_errchk(cufftExecD2Z(plan_expanded_forward, d_zm_ptr, d_zm_fft_ptr));
+    vec_power<<<CUDA_THREADS_BLOCKS(full_input_size / 2 + 1)>>>(d_zm_fft_ptr, d_zm_convert_ptr, full_input_size, siftings);
+
+    thrust::host_vector<cufftDoubleComplex> h_zm(full_input_size / 2 + 1);
+    h_zm = d_zm_convert;
+
+    gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(full_input_size / 2 + 1) >>>(full_input_size, dev_values_fft, d_zm_convert_ptr);
+    cufft_errchk(cufftExecZ2D(plan_expanded_backward, d_zm_convert_ptr, d_zm_ptr));
+
+    const size_t inside_window_start = val_start + mask_size * siftings;
+    const size_t inside_window_end = full_input_size;
+    const size_t inside_window_len = inside_window_end - inside_window_start;
+    std::vector<double> h_imf_temp(inside_window_len);
+    std::vector<double> h_rem_temp(inside_window_len);
+
+    cudaMemcpy(h_imf_temp.data(), d_zm_ptr + inside_window_start, sizeof(double) * inside_window_len, cudaMemcpyDeviceToHost);
+
+    thrust::device_vector<double> d_values_copy(inside_window_end - inside_window_start);
+    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_values_copy.data()), dev_values + inside_window_start,
+                         inside_window_len * sizeof(double), cudaMemcpyDeviceToDevice));
+    vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(inside_window_len)>>>(thrust::raw_pointer_cast(d_values_copy.data()), d_zm_ptr + inside_window_start, inside_window_len);
+    cudaMemcpy(h_rem_temp.data(), thrust::raw_pointer_cast(d_values_copy.data()), sizeof(double) * inside_window_len, cudaMemcpyDeviceToHost);
+
+    double sum1 = 0;
+    double sum2 = 0;
+    double big_sum1 = 0;
+    double big_sum2 = 0;
+    double big_sum3 = 0;
+    double prod = 0;
+    const size_t partial = 1000;
+    size_t cntr = 0;
+    double corr = 0;
+    size_t corr_count = 0;
+    const size_t full_count = inside_window_len / 2;
+    for (size_t i = full_count; i < inside_window_len; ++i) { // Non-parallelissabile!
+        sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
+        sum2 += pow(h_rem_temp[i] - h_rem_temp[i - 1], 2);
+        big_sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
+        big_sum2 += pow(h_rem_temp[i] - h_rem_temp[i - 1], 2);
+        big_sum3 += pow(h_rem_temp[i] + h_imf_temp[i] - h_rem_temp[i - 1] - h_imf_temp[i - 1], 2);
+        prod += (h_imf_temp[i] - h_imf_temp[i - 1]) * (h_rem_temp[i] - h_rem_temp[i - 1]);
+        ++cntr;
+        if (cntr >= partial) {
+            corr += sum1 * sum2 != 0 ? fabs(prod) / sqrt(sum1 * sum2) : 1.;
+            ++corr_count;
+            sum1 = 0;
+            sum2 = 0;
+            prod = 0;
+            cntr = 0;
+        }
+    }
+    corr = corr_count ? corr / double(corr_count) : corr + fabs(prod) / sqrt(sum1 * sum2);
+
+    if (big_sum2 > big_sum3) result = 1000. + (result + sqrt(big_sum2 / full_count)) * 1000.;
+    if (big_sum1 > big_sum3) result = 10. + (result + sqrt(big_sum1 / full_count)) * 100.;
+
+    result = result * (1 + corr);
+    if (!current_level) {
+        if (corr > .05) result = 1. + result * (10. + corr);
+    } else {
+        if (corr > .20) result = 1. + result * (10. + corr);
+    }
+
+    if (big_sum2 >= 0.95 * big_sum3) result = 30 + (result + sqrt(big_sum2 / full_count)) * 10.;
+    if (big_sum2 >= 0.60 * big_sum3) result = result + 5 + (sqrt(big_sum2 / full_count)) * 1.;
+    if (big_sum2 >= 0.80 * big_sum3)  result = result + 3 + (sqrt(big_sum2 / full_count)) * 1.;
+    if (big_sum1 > big_sum2) result = result + 4 + (big_sum1 / big_sum3);
+    if (big_sum1 > 0.5 * big_sum3) result = 10 + (result + sqrt(big_sum1 / full_count)) * 10.;
+    if (big_sum2 >= 0.99 * big_sum3) result += 1. + big_sum2 / big_sum3;
+    if (big_sum2 >= 0.98 * big_sum3) result += 1. + big_sum2 / big_sum3;
+    if (big_sum2 >= 0.97 * big_sum3) result += 1. + big_sum2 / big_sum3;
+    if (big_sum2 >= 0.96 * big_sum3) result += 1. + big_sum2 / big_sum3;
+
+    result += sqrt((big_sum1 + big_sum2) / big_sum3);
+    if (result < best_result.load() && quality <= best_quality.load()) {
+        LOG4_DEBUG("Found global best score " << result << " and best quality " << quality);
+        best_result.store(result);
+        best_quality.store(quality);
+    }
+    return result;
+}
+
+void fix_mask(const size_t mask_size, double *mask)
+{
+    double sum = 0;
+    const double padding_value = 1. / double(mask_size);
+#pragma omp parallel for reduction(+:sum) default(shared)
+    for (size_t i = 0; i < mask_size; ++i) {
+        if (mask[i] < 0) mask[i] = 0;
+        if (isnan(mask[i]) || isinf(mask[i])) {
+            LOG4_DEBUG("Very bad mask " << i);
+            mask[i] = padding_value;
+        }
+        sum += mask[i];
+    }
+    if (sum == 0) {
+        LOG4_ERROR("Bad masks!");
+#pragma omp simd
+        for (size_t i = 0; i < mask_size; ++i) mask[i] = padding_value;
+    } else {
+#pragma omp simd
+        for (size_t i = 0; i < mask_size; ++i) mask[i] = mask[i] / sum;
+    }
+}
+
+
+t_drand48_data seedme(const size_t thread_id)
+{
+    unsigned short int seed16v[3];
+    seed16v[0] = thread_id;
+    seed16v[1] = 91789217 * thread_id + 9821279871;
+    seed16v[2] = 128719761 * thread_id + 19827619263;
+    t_drand48_data buffer;
+    seed48_r(seed16v, &buffer);
+    return buffer;
+}
+
+
+void find_good_mask_anneal(
+        const size_t level, const size_t full_input_size, const size_t mask_size, const size_t siftings,
+        const size_t valid_pointer, double *dev_values, cufftDoubleComplex *dev_values_fft, double *h_mask,
+        const cufftHandle *plan_full_forward, const cufftHandle *plan_full_backward,
+        const cufftHandle *plan_mask_forward, const cufftHandle *plan_mask_backward,
+        const cufftHandle *plan_sift_forward, const cufftHandle *plan_sift_backward,
+        std::vector<double> &good_mask, double &result,
+        thrust::device_vector<double> &d_global_sift_matrix,
+        const size_t gpu_id)
+{
+    best_quality.store(1);
+    std::vector<std::vector<double>> current_good_masks;
+    std::vector<double> current_good_results;
+    static std::mutex current_results_mtx;
+
+    size_t val_start = valid_pointer;
+
+    std::vector<double> results(C_NUM_TRIES);
+    std::vector<double> current_mask(mask_size, 0.);
+
+    std::vector<double> best_mask(mask_size);
+    const double temp_const = 10000;
+    double temp = (double) C_NUM_TRIES / temp_const;
+    double step = 1;
+    size_t i = 0;
+
+    fix_mask(mask_size, good_mask.data());
+    bool filter = false;
+    cudaSetDevice(gpu_id);
+    thrust::device_vector<double> d_mask(mask_size);
+    thrust::device_vector<double> d_expanded_mask(mask_size * C_mask_expander);
+    {
+        auto rseed = seedme(omp_get_thread_num());
+        best_result = evaluate_mask(
+                mask_size, mask_size * C_mask_expander, siftings, good_mask.data(), dev_values, dev_values_fft, val_start, full_input_size, plan_full_forward[0],
+                plan_full_backward[0], plan_mask_forward[0], plan_sift_forward[0], plan_sift_backward[0], filter, d_mask, d_expanded_mask, d_global_sift_matrix, level, gpu_id);
+        for (size_t k = 0; k < C_filter_count; ++k) {
+            create_random_mask(i, step, mask_size, best_mask, good_mask.data(), &rseed, plan_mask_forward[0], plan_mask_backward[0], gpu_id);
+            fix_mask(mask_size, best_mask.data());
+            filter = true;
+            best_result = evaluate_mask(
+                    mask_size, mask_size * C_mask_expander, siftings, best_mask.data(), dev_values, dev_values_fft, val_start, full_input_size, plan_full_forward[0],
+                    plan_full_backward[0], plan_mask_forward[0], plan_sift_forward[0], plan_sift_backward[0], filter, d_mask, d_expanded_mask, d_global_sift_matrix, level, gpu_id);
+            if (filter) break;
+        }
+    }
+    if (filter == false)
+        best_result = evaluate_mask(
+                mask_size, mask_size * C_mask_expander, siftings, best_mask.data(), dev_values,
+                dev_values_fft, val_start, full_input_size, plan_full_forward[0],
+                plan_full_backward[0], plan_mask_forward[0], plan_sift_forward[0],
+                plan_sift_backward[0], filter, d_mask, d_expanded_mask, d_global_sift_matrix, level, gpu_id);
+    std::cout << "Starting score " << best_result << std::endl;
+    current_good_results.emplace_back(best_result);
+    current_good_masks.emplace_back(best_mask);
+
+    current_mask = best_mask;
+    results[0] = best_result;
+    double current_result = best_result;
+    for (i = 1; i < C_NUM_TRIES; i += C_parallelism) {
+        double internal_step = step / log(1. + double(i));
+        if (i > 3000) internal_step /= 10.;
+        if (i > C_NUM_TRIES / 12) internal_step /= 10.;
+        temp = (C_NUM_TRIES - i) / temp_const;
+        const size_t k_end = i + C_parallelism > C_NUM_TRIES ? C_NUM_TRIES % C_parallelism : C_parallelism;
+#pragma omp parallel for default(shared)
+        for (size_t k = 0; k < k_end; ++k) {
+            const size_t iter_ct = k + i;
+            thrust::device_vector<double> d_p_mask(mask_size);
+            thrust::device_vector<double> d_p_expanded_mask(mask_size * C_mask_expander);
+
+            if (i == 1) current_result = best_result;
+
+            auto rseed = seedme(omp_get_thread_num());
+            std::vector<double> mask(mask_size);
+
+            if (drander(&rseed) < .01) {
+                std::scoped_lock blck(best_mtx);
+                std::scoped_lock lck(current_mask_mutex);
+                current_mask = best_mask;
+                current_result = best_result;
+            } else if (drander(&rseed) < .01) {
+                std::scoped_lock results_lock(current_results_mtx);
+                const auto len = ssize_t(-log(drander(&rseed)));
+                const auto idx = std::max<ssize_t>(0, current_good_results.size() - 1 - len);
+                current_mask = current_good_masks[idx];
+                current_result = current_good_results[idx];
+            }
+
+            double evaluation;
+            bool filter = true;
+            for (size_t small_try = 0; small_try < C_filter_count; ++small_try) {
+                std::vector<double> current_mask_copy;
+                std::unique_lock<std::mutex> lck(current_mask_mutex);
+                current_mask_copy = current_mask;
+                lck.unlock();
+                create_random_mask(
+                        iter_ct, internal_step, mask_size, mask, current_mask_copy.data(), &rseed,
+                        plan_mask_forward[k], plan_mask_backward[k], gpu_id);
+                current_mask_copy.clear();
+                filter = true;
+                evaluation = evaluate_mask(
+                        mask_size, mask_size * C_mask_expander, siftings, mask.data(),
+                        dev_values, dev_values_fft, val_start, full_input_size,
+                        plan_full_forward[k], plan_full_backward[k], plan_mask_forward[k],
+                        plan_sift_forward[k], plan_sift_backward[k], filter, d_p_mask,
+                        d_p_expanded_mask, d_global_sift_matrix, level, gpu_id);
+                if (filter) break;
+            }
+            if (filter == false) {
+                std::vector<double> current_mask_copy;
+                std::unique_lock<std::mutex> lck(current_mask_mutex);
+                current_mask_copy = current_mask;
+                lck.unlock();
+                create_random_mask(iter_ct, step, mask_size, mask, current_mask_copy.data(), &rseed,
+                                   plan_mask_forward[k], plan_mask_backward[k], gpu_id);
+                current_mask_copy.clear();
+                filter = false;
+                evaluation = evaluate_mask(
+                        mask_size, mask_size * C_mask_expander, siftings, mask.data(),
+                        dev_values, dev_values_fft, val_start, full_input_size,
+                        plan_full_forward[k], plan_full_backward[k], plan_mask_forward[k],
+                        plan_sift_forward[k], plan_sift_backward[k], filter, d_p_mask,
+                        d_p_expanded_mask, d_global_sift_matrix, level, gpu_id);
+            }
+
+            results[iter_ct] = evaluation;
+            std::unique_lock<std::mutex> lck(best_mtx);
+            std::unique_lock<std::mutex> clck(current_mask_mutex);
+            if (results[iter_ct] < current_result || drander(&rseed) < exp(-(log(1. + current_result) - log(1. + results[i + k])) / temp)) {
+                std::memcpy(current_mask.data(), mask.data(), sizeof(double) * mask_size);
+                current_result = results[iter_ct];
+                if (current_result < best_result) {
+                    std::memcpy(best_mask.data(), mask.data(), sizeof(double) * mask_size);
+                    std::scoped_lock results_lock(current_results_mtx);
+                    current_good_results.push_back(best_result);
+                    current_good_masks.push_back(best_mask);
+                    best_result = current_result;
+                }
+                if (!(iter_ct % 1000)) {
+                    static double prev_msec = 0;
+                    std::cout << 100. * double(iter_ct) / double(C_NUM_TRIES) << "% \titeration " << iter_ct << " best score " << best_result << ", cycle best " << current_result << ", iteration best "
+                              << results[iter_ct] << ", took " << msecs() - prev_msec << " ms" << std::endl;
+                    prev_msec = msecs();
+                }
+            }
+        }
+    }
+    std::memcpy(h_mask, best_mask.data(), sizeof(double) * mask_size);
+    fix_mask(mask_size, h_mask);
+    result = best_result;
+    filter = false;
+    //cudaSetDevice(gpu_id);
+    const double repeat_best_result = evaluate_mask(
+            mask_size, mask_size * C_mask_expander, siftings, best_mask.data(),
+            dev_values, dev_values_fft, val_start, full_input_size,
+            plan_full_forward[0], plan_full_backward[0], plan_mask_forward[0],
+            plan_sift_forward[0], plan_sift_backward[0], filter, d_mask,
+            d_expanded_mask, d_global_sift_matrix, level, gpu_id);
+    std::cout << "Final score " << result << ", repeat best result " << repeat_best_result << std::endl;
+}
+
+
+void
+gauss_smoothen_mask(
+        const size_t mask_size, std::vector<double> &mask,
+        t_drand48_data_ptr buffer,
+        const cufftHandle plan_mask_forward,
+        const cufftHandle plan_mask_backward,
+        const size_t gpu_id)
+{
+    const size_t full_size = 2 * mask_size;
+    cudaSetDevice(gpu_id);
+    thrust::device_vector<double> d_mask_zm(full_size);
+    thrust::device_vector<cufftDoubleComplex> d_mask_zm_fft(full_size / 2 + 1);
+    cudaMemset(thrust::raw_pointer_cast(d_mask_zm.data() + mask_size), 0, mask_size * sizeof(double));
+    cudaMemcpy(thrust::raw_pointer_cast(d_mask_zm.data()), mask.data(), sizeof(double) * mask_size, cudaMemcpyKind::cudaMemcpyHostToDevice);
+    cufft_errchk(cufftExecD2Z(plan_mask_forward, thrust::raw_pointer_cast(d_mask_zm.data()), thrust::raw_pointer_cast(d_mask_zm_fft.data())));
+    gpu_multiply_smooth<<<CUDA_THREADS_BLOCKS(full_size / 2 + 1)>>>(full_size, 5. * -log(drander(buffer)), thrust::raw_pointer_cast(d_mask_zm_fft.data()));
+    cufft_errchk(cufftExecZ2D(plan_mask_backward, thrust::raw_pointer_cast(d_mask_zm_fft.data()), thrust::raw_pointer_cast(d_mask_zm.data())));
+    thrust::transform(thrust::device, d_mask_zm.begin(), d_mask_zm.begin() + mask_size, d_mask_zm.begin(), [mask_size] __device__ (const double &iter) -> double
+        { return (iter > 0 ? iter : 0) / double(mask_size);} );
+    if (mask.size() != mask_size) mask.resize(mask_size);
+    thrust::copy(d_mask_zm.begin(), d_mask_zm.begin() + mask_size, mask.begin());
+}
+
+
+void
+smoothen_mask(const size_t mask_size, std::vector<double> &mask, t_drand48_data_ptr buffer)
+{
+    const size_t window_size = 3 + 2. * (mask_size * drander(buffer) / 10.);
+
+    double weights[window_size];
+    double wsum = 0;
+    for (size_t i = 0; i < window_size; ++i) {
+        weights[i] = exp(-pow((3. * ((double) i - (window_size / 2))) / (double) (window_size / 2), 2) / 2.);
+        wsum += weights[i];
+    }
+    double nmask[mask_size];
+    for (size_t i = 0; i < mask_size; ++i) {
+        double sum = 0;
+        for (size_t j = std::max<size_t>(0, i - window_size / 2); j <= std::min<size_t>(i + window_size / 2, mask_size - 1); ++j)
+            sum += weights[window_size / 2 + i - j] * mask[j];
+        nmask[i] = sum / wsum;
+    }
+
+    memcpy(mask.data(), nmask, sizeof(nmask[0]) * mask_size);
+}
+
+
+void
+create_random_mask(
+        const size_t position, double step, const size_t mask_size, std::vector<double> &mask, const double *start_mask,
+        t_drand48_data_ptr buffer, const cufftHandle plan_mask_forward, const cufftHandle plan_mask_backward, const size_t gpu_id)
+{
+    step = step * drander(buffer);
+    if (!start_mask) {
+//#pragma omp simd
+        for (size_t i = 0; i < mask_size; ++i) mask[i] = drander(buffer);
+    } else {
+#pragma omp parallel for default(shared)
+        for (size_t i = 0; i < mask_size; ++i) {
+            if (drander(buffer) > .25) {
+                if (drander(buffer) > .05) {
+                    if (drander(buffer) > .5) {
+                        //masks[i]=start_mask[i]+step*(-log(drand48()));
+                        mask[i] = start_mask[i] + step * drander(buffer);
+                    } else {
+                        mask[i] = std::max<double>(0., start_mask[i] - step * drander(buffer));
+                    }
+                } else {
+                    mask[i] = start_mask[i] * (1. + step * (2 * drander(buffer) - 1));
+                }
+            } else {
+                mask[i] = start_mask[i];
+            }
+        }
+    }
+
+    if (drander(buffer) > .01) gauss_smoothen_mask(mask_size, mask, buffer, plan_mask_forward, plan_mask_backward, gpu_id);
+
+    fix_mask(mask_size, mask.data());
+}
+
+
+void
+find_good_mask_ffly(
+        std::vector<std::shared_ptr<common::gpu_context>> &gpu_ctxs,
+        const size_t full_input_size,
+        const size_t mask_size,
+        const size_t siftings,
+        const size_t valid_pointer,
+        std::vector<double *> &dev_values,
+        std::vector<cufftDoubleComplex *> &dev_values_fft,
+        double *h_mask,
+        const std::vector<std::vector<cufftHandle>> &plan_full_forward,
+        const std::vector<std::vector<cufftHandle>> &plan_full_backward,
+        const std::vector<std::vector<cufftHandle>> &plan_mask_forward,
+        const std::vector<std::vector<cufftHandle>> &plan_sift_forward,
+        const std::vector<std::vector<cufftHandle>> &plan_sift_backward,
+        double &result,
+        std::vector<std::shared_ptr<thrust::device_vector<double>>> &d_global_sift_matrix,
+        const size_t current_level)
+{
+    svr::optimizer::loss_callback_t loss_function = [&](std::vector<double>& x) -> double
+    {
+        auto y = x;
+        fix_mask(y.size(), y.data());
+
+        static std::mutex G_mx_incr;
+        std::unique_lock<std::mutex> ul_incr(G_mx_incr);
+        static size_t G_dev_incr, G_par_incr;
+        const auto dev_ix = G_dev_incr;
+        const auto par_ix = G_par_incr;
+        G_dev_incr = (G_dev_incr + 1) % gpu_ctxs.size();
+        G_par_incr = (G_par_incr + 1) % C_parallelism;
+        ul_incr.unlock();
+
+        cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+
+        thrust::device_vector<double> d_mask(mask_size);
+        thrust::device_vector<double> d_expanded_mask(mask_size * C_mask_expander);
+        bool filter = false;
+
+        static std::vector<std::mutex> mxs_par(gpu_ctxs.size() * C_parallelism);
+        const std::scoped_lock lk_par(mxs_par[dev_ix * C_parallelism + par_ix]);
+        return evaluate_mask(
+                mask_size, mask_size * C_mask_expander, siftings, y.data(), dev_values[dev_ix], dev_values_fft[dev_ix], size_t(valid_pointer), full_input_size,
+                plan_full_forward[dev_ix][par_ix], plan_full_backward[dev_ix][par_ix], plan_mask_forward[dev_ix][par_ix], plan_sift_forward[dev_ix][par_ix],
+                plan_sift_backward[dev_ix][par_ix], filter, d_mask, d_expanded_mask, *d_global_sift_matrix[dev_ix], current_level, gpu_ctxs[dev_ix]->phy_id());
+    };
+
+    std::vector<double> res_mask;
+    std::tie(std::ignore, res_mask) = svr::optimizer::firefly(
+            mask_size, FIREFLY_PARTICLES, FIREFLY_ITERATIONS, FFA_ALPHA, FFA_BETAMIN, FFA_GAMMA,
+            std::vector<double>(mask_size, 0.), std::vector<double>(mask_size, 1.), std::vector<double>(mask_size, 1.),
+            loss_function).operator std::tuple<double, std::vector<double>>();
+    std::memcpy(h_mask, res_mask.data(), sizeof(double) * mask_size);
+    fix_mask(mask_size, h_mask);
+}
+
+
+// TODO Pass a vector of all available GPU-IDs at the time of call and use them all up
+void
+optimize_levels(
+        const std::vector<double> &val,
+        std::vector<std::vector<double>> &masks,
+        const std::vector<size_t> &siftings,
+        const size_t window_start,
+        const size_t window_end)
+{
+    std::vector<std::shared_ptr<common::gpu_context>> gpu_ctxs;
+    while (common::gpu_handler::get_instance().get_free_gpus())
+        gpu_ctxs.emplace_back(std::make_shared<common::gpu_context>());
+    const size_t window_len = window_end - window_start;
+    srand48(928171);
+    sem_init(&sem_fft, 0, C_parallelism);
+
+    std::vector<thrust::host_vector<double>> h_imf(masks.size());
+    thrust::host_vector<double> h_values(window_len);
+    thrust::host_vector<double> h_values_temp(window_len);
+
+    std::vector<std::shared_ptr<thrust::device_vector<double>>> d_values;
+    std::vector<std::shared_ptr<thrust::device_vector<cufftDoubleComplex>>> d_values_fft;
+    std::vector<std::vector<std::shared_ptr<thrust::device_vector<double>>>> d_imf;
+    std::vector<std::shared_ptr<thrust::device_vector<double>>> d_temp;
+    for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+        cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+        d_values.emplace_back(std::make_shared<thrust::device_vector<double>>(window_len));
+        d_values_fft.emplace_back(std::make_shared<thrust::device_vector<cufftDoubleComplex>>(window_len / 2 + 1));
+        d_imf.emplace_back(masks.size());
+        d_temp.emplace_back(std::make_shared<thrust::device_vector<double>>(window_len));
+    }
+    std::memcpy(thrust::raw_pointer_cast(h_values.data()), &val[window_start], window_len * sizeof(double));
+
+    std::vector<double *> d_values_ptr(gpu_ctxs.size(), nullptr);
+    std::vector<cufftDoubleComplex *> d_values_fft_ptr(gpu_ctxs.size(), nullptr);
+    std::vector<double *> d_temp_ptr(gpu_ctxs.size(), nullptr);
+#pragma omp parallel for
+    for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+        *d_values[dev_ix] = h_values;
+        d_values_ptr[dev_ix] = thrust::raw_pointer_cast(d_values[dev_ix]->data());
+        d_values_fft_ptr[dev_ix] = thrust::raw_pointer_cast(d_values_fft[dev_ix]->data());
+        d_temp_ptr[dev_ix] = thrust::raw_pointer_cast(d_temp[dev_ix]->data());
+    }
+    std::vector<std::vector<cufftHandle>> plan_full_forward(gpu_ctxs.size(), std::vector<cufftHandle>(C_parallelism));
+    auto plan_full_backward = plan_full_forward;
+    size_t valid_pointer = 0; // first correct values start from this position inside d_values
+
+    const int n_batch = 1;
+#pragma omp parallel for collapse(2)
+    for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+        for (size_t i = 0; i < C_parallelism; ++i) {
+            cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+            cufft_errchk(cufftPlan1d(&plan_full_forward[dev_ix][i], window_len, CUFFT_D2Z, n_batch));
+            cufft_errchk(cufftPlan1d(&plan_full_backward[dev_ix][i], window_len, CUFFT_Z2D, n_batch));
+        }
+    }
+
+    for (size_t mask_ix = 0; mask_ix < masks.size(); ++mask_ix) {
+        std::vector<std::shared_ptr<thrust::device_vector<double>>> d_global_sift_matrix;
+        std::vector<std::vector<cufftHandle>> plan_sift_forward(gpu_ctxs.size(), std::vector<cufftHandle>{C_parallelism});
+        auto plan_sift_backward = plan_sift_forward;
+
+        for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+            cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+            d_global_sift_matrix.emplace_back(std::make_shared<thrust::device_vector<double>>());
+        }
+
+#pragma omp parallel for
+        for(size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+            cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+            for (size_t i = 0; i < C_parallelism; ++i) {
+                cufft_errchk(cufftPlan1d(&plan_sift_forward[dev_ix][i], siftings[mask_ix] * masks[mask_ix].size(), CUFFT_D2Z, n_batch));
+                cufft_errchk(cufftPlan1d(&plan_sift_backward[dev_ix][i], siftings[mask_ix] * masks[mask_ix].size(), CUFFT_Z2D, n_batch));
+            }
+            fill_auto_matrix(masks[mask_ix].size(), siftings[mask_ix], window_len - valid_pointer,
+                             thrust::raw_pointer_cast(h_values.data() + valid_pointer), *d_global_sift_matrix[dev_ix], gpu_ctxs[dev_ix]->phy_id());
+        }
+
+#ifndef USE_FIREFLY_SEARCH
+        std::vector<double> good_mask(masks[mask_ix].size());
+        double csum = 0;
+#pragma omp parallel for default(shared) reduction(+:csum)
+        for (size_t j = 0; j < good_mask.size(); ++j) {
+            good_mask[j] = drand48();
+            csum += good_mask[j];
+        }
+#pragma omp simd
+        for (size_t j = 0; j < masks[mask_ix].size(); ++j) good_mask[j] = good_mask[j] / csum;
+        // do_osqp(masks[mask_ix].size(), good_mask, window_len - valid_pointer, thrust::raw_pointer_cast(h_values.data() + valid_pointer), gpu_id);
+#endif
+        std::vector<std::vector<cufftHandle>> plan_mask_forward(gpu_ctxs.size(), std::vector<cufftHandle>{C_parallelism});
+        auto plan_mask_backward = plan_mask_forward;
+
+#pragma omp parallel for
+        for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+            cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+            for (size_t j = 0; j < C_parallelism; ++j) {
+                cufft_errchk(cufftPlan1d(&plan_mask_forward[dev_ix][j], C_mask_expander * masks[mask_ix].size(), CUFFT_D2Z, n_batch));
+                cufft_errchk(cufftPlan1d(&plan_mask_backward[dev_ix][j], C_mask_expander * masks[mask_ix].size(), CUFFT_Z2D, n_batch));
+            }
+            cufft_errchk(cufftExecD2Z(plan_full_forward[dev_ix][0], d_values_ptr[dev_ix], d_values_fft_ptr[dev_ix]));
+        }
+
+        double result;
+#ifdef USE_FIREFLY_SEARCH
+        find_good_mask_ffly(
+                gpu_ctxs, window_len, masks[mask_ix].size(), siftings[mask_ix], valid_pointer, d_values_ptr, d_values_fft_ptr,
+                masks[mask_ix].data(), plan_full_forward, plan_full_backward, plan_mask_forward, plan_sift_forward, plan_sift_backward, result, d_global_sift_matrix, mask_ix);
+#else
+        find_good_mask_anneal(
+                mask_ix, window_len, masks[mask_ix].size(), siftings[mask_ix], valid_pointer, d_values_ptr,
+                d_values_fft_ptr, masks[mask_ix].data(), plan_full_forward, plan_full_backward, plan_mask_forward, plan_mask_backward,
+                plan_sift_forward, plan_sift_backward, good_mask, result, d_global_sift_matrix, gpu_id);
+#endif
+        save_mask(masks[mask_ix], "Mask level " + std::to_string(mask_ix) + " final ", mask_ix, masks.size() + 1);
+
+        {
+            constexpr size_t dev_ix = 0;
+            cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+            d_imf[dev_ix][mask_ix] = std::make_shared<thrust::device_vector<double>>(*d_values[dev_ix]); // copy
+            double *d_imf_ptr = thrust::raw_pointer_cast(d_imf[dev_ix][mask_ix]->data());
+            transform_values(d_imf_ptr, masks[mask_ix].data(), window_len, masks[mask_ix].size(), siftings[mask_ix], d_temp_ptr[dev_ix], gpu_ctxs[dev_ix]->phy_id());
+            vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_values_ptr[dev_ix], d_imf_ptr, window_len);
+            valid_pointer += siftings[mask_ix] * (masks[mask_ix].size() - 1); // is it -1 really?
+            h_imf[mask_ix] = *d_imf[dev_ix][mask_ix];
+            h_values_temp = *d_values[dev_ix];
+            for (size_t j = 0; j < h_values.size(); ++j) h_values_temp[j] += h_imf[mask_ix][j];
+            h_values = *d_values[dev_ix];
+        }
+
+        best_result.store(std::numeric_limits<double>::max());
+        best_quality.store(1);
+
+#pragma omp parallel for collapse(2)
+        for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+            for (size_t j = 0; j < C_parallelism; ++j) {
+                cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+                cufftDestroy(plan_mask_forward[dev_ix][j]);
+                cufft_errchk(cufftDestroy(plan_sift_forward[dev_ix][j]));
+                cufft_errchk(cufftDestroy(plan_sift_backward[dev_ix][j]));
+            }
+        }
+    }
+
+#pragma omp parallel for collapse(2)
+    for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+        for (size_t p = 0; p < C_parallelism; ++p) {
+            cudaSetDevice(gpu_ctxs[dev_ix]->phy_id());
+            cufftDestroy(plan_full_forward[dev_ix][p]);
+            cufftDestroy(plan_full_backward[dev_ix][p]);
+        }
+    }
+}
+
+
+} // svr

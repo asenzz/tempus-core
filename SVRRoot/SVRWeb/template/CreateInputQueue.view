@@ -1,0 +1,21 @@
+<% c++ #include "view/InputQueueView.hpp" %>
+<% skin SVRWebSkin %>
+<% view CreateInputQueue uses content::InputQueue extends Main %>
+
+<% template page_head() %>
+<script src="/js/CreateInputQueue.js" type="text/javascript" language="JavaScript"></script>
+<% end template %>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+        <form action="" method="post" onsubmit="return validate(this);">
+            <% form as_p form %>
+        </form>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>

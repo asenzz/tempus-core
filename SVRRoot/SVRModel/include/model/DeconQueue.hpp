@@ -1,0 +1,113 @@
+#pragma once
+
+#include <common/types.hpp>
+#include <util/string_utils.hpp>
+#include "DBTable.hpp"
+#include "DataRow.hpp"
+#include "StoreBufferPushMerge.hpp"
+
+namespace svr {
+    namespace business {
+        class DeconQueueService;
+    }
+}
+
+namespace svr {
+namespace datamodel {
+
+class DeconQueue;
+using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
+
+class DeconQueue: public Queue
+{
+    friend svr::business::DeconQueueService;
+public:
+    DeconQueue();
+    DeconQueue(
+            std::string const &table_name,
+            std::string const &input_queue_table_name_,
+            std::string const &input_queue_column_name_,
+            const bigint dataset_id_,
+            const size_t decon_level_number_,
+            const data_row_container &data = data_row_container());
+    virtual ~DeconQueue(){};
+
+    DeconQueue_ptr clone_empty() const;
+
+    DeconQueue_ptr clone(const size_t start_ix = std::numeric_limits<size_t>::min(), const size_t end_ix = std::numeric_limits<size_t>::max()) const;
+
+    virtual void update_data(const DataRow::container &new_data, const bool overwrite = true) override;
+
+    inline std::string get_input_queue_table_name() const
+    {
+        return input_queue_table_name_;
+    }
+
+    void set_input_queue_table_name(const std::string &input_queue_table_name_);
+
+    inline std::string get_input_queue_column_name() const
+    {
+        return input_queue_column_name_;
+    }
+
+    void set_input_queue_column_name(const std::string &input_queue_column_name_);
+
+    inline bigint get_dataset_id() const
+    {
+        return dataset_id_;
+    }
+
+    void set_dataset_id(const bigint dataset_id_);
+
+    size_t get_decon_level_number() const;
+
+    virtual std::string metadata_to_string() const override;
+
+    bool operator==(const DeconQueue &other) const;
+
+    virtual std::string data_to_string() const override;
+
+    std::string data_to_string(const size_t data_size = DISPLAY_ROWS_LIMIT) const;
+
+    size_t get_column_count() const
+    {
+        return data_.empty() ? decon_level_number_ : data_.front()->get_values().size();
+    }
+
+    static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
+
+    // TODO Check why parent get_data is not visible
+    inline const DataRow::container &get_data() const override
+    { return Queue::get_data(); }
+
+    inline DataRow::container &get_data() override
+    { return Queue::get_data(); }
+
+    virtual DataRow::container get_data(const bpt::time_period &range, const size_t lag_count = 0) const;
+    std::vector<double> get_actual_values(const data_row_container::const_iterator &target_iter) const;
+    void erase_until(const data_row_container::iterator &target_iter);
+    void erase_until(const boost::posix_time::ptime &target_time);
+
+    static DeconQueue load(const std::string &file_path);
+
+private:
+    std::string input_queue_table_name_; // TODO Replace with pointer to Input Queue
+    std::string input_queue_column_name_; // TODO Replace with pointer to Input Queue
+    bigint dataset_id_ = 0; // TODO Replace with pointer to Dataset
+    size_t decon_level_number_ = 0;
+
+    void reinit_table_name();
+};
+
+}
+}
+
+template<>
+inline void store_buffer_push_merge<svr::datamodel::DeconQueue_ptr>(svr::datamodel::DeconQueue_ptr &dest, svr::datamodel::DeconQueue_ptr const &src)
+{
+    for(auto const &row: src->get_data()) dest->get_data().emplace_back(row);
+    dest->set_table_name(src->get_table_name());
+    dest->set_input_queue_table_name(src->get_input_queue_table_name());
+    dest->set_input_queue_column_name(src->get_input_queue_column_name());
+    dest->set_dataset_id(src->get_dataset_id());
+}

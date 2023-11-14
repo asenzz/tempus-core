@@ -1,0 +1,20 @@
+<% c++ #include "view/DatasetView.hpp" %>
+<% skin SVRWebSkin %>
+<% view Datasets uses content::Main extends Main %>
+
+<% template page_head() %>
+<script src="/js/Datasets.js" type="text/javascript" language="JavaScript"></script>
+<% end template %>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+    <table id="datasets"></table>
+    <div id="datasetsPager"></div>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>

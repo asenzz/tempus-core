@@ -1,0 +1,364 @@
+//
+// Created by zarko on 2/16/22.
+//
+
+#include "online_emd_impl.cuh"
+
+#ifndef CUDA_OEMD_MULTIGPU
+
+#include <vector>
+
+#include <helper_functions.h>
+#include <helper_cuda.h>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cassert>
+
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <common/cuda_util.cuh>
+
+#include <chrono>
+#include <thread>
+#include <cufft.h>
+
+#include "common/constants.hpp"
+
+const size_t oemd_block_size = 1024;
+#define CUDA_THREADS_BLOCKS(x_size) ((x_size) + oemd_block_size - 1) / oemd_block_size, oemd_block_size
+
+namespace svr {
+namespace cuoemd {
+
+
+#define  A1  (-3.969683028665376e+01)
+#define  A2   2.209460984245205e+02
+#define  A3  (-2.759285104469687e+02)
+#define  A4   1.383577518672690e+02
+#define  A5  (-3.066479806614716e+01)
+#define  A6   2.506628277459239e+00
+
+#define  B1  (-5.447609879822406e+01)
+#define  B2   1.615858368580409e+02
+#define  B3  (-1.556989798598866e+02)
+#define  B4   6.680131188771972e+01
+#define  B5  (-1.328068155288572e+01)
+
+#define  C1  (-7.784894002430293e-03)
+#define  C2  (-3.223964580411365e-01)
+#define  C3  (-2.400758277161838e+00)
+#define  C4  (-2.549732539343734e+00)
+#define  C5   4.374664141464968e+00
+#define  C6   2.938163982698783e+00
+
+#define  D1   7.784695709041462e-03
+#define  D2   3.224671290700398e-01
+#define  D3   2.445134137142996e+00
+#define  D4   3.754408661907416e+00
+
+#define P_LOW   0.02425
+/* P_high = 1 - p_low*/
+#define P_HIGH  0.97575
+
+double cpu_invnorm(const double p) //for simulation of normal distribution
+{
+    double x;
+    double q, r, u, e;
+    x=0;
+    if ((0 < p )  && (p < P_LOW)){
+        q = sqrt(-2*log(p));
+        x = (((((C1*q+C2)*q+C3)*q+C4)*q+C5)*q+C6) / ((((D1*q+D2)*q+D3)*q+D4)*q+1);
+    }
+    else{
+        if ((P_LOW <= p) && (p <= P_HIGH)){
+            q = p - 0.5;
+            r = q*q;
+            x = (((((A1*r+A2)*r+A3)*r+A4)*r+A5)*r+A6)*q /(((((B1*r+B2)*r+B3)*r+B4)*r+B5)*r+1);
+        }
+        else{
+            if ((P_HIGH < p)&&(p < 1)){
+                q = sqrt(-2*log(1-p));
+                x = -(((((C1*q+C2)*q+C3)*q+C4)*q+C5)*q+C6) / ((((D1*q+D2)*q+D3)*q+D4)*q+1);
+            }
+        }
+    }
+
+/*If you are compiling this under UNIX OR LINUX, you may uncomment this block for better accuracy.*/
+    if(( 0 < p)&&(p < 1)){
+        e = 0.5 * erfc(-x/sqrt(2.)) - p;
+        u = e * sqrt(2*M_PI) * exp(x*x/2);
+        x = x - u/(1 + x*u/2);
+    }
+    return x;
+}
+
+
+#if 0
+__global __ void reduce_mask_trim(
+        const size_t apply_ix,
+        const double *__restrict__ mask,
+        const double *__restrict__ rx,
+        const double *__restrict__ x,
+)
+{
+    rx[ix] += mask[size_t(mask_size - 1 - ix / stretch_coef + j / stretch_coef)] * x[j];
+    sum += mask[size_t(mask_size - 1 - ix / stretch_coef + j / stretch_coef)];
+}
+
+__global__ void reduce_mask(
+        double *__restrict__ rx,
+        const double *__restrict__ mask,
+        const double *__restrict__ x,
+        const size_t apply_ix,
+        const size_t mask_size,
+        const double stretch_coef)
+{
+    const size_t m = blockIdx.x * blockDim.x + threadIdx.x;
+    if (m < mask_size * stretch_coef)
+        rx[apply_ix] += mask[size_t(m / stretch_coef)] * x[size_t(apply_ix - mask_size + m / stretch_coef + 1)] / stretch_coef;
+}
+
+#endif
+
+#define MAX_STRETCH 3600
+__global__ void
+apply_mask(
+        const int stretch_coef,
+        double *__restrict__ x,
+        const size_t x_size,
+        const double *__restrict__ mask,
+        const size_t mask_size,
+        double *__restrict__ rx)
+{
+#if 1
+    const size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t total_block_size = blockDim.x * gridDim.x;
+
+    //const size_t all_work = x_size * mask_size*stretch_coef;//TOO BIG!!!
+    const size_t all_work = x_size * mask_size;//careful if this becomes > 2^64
+    double adjustment_sum =0.;
+    __shared__ double stretch_multipliers[MAX_STRETCH];
+    if (stretch_coef>MAX_STRETCH){
+        printf("ABORT ABORT ABORT\n");
+    }
+    for(int i=0;i<stretch_coef;i++){
+#if 0
+        const double lambda = 1.;
+        double this_stretch_multiplier = exp(-lambda * (double)i/(double)stretch_coef);
+#else
+        double this_stretch_multiplier = 1.;
+#endif
+        if (i % blockDim.x == threadIdx.x){
+            stretch_multipliers[i] = this_stretch_multiplier;
+        }
+        adjustment_sum += this_stretch_multiplier;
+    }
+    __syncthreads();
+    //can use reduction to compute adjustment sum faster.
+    for(int i=0;i<stretch_coef;i++){
+        if (i % blockDim.x == threadIdx.x){
+            stretch_multipliers[i]= stretch_multipliers[i]/adjustment_sum;
+        }
+    }
+    for (size_t j = thread_idx ; j<all_work;j+=total_block_size){
+        size_t rx_idx = j % x_size;
+        size_t mask_idx = j / x_size;
+        double mask_element = mask [mask_size-1-mask_idx];
+        double sum=0.;
+        if (rx_idx>=mask_size * stretch_coef){
+            for(int k=0;k<stretch_coef;k++){
+                sum+=mask_element * stretch_multipliers[k] * x[rx_idx-mask_idx*stretch_coef-k];
+            }
+            atomicAdd(&rx[rx_idx], sum);
+        }else{
+            //rx[rx_idx]=0.; - already 0.
+        }
+    }
+#else
+
+    const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ix >= x_size) return;
+
+    rx[ix] = 0;
+    if (ix >= stretch_coef * mask_size - 1) {
+        double sum = 0;
+        for (size_t m = 0; m < mask_size * stretch_coef; ++m)
+            sum += mask[size_t(m / stretch_coef)] * x[size_t(ix - stretch_coef * mask_size + m + 1)] / stretch_coef;
+        rx[ix] +=sum;
+    } else {
+        double sum = 0;
+        for (size_t j = 0; j <= ix; ++j) {
+            rx[ix] += mask[size_t(mask_size - 1 - ix / stretch_coef + j / stretch_coef)] * x[j] / stretch_coef;
+            sum += mask[size_t(mask_size - 1 - ix / stretch_coef + j / stretch_coef)] / stretch_coef;
+        }
+        rx[ix] /= sum;
+    }
+#endif
+}
+
+__global__ void
+vec_subtract_inplace(
+        double *__restrict__ x,
+        const double *__restrict__ y,
+        const size_t x_size)
+{
+    const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ix < x_size) x[ix] -= y[ix];
+}
+
+__global__ void gpu_expand_mask(
+    const size_t mask_size,
+    const double *__restrict__ mask,
+    const int stretch_coef,
+    double *__restrict__ expanded_mask)
+{
+    size_t all_work = (size_t) (mask_size * stretch_coef);
+
+    const size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t total_block_size = blockDim.x * gridDim.x;
+
+    for (size_t j=thread_idx;j < all_work;j+=total_block_size){
+        const auto mask_idx = (size_t) ((double)j / (double)stretch_coef);
+        expanded_mask[j] = mask[mask_size - 1 - mask_idx]/(double)stretch_coef;
+    }
+}
+
+
+void expand_the_mask(
+        const int stretch_coef,
+        const size_t mask_size,
+        const size_t input_size,
+        const double *dev_mask,
+        double **expanded_mask)
+{
+    *expanded_mask = (double *) cuda_calloc(input_size, sizeof(double));
+
+    gpu_expand_mask<<<1024,256>>>(mask_size, dev_mask, stretch_coef, *expanded_mask);
+
+    //gpu_errchk( cudaPeekAtLastError() );
+    //gpu_errchk( cudaDeviceSynchronize() );
+}
+
+__global__ void
+gpu_multiply_complex (const size_t input_size,
+                      const cufftDoubleComplex  *multiplier ,
+                      cufftDoubleComplex   *output)
+{
+    const size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t total_block_size = blockDim.x * gridDim.x;
+
+    for(size_t j=thread_idx;j <(input_size/2+1);j+=total_block_size){//because it is D2Z transform
+        cufftDoubleComplex new_output;
+        new_output.x = output[j].x * multiplier[j].x -  output[j].y * multiplier[j].y;
+        new_output.y = output[j].x * multiplier[j].y +  output[j].y * multiplier[j].x;
+        output[j].x = new_output.x/(double)input_size;
+        output[j].y = new_output.y/(double)input_size;
+    }
+}
+
+
+
+void do_multiply(size_t input_size, const  cufftDoubleComplex*dev_expanded_mask_fft,cufftDoubleComplex*dev_input_fft)
+{
+    gpu_multiply_complex<<<1024,256>>>(input_size,dev_expanded_mask_fft,dev_input_fft);
+    gpu_errchk( cudaPeekAtLastError() );
+    gpu_errchk( cudaDeviceSynchronize() );
+}
+
+
+void apply_mask_via_fft(int stretch_coef, size_t input_size, size_t mask_size,const double*dev_mask, double*dev_input,double*dev_output){
+    double *dev_expanded_mask;
+    //assume dev_output already allocated!
+    assert(input_size >=stretch_coef*mask_size);
+    expand_the_mask(stretch_coef,mask_size,input_size,dev_mask,&dev_expanded_mask);
+
+    cufftHandle plan_forward;
+    cufftHandle plan_backward;
+
+    cufftDoubleComplex *dev_expanded_mask_fft, *dev_input_fft;
+    gpu_errchk(cudaMalloc((void**)&dev_expanded_mask_fft, sizeof(cufftDoubleComplex)*(input_size/2+1)));
+    gpu_errchk(cudaMalloc((void**)&dev_input_fft, sizeof(cufftDoubleComplex)*(input_size/2+1)));
+    const int n_batch=1;
+    cufft_errchk( cufftPlan1d(&plan_forward, input_size,    CUFFT_D2Z, n_batch));
+    cufft_errchk( cufftPlan1d(&plan_backward, input_size,    CUFFT_Z2D, n_batch));
+
+    cudaDeviceSynchronize();
+    cufft_errchk( cufftExecD2Z(plan_forward, dev_expanded_mask, dev_expanded_mask_fft));
+    cufft_errchk( cufftExecD2Z(plan_forward, dev_input, dev_input_fft));
+    do_multiply(input_size, dev_expanded_mask_fft,dev_input_fft);
+
+
+    cufft_errchk( cufftExecZ2D(plan_backward, dev_input_fft, dev_output));
+    //probably multiplied by the wrong constant now. must be corrected somewhere, maybe even on the host
+
+    cudaDeviceSynchronize();
+
+
+    cufftDestroy(plan_forward);
+    cufftDestroy(plan_backward);
+    gpu_errchk(cudaFree(dev_expanded_mask_fft));
+    gpu_errchk(cudaFree(dev_input_fft))
+    gpu_errchk(cudaFree(dev_expanded_mask));
+
+}
+
+
+void transform(
+        const std::vector<double> &input,
+        std::vector <std::vector<double>> &decon,
+        const int gpu_id,
+        const std::vector<size_t> &siftings,
+        const std::vector<std::vector<double>> &mask,
+        const int stretch_coef,
+        const size_t levels)
+{
+    gpu_errchk(cudaSetDevice(gpu_id));
+    auto p_remainder = cuda_malloccopy(input);
+    auto p_rx = cuda_malloccopy(input);
+    auto p_rx2 = (double *) cuda_calloc(input.size(), sizeof(double));
+    if (decon.size() != input.size()) decon.resize(input.size());
+    for (size_t l = 0; l < levels - 1; l++) {
+        const size_t actual_l = levels - l - 1;
+        double *dev_mask = cuda_malloccopy(mask[l]);
+        for (size_t s = 0; s < siftings[l]; ++s) {
+            gpu_errchk(cudaMemset (p_rx2,0,sizeof(double)*input.size()));
+#if 1
+            apply_mask_via_fft(stretch_coef, input.size(),  mask[l].size(),dev_mask, p_rx  ,p_rx2);
+#else
+            apply_mask<<<CUDA_THREADS_BLOCKS(input.size())>>>(stretch_coef, p_rx, input.size(), dev_mask, mask[l].size(), p_rx2);
+#endif
+#ifdef CUDA_OUTPUT_FIR
+            if (s == 0) {
+//                if (stretch_coef > 600) std::this_thread::sleep_for(std::chrono::minutes(10)); // Sleep to cool down GPU
+                std::vector<double> p_host_rx = cuda_copy(p_rx, input.size(), cudaMemcpyDeviceToHost);
+                CU_LOG4_FILE(SAVE_OUTPUT_LOCATION << "oemd_level_" << actual_l << "_in.csv", deep_to_string(p_host_rx));
+                std::vector<double> p_host_rx2 = cuda_copy(p_rx2, input.size(), cudaMemcpyDeviceToHost);
+                CU_LOG4_FILE(SAVE_OUTPUT_LOCATION << "oemd_level_" << actual_l << "_out.csv", deep_to_string(p_host_rx2));
+            }
+#endif
+            vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input.size())>>>(p_rx, p_rx2, input.size());
+        }
+        auto host_rx = cuda_malloccopy(p_rx, input.size() * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost);
+        for (size_t t = 0; t < input.size(); ++t) {
+            if (decon[t].size() != levels) decon[t].resize(levels);
+            decon[t][actual_l] = host_rx[t];
+        }
+        free(host_rx);
+        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input.size())>>>(p_remainder, p_rx, input.size());
+        gpu_errchk(cudaMemcpy(p_rx, p_remainder, input.size() * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
+        gpu_errchk(cudaFree(dev_mask));
+    }
+    {
+        double *p_host_rx = cuda_malloccopy(p_rx, input.size() * sizeof(double), cudaMemcpyDeviceToHost);
+        for (size_t t = 0; t < input.size(); ++t) decon[t][0] = p_host_rx[t];
+        free(p_host_rx);
+    }
+    gpu_errchk(cudaFree(p_rx2));
+    gpu_errchk(cudaFree(p_rx));
+    gpu_errchk(cudaFree(p_remainder));
+}
+
+} // namespace cuoemd
+} // namespace svr
+
+#endif // #ifndef CUDA_OEMD_MULTIGPU

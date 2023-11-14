@@ -1,0 +1,108 @@
+#include "include/DaoTestFixture.h"
+#include "DAO/EnsembleDAO.hpp"
+#include <model/User.hpp>
+
+using svr::datamodel::Model;
+using svr::datamodel::kernel_type;
+
+TEST_F(DaoTestFixture, ModelWorkflow)
+{
+    size_t decon_level = 2;
+    std::set<size_t> learning_levels = {0, 1, 4};
+    std::set<size_t> learning_levels_0 = {1};
+    OnlineMIMOSVR_ptr svr_model = std::make_shared<svr::OnlineMIMOSVR>(
+            std::make_shared<svr::datamodel::SVRParameters>(
+                    0, 100, "q_svrwave_xauusd_60", "open", 2, 0, 0, 0.1, 0.5, 1, 10, 1, 0.5, kernel_type::RBF, 35,
+                    DEFAULT_APP_HYPERPARAMS(PROPS)), svr::MimoType::single, PROPS.get_multistep_len());
+
+    bpt::ptime last_modified = bpt::time_from_string("2015-05-20 10:45:00");
+    bpt::ptime last_modeled_value_time = bpt::time_from_string("2015-05-20 10:47:00");
+
+    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+            bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser",
+            svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
+
+    aci.user_service.save(user1);
+
+    InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+            "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5),
+            "UTC", std::vector<std::string>{"up", "down", "left", "right"});
+    aci.input_queue_service.save(iq);
+
+    Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::vector<InputQueue_ptr>{}
+            , svr::datamodel::Priority::Normal, "", 2, "sym7");
+
+    ds->set_is_active(true);
+    aci.dataset_service.save(ds);
+
+    std::vector<Ensemble_ptr> &ens = ds->get_ensembles();
+
+    ASSERT_EQ(0UL, ens.size());
+
+    DeconQueue_ptr p_decon_queue = std::make_shared<svr::datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+
+    DataRow_ptr row = DataRow_ptr(new svr::datamodel::DataRow(bpt::second_clock::local_time()));
+    row->set_values({3, 4, 5});
+
+    p_decon_queue->get_data().push_back(row);
+
+    aci.decon_queue_service.save(p_decon_queue);
+
+    Ensemble_ptr ensemble(new svr::datamodel::Ensemble(0L, ds->get_id(), p_decon_queue->get_table_name(),
+                                                       std::vector<std::string>()));
+
+    ds->get_ensembles().push_back(ensemble);
+
+    aci.ensemble_service.save(ensemble);
+
+    Model_ptr test_model = std::make_shared<Model>(
+            bigint(0), ensemble->get_id(), decon_level, learning_levels,
+            svr_model, last_modified, last_modeled_value_time);
+
+    Model_ptr test_model_0 = std::make_shared<Model>(
+            bigint(0), ensemble->get_id(), decon_level, learning_levels_0,
+            svr_model, last_modified, last_modeled_value_time);
+
+    ASSERT_FALSE(aci.model_service.exists(test_model));
+
+    ASSERT_EQ(0UL, aci.model_service.get_all_models_by_ensemble_id(test_model->get_ensemble_id()).size());
+
+    ASSERT_EQ(nullptr, aci.model_service.get_model_by_id(test_model->get_id()).get());
+
+    ASSERT_EQ(0, aci.model_service.remove(test_model));
+
+    ASSERT_EQ(1, aci.model_service.save(test_model));
+
+    ASSERT_EQ(1, aci.model_service.save(test_model_0));
+
+    ASSERT_NE(bigint(0), test_model->get_id());
+
+    ASSERT_NE(bigint(0), test_model_0->get_id());
+
+    ASSERT_TRUE(aci.model_service.exists(test_model));
+
+    auto models = aci.model_service.get_all_models_by_ensemble_id(ensemble->get_id());
+
+    ASSERT_EQ(2UL, models.size());
+
+    ASSERT_EQ(*test_model, *models.front());
+    ASSERT_EQ(*test_model, *aci.model_service.get_model_by_id(test_model->get_id()));
+
+    ASSERT_EQ(1, aci.model_service.remove(test_model));
+
+    ASSERT_EQ(1, aci.model_service.remove_by_ensemble_id(ensemble->get_id()));
+
+    ASSERT_FALSE(aci.model_service.exists(test_model));
+
+    ASSERT_FALSE(aci.model_service.exists(test_model_0));
+
+    ASSERT_EQ(0UL, aci.model_service.get_all_models_by_ensemble_id(ensemble->get_id()).size());
+
+    ASSERT_EQ(nullptr, aci.model_service.get_model_by_id(test_model->get_id()).get());
+
+    ASSERT_EQ(0, aci.model_service.remove(test_model));
+
+    aci.dataset_service.remove(ds);
+    aci.input_queue_service.remove(iq);
+    aci.user_service.remove(user1);
+}

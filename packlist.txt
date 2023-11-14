@@ -1,0 +1,17 @@
+.gitattributes
+.gitignore
+.idea
+CMakeLists.txt
+README
+SVRRoot
+autogen.sh
+cmake
+config
+configure.sh
+doc
+host_config
+libs
+packlist.txt
+scripts
+venv
+www

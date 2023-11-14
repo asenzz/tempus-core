@@ -1,0 +1,15 @@
+<% c++ #[[#include]]# "../../include/view/${NAME}View.hpp" %>
+<% skin basic_skin %>
+<% view ${NAME} uses content::${NAME} extends Main%>
+
+<% template title() %>
+    <% include title() %> :: ${NAME}
+<% end %>
+
+<% template page_content() %>
+
+<%= object.get_entity_id()%>
+
+<% end template %>
+<% end view %>
+<% end skin %>

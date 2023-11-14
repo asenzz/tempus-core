@@ -1,0 +1,38 @@
+<% c++ #include "view/DatasetView.hpp" %>
+<% skin SVRWebSkin %>
+<% view ShowDataset uses content::Dataset extends Main %>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 id="pageError" style="color: blue"><%= pageError %></h3>
+    <% else %>
+        <ul>
+            <li>
+                Dataset Name: <%= dataset_name %>
+            </li>
+            <li>
+                User Name: <%= user_name %>
+            </li>
+            <li>
+                Priority: <%= priority %>
+            </li>
+            <li>
+                Description: <%= description %>
+            </li>
+            <li>
+                Transformation levels: <%= transformation_levels %>
+            </li>
+            <li>
+                Transformation wavelet: <%= transformation_wavelet %>
+            </li>
+            <li>
+                Lookback time: <%= lookback_time %>
+            </li>
+
+        </ul>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>

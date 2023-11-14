@@ -1,0 +1,21 @@
+# .bashrc
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+	. /etc/bashrc
+fi
+
+# User specific aliases and functions
+
+export TEMPUS_GCC_VERSION=6.4.0
+export TEMPUS_BOOST_VERSION=1.60
+export TEMPUS_LIBRARY_DIR=`dirname "${BASH_SOURCE[0]}"`/lib/
+
+export LD_LIBRARY_PATH=/opt/soft/glibc-2.18/bin/:$LD_LIBRARY_PATH:/usr/local/cuda/include/CL:/opt/soft/boost-${TEMPUS_BOOST_VERSION}/lib/:/opt/soft/icu/lib/:/opt/soft/gcc-${TEMPUS_GCC_VERSION}/lib64/:/opt/soft/lz4/lib/:/opt/soft/gcc-infra/lib/
+export PATH=/opt/soft/glibc-2.18/bin/:$PATH
+export OpenCL_INCPATH=/usr/local/cuda/include/CL
+export CC=/opt/soft/gcc-$TEMPUS_GCC_VERSION/bin/gcc
+export CXX=/opt/soft/gcc-$TEMPUS_GCC_VERSION/bin/g++
+export CXXFLAGS="-std=c++1y -I/opt/soft/lz4/include/ -I/opt/soft/boost-${TEMPUS_BOOST_VERSION}/include/ -I/home/jarko/ViennaCL-1.7.0 -I$OpenCL_INCPATH"
+export LDFLAGS="-L/opt/soft/lz4/lib/ -L/opt/soft/boost-${TEMPUS_BOOST_VERSION}/lib/ -L/usr/local/cuda/lib64"
+

@@ -1,0 +1,43 @@
+app-config=../config/paramtune.app.config
+
+user-name = svrwave
+autotune-task-id = 0
+pso-state-file = /var/tmp/oemd-16.paramtune.10aug
+
+dataset-id = 0
+dataset-name = Dataset1
+svr-max-lookback-time-gap = 1,00:02:00
+result-dataset-id = 0
+
+svr-parameters = {
+"transformation_levels":"15", "transformation_name":"oemd",
+"svr_c_0":"10..500000", "svr_epsilon_0":"0.000001","svr_kernel_param_0":"0.0001..10", "svr_kernel_param2_0":"1", "svr_decremental_distance_0":"2000", "svr_adjacent_levels_ratio_0":"0.3", "svr_kernel_type_0":"7", "lag_count_0":"40",
+"svr_c_1":"10..500000",  "svr_epsilon_1":"0.000001", "svr_kernel_param_1":"0.0001..10", "svr_kernel_param2_1":"1", "svr_decremental_distance_1":"2000", "svr_adjacent_levels_ratio_1":"0.3", "svr_kernel_type_1":"7", "lag_count_1": "40",
+"svr_c_2":"10..500000",  "svr_epsilon_2":"0.000001", "svr_kernel_param_2":"0.0001..10", "svr_kernel_param2_2":"1", "svr_decremental_distance_2":"2000", "svr_adjacent_levels_ratio_2":"0.3", "svr_kernel_type_2":"7", "lag_count_2": "40",
+"svr_c_3":"10..500000",  "svr_epsilon_3":"0.000001", "svr_kernel_param_3":"0.0001..10", "svr_kernel_param2_3":"1", "svr_decremental_distance_3":"2000", "svr_adjacent_levels_ratio_3":"0.3", "svr_kernel_type_3":"7", "lag_count_3": "40",
+"svr_c_4":"10..500000",  "svr_epsilon_4":"0.000001", "svr_kernel_param_4":"0.0001..40", "svr_kernel_param2_4":"1", "svr_decremental_distance_4":"2000", "svr_adjacent_levels_ratio_4":"0.3", "svr_kernel_type_4":"7", "lag_count_4": "40",
+"svr_c_5":"10..500000", "svr_epsilon_5":"0.000001", "svr_kernel_param_5":"0.0001..40", "svr_kernel_param2_5":"1", "svr_decremental_distance_5":"2000", "svr_adjacent_levels_ratio_5":"0.3", "svr_kernel_type_5":"7", "lag_count_5": "40",
+"svr_c_6":"10..500000", "svr_epsilon_6":"0.000001", "svr_kernel_param_6":"0.0001..40", "svr_kernel_param2_6":"1", "svr_decremental_distance_6":"2000", "svr_adjacent_levels_ratio_6":"0.3", "svr_kernel_type_6":"7", "lag_count_6": "40",
+"svr_c_7":"10..500000", "svr_epsilon_7":"0.000001", "svr_kernel_param_7":"0.0001..40", "svr_kernel_param2_7":"1", "svr_decremental_distance_7":"2000", "svr_adjacent_levels_ratio_7":"0.3", "svr_kernel_type_7":"7", "lag_count_7": "40",
+"svr_c_8":"10..500000", "svr_epsilon_8":"0.000001",  "svr_kernel_param_8":"0.0001..40", "svr_kernel_param2_8":"1", "svr_decremental_distance_8":"2000", "svr_adjacent_levels_ratio_8":"0.3", "svr_kernel_type_8":"7", "lag_count_8": "40",
+"svr_c_9":"10..500000", "svr_epsilon_9":"0.000001",  "svr_kernel_param_9":"0.0001..40", "svr_kernel_param2_9":"1", "svr_decremental_distance_9":"2000", "svr_adjacent_levels_ratio_9":"0.3", "svr_kernel_type_9":"7", "lag_count_9": "40",
+"svr_c_10":"10..500000", "svr_epsilon_10":"0.000001",  "svr_kernel_param_10":"0.0001..40", "svr_kernel_param2_10":"1", "svr_decremental_distance_10":"2000", "svr_adjacent_levels_ratio_10":"0.3", "svr_kernel_type_10":"7", "lag_count_10": "40",
+"svr_c_11":"10..500000", "svr_epsilon_11":"0.000001",  "svr_kernel_param_11":"0.0001..40", "svr_kernel_param2_11":"1", "svr_decremental_distance_11":"2000", "svr_adjacent_levels_ratio_11":"0.3", "svr_kernel_type_11":"7", "lag_count_11": "40",
+"svr_c_12":"10..500000", "svr_epsilon_12":"0.000001",  "svr_kernel_param_12":"0.0001..40", "svr_kernel_param2_12":"1", "svr_decremental_distance_12":"2000", "svr_adjacent_levels_ratio_12":"0.3", "svr_kernel_type_12":"7", "lag_count_12": "40",
+"svr_c_13":"10..500000", "svr_epsilon_13":"0.000001",  "svr_kernel_param_13":"0.0001..40", "svr_kernel_param2_13":"1", "svr_decremental_distance_13":"2000", "svr_adjacent_levels_ratio_13":"0.3", "svr_kernel_type_13":"7", "lag_count_13": "40",
+"svr_c_14":"10..500000", "svr_epsilon_14":"0.000001",  "svr_kernel_param_14":"0.0001..40", "svr_kernel_param2_14":"1", "svr_decremental_distance_14":"2000", "svr_adjacent_levels_ratio_14":"0.3", "svr_kernel_type_14":"7", "lag_count_14": "40",
+"svr_c_15":"10..500000", "svr_epsilon_15":"0.000001",  "svr_kernel_param_15":"0.0001..40", "svr_kernel_param2_15":"1", "svr_decremental_distance_15":"2000", "svr_adjacent_levels_ratio_15":"0.3", "svr_kernel_type_15":"7", "lag_count_15": "40"
+}
+
+table-name = q_svrwave_eurusd_300
+
+start-training-time = 2017.05.01,02:00:00
+end-training-time = 2017.07.25,09:00
+start-validation-time = 2017.07.25,10:00
+end-validation-time = 2017.07.25,11:25
+validation-slide-count = 7
+validation-slide-direction = forward
+validation-slide-period = 0,1:30:00
+
+pso-particle-count = 64
+pso-iteration-count = 48

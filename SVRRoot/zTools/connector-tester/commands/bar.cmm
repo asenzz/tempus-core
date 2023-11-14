@@ -1,0 +1,101 @@
+
+#include <vector>
+
+#include "model/Request.hpp"
+
+struct Bar : Command
+{
+    Bar()
+    : Command("bar")
+    {}
+
+    char const * getBriefDescription()
+    {
+        return "bar user_name dataset_name col0 col1 col2 col3 [num]\t- sends num bars.";
+    }
+
+    char const * getDetailedDescription()
+    {
+        return "bar user_name dataset_name col0 col1 col2 col3 [num]\t\t- sends num bars.\n"
+                    "\tcol0 col1 col2 col3 are double. Usually, they are high, low, open, close\n"
+                    "\tNum is an int in diapason [0..requested_intervals.). Default is 0."
+                ;
+    }
+
+    bool execute(CommandText const &command, std::string &message)
+    {
+        if(command.parameters.size() < 6)
+            throw std::runtime_error("Bar: too few arguments.");
+        (void) message;
+
+        std::string const & user_name = command.parameters[0];
+        std::string const & dataset_name = command.parameters[1];
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+        size_t const n = command.parameters.size() >= 7 ? std::stoi(command.parameters[6]) : 1;
+#pragma GCC diagnostic pop
+
+        svr::context::AppContext & aci = APP;
+
+        User_ptr user = aci.user_service.get_user_by_user_name(user_name);
+
+        Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
+        if(!dataset)
+            throw std::runtime_error("Bar: cannot find the user's dataset.");
+
+        MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
+        if(!request)
+            throw std::runtime_error("Bar: cannot find the user's request. Make sure MT4 is started and requests for values.");
+
+        boost::posix_time::time_duration const resolution {boost::posix_time::seconds(request->resolution)};
+
+        InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
+        if(!queue)
+            throw std::runtime_error("Bar: cannot find the input queue.");
+
+        DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
+        if(!nr)
+            throw std::runtime_error("Bar: Input queue is empty");
+
+        using ColMapper = std::map<std::string, size_t> ;
+        ColMapper mapper;
+
+        for(size_t i = 0; i < queue->get_value_columns().size(); ++i)
+            mapper[queue->get_value_columns()[i]] = i;
+
+        boost::posix_time::ptime endt = nr->get_value_time();
+
+        MultivalResponse_ptr resp = MultivalResponse_ptr (new svr::datamodel::MultivalResponse (0, request->get_id(), endt + resolution, "", 0.0 ) );
+
+        for(size_t i = 0; i < n; ++i)
+        {
+            size_t coln = 0;
+            resp->value_time = endt + resolution * (i+1);
+            for( auto column : svr::common::from_sql_array(request->value_columns) )
+            {
+                ColMapper::const_iterator const iter = mapper.find(column);
+                if(iter == mapper.end())
+                {
+                    std::string txt {"Bar: cannot find column "}; txt += column; txt +=" in the input queue";
+                    throw std::runtime_error(txt.c_str());
+                }
+
+                resp->set_id(0);
+                resp->value_column = column;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+                resp->value = std::stod(command.parameters[2+coln++]);
+#pragma GCC diagnostic pop
+
+                aci.request_service.save(resp);
+            }
+        }
+        return true;
+    }
+};
+
+namespace {
+    Bar * b __attribute__((unused)) = new Bar();
+}

@@ -1,0 +1,18 @@
+app-config=../config/app.config
+
+
+set-dataset=1
+user-name=svrwave
+table-name=q_svrwave_eurusd_60
+dataset-id=0
+dataset-name=Dataset1
+svr-max-lookback-time-gap=0,23:00:00
+svr-parameters={"swt_levels":"1", "swt_wavelet_name":"bior2.6", "svr_c_0":"32", "svr_epsilon_0":"0.001", "svr_kernel_param_0":"1.5", "svr_kernel_param2_0":"1.0", "svr_decremental_distance_0":"1", "svr_adjacent_levels_ratio_0":"0.5", "svr_kernel_type_0":"5","svr_error_tolerance_0": "0.001", "lookback_rows_0": "12", "svr_c_1":"32", "svr_epsilon_1":"0.001", "svr_kernel_param_1":"1.0", "svr_kernel_param2_1":"1.2", "svr_decremental_distance_1":"1", "svr_adjacent_levels_ratio_1":"0.5", "svr_kernel_type_1":"5" ,"svr_error_tolerance_1": "0.001", "lookback_rows_1": "30"}
+use-onlinesvr=1
+
+set-prediction-task=1
+prediction-task-id=0
+start-training-time=2015.05.20,10:17
+end-training-time=2015.05.20,10:47
+start-forecast-time=2015.05.20,10:48
+end-forecast-time=2015.05.20,10:50

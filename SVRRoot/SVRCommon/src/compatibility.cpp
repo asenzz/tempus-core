@@ -1,0 +1,251 @@
+#include "common/compatibility.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <execinfo.h>
+#include <cxxabi.h>
+
+#include "common/parallelism.hpp"
+
+
+namespace std {
+    std::string to_string(const long double v)
+    {
+        std::ostringstream out;
+        out.precision(std::numeric_limits<double>::max_digits10);
+        return out.str();
+    }
+
+    std::string to_string(const double v)
+    {
+        std::ostringstream out;
+        out.precision(std::numeric_limits<double>::max_digits10);
+        return out.str();
+    }
+
+    std::string to_string(const float v)
+    {
+        std::ostringstream out;
+        out.precision(std::numeric_limits<float>::max_digits10);
+        return out.str();
+    }
+}
+
+namespace svr {
+namespace common {
+
+// Armadillo's * operator for vector and matrix seems to be broken in a multi-threaded environment
+arma::mat mul_mat_vec(const arma::mat &m, const arma::mat &v)
+{
+    arma::mat mul_t(m.n_rows, v.n_cols);
+    //LOG4_DEBUG("size p_kernel_matrices->at(chunk_idx), size component.chunk_weights[chunk_idx] " << arma::size(p_kernel_matrices->at(chunk_idx)) << " " << arma::size(component.chunk_weights[chunk_idx]));
+    __omp_pfor_i(0, mul_t.n_rows, mul_t(i, 0) = arma::sum(m.row(i) * v) )
+    return mul_t;
+}
+
+
+void test_mat_vec_mul()
+{
+    arma::mat m(5, 5);
+    arma::mat v(5, 1);
+    for (size_t i = 0; i < m.n_rows; ++i) {
+        m.row(i).fill(i);
+        v.row(i).fill(i);
+    }
+    arma::mat mul1 = m * v;
+    arma::mat mul2 = mul_mat_vec(m, v);
+    std::cout << "m * v = " << mul1;
+    std::cout << "m mult v = " << mul2;
+    std::cout << "testis " << (mul1 == mul2);
+}
+
+
+void arma_to_vcl(const arma::mat &input, viennacl::matrix<double> &output)
+{
+    double *raw_vec = (double *) malloc(output.internal_size() * sizeof(double));
+    __omp_tpfor_i(size_t, 0, output.size1(),
+                  for (size_t j = 0; j < output.size2(); ++j)
+            raw_vec[i * output.internal_size2() + j] = input(i, j); )
+    fast_copy(raw_vec, raw_vec + output.internal_size(), output);
+    free(raw_vec);
+}
+
+viennacl::vector<double> arma_to_vcl(const arma::colvec &input)
+{
+    viennacl::vector<double> res(input.size());
+    viennacl::fast_copy(input.memptr(), input.memptr() + input.n_elem, res.begin());
+    return res;
+}
+
+
+void vcl_to_arma(const viennacl::matrix<double> &input, arma::mat &output)
+{
+    output.set_size(input.internal_size2(), input.internal_size1());
+    viennacl::fast_copy(input, output.memptr());
+    output.resize(input.size2(), input.size1());
+    output = output.t();
+}
+
+
+ptimes_set_t
+to_multistep_times(
+        const ptimes_set_t &prediction_times,
+        const bpt::time_duration &resolution, const size_t &multistep_len)
+{
+    bpt::ptime prev;
+    size_t multistep_counter = 0;
+    ptimes_set_t multistep_subset;
+    for (const auto &prediction_time: prediction_times)
+    {
+
+        if((prediction_time - resolution != prev) || multistep_counter >= multistep_len)
+        {
+            multistep_counter = 0;
+            multistep_subset.insert(prediction_time);
+        }
+
+        prev = prediction_time;
+        ++multistep_counter;
+    }
+    return multistep_subset;
+}
+
+ptimes_set_t
+to_times(
+        const boost::posix_time::time_period &prediction_range,
+        const boost::posix_time::time_duration &resolution)
+{
+    ptimes_set_t result;
+    for (auto prediction_time = prediction_range.begin();
+         prediction_time < prediction_range.end();
+         prediction_time += resolution)
+        result.insert(prediction_time);
+    return result;
+}
+
+ptimes_set_t
+to_times(
+        const boost::posix_time::time_period &prediction_range,
+        const boost::posix_time::time_duration &resolution,
+        const size_t comb_train_ct,
+        const size_t comb_validate_ct)
+{
+    size_t ctr = 0;
+    ptimes_set_t result;
+    for (auto prediction_time = prediction_range.begin();
+         prediction_time < prediction_range.end();
+         prediction_time += resolution) {
+        if (ctr >= comb_train_ct) {
+            ++ctr;
+            continue;
+        }
+        result.insert(prediction_time);
+        if (ctr >= comb_train_ct + comb_validate_ct) ctr = 0;
+        else ++ctr;
+    }
+    return result;
+}
+
+
+static const unsigned int max_frames = 63;
+/** Print a demangled stack backtrace of the caller function to FILE* out. */
+void print_stacktrace()
+{
+    FILE *out = stdout;
+    fprintf(out, "stack trace:\n");
+
+    // storage array for stack trace address data
+    void* addrlist[max_frames+1];
+
+    // retrieve current stack addresses
+    int addrlen = backtrace(addrlist, sizeof(addrlist) / sizeof(void*));
+
+    if (addrlen == 0) {
+        fprintf(out, "  <empty, possibly corrupt>\n");
+        return;
+    }
+
+    // resolve addresses into strings containing "filename(function+address)",
+    // this array must be free()-ed
+    char** symbollist = backtrace_symbols(addrlist, addrlen);
+
+    // allocate string which will be filled with the demangled function name
+    size_t funcnamesize = 256;
+    char* funcname = (char*)malloc(funcnamesize);
+
+    // iterate over the returned symbol lines. skip the first, it is the
+    // address of this function.
+    for (int i = 1; i < addrlen; i++)
+    {
+        char *begin_name = 0, *begin_offset = 0, *end_offset = 0;
+
+        // find parentheses and +address offset surrounding the mangled name:
+        // ./module(function+0x15c) [0x8048a6d]
+        for (char *p = symbollist[i]; *p; ++p)
+        {
+            if (*p == '(')
+                begin_name = p;
+            else if (*p == '+')
+                begin_offset = p;
+            else if (*p == ')' && begin_offset) {
+                end_offset = p;
+                break;
+            }
+        }
+
+        if (begin_name && begin_offset && end_offset
+            && begin_name < begin_offset)
+        {
+            *begin_name++ = '\0';
+            *begin_offset++ = '\0';
+            *end_offset = '\0';
+
+            // mangled name is now in [begin_name, begin_offset) and caller
+            // offset in [begin_offset, end_offset). now apply
+            // __cxa_demangle():
+
+            int status;
+            char* ret = abi::__cxa_demangle(begin_name,
+                                            funcname, &funcnamesize, &status);
+            if (status == 0) {
+                funcname = ret; // use possibly realloc()-ed string
+                fprintf(out, "  %s : %s+%s\n",
+                        symbollist[i], funcname, begin_offset);
+            }
+            else {
+                // demangling failed. Output function name as a C function with
+                // no arguments.
+                fprintf(out, "  %s : %s()+%s\n",
+                        symbollist[i], begin_name, begin_offset);
+            }
+        }
+        else
+        {
+            // couldn't parse the line? print the whole line.
+            fprintf(out, "  %s\n", symbollist[i]);
+        }
+    }
+
+    free(funcname);
+    free(symbollist);
+}
+
+/*bool Equals(const double& lhs, const double& rhs){
+	return(std::fabs(lhs - rhs) < (std::numeric_limits<double>::epsilon() * 1000000));
+}*/
+
+
+bool Equals(const double& lhs, const double& rhs)
+{
+	return Round(lhs) == Round(rhs);
+}
+
+
+double Round(const double &dbl)
+{
+	return round(dbl * multi_div)/multi_div;
+}
+
+
+}
+}

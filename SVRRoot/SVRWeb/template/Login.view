@@ -1,0 +1,16 @@
+<% c++ #include "view/LoginView.hpp" %>
+<% skin SVRWebSkin %>
+<% view Login uses content::Login extends Main%>
+
+<% template page_content() %>
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+        <form method="post" action="/web/login/" >
+            <% form as_p form %>
+        </form>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>

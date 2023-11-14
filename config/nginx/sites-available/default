@@ -1,0 +1,171 @@
+# You may add here your
+# server {
+#	...
+# }
+# statements for each of your virtual hosts to this file
+
+##
+# You should look at the following URL's in order to grasp a solid understanding
+# of Nginx configuration files in order to fully unleash the power of Nginx.
+# http://wiki.nginx.org/Pitfalls
+# http://wiki.nginx.org/QuickStart
+# http://wiki.nginx.org/Configuration
+#
+# Generally, you will want to move this file somewhere, and start with a clean
+# file but keep this around for reference. Or just disable in sites-enabled.
+#
+# Please see /usr/share/doc/nginx-doc/examples/ for more detailed examples.
+##
+
+
+# HTTPS server
+#
+server {
+	listen 443;
+	server_name localhost;
+
+	root /;
+#	index index.html index.htm;
+
+	ssl on;
+	ssl_certificate 	/etc/ssl/certs/server.pem;
+	ssl_certificate_key 	/etc/ssl/private/server.key;
+
+	ssl_session_timeout 5m;
+
+	ssl_protocols SSLv3 TLSv1 TLSv1.1 TLSv1.2;
+	ssl_ciphers "HIGH:!aNULL:!MD5 or HIGH:!aNULL:!MD5:!3DES";
+	ssl_prefer_server_ciphers on;
+
+
+	set $path_info "";
+	if ( $fastcgi_script_name ~ ^/(mt4|web)(/.*$) ) {
+	    set $path_info $2;
+	}
+
+	location ~ /(mt4|web)/.* {
+	    fastcgi_pass unix:/var/svrweb/svrweb_fcgi;
+
+	    fastcgi_param  QUERY_STRING       $query_string;
+	    fastcgi_param  REQUEST_METHOD     $request_method;
+	    fastcgi_param  CONTENT_TYPE       $content_type;
+	    fastcgi_param  CONTENT_LENGTH     $content_length;
+
+	    fastcgi_param  SCRIPT_NAME        $1;
+	    fastcgi_param  PATH_INFO          $path_info;
+	    fastcgi_param  REQUEST_URI        $request_uri;
+	    fastcgi_param  DOCUMENT_URI       $document_uri;
+	    fastcgi_param  DOCUMENT_ROOT      $document_root;
+	    fastcgi_param  SERVER_PROTOCOL    $server_protocol;
+
+	    fastcgi_param  GATEWAY_INTERFACE  CGI/1.1;
+	    fastcgi_param  SERVER_SOFTWARE    nginx;
+
+	    fastcgi_param  REMOTE_ADDR        $remote_addr;
+	    fastcgi_param  REMOTE_PORT        $remote_port;
+	    fastcgi_param  SERVER_ADDR        $server_addr;
+	    fastcgi_param  SERVER_PORT        $server_port;
+	    fastcgi_param  SERVER_NAME        $server_name;
+	}
+}
+
+#server {
+#	listen 80 default_server;
+#	listen [::]:80 default_server ipv6only=on;
+#
+#	root /;
+#	root /usr/share/nginx/html;
+#
+#	# Make site accessible from http://localhost/
+#	server_name localhost;
+#
+#	location / {
+#		# First attempt to serve request as file, then
+#		# as directory, then fall back to displaying a 404.
+#		try_files $uri $uri/ =404;
+#		# Uncomment to enable naxsi on this location
+#		# include /etc/nginx/naxsi.rules
+#	}
+#
+#	set $path_info "";
+#	if ( $fastcgi_script_name ~ ^/(mt4|web)(/.*$) ) {
+#	    set $path_info $2;
+#	}
+#
+#	location ~ /(mt4|web)/.* {
+#	    fastcgi_pass unix:/var/svrweb/svrweb_fcgi;
+#
+#	    fastcgi_param  QUERY_STRING       $query_string;
+#	    fastcgi_param  REQUEST_METHOD     $request_method;
+#	    fastcgi_param  CONTENT_TYPE       $content_type;
+#	    fastcgi_param  CONTENT_LENGTH     $content_length;
+#
+#	    fastcgi_param  SCRIPT_NAME        $1;
+#	    fastcgi_param  PATH_INFO          $path_info;
+#	    fastcgi_param  REQUEST_URI        $request_uri;
+#	    fastcgi_param  DOCUMENT_URI       $document_uri;
+#	    fastcgi_param  DOCUMENT_ROOT      $document_root;
+#	    fastcgi_param  SERVER_PROTOCOL    $server_protocol;
+#
+#	    fastcgi_param  GATEWAY_INTERFACE  CGI/1.1;
+#	    fastcgi_param  SERVER_SOFTWARE    nginx;
+#
+#	    fastcgi_param  REMOTE_ADDR        $remote_addr;
+#	    fastcgi_param  REMOTE_PORT        $remote_port;
+#	    fastcgi_param  SERVER_ADDR        $server_addr;
+#	    fastcgi_param  SERVER_PORT        $server_port;
+#	    fastcgi_param  SERVER_NAME        $server_name;
+#	}
+
+	# Only for nginx-naxsi used with nginx-naxsi-ui : process denied requests
+	#location /RequestDenied {
+	#	proxy_pass http://127.0.0.1:8080;
+	#}
+
+	#error_page 404 /404.html;
+
+	# redirect server error pages to the static page /50x.html
+	#
+	#error_page 500 502 503 504 /50x.html;
+	#location = /50x.html {
+	#	root /usr/share/nginx/html;
+	#}
+
+	# pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
+	#
+	#location ~ \.php$ {
+	#	fastcgi_split_path_info ^(.+\.php)(/.+)$;
+	#	# NOTE: You should have "cgi.fix_pathinfo = 0;" in php.ini
+	#
+	#	# With php5-cgi alone:
+	#	fastcgi_pass 127.0.0.1:9000;
+	#	# With php5-fpm:
+	#	fastcgi_pass unix:/var/run/php5-fpm.sock;
+	#	fastcgi_index index.php;
+	#	include fastcgi_params;
+	#}
+
+	# deny access to .htaccess files, if Apache's document root
+	# concurs with nginx's one
+	#
+	#location ~ /\.ht {
+	#	deny all;
+	#}
+#}
+
+
+# another virtual host using mix of IP-, name-, and port-based configuration
+#
+#server {
+#	listen 8000;
+#	listen somename:8080;
+#	server_name somename alias another.alias;
+#	root html;
+#	index index.html index.htm;
+#
+#	location / {
+#		try_files $uri $uri/ =404;
+#	}
+#}
+
+

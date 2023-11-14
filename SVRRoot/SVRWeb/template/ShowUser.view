@@ -1,0 +1,17 @@
+<% c++ #include "view/UserView.hpp" %>
+<% skin SVRWebSkin %>
+<% view ShowUser uses content::User extends Main %>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+        <h3>User name: <%= object->get_user_name() %></h3>
+        <h3>Name: <%= object->get_name() %></h3>
+        <h3>E-mail: <%= object->get_email() %></h3>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>

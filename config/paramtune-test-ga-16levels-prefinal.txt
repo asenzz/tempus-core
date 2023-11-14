@@ -1,0 +1,43 @@
+app-config=../config/paramtune.app.config
+
+user-name = svrwave
+autotune-task-id = 0
+pso-state-file = /var/tmp/oemd-16.paramtune.10aug
+
+dataset-id = 0
+dataset-name = Dataset1
+svr-max-lookback-time-gap = 1,00:02:00
+result-dataset-id = 0
+
+svr-parameters = {
+"transformation_levels":"15", "transformation_name":"oemd",
+"svr_c_0":"500", "svr_epsilon_0":"0.0001","svr_kernel_param_0":"1", "svr_kernel_param2_0":"0.05..0.2", "svr_decremental_distance_0":"6500", "svr_adjacent_levels_ratio_0":"0.0001", "svr_kernel_type_0":"6", "lag_count_0":"25",
+"svr_c_1":"500",  "svr_epsilon_1":"0.0001", "svr_kernel_param_1":"1", "svr_kernel_param2_1":"0.05..0.2", "svr_decremental_distance_1":"6500", "svr_adjacent_levels_ratio_1":"0.0001", "svr_kernel_type_1":"6", "lag_count_1": "25",
+"svr_c_2":"500",  "svr_epsilon_2":"0.0001", "svr_kernel_param_2":"1", "svr_kernel_param2_2":"0.05..0.2", "svr_decremental_distance_2":"6500", "svr_adjacent_levels_ratio_2":"0.0001", "svr_kernel_type_2":"6", "lag_count_2": "25",
+"svr_c_3":"500",  "svr_epsilon_3":"0.0001", "svr_kernel_param_3":"1", "svr_kernel_param2_3":"0.05..0.2", "svr_decremental_distance_3":"6500", "svr_adjacent_levels_ratio_3":"0.0001", "svr_kernel_type_3":"6", "lag_count_3": "25",
+"svr_c_4":"500",  "svr_epsilon_4":"0.0001", "svr_kernel_param_4":"1", "svr_kernel_param2_4":"0.05..0.2", "svr_decremental_distance_4":"6500", "svr_adjacent_levels_ratio_4":"0.0001", "svr_kernel_type_4":"6", "lag_count_4": "25",
+"svr_c_5":"500", "svr_epsilon_5":"0.0001", "svr_kernel_param_5":"6", "svr_kernel_param2_5":"0.015..0.06", "svr_decremental_distance_5":"6500", "svr_adjacent_levels_ratio_5":"0.0001", "svr_kernel_type_5":"6", "lag_count_5": "25",
+"svr_c_6":"500", "svr_epsilon_6":"0.0001", "svr_kernel_param_6":"6", "svr_kernel_param2_6":"0.015..0.06", "svr_decremental_distance_6":"6500", "svr_adjacent_levels_ratio_6":"0.0001", "svr_kernel_type_6":"6", "lag_count_6": "25",
+"svr_c_7":"500", "svr_epsilon_7":"0.0001", "svr_kernel_param_7":"8", "svr_kernel_param2_7":"0.0125..0.05", "svr_decremental_distance_7":"6500", "svr_adjacent_levels_ratio_7":"0.1", "svr_kernel_type_7":"6", "lag_count_7": "25",
+"svr_c_8":"500", "svr_epsilon_8":"0.0001",  "svr_kernel_param_8":"8", "svr_kernel_param2_8":"0.0125..0.05", "svr_decremental_distance_8":"6500", "svr_adjacent_levels_ratio_8":"0.1", "svr_kernel_type_8":"6", "lag_count_8": "25",
+"svr_c_9":"500", "svr_epsilon_9":"0.0001",  "svr_kernel_param_9":"8", "svr_kernel_param2_9":"0.0125..0.05", "svr_decremental_distance_9":"6500", "svr_adjacent_levels_ratio_9":"0.1", "svr_kernel_type_9":"6", "lag_count_9": "25",
+"svr_c_10":"2000", "svr_epsilon_10":"0.0001",  "svr_kernel_param_10":"8", "svr_kernel_param2_10":"0.0125..0.05", "svr_decremental_distance_10":"6500", "svr_adjacent_levels_ratio_10":"0.1", "svr_kernel_type_10":"6", "lag_count_10": "25",
+"svr_c_11":"2000", "svr_epsilon_11":"0.0001",  "svr_kernel_param_11":"8", "svr_kernel_param2_11":"0.0125..0.05", "svr_decremental_distance_11":"6500", "svr_adjacent_levels_ratio_11":"0.1", "svr_kernel_type_11":"6", "lag_count_11": "25",
+"svr_c_12":2000", "svr_epsilon_12":"0.0001",  "svr_kernel_param_12":"8", "svr_kernel_param2_12":"0.0125..0.05", "svr_decremental_distance_12":"6500", "svr_adjacent_levels_ratio_12":"0.1", "svr_kernel_type_12":"6", "lag_count_12": "25",
+"svr_c_13":"2000", "svr_epsilon_13":"0.0001",  "svr_kernel_param_13":"8", "svr_kernel_param2_13":"0.0125..0.05", "svr_decremental_distance_13":"6500", "svr_adjacent_levels_ratio_13":"0.1", "svr_kernel_type_13":"6", "lag_count_13": "25",
+"svr_c_14":"2000", "svr_epsilon_14":"0.0001",  "svr_kernel_param_14":"8", "svr_kernel_param2_14":"0.0125..0.05", "svr_decremental_distance_14":"6500", "svr_adjacent_levels_ratio_14":"0.1", "svr_kernel_type_14":"6", "lag_count_14": "25",
+"svr_c_15":"2000", "svr_epsilon_15":"0.0001",  "svr_kernel_param_15":"8", "svr_kernel_param2_15":"0.0125..0.05", "svr_decremental_distance_15":"6500", "svr_adjacent_levels_ratio_15":"0.1", "svr_kernel_type_15":"6", "lag_count_15": "25"
+}
+
+table-name = q_svrwave_eurusd_300
+
+start-training-time = 2017.05.01,02:00:00
+end-training-time = 2017.07.25,09:00
+start-validation-time = 2017.07.25,10:00
+end-validation-time = 2017.07.25,11:25
+validation-slide-count = 7
+validation-slide-direction = forward
+validation-slide-period = 0,1:30:00
+
+pso-particle-count = 64
+pso-iteration-count = 48

@@ -1,0 +1,111 @@
+<% c++ #include "view/MainView.hpp" %>
+<% skin SVRWebSkin %>
+<% view Main uses content::Main %>
+
+<% template title() %>:: <%= pageTitle %><% end %>
+<% template subtitle() %><%= subTitle %><% end %>
+
+<% template page_head()%><% end %>
+
+<% template page_nav() %>
+    <ul id="jMenu">
+        <li><a href="<% url "/index" %>">Home</a></li>
+        <% if (content.app().session().is_set("role") && content.app().session()["role"] == "ADMIN") %>
+        <li><a href="<% url "/user/showall" %>" >Users</a>
+            <ul>
+                <li><a href="<% url "/user/showall" %>">Show All</a></li>
+                <li><a href="<% url "/user/create" %>">Create User</a></li>
+            </ul>
+        </li>
+        <% end %>
+        <li><a href="<% url "/queue/showall" %>" >Input Queues</a>
+            <ul>
+                <li><a href="<% url "/queue/showall" %>">Show All</a></li>
+                <li><a href="<% url "/queue/create" %>">Create InputQueue</a></li>
+            </ul>
+        </li>
+        <li><a href="<% url "/dataset/showall" %>" >Datasets</a>
+            <ul>
+                <li><a href="<% url "/dataset/showall" %>">Show All</a></li>
+                <li><a href="<% url "/dataset/create" %>">Create Dataset</a></li>
+            </ul>
+        </li>
+        <li>
+            <a href="<% url "/login/login" %>">
+            <% if (content.app().session()["user"] != "") %> Logout
+            <% else %>Login<% end %>
+            </a>
+        </li>
+    </ul>
+<% end %>
+
+<% template page_content()%>No content<% end %>
+
+<% template page_footer()%>
+    <div id="copyright">
+        Copyright &copy; 2015 SVRDel |
+        Design by <a href="<% url "/index" %>">SVRDel Designs</a>
+    </div>
+
+    <div id="footercontact">
+        <a href="/contact">Contact</a>
+    </div>
+<% end %>
+
+<% template render() %>
+
+<html>
+<head>
+    <title><% include title() %></title>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+    <meta name="description" content="Forecast Service" />
+    <meta name="keywords" content="forecast,svr,algorithm,onlinesvr" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="/css/jquery-ui.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="/css/ui.jqgrid.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="/css/jmenu.css"/>
+    <link rel="stylesheet" type="text/css" media="screen" href="/css/style.css"/>
+
+    <script src="/js/jquery/jquery.js" type="text/javascript" language="JavaScript"></script>
+    <script src="/js/jquery/jquery-ui.js" type="text/javascript" ></script>
+    <script src="/js/jquery/jMenu.jquery.min.js" type="text/javascript" ></script>
+
+    <script src="/js/json/json2.js" type="text/javascript" language="JavaScript"></script>
+    <script src="/js/json/jsonrpc.js" type="text/javascript" language="JavaScript"></script>
+
+    <script src="/js/jqgrid/grid.locale-en.js" type="text/javascript"></script>
+    <script src="/js/jqgrid/jquery.jqGrid.min.js" type="text/javascript"></script>
+
+    <script src="/js/common.js" type="text/javascript" language="JavaScript"></script>
+    <% include page_head() %>
+</head>
+<body>
+
+<!--
+<div id="slogan">
+    <% include subtitle() %>
+</div>
+-->
+<div id="title">
+    <% include title() %>
+</div>
+
+<div id="menu">
+    <% include page_nav() %>
+</div>
+
+<div id="maincontent">
+    <% include page_content() %>
+    <div id="jDialog"></div>
+</div>
+
+<div id="footer">
+    <% include page_footer() %>
+</div>
+
+</body>
+</html>
+
+<% end template %>
+<% end view %>
+<% end skin %>

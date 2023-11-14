@@ -1,0 +1,52 @@
+#include <thread>
+#include <chrono>
+#include "../controller.hpp"
+
+struct Cycle : Command
+{
+    Cycle()
+    : Command("c")
+    {}
+
+    char const * getBriefDescription()
+    {
+        return "c command [params]\t\t\t\t\t- cycles the command following after in an infinite loop once in a minute.";
+    }
+
+    char const * getDetailedDescription()
+    {
+        return getBriefDescription();
+    }
+
+    bool execute(CommandText const & command, std::string & message)
+    {
+        if(command.parameters.empty())
+            throw std::runtime_error("Cycle: requires command passed as parameters");
+
+        CommandText cmd;
+        cmd.command = command.parameters[0];
+        cmd.parameters = decltype(command.parameters)(command.parameters.begin()+1, command.parameters.end());
+
+        std::string msg;
+
+        Controller controller;
+        while(true)
+        {
+            if(!controller.execute(cmd, msg))
+            {
+                message = msg;
+                return false;
+            }
+            std::this_thread::sleep_for(std::chrono::minutes(1));
+        }
+
+        return true;
+    }
+};
+
+namespace {
+    Cycle * c __attribute__((unused)) = new Cycle();
+}
+
+
+

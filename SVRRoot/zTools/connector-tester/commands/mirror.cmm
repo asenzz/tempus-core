@@ -1,0 +1,103 @@
+#include <appcontext.hpp>
+#include <model/Request.hpp>
+#include <model/User.hpp>
+#include <util/string_utils.hpp>
+
+struct Mirror : Command
+{
+    Mirror()
+    : Command("mirror")
+    {}
+
+    char const * getBriefDescription()
+    {
+        return "mirror user_name dataset_name resolution\t\t- mirror the requested values from the input queue.";
+    }
+
+    char const * getDetailedDescription()
+    {
+        return "mirror user_name dataset_name\t\t- mirror the requested values from the input queue\n"
+                    "\tgiven by user_name, dataset_id. Resolution will be calculated from the request.\n"
+                    "\tOutputs the requested number of bars. Bars are outputted in a mirrored order - \n"
+                    "\tlast bar in the input queue becomes first."
+                ;
+    }
+
+    bool execute(CommandText const & command, std::string & message)
+    {
+        if(command.parameters.size() < 2)
+            throw std::runtime_error("Mirror: too few arguments.");
+
+        std::string const & user_name = command.parameters[0];
+        std::string const & dataset_name = command.parameters[1];
+
+        svr::context::AppContext & aci = APP;
+
+        User_ptr user = aci.user_service.get_user_by_user_name(user_name);
+
+        Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
+        if(!dataset)
+            throw std::runtime_error("Mirror: cannot find the user's dataset.");
+
+        MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
+        if(!request)
+            throw std::runtime_error("Mirror: cannot find the user's request. Make sure MT4 is started and requests for values.");
+
+        boost::posix_time::time_duration const resolution {boost::posix_time::seconds(request->resolution)};
+
+        InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
+        if(!queue)
+            throw std::runtime_error("Mirror: cannot find the input queue.");
+
+        size_t n ((request->value_time_end - request->value_time_start).total_seconds() / request->resolution);
+
+        DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
+        if(!nr)
+            throw std::runtime_error("Mirror: Input queue is empty");
+
+        boost::posix_time::ptime endt = nr->get_value_time() + resolution;
+        boost::posix_time::ptime strt = endt - resolution * (n);
+
+        using DataRows = svr::datamodel::DataRow::container;
+
+        DataRows data = aci.input_queue_service.get_queue_data(queue->get_table_name(), strt, endt);
+
+        if(data.front()->get_values().size() != queue->get_value_columns().size() )
+            throw std::runtime_error("Mirror: input queue column number does not correspond to that in the metadata.");
+
+        using ColMapper = std::map<std::string, size_t> ;
+        ColMapper mapper;
+
+        for(size_t i = 0; i < queue->get_value_columns().size(); ++i)
+            mapper[queue->get_value_columns()[i]] = i;
+
+        n = 1;
+
+        MultivalResponse_ptr resp = MultivalResponse_ptr (new svr::datamodel::MultivalResponse (0, request->get_id(), strt, "", 0.0 ) );
+        for(DataRows::reverse_iterator idata = data.rbegin(); idata != data.rend(); ++idata)
+        {
+            resp->value_time = endt + resolution * n++ ;
+
+            for( auto column : svr::common::from_sql_array(request->value_columns) )
+            {
+                ColMapper::const_iterator const iter = mapper.find(column);
+                if(iter == mapper.end())
+                {
+                    std::string txt {"Mirror: cannot find column "}; txt += column; txt +=" in the input queue";
+                    throw std::runtime_error(txt.c_str());
+                }
+
+                resp->set_id(0);
+                resp->value_column = column;
+                resp->value = idata->get()->get_values()[iter->second];
+                aci.request_service.save(resp);
+            }
+        }
+
+        return true;
+    }
+};
+
+namespace {
+    Mirror * m __attribute__((unused)) = new Mirror();
+}

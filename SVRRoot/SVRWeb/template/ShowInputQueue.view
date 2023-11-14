@@ -1,0 +1,29 @@
+<% c++ #include "view/InputQueueView.hpp" %>
+
+<% skin SVRWebSkin %>
+<% view ShowInputQueue uses content::InputQueue extends Main%>
+
+<% template title() %>
+    :: <%= pageTitle %>
+<% end %>
+
+<% template page_head() %>
+    <script src="/js/ShowInputQueue.js" type="text/javascript" language="JavaScript"></script>
+    <script type="application/javascript">
+        var inputQueueTableName = '<%= object->get_table_name() %>';
+    </script>
+<% end template%>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h2 id="pageError" style="color: blue"><%= pageError %></h2>
+    <% else %>
+        <table id="queue"></table>
+        <div id="jqGridPager"></div>
+    <% end %>
+
+<% end template %>
+
+<% end view %>
+<% end skin %>

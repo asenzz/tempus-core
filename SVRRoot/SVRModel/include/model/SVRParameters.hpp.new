@@ -1,0 +1,530 @@
+#pragma once
+
+#include "common/defines.h"
+#include "common/types.hpp"
+#include "model/Entity.hpp"
+#include "common/Logging.hpp"
+#include "util/string_utils.hpp"
+#include "common/constants.hpp"
+#include <cstdlib>
+#include <limits>
+#include <map>
+#include <cstddef>
+#include <ostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <sys/types.h>
+#include <tuple>
+#include <vector>
+#include <utility>
+
+//#define SMO_EPSILON 1e-3
+
+namespace svr {
+namespace datamodel {
+
+#define DEFAULT_SVR_HYPERPARAMS \
+        bigint(0),\
+        bigint(0),\
+        "",\
+        "",\
+        DEFAULT_SVRPARAM_DECON_LEVEL,\
+        DEFAULT_SVRPARAM_DECREMENT_DISTANCE,\
+        DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO,\
+        DEFAULT_SVRPARAM_LAG_COUNT
+
+
+typedef enum class kernel_type : int
+{
+    LINEAR = 0,
+    POLYNOMIAL = 1,
+    RBF = 2,
+    RBF_GAUSSIAN = 3,
+    RBF_EXPONENTIAL = 4,
+    MLP = 5,
+    GA = 6, // global alignment
+    PATH = 7, // path kernel
+    DEEP_PATH = 8,
+    DEEP_PATH2 = 9,
+    number_of_kernel_types = 10 //end of enum = invalid type
+} kernel_type_e, *kernel_type_e_ptr;
+
+inline kernel_type_e operator++(kernel_type_e &k_type)
+{
+    int tmp = static_cast<int>(k_type);
+    tmp++;
+    return k_type = static_cast<kernel_type_e >( tmp);
+}
+
+inline kernel_type_e const operator++(kernel_type_e &k_type, int)
+{
+    const kernel_type_e tmp(k_type);
+    ++k_type;
+    return tmp;
+}
+
+enum class bound_type : int
+{
+    min = 0,
+    max = 1
+};
+
+typedef std::tuple<std::string, /* input_queue_table_name; */ std::string, /* input_queue_column_name; */ size_t /* decon_level */> svr_parameters_index_t;
+
+struct machine_parameters
+{
+    double svr_C;
+    double svr_epsilon;
+    double svr_kernel_param;
+    double svr_kernel_param2;
+    kernel_type_e kernel_type;
+
+    explicit machine_parameters(
+            const double svr_C = DEFAULT_SVRPARAM_SVR_COST,
+            const double svr_epsilon = DEFAULT_SVRPARAM_SVR_EPSILON,
+            const double svr_kernel_param = DEFAULT_SVRPARAM_KERNEL_PARAM_1,
+            const double svr_kernel_param2 = DEFAULT_SVRPARAM_KERNEL_PARAM_2,
+            const kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE
+    ) : svr_C(svr_C), svr_epsilon(svr_epsilon), svr_kernel_param(svr_kernel_param), svr_kernel_param2(svr_kernel_param2), kernel_type(kernel_type)
+    {
+        if (svr_epsilon < 0) THROW_EX_FS(std::invalid_argument, "Epsilon parameter " << svr_epsilon << " is less than zero.");
+        if (kernel_type >= kernel_type_e::number_of_kernel_types) THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << ssize_t(kernel_type));
+    }
+};
+
+bool operator==(const machine_parameters &lhs, const machine_parameters &rhs)
+{
+    return lhs.svr_C == rhs.svr_C && lhs.svr_epsilon == rhs.svr_epsilon && lhs.svr_kernel_param == rhs.svr_kernel_param && lhs.svr_kernel_param2 == rhs.svr_kernel_param2 && lhs.kernel_type == rhs.kernel_type;
+}
+
+bool operator!=(const machine_parameters &lhs, const machine_parameters &rhs)
+{
+    return !operator==(lhs, rhs);
+}
+
+typedef std::map<std::pair<size_t /* chunk ix */, size_t /* labels column */>, machine_parameters> chunk_label_params_t;
+bool operator==(const chunk_label_params_t &lhs, const chunk_label_params_t &rhs)
+{
+    if (lhs.size() != rhs.size()) return false;
+    for (const auto &l_elem: lhs) {
+        try {
+            if (l_elem.second != rhs.at(l_elem.first)) return false;
+        } catch (...) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::basic_ostream<char> &operator<<(std::basic_ostream<char> &os, const machine_parameters &params)
+{
+    os << "cost " << params.svr_C << ", epsilon " << params.svr_epsilon << ", gamma "
+       << params.svr_kernel_param << ", labmda " << params.svr_kernel_param2 << ", kernel " << ssize_t(params.kernel_type);
+    return os;
+}
+
+std::basic_ostream<char> &operator<<(std::basic_ostream<char> &os, const chunk_label_params_t &chunk_label_params)
+{
+    bool first = true;
+    for (const auto &el: chunk_label_params) {
+        if (first) first = false;
+        else os << ", ";
+        os << "chunk " << el.first.first << ", column " << el.first.second << ", " << el.second;
+    }
+    return os;
+}
+
+class SVRParameters : public Entity
+{
+private:
+    bigint dataset_id; /* TODO Replace with pointer to dataset id */
+
+    std::string input_queue_table_name; // TODO Replace with pointer to Input Queue
+    std::string input_queue_column_name; // TODO Replace with pointer to Input Queue
+    size_t decon_level_;
+
+    chunk_label_params_t chunk_label_params;
+
+    u_int64_t svr_decremental_distance;
+    double svr_adjacent_levels_ratio;
+    size_t lag_count;
+    std::vector<size_t> sub_vector_indices;
+    size_t chunks_ct;
+    size_t labels_ct;
+    bool skip = false;
+public:
+
+public:
+    SVRParameters() : SVRParameters(DEFAULT_SVR_HYPERPARAMS) {}
+
+    SVRParameters(
+            const bigint id,
+            const bigint dataset_id,
+            const std::string &input_queue_table_name,
+            const std::string &input_queue_column_name,
+            const size_t decon_level,
+            const u_int64_t svr_decremental_distance = DEFAULT_SVRPARAM_DECREMENT_DISTANCE,
+            const double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO,
+            const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT,
+            const chunk_label_params_t &chunk_label_params = {},
+            // Global parameters needed by SVR algorithms
+            const size_t chunks_ct = 0,
+            const size_t labels_ct = common::__multistep_len)
+            : Entity(id),
+              dataset_id(dataset_id),
+              input_queue_table_name(input_queue_table_name),
+              input_queue_column_name(input_queue_column_name),
+              decon_level_(decon_level),
+              chunk_label_params(chunk_label_params),
+              svr_decremental_distance(svr_decremental_distance),
+              svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
+              lag_count(lag_count),
+              chunks_ct(chunks_ct),
+              labels_ct(labels_ct)
+    {
+
+        if (chunk_label_params.empty())
+            for (size_t chunk_ix = 0; chunk_ix < chunks_ct; ++chunk_ix)
+                for (size_t labels_ix = 0; labels_ix < labels_ct; ++labels_ix)
+                    this->chunk_label_params[{chunk_ix, labels_ix}] = machine_parameters();
+    }
+
+    SVRParameters(const SVRParameters &params) :
+            SVRParameters(
+                    bigint(0),
+                    params.get_dataset_id(),
+                    params.get_input_queue_table_name(),
+                    params.get_input_queue_column_name(),
+                    params.get_decon_level(),
+                    params.get_svr_decremental_distance(),
+                    params.get_svr_adjacent_levels_ratio(),
+                    params.get_lag_count(),
+                    params.chunk_label_params,
+                    params.chunks_ct,
+                    params.labels_ct)
+    {}
+
+    SVRParameters &operator=(const SVRParameters &v)
+    {
+        set_id(v.get_id());
+        dataset_id = v.dataset_id;
+        input_queue_table_name = v.input_queue_table_name;
+        input_queue_column_name = v.input_queue_column_name;
+        decon_level_ = v.decon_level_;
+        svr_decremental_distance = v.svr_decremental_distance;
+        svr_adjacent_levels_ratio = v.svr_adjacent_levels_ratio;
+        lag_count = v.lag_count;
+        chunk_label_params = v.chunk_label_params;
+        // Globals
+        chunks_ct = v.chunks_ct;
+        labels_ct = v.labels_ct;
+        return *this;
+    }
+
+    bool operator==(const SVRParameters &other) const
+    {
+        return get_dataset_id() == other.get_dataset_id()
+               && get_input_queue_table_name() == other.get_input_queue_table_name()
+               && get_input_queue_column_name() == other.get_input_queue_column_name()
+               && get_decon_level() == other.get_decon_level()
+               && chunk_label_params == other.chunk_label_params
+               && get_svr_decremental_distance() == other.get_svr_decremental_distance()
+               && get_svr_adjacent_levels_ratio() == other.get_svr_adjacent_levels_ratio()
+               && get_lag_count() == other.get_lag_count();
+    }
+
+    bool operator!=(const SVRParameters & other) const
+    {
+        return !operator==(other);
+    }
+
+    std::ostream &operator <<(std::ostream& os) override
+    {
+        os << to_string();
+        return os;
+    }
+
+    bigint get_dataset_id() const
+    {
+        return dataset_id;
+    }
+
+    void set_dataset_id(const bigint &value)
+    {
+        dataset_id = value;
+    }
+
+    std::string get_input_queue_column_name() const
+    {
+        return input_queue_column_name;
+    }
+
+    void set_input_queue_column_name(const std::string &value)
+    {
+        input_queue_column_name = value;
+    }
+
+    std::string get_input_queue_table_name() const
+    {
+        return input_queue_table_name;
+    }
+
+    void set_input_queue_table_name(const std::string &value)
+    {
+        input_queue_table_name = value;
+    }
+
+    size_t get_decon_level() const
+    {
+        return decon_level_;
+    }
+
+    void set_decon_level(const size_t decon_level)
+    {
+        this->decon_level_ = decon_level;
+    }
+
+    void set_skip(const bool _skip)
+    {
+        skip = _skip;
+    }
+
+    bool get_skip() const
+    {
+        return skip;
+    }
+
+    double get_svr_C(const size_t chunk_ix, const size_t label_col) const
+    {
+        return chunk_label_params.at({chunk_ix, label_col}).svr_C;
+    }
+
+    void set_svr_C(const size_t chunk_ix, const size_t label_col, const double _svr_C)
+    {
+        chunk_label_params.at({chunk_ix, label_col}).svr_C = _svr_C;
+    }
+
+    double get_svr_epsilon(const size_t chunk_ix, const size_t label_col) const
+    {
+        return chunk_label_params.at({chunk_ix, label_col}).svr_epsilon;
+    }
+
+
+    void set_svr_epsilon(const size_t chunk_ix, const size_t label_col, const double _svr_epsilon)
+    {
+        if (_svr_epsilon < 0) THROW_EX_FS(std::invalid_argument, "Epsilon parameter " << _svr_epsilon << " is less than zero.");
+        chunk_label_params.at({chunk_ix, label_col}).svr_epsilon = _svr_epsilon;
+    }
+
+    double get_svr_kernel_param(const size_t chunk_ix, const size_t label_col) const
+    {
+        return chunk_label_params.at({chunk_ix, label_col}).svr_kernel_param;
+    }
+
+    void set_svr_kernel_param(const size_t chunk_ix, const size_t label_col, const double _svr_kernel_param)
+    {
+        chunk_label_params.at({chunk_ix, label_col}).svr_kernel_param = _svr_kernel_param;
+    }
+
+    double get_svr_kernel_param2(const size_t chunk_ix, const size_t label_col) const
+    {
+        return chunk_label_params.at({chunk_ix, label_col}).svr_kernel_param2;
+    }
+
+    void set_svr_kernel_param2(const size_t chunk_ix, const size_t label_col, const double _svr_kernel_param2)
+    {
+        chunk_label_params.at({chunk_ix, label_col}).svr_kernel_param2 = _svr_kernel_param2;
+    }
+
+    kernel_type_e get_kernel_type(const size_t chunk_ix, const size_t label_col) const
+    {
+        return chunk_label_params.at({chunk_ix, label_col}).kernel_type;
+    }
+
+
+    void set_kernel_type(const size_t chunk_ix, const size_t label_col, const kernel_type_e _kernel_type)
+    {
+        if (_kernel_type < kernel_type_e::number_of_kernel_types)
+            chunk_label_params.at({chunk_ix, label_col}).kernel_type = _kernel_type;
+        else
+            THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << ssize_t(_kernel_type));
+    }
+
+
+    u_int64_t get_svr_decremental_distance() const
+    {
+        return svr_decremental_distance;
+    }
+
+
+    void set_svr_decremental_distance(const u_int64_t _svr_decremental_distance)
+    {
+        this->svr_decremental_distance = _svr_decremental_distance;
+    }
+
+
+    double get_svr_adjacent_levels_ratio() const
+    {
+        return svr_adjacent_levels_ratio;
+    }
+
+
+    void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio)
+    {
+        if (_svr_adjacent_levels_ratio < 0 || _svr_adjacent_levels_ratio > 1)
+            THROW_EX_FS(std::range_error, "Adjacent levels ratio " << _svr_adjacent_levels_ratio << " is out of 0..1 range.");
+        this->svr_adjacent_levels_ratio = _svr_adjacent_levels_ratio;
+    }
+
+
+    size_t get_lag_count() const
+    {
+        return lag_count;
+    }
+
+    void set_lag_count(const size_t _lag_count)
+    {
+        if (_lag_count == 0) THROW_EX_FS(std::invalid_argument, "Lag count parameter is zero.");
+        this->lag_count = _lag_count;
+    }
+
+
+    std::string to_string() const override
+    {
+        std::stringstream ss;
+        ss << std::setprecision(std::numeric_limits<double>::max_digits10);
+        ss << "id " << id
+           << ", dataset id " << dataset_id
+           << ", decrement distance " << svr_decremental_distance
+           << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
+           << ", lag count " << lag_count
+           << ", table name " << input_queue_table_name
+           << ", column name " << input_queue_column_name
+           << ", level " << decon_level_
+           << ", machine parameters " << chunk_label_params;
+
+        return ss.str();
+    }
+
+    std::string to_sql_string() const
+    {
+        std::stringstream ss;
+        ss.precision(std::numeric_limits<double>::max_digits10);
+
+        ss << "\t" << get_id()
+           << "\t" << get_dataset_id()
+           << "\t" << input_queue_table_name
+           << "\t" << input_queue_column_name
+           << "\t" << decon_level_
+           << "\t" << svr_decremental_distance
+           << "\t" << svr_adjacent_levels_ratio
+           << "\t" << lag_count;
+
+        return ss.str();
+    }
+
+    bool from_sql_string(const std::string &sql_string)
+    {
+        std::vector<std::string> tokens;
+        svr::common::split(sql_string, '\t', tokens);
+
+        if (tokens.size() != 7) {
+            LOG4_ERROR("Incorrect number of tokens " << tokens.size());
+            return false;
+        }
+        set_id(atoll(tokens[0].c_str()));
+        set_dataset_id(atoll(tokens[1].c_str()));
+        set_input_queue_table_name(tokens[2]);
+        set_input_queue_column_name(tokens[3]);
+        set_decon_level(atoll(tokens[4].c_str()));
+        set_svr_decremental_distance(atoll(tokens[9].c_str()));
+        set_lag_count(atoll(tokens[12].c_str()));
+
+        LOG4_DEBUG("Successfully loaded parameters " << to_string());
+
+        return true;
+    }
+
+    std::string to_options_string(const size_t model_number) const
+    {
+        std::stringstream ss;
+
+        ss << "\"svr_decremental_distance_" << model_number << "\":\"" << get_svr_decremental_distance() << "\","
+           << "\"svr_svr_adjacent_levels_ratio_" << model_number << "\":\"" << get_svr_adjacent_levels_ratio() << "\","
+           << "\"lag_count_" << model_number << "\":\"" << get_lag_count() << "\"";
+
+        return ss.str();
+    }
+
+    std::vector<double> to_vector() const
+    {
+        LOG4_THROW("Not implemented!");
+        return std::vector<double>();
+    }
+
+    const std::vector<size_t> &get_sub_vector_indices() const
+    {
+        return sub_vector_indices;
+    }
+
+    void set_sub_vector_indices(const std::vector<size_t> &new_sub_vector_indices)
+    {
+        sub_vector_indices = new_sub_vector_indices;
+    }
+};
+
+struct tune_svr_parameters
+{
+    bool svr_C{false};
+    bool svr_epsilon{false};
+    bool svr_kernel_param{false};
+    bool svr_kernel_param2{false};
+    bool svr_decremental_distance{false};
+    bool svr_adjacent_levels_ratio{false};
+    bool lag_count{false};
+};
+
+struct Bounds
+{
+    datamodel::SVRParameters min_bounds;
+    datamodel::SVRParameters max_bounds;
+    tune_svr_parameters is_tuned;
+
+    std::vector<double> to_vector(const bound_type &bt) const
+    {
+        const datamodel::SVRParameters *current_parameters;
+        switch (bt) {
+            case bound_type::min :
+                current_parameters = &min_bounds;
+                break;
+            case bound_type::max :
+                current_parameters = &max_bounds;
+                break;
+        }
+
+        std::vector<double> result;
+        result.push_back(current_parameters->get_svr_decremental_distance());
+        result.push_back(current_parameters->get_svr_adjacent_levels_ratio());
+        result.push_back(static_cast<double>(current_parameters->get_lag_count()));
+
+        return result;
+    }
+};
+
+} // datamodel namespace
+} // svr namespace
+
+using SVRParameters_ptr = std::shared_ptr<svr::datamodel::SVRParameters>;
+
+namespace svr {
+namespace datamodel {
+
+using ensemble_svr_parameters_t = std::map<
+/* input queue table name */ std::pair<std::string,
+/* input queue column name */ std::string>,
+/* svr parameters */ std::vector<SVRParameters_ptr> >;
+
+}
+}
+

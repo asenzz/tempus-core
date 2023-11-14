@@ -1,0 +1,33 @@
+total 2.7G
+drwxrwxr-x 14 zarko zarko 4.0K Jun 10  2019 libpqxx
+drwxr-xr-x  4 zarko zarko 4.0K Oct 14  2020 l_mkl_2020.4.304
+drwxr-xr-x  4 zarko zarko 4.0K Oct 14  2020 l_mpi_2019.9.304
+-rw-rw-r--  1 zarko zarko 211M Oct 14  2020 l_mpi_2019.9.304.tgz
+-rw-rw-r--  1 zarko zarko 524M Oct 21  2020 l_mkl_2020.4.304.tgz
+drwxrwxr-x 11 zarko zarko 4.0K Oct 29 14:25 armadillo
+drwxrwxr-x 17 zarko zarko 4.0K Oct 29 16:15 eigen
+drwxrwxr-x 17 zarko zarko 4.0K Oct 29 18:02 quickfix
+drwxrwxr-x 12 zarko zarko 4.0K Oct 30 07:28 CLBlast
+drwxrwxr-x  8 zarko zarko 4.0K Oct 30 07:58 eiquadprog
+-rw-rw-r--  1 zarko zarko  68M Oct 30 08:21 libpqxx.tar.bz2
+drwxrwxr-x 20 zarko zarko 4.0K Jan  8 11:56 magma
+-rw-r--r--  1 zarko zarko 487M Feb  9 22:34 CLion-2020.1.tar.gz
+-rw-r--r--  1 zarko zarko 2.4M Feb  9 22:34 Crack.rar
+-rw-rw-r--  1 zarko zarko  459 Feb 21 09:13 intel_mkl_cmake_settings.txt
+-rw-r--r--  1 zarko zarko  22M Feb 25 23:05 Beyond Compare v4.3.2.24472 ENG-[WEB].rar
+-rw-r--r--  1 zarko zarko  20M Feb 26 13:41 bcompare-4.3.4.24657_amd64.deb
+drwxrwxr-x 10 zarko zarko 4.0K Mar  1 13:21 cista
+-rw-rw-r--  1 zarko zarko 1.4G Mar  9 10:23 nv-tensorrt-repo-ubuntu1804-cuda11.1-trt7.2.3.4-ga-20210226_1-1_amd64.deb
+drwxrwxr-x 12 zarko zarko 4.0K Mar 10 00:22 haste
+drwxrwxr-x  4 zarko zarko 4.0K Mar 12 09:12 tensorflow-cmake
+drwxrwxr-x  7 zarko zarko 4.0K Mar 13 10:19 tensorflow
+drwxrwxr-x  7 zarko zarko 4.0K Mar 13 13:54 tensorflow-examples
+drwxrwxr-x 26 zarko zarko 4.0K Mar 14 12:43 pytorch
+drwxrwxr-x  5 zarko zarko 4.0K Mar 18 13:37 matplotlib-cpp
+drwxrwxr-x  8 zarko zarko 4.0K Apr 10 10:57 optim
+drwxrwxr-x 12 zarko zarko 4.0K Apr 19 12:58 armadillo-code
+drwxrwxr-x 13 zarko zarko 4.0K Apr 20 15:31 viennacl-dev
+drwxrwxr-x 16 zarko zarko 4.0K Apr 24 02:09 thundersvm
+drwxrwxr-x 13 zarko zarko 4.0K Apr 25 19:15 osqp
+drwxr-xr-x 21 zarko zarko 4.0K Apr 27 07:06 ..
+drwxrwxr-x 23 zarko zarko 4.0K Apr 27 07:50 .

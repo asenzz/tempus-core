@@ -1,0 +1,43 @@
+{
+
+    "http" : {
+        "script_names" : ["/web", "/mt4", "/"]
+    },
+    "service":{
+        "api":"http",
+        "ip":"0.0.0.0",
+        "port":8080
+    },
+    "logging" : {
+        "level" : "debug"
+    },
+    "session" : {
+        "expire" : "renew",
+        "timeout" : 604800,
+        "location" : "client",
+        "client" :      {
+            "hmac" :        "sha1",
+            "hmac_key" :    "3891bbf7f845fd4277008a63d72640fc13bb9a31"
+        }
+    },
+    "views" : {
+        "paths" : [".", "../build/"],
+        "skins" : ["SVRWebSkin"],
+        "default_skin" : "SVRWebSkin",
+        "auto_reload" : true
+    },
+    "file_server" : {
+        "enable" : true,
+        "document_root" : "./resources"
+    },
+    "security" : {
+        "content_length_limit" : 65536, // KB
+        "display_error_message" : true
+    },
+    "misc" : {
+            "invalid_url_throws" : false
+            // Set it to true of you want that invalid URL would
+            // trigger an exception
+    },
+}
+

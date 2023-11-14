@@ -1,0 +1,206 @@
+#include "../include/recombine_parameters.cuh"
+#include <cstdint>
+#include <cuda_runtime_api.h>
+#include "common/cuda_util.cuh"
+#include "common/gpu_handler.hpp"
+#include "cuda_runtime.h"
+
+namespace svr::business {
+
+// constexpr unsigned C_emo_part_j = EMO_MAX_J / 2;
+// constexpr unsigned C_emo_rest_j = EMO_MAX_J - C_emo_part_j;
+
+template<unsigned k_block_size> __device__ void
+warp_reduce(
+        volatile double *_sh_best_score,
+        volatile t_params_vec *_sh_best_params_ix,
+        const uint32_t thr_ix,
+        const uint8_t colct)
+{
+#define WARP_NOSYNC(this_block_size, thr_ix_off)                                                                                    \
+        if (k_block_size >= this_block_size) {                                                                                      \
+            if (_sh_best_score[thr_ix + thr_ix_off] < _sh_best_score[thr_ix]) {                                                     \
+                _sh_best_score[thr_ix] = _sh_best_score[thr_ix + thr_ix_off];                                                       \
+                for (uint16_t colix = 0; colix < colct; ++colix)                                                                    \
+                    _sh_best_params_ix[thr_ix][colix] = _sh_best_params_ix[thr_ix + thr_ix_off][colix];                             \
+            }                                                                                                                       \
+        }
+
+    WARP_NOSYNC(64, 32);
+    WARP_NOSYNC(32, 16);
+    WARP_NOSYNC(16, 8);
+    WARP_NOSYNC(8, 4);
+    WARP_NOSYNC(4, 2);
+    WARP_NOSYNC(2, 1);
+}
+
+
+template<unsigned k_block_size> __global__ void
+cu_recombine_parameters(
+        const uint8_t colct,
+        const uint32_t rowct,
+        const uint8_t *__restrict__ p_combinations, // Len of prediction_ct * col_ct
+        const t_param_preds_cu *__restrict__ p_params_preds, // Len of col_ct * C_tune_keep_preds
+        uint8_t *__restrict__ best_param_ixs, // Len of col_ct
+        double *__restrict__ p_best_score,
+        const double *__restrict__ recon_signs,
+        const double *__restrict__ recon_last_knowns
+)
+{
+    const auto thr_ix = threadIdx.x;
+    const auto g_thr_ix = thr_ix + blockIdx.x * k_block_size;
+    if (g_thr_ix >= rowct) return;
+    const uint32_t grid_size = k_block_size * gridDim.x;
+    // printf("cu_recombine_parameters: Begin %u, %u, %u.\n", thr_ix, g_thr_ix, grid_size);
+    __shared__ double _sh_best_score[k_block_size];
+    __shared__ t_params_vec _sh_best_params_ix[k_block_size];
+    _sh_best_score[thr_ix] = DBL_MAX;
+//    uint32_t best_rowix = g_thr_ix;
+    for (uint32_t rowix = g_thr_ix; rowix < rowct; rowix += grid_size) {
+        double score = 0;
+        {
+            double recon_preds[EMO_SLIDE_LEN];
+#ifdef DEBUG_VALUES
+            double recon_labels[EMO_SLIDE_LEN];
+#endif
+            for (uint8_t j = 0; j < EMO_MAX_J; ++j) {
+                memset(&(recon_preds[0]), 0, EMO_SLIDE_LEN * sizeof(double));
+                const auto elto = EMO_TUNE_VALIDATION_WINDOW + (EMO_MAX_J - j) * EMO_SLIDE_SKIP;
+                const auto j_EMO_SLIDE_LEN = j * EMO_SLIDE_LEN;
+#ifdef DEBUG_VALUES
+                memset(&(recon_labels[0]), 0, EMO_SLIDE_LEN * sizeof(double));
+#endif
+                for (uint16_t colix = 0; colix < colct; ++colix)
+                    for (uint16_t el = 0; el < elto; ++el) {
+                        recon_preds[el] += p_params_preds[colct * p_combinations[colix * rowct + rowix] + colix].predictions[j][el];
+#ifdef DEBUG_VALUES
+                        recon_labels[el] += p_params_preds[colct * p_combinations[colix * rowct + rowix] + colix].labels[j][el];
+#endif
+                    }
+
+                for (uint16_t el = 0; el < elto; ++el)
+                    score += abs(_CUSIGN(_CUSIGN(recon_preds[el] - recon_last_knowns[j_EMO_SLIDE_LEN + el]) - recon_signs[j_EMO_SLIDE_LEN + el]));
+                // score += arma::sum(arma::abs(arma::vectorise(arma::sign(arma::sign(recon_preds - recon_last_knowns) - arma::sign(recon_labels - recon_last_knowns)))));
+#ifdef DEBUG_VALUES
+                if (g_thr_ix == 0 && j == 0) {
+                    for (uint16_t el = 0; el < EMO_TUNE_VALIDATION_WINDOW; ++el)
+                        printf("cu_recombine_parameters: Recon at %u, pred %f, last known %f, sign %f, label %f, ref sign %f\n", el, recon_preds[el], recon_last_knowns[el], _CUSIGN(recon_preds[el] - recon_last_knowns[el]), recon_labels[el], recon_signs[el]);
+                }
+#endif
+            }
+        }
+        // printf("cu_recombine_parameters: Score %f at combination %u.\n", score, rowix);
+        if (score < _sh_best_score[thr_ix]) {
+            _sh_best_score[thr_ix] = score;
+            for (uint16_t colix = 0; colix < colct; ++colix)
+                _sh_best_params_ix[thr_ix][colix] = p_params_preds[colct * p_combinations[colix * rowct + rowix] + colix].params_ix;
+        }
+    }
+    __syncthreads();
+
+    /*
+    for (uint32_t stride = blockDim.x / 2; stride > 32; stride >>= 1) { // /= 2) { // uniform
+        if (thr_ix < stride) {
+            if (_sh_best_score[thr_ix + stride] < _sh_best_score[thr_ix]) {
+                _sh_best_score[thr_ix] = _sh_best_score[thr_ix + stride];
+                for (uint16_t colix = 0; colix < colct; ++colix)
+                    _sh_best_params_ix[thr_ix][colix] = _sh_best_params_ix[thr_ix + stride][colix];
+            }
+        }
+        __syncthreads();
+    }
+    */
+
+#define WARP_SYNC(this_block_size, stride)                                                                      \
+    if (k_block_size >= this_block_size) {                                                                      \
+        if (thr_ix < stride) {                                                                                  \
+            if (_sh_best_score[thr_ix + stride] < _sh_best_score[thr_ix]) {                                     \
+                _sh_best_score[thr_ix] = _sh_best_score[thr_ix + stride];                                       \
+                memcpy(&(_sh_best_params_ix[thr_ix][0]), &(_sh_best_params_ix[thr_ix + stride][0]), colct);     \
+            }                                                                                                   \
+        }                                                                                                       \
+        __syncthreads();                                                                                        \
+    }
+
+    //WARP_SYNC(512, 256);
+    WARP_SYNC(256, 128);
+    WARP_SYNC(128, 64);
+
+    if (thr_ix < 32)
+        warp_reduce<k_block_size>(&(_sh_best_score[0]), (t_params_vec *) &(_sh_best_params_ix[0][0]), thr_ix, colct);
+
+    if (!thr_ix) {
+        if (_sh_best_score[0] < *p_best_score) {
+            memcpy((void *)&(best_param_ixs[0]), &(_sh_best_params_ix[thr_ix][0]), colct);
+            // for (uint16_t colix = 0; colix < colct; ++colix)
+            //    best_param_ixs[colix] = _sh_best_params_ix[thr_ix][colix];
+            *p_best_score = _sh_best_score[thr_ix];
+            // printf("cu_recombine_parameters: Final score %f = %f\n", *p_best_score, _sh_best_score[0]);
+        }
+    }
+}
+
+
+void
+recombine_parameters(
+        const uint32_t rows_ct,
+        const uint32_t colct,
+        const uint8_t *combos,
+        const t_param_preds_cu *params_preds,
+        double *p_best_score,
+        uint8_t *best_params_ixs)
+{
+    const decltype(rows_ct) adj_rows_ct = rows_ct - rows_ct % CUDA_BLOCK_SIZE;
+    if (rows_ct != adj_rows_ct) LOG4_ERROR("Input rows count " << rows_ct << ", differs from adjusted " << adj_rows_ct);
+    double recon_last_knowns[EMO_MAX_J * EMO_SLIDE_LEN], recon_signs[EMO_MAX_J * EMO_SLIDE_LEN];
+    memset(recon_last_knowns, 0, EMO_MAX_J * EMO_SLIDE_LEN * sizeof(double));
+    memset(recon_signs, 0, EMO_MAX_J * EMO_SLIDE_LEN * sizeof(double));
+#pragma omp parallel for simd // collapse(2)
+    for (uint8_t j = 0; j < uint8_t(EMO_MAX_J); ++j) {
+        for (uint16_t el = 0; el < uint16_t(EMO_TUNE_VALIDATION_WINDOW) + (EMO_MAX_J - j) * EMO_SLIDE_SKIP; ++el) {
+            double recon_labels = 0;
+            for (uint16_t colix = 0; colix < colct; ++colix) {
+                recon_labels += params_preds[colix].labels[j][el];
+                recon_last_knowns[EMO_SLIDE_LEN * j + el] += params_preds[colix].last_knowns[j][el];
+            }
+            recon_signs[EMO_SLIDE_LEN * j + el] = _CUSIGN(recon_labels - recon_last_knowns[EMO_SLIDE_LEN * j + el]);
+        }
+    }
+
+    common::gpu_context ctx;
+    cudaSetDevice(ctx.phy_id());
+    double *p_best_score_gpu = nullptr;
+    cu_errchk(cudaMalloc((void **) &p_best_score_gpu, sizeof(double)));
+    uint8_t *combos_gpu;
+    cu_errchk(cudaMalloc((void **) &combos_gpu, adj_rows_ct * colct));
+    cu_errchk(cudaMemcpy((void *) combos_gpu, (void *) combos, adj_rows_ct * colct, cudaMemcpyHostToDevice));
+    t_param_preds_cu *params_preds_gpu;
+    cu_errchk(cudaMalloc((void **) &params_preds_gpu, sizeof(t_param_preds_cu) * colct * TUNE_KEEP_PREDS));
+    cu_errchk(cudaMemcpy((void *) params_preds_gpu, (void *) params_preds, sizeof(t_param_preds_cu) * colct * TUNE_KEEP_PREDS, cudaMemcpyHostToDevice));
+    uint8_t *best_param_ixs_gpu;
+    cu_errchk(cudaMalloc((void **) &best_param_ixs_gpu, colct));
+    *p_best_score = DBL_MAX;
+    cu_errchk(cudaMemcpy((void *) p_best_score_gpu, (void *) p_best_score, sizeof(double), cudaMemcpyHostToDevice));
+
+    double *recon_last_knowns_gpu;
+    double *recon_signs_gpu;
+    cu_errchk(cudaMalloc((void **) &recon_last_knowns_gpu, sizeof(double) * EMO_MAX_J * EMO_SLIDE_LEN));
+    cu_errchk(cudaMalloc((void **) &recon_signs_gpu, sizeof(double) * EMO_MAX_J * EMO_SLIDE_LEN));
+    cu_errchk(cudaMemcpy((void *) recon_last_knowns_gpu, (void *) &(recon_last_knowns[0]), sizeof(double) * EMO_MAX_J * EMO_SLIDE_LEN, cudaMemcpyHostToDevice));
+    cu_errchk(cudaMemcpy((void *) recon_signs_gpu, (void *) &(recon_signs[0]), sizeof(double) * EMO_MAX_J * EMO_SLIDE_LEN, cudaMemcpyHostToDevice));
+
+    printf("cu_recombine_parameters: Blocks %u, threads per block %u\n", CUDA_THREADS_BLOCKS(rows_ct));
+    cu_recombine_parameters<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(adj_rows_ct)>>>
+            (colct, adj_rows_ct, combos_gpu, params_preds_gpu, best_param_ixs_gpu, p_best_score_gpu, recon_signs_gpu, recon_last_knowns_gpu);
+    cu_errchk(cudaMemcpy((void *) best_params_ixs, (void *) best_param_ixs_gpu, colct, cudaMemcpyDeviceToHost));
+    cu_errchk(cudaMemcpy((void *) p_best_score, (void *) p_best_score_gpu, sizeof(double), cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(best_param_ixs_gpu));
+    cu_errchk(cudaFree(params_preds_gpu));
+    cu_errchk(cudaFree(combos_gpu));
+    cu_errchk(cudaFree(p_best_score_gpu));
+    cu_errchk(cudaFree(recon_last_knowns_gpu));
+    cu_errchk(cudaFree(recon_signs_gpu));
+}
+
+
+}

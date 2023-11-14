@@ -1,0 +1,16 @@
+app-config=../config/paramtune.app.config
+
+user-name=svrwave
+dataset-id=10000
+dataset-name=Dataset1
+svr-max-lookback-time-gap=1,12:00:00
+
+svr-parameters={"swt_levels":"8", "swt_wavelet_name":"sym14", "svr_c_0":"9.5536", "svr_epsilon_0":"0.003", "svr_kernel_param_0":"0.1", "svr_kernel_param2_0":"0.3", "svr_decremental_distance_0":"200", "svr_adjacent_levels_ratio_0":"0.68", "svr_kernel_type_0":"3","svr_error_tolerance_0": "0.0000001", "lag_count_0": "95", "svr_c_1":"10.0", "svr_epsilon_1":"0.0003473067", "svr_kernel_param_1":"18.852", "svr_kernel_param2_1":"0.108544", "svr_decremental_distance_1":"200", "svr_adjacent_levels_ratio_1":"0.5", "svr_kernel_type_1":"3" ,"svr_error_tolerance_1": "0.01", "lag_count_1": "95", "svr_c_2":"10.0", "svr_epsilon_2":"0.0003473067", "svr_kernel_param_2":"18.852", "svr_kernel_param2_2":"0.108544", "svr_decremental_distance_2":"200", "svr_adjacent_levels_ratio_2":"0.5", "svr_kernel_type_2":"3","svr_error_tolerance_2": "0.01", "lag_count_2": "95", "svr_c_3":"10.0", "svr_epsilon_3":"0.0003473067", "svr_kernel_param_3":"18.852", "svr_kernel_param2_3":"0.108544", "svr_decremental_distance_3":"200", "svr_adjacent_levels_ratio_3":"0.5", "svr_kernel_type_3":"3","svr_error_tolerance_3": "0.01", "lag_count_3": "95", "svr_c_4":"10.0", "svr_epsilon_4":"0.0003473067", "svr_kernel_param_4":"18.852", "svr_kernel_param2_4":"0.108544", "svr_decremental_distance_4":"200", "svr_adjacent_levels_ratio_4":"0.5", "svr_kernel_type_4":"3","svr_error_tolerance_4": "0.01", "lag_count_4": "95", "svr_c_5":"10.0", "svr_epsilon_5":"0.0003473067", "svr_kernel_param_5":"18.852", "svr_kernel_param2_5":"0.108544", "svr_decremental_distance_5":"200", "svr_adjacent_levels_ratio_5":"0.5", "svr_kernel_type_5":"3","svr_error_tolerance_5": "0.01", "lag_count_5": "95", "svr_c_6":"10.0", "svr_epsilon_6":"0.0003473067", "svr_kernel_param_6":"18.852", "svr_kernel_param2_6":"0.108544", "svr_decremental_distance_6":"200", "svr_adjacent_levels_ratio_6":"0.5", "svr_kernel_type_6":"3","svr_error_tolerance_6": "0.01", "lag_count_6": "95", "svr_c_7":"10.0", "svr_epsilon_7":"0.0003473067", "svr_kernel_param_7":"18.852", "svr_kernel_param2_7":"0.108544", "svr_decremental_distance_7":"200", "svr_adjacent_levels_ratio_7":"0.5", "svr_kernel_type_7":"3","svr_error_tolerance_7": "0.01", "lag_count_7": "95", "svr_c_8":"10.0", "svr_epsilon_8":"0.0003473067", "svr_kernel_param_8":"18.852", "svr_kernel_param2_8":"0.108544", "svr_decremental_distance_8":"200", "svr_adjacent_levels_ratio_8":"0.5", "svr_kernel_type_8":"3","svr_error_tolerance_8": "0.01", "lag_count_8": "95", "svr_c_9":"10.0", "svr_epsilon_9":"0.0003473067", "svr_kernel_param_9":"18.852", "svr_kernel_param2_9":"0.108544", "svr_decremental_distance_9":"200", "svr_adjacent_levels_ratio_9":"0.5", "svr_kernel_type_9":"3","svr_error_tolerance_9": "0.01", "lag_count_9": "95"}
+
+prediction-task-id=0
+table-name=q_svrwave_eurusd_60
+start-training-time=2015.02.02,02:00
+end-training-time=2015.03.26,22:00
+start-forecast-time=2015.03.26,22:01
+end-forecast-time=2015.03.26,22:16
+

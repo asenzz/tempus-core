@@ -1,0 +1,15 @@
+--style=linux
+--indent-classes
+--indent-switches
+--indent-col1-comments
+--indent-preprocessor
+--indent-namespaces
+--indent-labels
+--indent-blocks
+--indent-brackets
+--indent-cases
+--convert-tabs
+--keep-one-line-blocks
+--align-pointer=name
+--preserve-date
+--lineend=linux

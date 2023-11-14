@@ -1,0 +1,10 @@
+<% c++ #include "view/MainView.hpp" %>
+<% skin SVRWebSkin %>
+<% view Index uses content::Main extends Main%>
+
+<% template page_content() %>
+Welcome to SVR Forecast Service
+<% end template %>
+
+<% end view %>
+<% end skin %>

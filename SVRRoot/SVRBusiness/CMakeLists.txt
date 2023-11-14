@@ -1,0 +1,62 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
+IF(USE_CUDA)
+        PROJECT(SVRBusiness LANGUAGES CXX CUDA)
+ELSE()
+        PROJECT(SVRBusiness CXX)
+ENDIF()
+
+
+SET(BUILD_MAIN OFF)
+
+#Define project dependencies
+SET(DEPENDENCIES SVRPersist SVRCommon SVRModel OnlineSVR)
+
+FOREACH(DEP ${DEPENDENCIES})
+    INCLUDE_DIRECTORIES(../${DEP}/include)
+ENDFOREACH(DEP)
+INCLUDE_DIRECTORIES(../SVRFix/include)
+IF(USE_CUDA)
+    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc" "src/*.cu" "src/*.cuh")
+ELSE()
+    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
+ENDIF()
+
+FIND_PACKAGE(LibPQXX REQUIRED)
+
+INCLUDE_DIRECTORIES(include)
+LINK_DIRECTORIES(${PQXX_LIBRARIES_DIRECTORY})
+IF(EXPERIMENTAL_FEATURES)
+    LINK_DIRECTORIES(${MATLAB_LINK_DIR})
+ENDIF(EXPERIMENTAL_FEATURES)
+
+IF(BUILD_MAIN)
+    ADD_EXECUTABLE(${PROJECT_NAME} "src/main.cpp")
+ELSE()
+    LIST(REMOVE_ITEM SOURCE_FILES "main.cpp")
+    ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES})
+ENDIF()
+
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} crypto rt wavelib)
+
+list (FIND MODULES "SVRFix" idx)
+if (${idx} GREATER -1)
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME} SVRFix-shared)
+endif()
+
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PEDANTIC_FLAGS}")
+
+if (USE_CUDA)
+    SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    INCLUDE_DIRECTORIES(include ${CUDA_INCLUDE_DIRS} ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${JEMALLOC_LIBRARIES} ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_cusolver_LIBRARY} ${CUDA_cusparse_LIBRARY})
+    #TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PUBLIC -Wno-error)
+    SET(CUDA_ARCH_LIST Auto CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
+					compute capability versions (6.1, 7.0, etc) to generate code for. \
+					Set to Auto for automatic detection (default)."
+            )
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}") # -Wno-error")
+    CUDA_SELECT_NVCC_ARCH_FLAGS(CUDA_ARCH_FLAGS ${CUDA_ARCH_LIST})
+    TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+            -gencode arch=compute_70,code=sm_70 -forward-unknown-to-host-compiler
+            >)
+endif()

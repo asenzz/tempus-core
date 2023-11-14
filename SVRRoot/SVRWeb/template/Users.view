@@ -1,0 +1,20 @@
+<% c++ #include "view/UserView.hpp" %>
+<% skin SVRWebSkin %>
+<% view Users uses content::Main extends Main %>
+
+<% template page_head() %>
+<script src="/js/Users.js" type="text/javascript" language="JavaScript"></script>
+<% end template %>
+
+<% template page_content() %>
+
+    <% if not empty pageError %>
+        <h3 style="color: blue"><%= pageError %></h3>
+    <% else %>
+    <table id="users"></table>
+    <div id="jqGridPager"></div>
+    <% end %>
+<% end template %>
+
+<% end view %>
+<% end skin %>
