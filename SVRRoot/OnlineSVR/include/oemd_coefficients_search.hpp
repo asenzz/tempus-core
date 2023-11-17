@@ -58,6 +58,7 @@ oemd_coefs_search(
         std::vector<std::vector<double>> &mask,
         std::vector<size_t> &siftings);
 
+#if 1
 void
 optimize_levels(
         const std::vector<double> &val,
@@ -65,7 +66,15 @@ optimize_levels(
         std::vector<size_t> &siftings,
         const size_t window_start,
         const size_t window_end);
-
+#else
+void
+optimize_levels(
+        const std::vector<double> &val,
+        std::vector<std::vector<double>> &masks,
+        const std::vector<size_t> &siftings,
+        const size_t window_start,
+        const size_t window_end);
+#endif
 }
 
 #endif //SVR_OEMD_COEFFICIENTS_SEARCH_HPP

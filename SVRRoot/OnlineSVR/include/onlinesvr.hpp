@@ -31,7 +31,7 @@ constexpr double SANE_PREDICT = 1e6;
 
 
 /* Auto cost and gamma */
-constexpr double DE_FINE_DIVISOR = 3.55555; // > 1
+constexpr double DE_FINE_DIVISOR = 10; // > 1
 // constexpr double MULTIPLE_EPSCO = 2; // TODO Try C_input_obseg * .5, .25  // 2. for price, C_input_obseg for direction, epsilon-cost multiple, above 1, smaller is better and slower
 const std::deque<double> C_gamma_multis {1., 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7}; // Full gammas multis span
 #define FINER_GAMMA_TUNE
@@ -42,7 +42,7 @@ const std::deque<double> C_gamma_multis {1., 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7};
 // constexpr double MULTIPLE_EPSCO_FINE = MULTIPLE_EPSCO;
 constexpr double FINE_GAMMA_MULTIPLE = 1. + 1. / DE_FINE_DIVISOR;
 constexpr double C_fine_gamma_mult = 10;
-constexpr double C_fine_gamma_div = 25;
+constexpr double C_fine_gamma_div = 10;
 #else
 // #define MULTIPLE_EPSCO_FINE     (1.33)
 #define FINE_GAMMA_MULTIPLE     (1.66)

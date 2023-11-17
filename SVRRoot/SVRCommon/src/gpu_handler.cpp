@@ -118,14 +118,14 @@ void gpu_handler::init_devices(const int device_type)
 
 size_t gpu_handler::get_free_gpus() const
 {
-    std::scoped_lock l(free_gpu_mutex_);
+    const std::scoped_lock l(free_gpu_mutex_);
     return free_gpus_.size();
 }
 
 
 size_t gpu_handler::get_free_gpu()
 {
-    std::scoped_lock l(free_gpu_mutex_);
+    const std::scoped_lock l(free_gpu_mutex_);
     const auto free_gpu_index = free_gpus_.top();
     free_gpus_.pop();
     return free_gpu_index;
@@ -161,7 +161,7 @@ size_t gpu_handler::get_max_gpu_data_chunk_size() const
 
 const viennacl::ocl::device &gpu_handler::device(const size_t idx) const
 {
-    boost::shared_lock<boost::shared_mutex> rl(devices_mutex_);
+    const boost::shared_lock<boost::shared_mutex> rl(devices_mutex_);
     if (idx >= devices_.size()) LOG4_THROW("Wrong device index " << idx << " of available " << devices_.size());
     return devices_[idx];
 }

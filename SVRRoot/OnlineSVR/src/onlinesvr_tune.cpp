@@ -192,8 +192,8 @@ PROFILE_EXEC_TIME(
 
 double calc_gamma(const arma::mat &Z, const size_t train_len, const double meanabs_labels)
 {
-    return 2. * meanabs_labels * (.5 * std::sqrt(2. * common::meanabs(Z)) - 1. / double(train_len));
-    // return 2. * meanabs_labels * (.5 * std::sqrt(2. * arma::mean(arma::abs(arma::vectorise(Z.submat(Z.n_rows - CHUNK_DECREMENT, Z.n_cols - CHUNK_DECREMENT, Z.n_rows - 1, Z.n_cols - 1))))) - 1. / double(train_len));
+    // return 2. * meanabs_labels * (.5 * std::sqrt(2. * common::meanabs(Z)) - 1. / double(train_len));
+    return 2. * meanabs_labels * (.5 * std::sqrt(2. * arma::mean(arma::abs(arma::vectorise(Z.submat(Z.n_rows - CHUNK_DECREMENT, Z.n_cols - CHUNK_DECREMENT, Z.n_rows - 1, Z.n_cols - 1))))) - 1. / double(train_len));
 }
 
 
@@ -544,8 +544,8 @@ OnlineMIMOSVR::tune_kernel_params(
     const std::string original_input_queue_table_name = p_model_parameters->get_input_queue_table_name();
     p_model_parameters->set_input_queue_column_name("TUNE_COLUMN_" + p_model_parameters->get_input_queue_column_name());
     p_model_parameters->set_input_queue_table_name("TUNE_TABLE_" + p_model_parameters->get_input_queue_table_name());
-    const double meanabs_labels = common::meanabs(labels); // .rows(labels.n_rows - p_model_parameters->get_svr_decremental_distance(), labels.n_rows - 1));
-    // const auto meanabs_labels = common::meanabs<double>(labels.rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1));
+    // const double meanabs_labels = common::meanabs(labels); // .rows(labels.n_rows - p_model_parameters->get_svr_decremental_distance(), labels.n_rows - 1));
+    const auto meanabs_labels = common::meanabs<double>(labels.rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1));
     // const double medianabs_labels = common::medianabs(labels); // .rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1)
     const auto indexes = get_indexes(labels.n_rows, *p_model_parameters);
     if (chunk_ix == std::numeric_limits<size_t>::max()) chunk_ix = indexes.size() - 1;

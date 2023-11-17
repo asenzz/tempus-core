@@ -15,7 +15,7 @@ namespace common {
 
 constexpr unsigned MAX_TUNE_CHUNKS = 1;
 
-constexpr double C_input_obseg_labels = 1.660; // 83.3553 Seems to work best for direction
+constexpr double C_input_obseg_labels = 1660; // 83.3553 Seems to work best for direction
 constexpr double C_input_obseg_features = 1; // Best for direction .12, .07324079159, .05547593844
 
 constexpr double C_singlesolve_delta = .0001;
@@ -27,9 +27,9 @@ constexpr double C_singlesolve_delta = .0001;
 // const auto C_tune_crass_epscost = [](){ std::deque<double> r; for (double iter = 1. / common::C_input_obseg_labels; iter <= common::C_input_obseg_labels; iter *= multi_epsco_grid) r.emplace_back(iter); return r; } ();
 const auto C_tune_crass_epscost = []() {
     std::deque<double> r = {.5};
-    for (double x = 1; x <= 8.; x += 1.) {
-        r.emplace_back(std::pow(2. * C_input_obseg_labels, x));
-        r.emplace_back(std::pow(2. * C_input_obseg_labels, -x));
+    for (double x = 1; x <= 1.; x += 1.) {
+        r.emplace_back(std::pow(C_input_obseg_labels, x));
+        r.emplace_back(std::pow(C_input_obseg_labels, -x));
     }
     return r;
 } ();

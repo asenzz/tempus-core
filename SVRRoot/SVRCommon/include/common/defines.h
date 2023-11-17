@@ -13,7 +13,7 @@
 
 #define MANIFOLD_TEST
 #ifdef MANIFOLD_TEST
-constexpr unsigned TEST_OFFSET_DEFAULT = 115;
+constexpr unsigned TEST_OFFSET_DEFAULT = 230;
 #define MANIFOLD_TEST_VALIDATION_WINDOW (getenv("SVRWAVE_TEST_WINDOW") ? strtoul(getenv("SVRWAVE_TEST_WINDOW"), nullptr, 10) : (TEST_OFFSET_DEFAULT))
 #endif
 
@@ -26,13 +26,13 @@ constexpr unsigned TEST_OFFSET_DEFAULT = 115;
 constexpr unsigned MAIN_DECON_QUEUE_RES_SECS = 3600;
 //#define LAST_KNOWN_LABEL
 #define MULTISTEP_PRED_PERIOD       bpt::seconds(MAIN_DECON_QUEUE_RES_SECS)
-constexpr unsigned CHUNK_DECREMENT = 6000;
+constexpr unsigned CHUNK_DECREMENT = 9000;
 // #define LAST_QUANT_FEAT // The feature is average of QUANTIZE_FIXED number of features vs the last value of the range
 // #define EMO_DIFF
 // #define EMO_DIFF_FEATS
 
 
-#define QUANTIZE_FIXED      10
+#define QUANTIZE_FIXED      15
 //#define QUANTIZE_FIXED_MAX  15
 //#define QUANTIZE_FIXED_MIN  1
 
@@ -143,7 +143,7 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 #define DEFAULT_SVRPARAM_DECREMENT_DISTANCE CHUNK_DECREMENT
 #define DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO 1
 #define DEFAULT_SVRPARAM_KERNEL_TYPE (svr::datamodel::kernel_type_e::PATH)
-#define DEFAULT_SVRPARAM_LAG_COUNT 800
+#define DEFAULT_SVRPARAM_LAG_COUNT 1000
 
 
 #define POSTGRES_DATETIME_FORMAT_STRING ("%Y.%m.%d,%H:%M")

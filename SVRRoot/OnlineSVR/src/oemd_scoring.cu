@@ -10,7 +10,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <complex>
-#include <semaphore.h>
+#include <semaphore>
 #include <iomanip>
 #include <omp.h>
 #include <filesystem>
