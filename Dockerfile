@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt -yq update
 RUN apt -y install tzdata
 RUN apt -yq upgrade
-RUN apt -yq install git gpg linux-headers-generic postgresql wget libpq-dev gcc g++
+RUN apt -yq install git cmake make gpg linux-headers-generic postgresql wget libpq-dev gcc g++
 
 RUN wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/${CUDADIST}/${CUDAARCH}/cuda-${CUDADIST}.pin
 RUN wget -O /tmp/cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/${CUDADIST}/${CUDAARCH}/cuda-keyring_1.1-1_all.deb
