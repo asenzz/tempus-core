@@ -3,14 +3,13 @@
 #include <fstream>
 #include "onlinesvr_persist.hpp"
 
-using namespace std;
 
 namespace svr {
 
 // I/O Operations
 OnlineMIMOSVR_ptr OnlineMIMOSVR::load_online_mimosvr(const char *filename)
 {
-    ifstream file(filename, ios::in);
+    std::ifstream file(filename, std::ios::in);
     if (!file) {
         LOG4_ERROR("Error. File not found." << filename);
         throw std::runtime_error("Error. File not found.");
@@ -23,7 +22,7 @@ bool OnlineMIMOSVR::save_online_mimosvr(const char *filename)
 {
     bool res;
     // Open the file
-    ofstream file(filename, ios::out);
+    std::ofstream file(filename, std::ios::out);
     if (!file) {
         LOG4_ERROR("Error. It's impossible to create the file.");
         return false;
@@ -40,7 +39,7 @@ bool OnlineMIMOSVR::save_online_mimosvr(const char *filename)
 
     OnlineMIMOSVR_ptr OnlineMIMOSVR::load_onlinemimosvr_no_weights_no_kernel(const char *filename)
     {
-        ifstream file(filename, ios::in);
+        std::ifstream file(filename, std::ios::in);
         if (!file) {
             LOG4_ERROR("Error. File not found." << filename);
             throw std::runtime_error("Error. File not found.");
@@ -53,7 +52,7 @@ bool OnlineMIMOSVR::save_online_mimosvr(const char *filename)
     {
         bool res;
         // Open the file
-        ofstream file(filename, ios::out);
+        std::ofstream file(filename, std::ios::out);
         if (!file) {
             LOG4_ERROR("Error. It's impossible to create the file.");
             return false;

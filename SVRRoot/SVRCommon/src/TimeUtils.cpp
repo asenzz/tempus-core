@@ -1,8 +1,6 @@
 #include <util/TimeUtils.hpp>
 #include <sstream>
 
-using namespace std;
-
 namespace svr {
 
 double
@@ -45,7 +43,7 @@ boost::posix_time::ptime round_minute(const boost::posix_time::ptime &t)
     return bpt::ptime(t.date(), bpt::minutes(t.time_of_day().minutes()));
 }
 
-bpt::seconds date_time_string_to_seconds(const string &date_time)
+bpt::seconds date_time_string_to_seconds(const std::string &date_time)
 {
     boost::char_separator<char> separator(",: ");
     boost::tokenizer<boost::char_separator<char>> tokens(date_time, separator);

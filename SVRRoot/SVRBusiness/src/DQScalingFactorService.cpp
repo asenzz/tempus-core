@@ -77,6 +77,8 @@ DQScalingFactorService::slice(
 std::pair<std::vector<double>, std::vector<double>>
 DQScalingFactorService::do_calculate(const datamodel::DataRow::container::const_iterator &begin, const size_t rows_size)
 {
+    LOG4_THROW("Not used!");
+#if 0
     if (rows_size < 1) return {{}, {}};
 
     auto get_coefs = [&](arma::mat &scale_data, const size_t q) -> arma::mat {
@@ -123,6 +125,7 @@ DQScalingFactorService::do_calculate(const datamodel::DataRow::container::const_
     arma::mat scale_data_labels = scale_data_features;
     return {arma::conv_to<std::vector<double>>::from(get_coefs(scale_data_features, QUANTIZE_FIXED)),
             arma::conv_to<std::vector<double>>::from(get_coefs(scale_data_labels, MAIN_DECON_QUEUE_RES_SECS))};
+#endif
 }
 
 

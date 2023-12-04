@@ -456,8 +456,8 @@ public:
            << ", table name " << input_queue_table_name
            << ", column name " << input_queue_column_name
            << ", decon level " << decon_level_
-           << ", chunk ix " << chunk_ix_
-           << ", grad level " << grad_level_;
+           << ", chunk " << chunk_ix_
+           << ", gradient " << grad_level_;
 
         return ss.str();
     }

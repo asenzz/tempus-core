@@ -21,7 +21,6 @@ using namespace svr::context;
 using namespace svr::common;
 using namespace svr::daemon;
 using namespace bpt;
-using namespace std;
 
 
 namespace svr::daemon {
@@ -34,12 +33,12 @@ std::string DaemonFacade::S_LOOP_INTERVAL = "LOOP_INTERVAL_MS";
 std::string DaemonFacade::S_DAEMONIZE = "DAEMONIZE";
 
 
-DaemonFacade::DaemonFacade(const string &app_properties_path) : loop_count(0)
+DaemonFacade::DaemonFacade(const std::string &app_properties_path) : loop_count(0)
 {
     initialize(app_properties_path);
 }
 
-void DaemonFacade::initialize(const string &app_properties_path)
+void DaemonFacade::initialize(const std::string &app_properties_path)
 {
     // parse necessary daemon configuration parameters
     loop_interval = AppContext::get_instance().app_properties.get_property<long>(app_properties_path, S_LOOP_INTERVAL, "1000");
@@ -323,7 +322,7 @@ void DaemonFacade::start_loop()
 bool DaemonFacade::continue_loop()
 {
     // wait some time before next iteration
-    this_thread::sleep_for(std::chrono::milliseconds(loop_interval));
+    std::this_thread::sleep_for(std::chrono::milliseconds(loop_interval));
     if (max_loop_count < 0) return true;
     else return (++loop_count) < max_loop_count;
 }

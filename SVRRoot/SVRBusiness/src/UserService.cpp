@@ -5,7 +5,7 @@
 #include <common/Logging.hpp>
 
 using namespace svr::common;
-using namespace std;
+
 
 namespace svr {
 namespace business {

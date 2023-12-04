@@ -133,8 +133,8 @@ outlier_test(
     const boost::math::students_t distrib(data.n_cols - 2);
     const double ddata_size = data.n_cols;
     const double t_level = quantile(distrib, alpha / ddata_size);
-    const double G_limit_min = (ddata_size - 1) / sqrt(ddata_size) * sqrt(pow(t_level, 2) / (ddata_size - 2 + pow(t_level, 2)));
-    const double G_limit_max = (ddata_size - 1) / sqrt(ddata_size) * sqrt(pow(t_level, 2) / (ddata_size - 2 + pow(t_level, 2)));
+    const double G_limit_min = (ddata_size - 1) / sqrt(ddata_size) * sqrt(std::pow(t_level, 2) / (ddata_size - 2 + std::pow(t_level, 2)));
+    const double G_limit_max = (ddata_size - 1) / sqrt(ddata_size) * sqrt(std::pow(t_level, 2) / (ddata_size - 2 + std::pow(t_level, 2)));
 
 #pragma omp parallel for
     for (size_t i = 0; i < data.n_rows; ++i) {

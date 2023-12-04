@@ -3,7 +3,6 @@
 #include <common/Logging.hpp>
 
 using namespace svr::datamodel;
-using namespace std;
 using namespace svr::common;
 
 namespace svr {
@@ -21,17 +20,17 @@ User_ptr UserRowMapper::mapRow(const pqxx_tuple& rowSet) const
 	svr::datamodel::ROLE role;
 	svr::datamodel::Priority priority = static_cast<svr::datamodel::Priority>(rowSet["priority"].as<int>((int)svr::datamodel::Priority::Normal));
 
-	if(ignoreCaseEquals(rowSet["role"].as<string>(""), "admin"))
+	if(ignoreCaseEquals(rowSet["role"].as<std::string>(""), "admin"))
 		role = svr::datamodel::ROLE::ADMIN;
 	else
 	    role = svr::datamodel::ROLE::USER;
 
-	return make_shared<User>(
+	return std::make_shared<User>(
 			rowSet["user_id"].as<bigint>(std::numeric_limits<bigint>::quiet_NaN()),
-			rowSet["username"].as<string>(""),
-			rowSet["email"].as<string>(""),
-			rowSet["password"].as<string>(""),
-			rowSet["name"].as<string>(""),
+			rowSet["username"].as<std::string>(""),
+			rowSet["email"].as<std::string>(""),
+			rowSet["password"].as<std::string>(""),
+			rowSet["name"].as<std::string>(""),
 			role,
 			priority
 	);

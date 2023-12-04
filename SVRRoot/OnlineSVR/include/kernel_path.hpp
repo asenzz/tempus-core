@@ -354,7 +354,7 @@ public:
             //for jj=1:N
             for (int jj = 0; jj < N; ++jj) {
                 const auto iijj = ii * N + jj;
-                w[iijj] = ii == jj ? 1. : 1. / std::pow(1. + abs(ii - jj), 2);
+                w[iijj] = ii == jj ? 1. : 1. / std::pow<double>(1. + abs(ii - jj), 2);
                 w_sum += w[iijj];
             }
         }

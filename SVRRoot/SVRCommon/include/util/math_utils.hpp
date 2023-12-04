@@ -14,6 +14,17 @@
 
 namespace svr {
 
+#if 0
+template<typename T> constexpr auto pow = [](const T lhs, const long rhs) -> T
+{
+    const bool negexp = rhs < 0;
+    const unsigned long ct = negexp ? -rhs : rhs;
+    T res = 1;
+    for (unsigned long i = 0; i < ct; ++i) res *= res;
+    return negexp ? 1./ res : res;
+};
+#endif
+
 template<typename T>
 std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
 {
@@ -21,12 +32,14 @@ std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
     return lsh;
 }
 
+
 template<typename T>
 std::atomic<T> &operator += (std::atomic<T> &lhs, const T &rhs)
 {
     lhs.store(lhs.load() + rhs);
     return lhs;
 }
+
 
 template<typename T>
 std::atomic<T> &operator &= (std::atomic<T> &lhs, const T &rhs)
@@ -187,24 +200,6 @@ operator +(const std::vector<T> &lhs, const std::vector<T> &rhs)
 }
 
 template<typename T> T
-meanabs(const std::vector<T> &v)
-{
-    double res = 0;
-#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none)
-    for (const auto _v: v) res += std::abs(_v);
-    return res / double(v.size());
-}
-
-
-template<typename scalar_t> scalar_t
-meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typename std::vector<scalar_t>::const_iterator &end)
-{
-    double res = 0;
-    for (auto iter = begin; iter != end; ++iter) res += std::abs(*iter);
-    return res / std::abs(double(std::distance(begin, end)));
-}
-
-template<typename T> T
 snap_copy(const T v, const std::vector<T> &sorted_possible_values)
 {
     if (v <= (sorted_possible_values.front() + *std::next(sorted_possible_values.begin()) ) / 2.)  return sorted_possible_values.front();
@@ -316,10 +311,45 @@ medianabs(const arma::Mat<T> &m)
     return arma::median(arma::abs(arma::vectorise(m)));
 }
 
+
+template<typename T> T
+meanabs(const std::vector<T> &v)
+{
+    double res = 0;
+#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none)
+    for (const auto _v: v) res += std::abs(_v);
+    return res / double(v.size());
+}
+
+
+template<typename scalar_t> scalar_t
+meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typename std::vector<scalar_t>::const_iterator &end)
+{
+    double res = 0;
+    for (auto iter = begin; iter != end; ++iter) res += std::abs(*iter);
+    return res / std::abs(double(std::distance(begin, end)));
+}
+
 template<typename T> T
 sum(const arma::Mat<T> &m)
 {
     return arma::sum(arma::vectorise(m));
+}
+
+template<typename T> T
+sumabs(const arma::Mat<T> &m)
+{
+    return arma::sum(arma::abs(arma::vectorise(m)));
+}
+
+template<typename T> arma::Mat<T>
+extrude_rows(const arma::Mat<T> &m, const size_t ct)
+{
+    arma::Mat<T> r = m;
+    while (r.n_cols < ct)
+        r = arma::join_rows(r, m);
+    if (r.n_cols > ct) r.shed_cols(ct, r.n_cols);
+    return r;
 }
 
 #define INF (9.9e99)

@@ -52,6 +52,7 @@ DatasetService::recombine_params(
     for (const auto &tp: tune_predictions) empty_preds &= tp.empty();
     if (empty_preds) return;
 
+#ifdef SEPARATE_PREDICTIONS_BY_COST
     // Combined epscos take index 0
     for (auto &tp_level: tune_predictions) {
         if (tp_level.empty()) continue;
@@ -60,13 +61,13 @@ DatasetService::recombine_params(
             tp_level[0].insert(key_tp.second.begin(), key_tp.second.end());
         }
     }
+#endif
 
     std::vector<SVRParameters_ptr> this_ensemble_params(ensemble_params.size());
     double best_score = recombine_params(tune_predictions, this_ensemble_params, half_levct, scale_label, dc_offset, 0);
     ensemble_params = this_ensemble_params;
     LOG4_DEBUG("Found best score " << best_score << " for epsco 0.");
-#if 0
-    LOG4_DEBUG("Found best score " << best_score << " for epsco 0.");
+#ifdef SEPARATE_PREDICTIONS_BY_COST
     for (const auto epsco: rough_epscos_grid) {
         const uint64_t epsco_key = 1e6 * epsco;
         const auto score = recombine_params(tune_predictions, this_ensemble_params, half_levct, scale_label, dc_offset, epsco_key);
@@ -131,9 +132,9 @@ DatasetService::recombine_params(
             const auto &tp = std::next(tune_predictions[(colix >= 16 ? (colix + 1) : colix) * 2][epsco_key].begin(), rowix)->get();
             for (uint32_t j = 0; j < EMO_MAX_J; ++j) {
                 for (uint32_t el = 0; el < EMO_TUNE_VALIDATION_WINDOW; ++el) {
-                    params_preds[rowix * colct + colix].predictions[j][el] = tp->p_predictions->at(j).at(el, 0);
-                    params_preds[rowix * colct + colix].labels[j][el] = tp->p_labels->at(j).at(el, 0);
-                    params_preds[rowix * colct + colix].last_knowns[j][el] = tp->p_last_knowns->at(j).at(el, 0);
+                    params_preds[rowix * colct + colix].predictions[j][el] = arma::mean(tp->p_predictions->at(j).row(el));
+                    params_preds[rowix * colct + colix].labels[j][el] = arma::mean(tp->p_labels->at(j).row(el));
+                    params_preds[rowix * colct + colix].last_knowns[j][el] = arma::mean(tp->p_last_knowns->at(j).row(el));
                     // LOG4_TRACE("Row " << rowix << ", J " << j << ", col " << colix << ", prediction " << params_preds[rowix * colct + colix].predictions[j][el] << ", label " << params_preds[rowix * colct + colix].labels[j][el] << ", last known " << params_preds[rowix * colct + colix].last_knowns[j][el]);
                 }
             }
@@ -266,9 +267,9 @@ void DatasetService::process_dataset_test_tune(
         APP.dq_scaling_factor_service.scale(p_dataset, p_aux_decon, p_params, p_model->get_learning_levels(), level_features[half_levix], level_labels[half_levix], level_last_knowns[half_levix]);
         const size_t full_validation_sz = p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE;
         if (!p_params->get_svr_kernel_param())
-        PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
-            tune_predictions[levix], p_params, level_features[half_levix].rows(0, full_validation_sz - 1), level_labels[half_levix].rows(0, full_validation_sz - 1),
-                level_last_knowns[half_levix].rows(0, full_validation_sz - 1)), "Tune kernel params for model " << p_params->get_decon_level());
+            PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
+                tune_predictions[levix], p_params, level_features[half_levix].rows(0, full_validation_sz - 1), level_labels[half_levix].rows(0, full_validation_sz - 1),
+                    level_last_knowns[half_levix].rows(0, full_validation_sz - 1)), "Tune kernel params for model " << p_params->get_decon_level());
         scale_label[levix] = p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), levix);
         dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), DC_DQ_SCALING_FACTOR);
     )

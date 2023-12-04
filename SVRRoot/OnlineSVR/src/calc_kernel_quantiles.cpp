@@ -4,7 +4,6 @@
 #include "calc_kernel_quantiles.hpp"
 #include "common/compatibility.hpp"
 
-#include <set>
 #include <vector>
 #include <numeric>
 #include <algorithm>
@@ -25,7 +24,7 @@ calc_kernel_quantiles::calc_kernel_quantiles(const arma::mat &K, const arma::mat
     // result = Y[idx[0]] is the smallest
     //
     std::vector<size_t> borders(num_classes + 1);
-    __omp_pfor_i (0, num_classes, borders[i] = size_t(double(i * N) / double(num_classes)) )
+    __tbb_pfor_i (0, num_classes, borders[i] = size_t(double(i * N) / double(num_classes)) )
     borders[num_classes] = N;
 
     //one-vs-all or one-vs-the rest strategy implemented - for each class
@@ -43,7 +42,7 @@ calc_kernel_quantiles::calc_kernel_quantiles(const arma::mat &K, const arma::mat
                 const size_t left_idx = idx[borders[i] + j];
                 for (size_t k = 0; k < N2; ++k) {
                     const size_t right_idx = k < borders[i] ? idx[k] : idx[borders[i + 1] + k - borders[i]];
-                    E12 += pow(K(left_idx, left_idx) - 2. * K(left_idx, right_idx) + K(right_idx, right_idx), 2);
+                    E12 += std::pow(K(left_idx, left_idx) - 2. * K(left_idx, right_idx) + K(right_idx, right_idx), 2);
                 }
             }
 
@@ -53,7 +52,7 @@ calc_kernel_quantiles::calc_kernel_quantiles(const arma::mat &K, const arma::mat
                 const size_t left_idx = idx[borders[i] + j];
                 for (size_t k = 0; k < N1; ++k) {
                     const size_t right_idx = idx[borders[i] + k];
-                    E11 += pow(K(left_idx, left_idx) - 2. * K(left_idx, right_idx) + K(right_idx, right_idx), 2);
+                    E11 += std::pow(K(left_idx, left_idx) - 2. * K(left_idx, right_idx) + K(right_idx, right_idx), 2);
                 }
             }
             E11 = E11 / (double) N1 / (double) N1;
@@ -62,7 +61,7 @@ calc_kernel_quantiles::calc_kernel_quantiles(const arma::mat &K, const arma::mat
                 const size_t left_idx = j < borders[i] ? idx[j] : idx[borders[i + 1] + j - borders[i]];
                 for (size_t k = 0; k < N2; ++k) {
                     const size_t right_idx = k < borders[i] ? idx[k] : idx[borders[i + 1] + k - borders[i]];
-                    E22 += pow(K(left_idx, left_idx) - 2. * K(left_idx, right_idx) + K(right_idx, right_idx), 2);
+                    E22 += std::pow(K(left_idx, left_idx) - 2. * K(left_idx, right_idx) + K(right_idx, right_idx), 2);
                 }
             }
             E22 = E22 / (double) N2 / (double) N2;

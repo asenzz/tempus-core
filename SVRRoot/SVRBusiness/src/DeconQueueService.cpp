@@ -14,7 +14,7 @@
 #include "online_emd.hpp"
 #include "fast_cvmd.hpp"
 
-using namespace std;
+
 using namespace svr::datamodel;
 using namespace svr::common;
 using namespace bpt;
@@ -45,7 +45,7 @@ bool DeconQueueService::exists(DeconQueue_ptr const &p_decon_queue)
     return decon_queue_dao.exists(p_decon_queue->get_table_name());
 }
 
-bool DeconQueueService::exists(const string &decon_queue_table_name)
+bool DeconQueueService::exists(const std::string &decon_queue_table_name)
 {
     return decon_queue_dao.exists(decon_queue_table_name);
 }
@@ -143,7 +143,7 @@ DeconQueueService::deconstruct(
     LOG4_BEGIN();
     auto p_decon_queue = p_dataset->get_decon_queue(p_input_queue, column_name);
     if (!p_decon_queue) {
-        p_decon_queue = make_shared<DeconQueue>(
+        p_decon_queue = std::make_shared<DeconQueue>(
                 "",
                 p_input_queue->get_table_name(),
                 column_name,
@@ -166,7 +166,7 @@ void
 DeconQueueService::deconstruct_ticks(
         const InputQueue_ptr &p_input_queue,
         const Dataset_ptr &p_dataset,
-        const string &column_name,
+        const std::string &column_name,
         data_row_container &decon_data)
 {
     LOG4_BEGIN();
@@ -242,7 +242,7 @@ void
 DeconQueueService::deconstruct(
         const InputQueue_ptr &p_input_queue,
         const Dataset_ptr &p_dataset,
-        const string &column_name,
+        const std::string &column_name,
         svr::datamodel::DataRow::container &decon_out,
         const bool get_data_from_database)
 {
@@ -396,9 +396,9 @@ void
 DeconQueueService::deconstruct_cvmd(
     const Dataset_ptr &p_dataset,
     const InputQueue_ptr &p_input_queue,
-    const string &column_name,
-    const vector<double> &column_values,
-    vector<std::vector<double>> &raw_deconstructed_data,
+    const std::string &column_name,
+    const std::vector<double> &column_values,
+    std::vector<std::vector<double>> &raw_deconstructed_data,
     const bool do_batch) const
 {
     const auto p_decon_queue = p_dataset->get_decon_queue(p_input_queue, column_name);
@@ -462,7 +462,7 @@ DeconQueueService::copy_recon_frame_to_container(
         const svr::datamodel::DataRow::container &decon_data,
         const std::set<ptime> &times,
         DataRow::container &recon_data,
-        const vector<double> &recon_out,
+        const std::vector<double> &recon_out,
         const size_t limit)
 {
     if (recon_out.size() != times.size()) LOG4_THROW("Reconstructed data size " << recon_out.size() << " doesn't equal times size " << times.size());
@@ -486,7 +486,7 @@ DeconQueueService::copy_recon_frame_to_container(
 
 data_row_container DeconQueueService::reconstruct(
         const svr::datamodel::datarow_range &data,
-        const string &transformation_name,
+        const std::string &transformation_name,
         const size_t n_decomposition_levels)
 {
     data_row_container out_data_container;
@@ -497,7 +497,7 @@ data_row_container DeconQueueService::reconstruct(
 
 void DeconQueueService::reconstruct(
         const svr::datamodel::datarow_range &data,
-        const string &transformation_name,
+        const std::string &transformation_name,
         const size_t n_decomposition_levels,
         data_row_container &out_data_container)
 {
@@ -556,7 +556,7 @@ size_t
 DeconQueueService::load_decon_data(const DeconQueue_ptr &decon_queue, const ptime &time_from, const ptime &time_to, const size_t limit)
 {
     reject_nullptr(decon_queue);
-    deque<DataRow_ptr> new_data = decon_queue_dao.get_data(decon_queue->get_table_name(), time_from, time_to, limit);
+    std::deque<DataRow_ptr> new_data = decon_queue_dao.get_data(decon_queue->get_table_name(), time_from, time_to, limit);
     data_row_container &decon_queue_data = decon_queue->get_data();
     if (!new_data.empty() and !decon_queue_data.empty() and new_data.front()->get_value_time() <= decon_queue_data.back()->get_value_time())
         decon_queue_data.erase(lower_bound(decon_queue_data, new_data.front()->get_value_time()), decon_queue_data.end());
@@ -569,7 +569,7 @@ size_t DeconQueueService::load_latest_decon_data(const DeconQueue_ptr &decon_que
 {
     LOG4_DEBUG("Loading " << limit << " values until " << time_to << " from decon queue " << decon_queue->get_table_name());
     reject_nullptr(decon_queue);
-    deque<DataRow_ptr> new_data;
+    std::deque<DataRow_ptr> new_data;
     try {
         new_data = decon_queue_dao.get_latest_data(decon_queue->get_table_name(), time_to, limit);
     } catch (const std::exception &ex) {

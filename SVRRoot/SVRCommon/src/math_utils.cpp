@@ -13,7 +13,7 @@ namespace common {
 std::vector<double> levy(const size_t d) // Return colvec of columns d
 {
     constexpr double beta = 3. / 2.;
-    static const double sigma = std::pow(tgamma(1. + beta) * sin(M_PI * beta / 2.) / (tgamma((1. + beta) / 2.) * beta * pow(2, ((beta - 1.) / 2.))), 1. / beta);
+    static const double sigma = std::pow(tgamma(1. + beta) * sin(M_PI * beta / 2.) / (tgamma((1. + beta) / 2.) * beta * std::pow(2, ((beta - 1.) / 2.))), 1. / beta);
 
     arma::mat u(1, d, arma::fill::randn);
     u = u * sigma;
@@ -393,11 +393,9 @@ arma::uvec complement_vectors(const std::set<size_t> &svi, const arma::uvec &new
     //arma::uvec complement_ixs;
     std::vector<long long unsigned int> complement_ixs;
 
-    size_t ix = 0;
     for (size_t i = 0; i < new_ixs.n_elem; ++i) {
         if (svi.find(new_ixs(i)) == svi.end()) {
             complement_ixs.push_back(new_ixs(i));
-            ++ix;
         }
     }
     LOG4_DEBUG("complement_ixs size svi size  " << complement_ixs.size() << " " << svi.size());
@@ -405,8 +403,11 @@ arma::uvec complement_vectors(const std::set<size_t> &svi, const arma::uvec &new
     return ret_values;
 }
 
-void shuffle_matrix(const arma::mat &x, const arma::mat &y, arma::uvec &shuffled_rows,
-                    arma::uvec &shuffled_cols)
+void shuffle_matrix(
+        const arma::mat &x,
+        const arma::mat &y,
+        arma::uvec &shuffled_rows,
+        arma::uvec &shuffled_cols)
 {
     size_t x_train_rows = x.n_rows;
     size_t x_train_cols = x.n_cols;

@@ -7,8 +7,6 @@
 
 #include "util/CompressionUtils.hpp"
 
-using namespace std;
-
 
 namespace svr
 {

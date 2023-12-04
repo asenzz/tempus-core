@@ -8,7 +8,7 @@
 #include "InterprocessReader.hpp"
 #include "util/TimeUtils.hpp"
 
-using namespace std;
+
 using namespace bpt;
 using namespace svr::common;
 using namespace svr::datamodel;
@@ -25,21 +25,21 @@ InputQueueService::~InputQueueService()
 
 InputQueue_ptr
 InputQueueService::get_queue_metadata(
-        const string &user_name,
-        const string &logical_name,
+        const std::string &user_name,
+        const std::string &logical_name,
         const time_duration &resolution)
 {
     return input_queue_dao.get_queue_metadata(user_name, logical_name, resolution);
 }
 
 InputQueue_ptr
-InputQueueService::get_queue_metadata(const string &input_queue_table_name)
+InputQueueService::get_queue_metadata(const std::string &input_queue_table_name)
 {
     return input_queue_dao.get_queue_metadata(input_queue_table_name);
 }
 
 svr::datamodel::DataRow::container InputQueueService::get_queue_data(
-        const string &table_name,
+        const std::string &table_name,
         const ptime &time_from,
         const ptime &time_to,
         size_t limit)
@@ -184,7 +184,7 @@ bpt::ptime InputQueueService::adjust_time_on_grid(
     // Hint: this can(should) be caught on object construction time.
     if (p_input_queue->get_resolution().total_seconds() / 2
         < p_input_queue->get_legal_time_deviation().total_seconds()) {
-        throw invalid_argument(
+        throw std::invalid_argument(
                 "Invalid Resolution/Legal time deviation arguments!"
                 "Cannot calculate time on grid because value_time may be valid on two different timegrid slots!");
     }
@@ -260,7 +260,7 @@ InputQueueService::clone_with_data(
 data_row_container
 InputQueueService::get_column_data(
         const InputQueue_ptr &queue,
-        const string &column_name)
+        const std::string &column_name)
 {
     LOG4_BEGIN();
 

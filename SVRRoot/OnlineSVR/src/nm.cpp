@@ -260,7 +260,7 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
                 x = z / dnn;
 
                 z = 0;
-                for (i = 0; i < nn; i++) z += pow(y[i] - x, 2);
+                for (i = 0; i < nn; i++) z += std::pow(y[i] - x, 2);
 
                 if (z <= rq) {
                     break;

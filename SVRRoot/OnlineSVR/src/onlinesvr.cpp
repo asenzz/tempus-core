@@ -199,9 +199,18 @@ arma::mat OnlineMIMOSVR::call_gpu_dynsolve(const arma::mat &left, const arma::ma
     return output;
 }
 
-void OnlineMIMOSVR::call_gpu_dynsolve(const arma::mat &left, const arma::mat &right, arma::mat &output)
+
+void OnlineMIMOSVR::call_gpu_dynsolve(const arma::mat &left, const arma::mat &right, arma::Mat<double> &output)
 {
     if (output.n_rows != left.n_rows || output.n_cols != right.n_cols) output.set_size(left.n_rows, right.n_cols);
+#pragma omp parallel for schedule(static, 1) num_threads(right.n_cols)
+    for (size_t i = 0; i < right.n_cols; ++i)
+        PROFILE_EXEC_TIME(svr::solvers::dyn_gpu_solve(left.n_rows, left.memptr(), right.colptr(i), output.colptr(i)), "Dynamic GPU solve");
+}
+
+
+void OnlineMIMOSVR::call_gpu_dynsolve(const arma::mat &left, const arma::mat &right, arma::subview<double> output)
+{
 #pragma omp parallel for schedule(static, 1) num_threads(right.n_cols)
     for (size_t i = 0; i < right.n_cols; ++i)
         PROFILE_EXEC_TIME(svr::solvers::dyn_gpu_solve(left.n_rows, left.memptr(), right.colptr(i), output.colptr(i)), "Dynamic GPU solve");
@@ -218,12 +227,12 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
     size_t best_it = std::numeric_limits<size_t>::max();
     double best_sae = std::numeric_limits<double>::max();
     for (size_t i = 0; i < iters; ++i) {
-        arma::mat error_mat(solved.n_rows, solved.n_cols);
+        arma::mat error_mat(arma::size(solved));
         double sae = 0;
 #pragma omp parallel for reduction(+:sae) schedule(static, 1)
         for (size_t col_ix = 0; col_ix < solved.n_cols; ++col_ix) {
             error_mat.col(col_ix) = arma::abs(K * solved.col(col_ix) - rhs.col(col_ix));
-            const double this_sae = arma::sum(arma::vectorise(error_mat.col(col_ix)));
+            const double this_sae = common::sum<double>(error_mat.col(col_ix));
             sae += this_sae;
         }
         if (sae < best_sae) {
@@ -233,16 +242,12 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
         }
         LOG4_TRACE("IRWLS iteration " << i << ", SAE " << sae << ", kernel dimensions " << arma::size(K) << ", best SAE " << best_sae);
         // const arma::mat mult = error_mat / double(K.n_rows);
-        const arma::mat mult = 1. / arma::sqrt(error_mat + common::C_singlesolve_delta / (double(i) + 1.));
+        const arma::mat mult = 1. / arma::sqrt(error_mat + common::C_singlesolve_delta / ((i + 1.) * IRWLS_ITER / double(iters)));
 #pragma omp parallel for schedule(static, 1) num_threads(solved.n_cols)
-        for (size_t col_ix = 0; col_ix < solved.n_cols; ++col_ix) {
-            arma::mat this_col = solved.col(col_ix);
-            call_gpu_dynsolve((mult.col(col_ix) * arma::ones(1, K.n_cols)) % K + epsilon_eye_K, rhs.col(col_ix) % mult.col(col_ix), this_col);
-            solved.col(col_ix) = this_col;
-        }
+        for (size_t col_ix = 0; col_ix < solved.n_cols; ++col_ix)
+            call_gpu_dynsolve((mult.col(col_ix) * arma::ones(1, K.n_cols)) % K + epsilon_eye_K, rhs.col(col_ix) % mult.col(col_ix), solved.col(col_ix));
     }
-    const arma::mat error_mat = arma::abs(K * solved - rhs);
-    const double sae = common::sum(error_mat);
+    const double sae = common::sumabs<double>(K * solved - rhs);
     if (sae < best_sae) {
         best_sae = sae;
         best_solution = solved;
@@ -378,7 +383,7 @@ void OnlineMIMOSVR::do_over_train_zero_epsilon(const arma::mat &xx_train, const 
         // The regression parameters
         component.chunk_weights[chunk_idx] = arma::ones(y_train.n_rows, y_train.n_cols);
         // Prediction error
-        calc_weights(chunk_idx, y_train, 1. / (2. * auto_gu[chunk_idx]), component, IRWLS_ITER_BATCH);
+        calc_weights(chunk_idx, y_train, 1. / (2. * auto_gu[chunk_idx]), component, IRWLS_ITER);
     }
 }
 
@@ -389,7 +394,7 @@ void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const mat &y_train, cons
 #pragma omp parallel for schedule(static, 1) num_threads(std::min<size_t>(std::thread::hardware_concurrency(), y_train.n_cols))
     for (size_t col_ix = 0; col_ix < y_train.n_cols; ++col_ix)
         E.col(col_ix) = y_train.col(col_ix) + component.epsilon - p_kernel_matrices->at(chunk_ix) * component.chunk_weights[chunk_ix].col(col_ix);
-    component.mae_chunk_values[chunk_ix] = sqrt(common::armd::mean_all(pow(sqrt(sum(pow(E, 2), 1)), 2))); // ixs.size() < 2 ? 1 : common::meanabs<double>(E);
+    component.mae_chunk_values[chunk_ix] = ixs.size() < 2 ? 1 : common::meanabs<double>(E);
     LOG4_DEBUG("Initial MAE " << component.mae_chunk_values[chunk_ix] << " for chunk " << chunk_ix);
 #if 0
     // RMSE with no weights
@@ -409,7 +414,7 @@ void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const mat &y_train, cons
     for (size_t col_ix = 0; col_ix < y_train.n_cols; ++col_ix)
         E.col(col_ix) = y_train.col(col_ix) + component.epsilon - p_kernel_matrices->at(chunk_ix) * component.chunk_weights[chunk_ix].col(col_ix);
     // E = y_train + component.epsilon - p_kernel_matrices->at(chunk_ix) * component.chunk_weights[chunk_ix];
-    component.mae_chunk_values[chunk_ix] = sqrt(common::armd::mean_all(pow(sqrt(sum(pow(E, 2), 1)), 2))); // ixs.size() < 2 ? 1 : common::meanabs<double>(E);
+    component.mae_chunk_values[chunk_ix] = ixs.size() < 2 ? 1 : common::meanabs<double>(E);
     LOG4_DEBUG("Final MAE " << component.mae_chunk_values[chunk_ix] << " for chunk " << chunk_ix);
 }
 

@@ -10,10 +10,10 @@
 
 #define NEW_SCALING // Shortest time-frame scaling
 #define MODEL_TRAIN_OFFSET 0 // Use for MQL5 backtests, shows how many main queue samples backward to shift the signal
-
+// #define SEPARATE_PREDICTIONS_BY_COST
 #define MANIFOLD_TEST
 #ifdef MANIFOLD_TEST
-constexpr unsigned TEST_OFFSET_DEFAULT = 230;
+constexpr unsigned TEST_OFFSET_DEFAULT = 430;
 #define MANIFOLD_TEST_VALIDATION_WINDOW (getenv("SVRWAVE_TEST_WINDOW") ? strtoul(getenv("SVRWAVE_TEST_WINDOW"), nullptr, 10) : (TEST_OFFSET_DEFAULT))
 #endif
 
@@ -26,13 +26,13 @@ constexpr unsigned TEST_OFFSET_DEFAULT = 230;
 constexpr unsigned MAIN_DECON_QUEUE_RES_SECS = 3600;
 //#define LAST_KNOWN_LABEL
 #define MULTISTEP_PRED_PERIOD       bpt::seconds(MAIN_DECON_QUEUE_RES_SECS)
-constexpr unsigned CHUNK_DECREMENT = 9000;
+constexpr unsigned CHUNK_DECREMENT = 6000;
 // #define LAST_QUANT_FEAT // The feature is average of QUANTIZE_FIXED number of features vs the last value of the range
 // #define EMO_DIFF
 // #define EMO_DIFF_FEATS
 
 
-#define QUANTIZE_FIXED      15
+#define QUANTIZE_FIXED      10
 //#define QUANTIZE_FIXED_MAX  15
 //#define QUANTIZE_FIXED_MIN  1
 
@@ -165,7 +165,7 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 #endif
 #endif
 
-constexpr double BAD_VALIDATION = 1000;
+constexpr double BAD_VALIDATION = 1e6;
 
 constexpr unsigned CUDA_BLOCK_SIZE = 256;
 constexpr unsigned TILE_WIDTH = 16; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!

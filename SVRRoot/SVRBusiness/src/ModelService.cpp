@@ -153,7 +153,7 @@ ModelService::prepare_labels(
         arma::rowvec &labels_row,
         const bpt::time_duration &aux_resolution)
 {
-    const auto res = generate_labels(label_aux_start_iter, label_aux_end_iter, start_time, end_time, aux_resolution, level_ix, labels_row); // TODO Hack, see why crash on smaller than 3600 tmp_labels_row
+    const auto res = generate_labels(label_aux_start_iter, label_aux_end_iter, start_time, end_time, aux_resolution, level_ix, labels_row);
     return res && common::sane(labels_row);
 }
 

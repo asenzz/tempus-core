@@ -430,7 +430,6 @@ DatasetService::prepare_data(
 
     PROFILE_EXEC_TIME(recombine_params(tune_predictions, ensemble_params, half_levct, scale_label, dc_offset), "Recombine parameters for " << half_levct - 1 << " models.");
 
-
 #ifdef TRIM_DATA // TODO Buggy check why needed data is cleared!
     const auto leftover_len = p_dataset->get_max_lag_count() + p_dataset->get_residuals_count() + 1;
     const auto leftover_len_aux = leftover_len * resolution_factor;

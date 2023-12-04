@@ -9,7 +9,7 @@
 
 #include <appcontext.hpp>
 
-using namespace std;
+
 using namespace svr::common;
 using namespace svr::datamodel;
 using namespace svr::context;

@@ -9,7 +9,7 @@ using namespace svr::business;
 using namespace svr::context;
 using namespace svr::common;
 using namespace bpt;
-using namespace std;
+
 
 int main(int argc, char** argv)
 {

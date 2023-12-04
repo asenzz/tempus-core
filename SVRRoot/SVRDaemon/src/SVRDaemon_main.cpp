@@ -5,7 +5,6 @@
 #include <csignal>
 
 
-using namespace std;
 using namespace svr::daemon;
 using namespace svr::context;
 using namespace svr::datamodel;
@@ -32,7 +31,7 @@ std::string parse(int argc, char** argv)
     boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(gen_desc).run(), vm);
     if (vm.count("help") or !vm.count("config"))
     {
-        cout << gen_desc << "\n";
+        std::cout << gen_desc << "\n";
         exit(0);
     }
     if (vm["config"].as<std::string>().empty())
@@ -55,11 +54,11 @@ int main(int argc, char** argv)
     signal(SIGABRT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    shared_ptr<DaemonFacade> p_daemon_facade;
+    std::shared_ptr<DaemonFacade> p_daemon_facade;
     try
     {
         std::string config_path = parse(argc, argv);
-        p_daemon_facade = make_shared<DaemonFacade>(config_path);
+        p_daemon_facade = std::make_shared<DaemonFacade>(config_path);
         p_daemon_facade->start_loop();
     } catch(std::invalid_argument& e) {
         LOG4_ERROR(e.what());

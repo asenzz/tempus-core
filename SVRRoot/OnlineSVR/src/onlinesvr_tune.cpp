@@ -79,13 +79,13 @@ OnlineMIMOSVR::future_validate(
                           "Chunk predict " << ix << " of " << num_preds << " rows, " << features.n_cols << " feature columns, " << PROPS.get_multistep_len() << " labels per row, level " << online_svr.get_svr_parameters().get_decon_level());
         online_svr.learn(features.row(i_future), labels.row(i_future), false, true, std::numeric_limits<size_t>::max(), times[i_future]);
 #endif
-        lin_pred_values[ix] = last_knowns.at(i_future, 0) * scale_label;
+        lin_pred_values[ix] = arma::mean(last_knowns.row(i_future)) * scale_label;
 #ifdef EMO_DIFF
         const auto predicted_val = predicted_values(ix, 0) + lin_pred_values[ix];
         const auto actual_val = labels.at(i_future, 0) + lin_pred_values[ix];
 #else
-        double predicted_val = predicted_values(ix, 0) * scale_label;
-        double actual_val = labels.at(i_future, 0) * scale_label;
+        double predicted_val = arma::mean(predicted_values.row(ix)) * scale_label;
+        double actual_val = arma::mean(labels.row(i_future)) * scale_label;
         if (online_svr.get_svr_parameters().get_decon_level() == 0) {
             predicted_val += dc_offset;
             actual_val += dc_offset;
@@ -94,7 +94,7 @@ OnlineMIMOSVR::future_validate(
 #endif
         ret_predicted_values[ix] = predicted_val;
         actual_values[ix] = actual_val;
-        LOG4_DEBUG("Predicted " << predicted_val << ", actual " << actual_val << ", last known " << lin_pred_values[ix] << ", row " << ix << ", col " << 0 << ", level " << online_svr.get_svr_parameters().get_decon_level());
+        LOG4_DEBUG("Predicted " << predicted_val << ", actual " << actual_val << ", last known " << lin_pred_values[ix] << ", row " << ix << ", cols " << labels.n_cols << ", level " << online_svr.get_svr_parameters().get_decon_level());
         mae += std::abs(actual_val - predicted_val);
 #ifdef EMO_DIFF
         mae_lk += std::abs(actual_val - lin_pred_values[ix]);
@@ -192,8 +192,8 @@ PROFILE_EXEC_TIME(
 
 double calc_gamma(const arma::mat &Z, const size_t train_len, const double meanabs_labels)
 {
-    // return 2. * meanabs_labels * (.5 * std::sqrt(2. * common::meanabs(Z)) - 1. / double(train_len));
-    return 2. * meanabs_labels * (.5 * std::sqrt(2. * arma::mean(arma::abs(arma::vectorise(Z.submat(Z.n_rows - CHUNK_DECREMENT, Z.n_cols - CHUNK_DECREMENT, Z.n_rows - 1, Z.n_cols - 1))))) - 1. / double(train_len));
+    return 2. * meanabs_labels * (.5 * std::sqrt(2. * common::medianabs<double>(Z.submat(Z.n_rows - CHUNK_DECREMENT, Z.n_cols - CHUNK_DECREMENT, Z.n_rows - 1, Z.n_cols - 1))) - 1. / double(train_len));
+    // return 2. * meanabs_labels * (.5 * std::sqrt(2. * common::medianabs(Z)) - 1. / double(train_len));
 }
 
 
@@ -503,6 +503,7 @@ calc_direction(const arma::mat &K, const double epsco, const arma::mat &labels, 
             const arma::mat eye_epsco = arma::eye(x_test_len, x_test_len) * epsco;
 #ifdef TAIL_VALIDATION
             p_out_labels->at(j) = labels.rows(labels.n_rows - 1 - start_point_labels - x_test_final, labels.n_rows - 1 - start_point_labels - x_test_start);
+            p_out_preds->at(j).set_size(arma::size(p_out_labels->at(j)));
             p_out_preds->at(j) = K.submat(K.n_rows - 1 - start_point_K - x_test_final, K.n_rows - 1 - start_point_K - x_train_final, K.n_rows - 1  - start_point_K - x_test_start, K.n_rows - 1 - start_point_K - x_train_start) *
                     OnlineMIMOSVR::call_gpu_dynsolve(eye_epsco + K.submat(K.n_rows - 1 - start_point_K - x_train_final, K.n_rows - 1 - start_point_K - x_train_final,
                                                                           K.n_rows - 1 - start_point_K - x_train_start, K.n_rows - 1 - start_point_K - x_train_start),
@@ -510,11 +511,19 @@ calc_direction(const arma::mat &K, const double epsco, const arma::mat &labels, 
             this_score += common::meanabs<double>(p_out_preds->at(j) - p_out_labels->at(j)) / meanabs_labels;
 #endif
             p_out_labels->at(j) = labels.rows(start_point_labels + x_test_start, start_point_labels + x_test_final);
-            p_out_last_knowns->at(j) = last_knowns.rows(start_point_labels + x_test_start, start_point_labels + x_test_final);
-            p_out_preds->at(j) = K.submat(start_point_K + x_test_start, start_point_K + x_train_start, start_point_K + x_test_final, start_point_K + x_train_final) * OnlineMIMOSVR::call_gpu_dynsolve(
-                    eye_epsco + K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final),
-                    labels.rows(start_point_labels + x_train_start, start_point_labels + x_train_final));
+            p_out_preds->at(j).set_size(arma::size(p_out_labels->at(j)));
+            p_out_last_knowns->at(j) = common::extrude_rows<double>(last_knowns.rows(start_point_labels + x_test_start, start_point_labels + x_test_final), p_out_preds->at(j).n_cols);
+            const auto K_submat_1 = K.submat(start_point_K + x_test_start, start_point_K + x_train_start, start_point_K + x_test_final, start_point_K + x_train_final);
+            const auto K_submat_2 = K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final);
+            for (size_t col = 0; col < labels.n_cols; ++col)
+                p_out_preds->at(j).col(col) = K_submat_1 *
+                         OnlineMIMOSVR::solve_dispatch(
+                                 eye_epsco, K_submat_2,
+                                 labels.submat(start_point_labels + x_train_start, col, start_point_labels + x_train_final, col), IRWLS_ITER_TUNE);
             this_score += common::meanabs<double>(p_out_preds->at(j) - p_out_labels->at(j)) / meanabs_labels;
+
+            // Direction validation
+            this_score += this_score * common::sumabs<double>(arma::sign((arma::sign(p_out_labels->at(j) - p_out_last_knowns->at(j)) - arma::sign(p_out_preds->at(j) - p_out_last_knowns->at(j))))) / double(p_out_labels->at(j).n_elem);
 
             score += this_score;
         } catch (const std::exception &ex) {
@@ -544,9 +553,9 @@ OnlineMIMOSVR::tune_kernel_params(
     const std::string original_input_queue_table_name = p_model_parameters->get_input_queue_table_name();
     p_model_parameters->set_input_queue_column_name("TUNE_COLUMN_" + p_model_parameters->get_input_queue_column_name());
     p_model_parameters->set_input_queue_table_name("TUNE_TABLE_" + p_model_parameters->get_input_queue_table_name());
-    // const double meanabs_labels = common::meanabs(labels); // .rows(labels.n_rows - p_model_parameters->get_svr_decremental_distance(), labels.n_rows - 1));
-    const auto meanabs_labels = common::meanabs<double>(labels.rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1));
-    // const double medianabs_labels = common::medianabs(labels); // .rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1)
+    // const double meanabs_labels = common::meanabs<double>(labels.rows(labels.n_rows - , labels.n_rows - 1));
+    const auto meanabs_labels = common::medianabs<double>(labels.rows(labels.n_rows - CHUNK_DECREMENT, labels.n_rows - 1));
+    // const double meanabs_labels = common::medianabs(labels); // .rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1)
     const auto indexes = get_indexes(labels.n_rows, *p_model_parameters);
     if (chunk_ix == std::numeric_limits<size_t>::max()) chunk_ix = indexes.size() - 1;
     const size_t train_len = indexes[chunk_ix].n_elem;
@@ -578,9 +587,7 @@ OnlineMIMOSVR::tune_kernel_params(
             for (const auto epsco: epscos) {
                 auto p_cost_params = std::make_shared<SVRParameters>(gamma_params);
                 p_cost_params->set_svr_C(1. / (2. * epsco));
-                std::vector<arma::mat> *p_out_preds, *p_out_labels, *p_out_last_knowns;
-                double score;
-                std::tie(p_out_preds, p_out_labels, p_out_last_knowns, score) = calc_direction(K, epsco, label_chunks[chunk_ix], lastknown_chunks[chunk_ix], train_len, meanabs_labels);
+                const auto [p_out_preds, p_out_labels, p_out_last_knowns, score] = calc_direction(K, epsco, label_chunks[chunk_ix], lastknown_chunks[chunk_ix], train_len, meanabs_labels);
                 const std::scoped_lock sl(add_predictions_mx);
                 if (score < best_score) {
                     best_score = score;
@@ -594,7 +601,11 @@ OnlineMIMOSVR::tune_kernel_params(
                lambda_score += score;
                p_cost_params->set_input_queue_table_name(original_input_queue_table_name);
                p_cost_params->set_input_queue_column_name(original_input_queue_column_name);
+#ifdef SEPARATE_PREDICTIONS_BY_COST
                const uint64_t epsco_key = 1e6 * epsco;
+#else
+               constexpr uint64_t epsco_key = 0;
+#endif
                predictions[epsco_key].emplace(std::make_shared<t_param_preds>(score, p_cost_params, p_out_preds, p_out_labels, p_out_last_knowns));
                while (predictions[epsco_key].size() > size_t(common::C_tune_keep_preds))
                    predictions[epsco_key].erase(std::prev(predictions[epsco_key].end()));
@@ -619,13 +630,22 @@ OnlineMIMOSVR::tune_kernel_params(
         const arma::mat &Z = get_cached_Z(lambda_params, feature_chunks_t[chunk_ix], label_chunks[chunk_ix]);
         const double min_gamma = get_cached_gamma(lambda_params, Z, train_len, meanabs_labels);
         PROFILE_EXEC_TIME(validate_gammas(min_gamma, Z, C_gamma_multis, lambda_params, common::C_tune_crass_epscost), "Validate gammas " << lambda_params.to_string());
+
+#ifdef NEW_FINER_GAMMA_TUNE
+        LOG4_DEBUG("First pass score " << best_score << ", best parameters " << best_params.to_string());
+        std::deque<double> gamma_fine_multis;
+        for (double gamma_mult = gamma_mult_fine_start; gamma_mult < gamma_mult_fine_end; gamma_mult *= FINE_GAMMA_MULTIPLE)
+            gamma_fine_multis.emplace_back(gamma_mult);
+        validate_gammas(min_gamma, Z, gamma_fine_multis, *p_model_parameters, common::C_tune_crass_epscost);
+        *p_model_parameters = best_params;
+#endif
     }
 #ifdef FINER_GAMMA_TUNE
     LOG4_DEBUG("First pass score " << best_score << ", best parameters " << best_params.to_string());
     *p_model_parameters = best_params;
     const arma::mat &Z = get_cached_Z(best_params, feature_chunks_t[chunk_ix], label_chunks[chunk_ix]);
 
-#if 0
+#if 0 // Fine epsco tuning
     std::deque<double> epsco_fine_grid;
     for (double epsco = epsco_fine_start; epsco <= epsco_fine_end; epsco *= MULTIPLE_EPSCO_FINE)
         epsco_fine_grid.emplace_back(epsco);

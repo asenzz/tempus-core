@@ -22,7 +22,6 @@
 using namespace svr::common;
 using namespace svr::datamodel;
 
-using namespace std;
 
 namespace svr {
 namespace business {
@@ -254,7 +253,7 @@ std::vector<Ensemble_ptr> EnsembleService::init_ensembles_from_dataset(
 
 void
 EnsembleService::update_ensemble_decon_queues(
-        const vector<Ensemble_ptr> &ensembles,
+        const std::vector<Ensemble_ptr> &ensembles,
         const std::vector<DeconQueue_ptr> &new_decon_queues)
 {
     LOG4_BEGIN();
@@ -425,6 +424,7 @@ void EnsembleService::train(
 {
     LOG4_BEGIN();
 
+#if 0
     if (model_numb != std::numeric_limits<size_t>::max()) LOG4_DEBUG("Training only model " << model_numb);
     const auto models_count = model_parameters.size();
     if (models_count != p_ensemble->get_decon_queue()->get_column_count())
@@ -476,9 +476,8 @@ void EnsembleService::train(
             continue;
         } else
             LOG4_DEBUG("Training model " << model_counter << " ensemble " << p_ensemble->get_id());
-
         pdtm_tasks.push_back(
-                ::svr::async(
+                svr::async(
                         &EnsembleService::prepare_data_and_train_model,
                         this,
                         std::ref(p_ensemble->get_models()[model_counter]),
@@ -486,11 +485,13 @@ void EnsembleService::train(
                         std::ref(p_ensemble->get_aux_decon_queues()),
                         std::ref(model_parameters[model_counter]),
                         std::ref(max_gap))
+
         );
     }
     for (auto &tsk: pdtm_tasks) tsk.get();
     LOG4_DEBUG("Finished training ensemble for " << p_ensemble->get_decon_queue()->get_input_queue_table_name() <<
                                                  " " << p_ensemble->get_decon_queue()->get_input_queue_column_name());
+#endif
 }
 
 // Warning predict in ensemble decon queues

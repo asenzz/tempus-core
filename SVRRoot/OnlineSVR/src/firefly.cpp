@@ -36,7 +36,6 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 #include "util/math_utils.hpp"
 #include "common/gpu_handler.hpp"
 
-using namespace std;
 
 
 namespace svr {
@@ -96,7 +95,7 @@ firefly::firefly(
 // optionally recalculate the new alpha value
 double firefly::alpha_new(const double old_alpha, const double NGen)
 {
-    delta = 1. - pow(firefly::delta_base, 1. / NGen);            // delta parameter
+    delta = 1. - std::pow(firefly::delta_base, 1. / NGen);            // delta parameter
     return (1. - delta) * old_alpha;
 }
 
@@ -167,7 +166,7 @@ void firefly::move_ffa()
             for (size_t k = 0; k < D; ++k)
                 r += (ffa[i][k] - ffa[j][k]) * (ffa[i][k] - ffa[j][k]);
             r = sqrt(r);
-            const double beta = (beta0 - betamin) * exp(-gamma * pow(r, 2.0)) + betamin;
+            const double beta = (beta0 - betamin) * exp(-gamma * std::pow(r, 2.0)) + betamin;
             for (size_t k = 0; k < D; ++k) {
                 const double tmpf = alpha * (sobolnum(j, sobol_ctr + i) - .5) * scale;
                 ffa[i][k] = ffa[i][k] * (1. - beta) + ffa_tmp[j][k] * beta + tmpf;
@@ -191,7 +190,7 @@ void firefly::move_ffa_adaptive(const double rate)
             double r = 0;
             for (size_t k = 0; k < D; ++k)
                 r += std::abs<double>(ffa[i][k] - ffa_prev[j][k]);
-            const double beta = (beta0 - betamin) * exp(-gamma * pow(r, 2)) + betamin;
+            const double beta = (beta0 - betamin) * exp(-gamma * std::pow(r, 2)) + betamin;
             if (drand48() > rate) {
                 for (size_t k = 0; k < D; ++k)
                     ffa[i][k] = ffa[i][k] * (1. - beta) + ffa_prev[j][k] * beta + alpha * copysign(1., (drand48() - .5)) * levy_random[k] * scale(k, 0);
@@ -249,8 +248,8 @@ void firefly::ffa_main()
             double a, b;
             if (floor(log10(fabs(fbest[t - 2]))) == floor(log10(fabs(fbest[t - 1])))) {
                 const double theta = floor(log10(fabs(fbest[t - 1] - trunc(fbest[t - 1]))));
-                a = fbest[t - 2] - pow(10, theta) * floor(fbest[t - 2] / pow(10, theta + 1.));
-                b = fbest[t - 1] - pow(10, theta) * floor(fbest[t - 1] / pow(10, theta + 1.));
+                a = fbest[t - 2] - std::pow(10, theta) * floor(fbest[t - 2] / std::pow(10, theta + 1.));
+                b = fbest[t - 1] - std::pow(10, theta) * floor(fbest[t - 1] / std::pow(10, theta + 1.));
             } else {
                 a = fbest[t - 2];
                 b = fbest[t - 1];

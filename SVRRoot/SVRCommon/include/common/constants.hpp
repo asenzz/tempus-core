@@ -9,30 +9,32 @@
 #include <deque>
 
 #include "defines.h"
+#include "util/math_utils.hpp"
 
 namespace svr {
 namespace common {
 
 constexpr unsigned MAX_TUNE_CHUNKS = 1;
 
-constexpr double C_input_obseg_labels = 1660; // 83.3553 Seems to work best for direction
-constexpr double C_input_obseg_features = 1; // Best for direction .12, .07324079159, .05547593844
+constexpr double C_input_obseg_features = 5e-1; // Best for direction .12, .07324079159, .05547593844
+constexpr double C_input_obseg_labels = 5e1;
 
-constexpr double C_singlesolve_delta = .0001;
+constexpr double C_singlesolve_delta = 1e-4;
 
 // const std::deque<double> C_tune_crass_epscost {svr::common::C_input_obseg_labels, 1., 1e-1, 2.5e-1, 5e-1, 7.5e-1, 1e-2, 2.5e-2, 5e-2, 7.5e-2, 1e-3, 2.5e-3, 5e-3, 7.5e-3, 1e-4}; // Use for lower obseg eg. 0.5
-// const std::deque<double> C_tune_crass_epscost {1.21e-4}; // Use for mingamma 1e5
+const std::deque<double> C_tune_crass_epscost {C_input_obseg_labels};
 // const std::deque<double> C_tune_crass_epscost {1e-4, 1e-5, 1e-6, 1e-7, 1e-9}; // Higher costs
 // const auto C_tune_crass_epscost = [](){ std::deque<double> r; for (double div = common::C_input_obseg_labels; div >= 1; div /= 2) r.emplace_back(svr::common::C_input_obseg_labels / div); return r; } ();
-// const auto C_tune_crass_epscost = [](){ std::deque<double> r; for (double iter = 1. / common::C_input_obseg_labels; iter <= common::C_input_obseg_labels; iter *= multi_epsco_grid) r.emplace_back(iter); return r; } ();
+/*
 const auto C_tune_crass_epscost = []() {
-    std::deque<double> r = {.5};
-    for (double x = 1; x <= 1.; x += 1.) {
-        r.emplace_back(std::pow(C_input_obseg_labels, x));
-        r.emplace_back(std::pow(C_input_obseg_labels, -x));
+    std::deque<double> r = {C_input_obseg_features};
+    for (double x = 1; x <= 1; x += 1) {
+        r.emplace_back(std::pow<double>(C_input_obseg_labels, x));
+        // r.emplace_back(std::pow<double>(C_input_obseg_labels, -x));
     }
     return r;
 } ();
+*/
 
 const std::deque<double> C_tune_lambdas_path {75., 15., 0., 1e-3, .2, .75, 1., 1.5, 3.};
 // const std::vector<double> C_tune_lambdas_path {0., 1., 1e1, 1e2, 1e3, 1e4, 1e5};
@@ -40,11 +42,12 @@ const std::deque<double> C_tune_lambdas_path {75., 15., 0., 1e-3, .2, .75, 1., 1
 // const double C_tune_lambda_max = *std::max_element(C_tune_lambdas_path.begin(), C_tune_lambdas_path.end()); // Max from above array
 // const double C_tune_lambda_min = *std::min_element(C_tune_lambdas_path.begin(), C_tune_lambdas_path.end()); // Min from above array
 
-constexpr uint16_t  C_forecast_focus = 115;
-constexpr uint8_t   C_tune_keep_preds = TUNE_KEEP_PREDS;
-const uint64_t C_num_combos = std::pow<uint64_t>(3, 22); // should be even power of TUNE_KEEP_PREDS  4^18 // std::numeric_limits<int64_t>::max();
+constexpr uint16_t C_forecast_focus = 115;
 
-constexpr double C_default_value_tick_volume = 1;
+constexpr uint8_t   C_tune_keep_preds = TUNE_KEEP_PREDS;
+const uint64_t  C_num_combos = std::pow<uint64_t>(3, 22); // should be even power of TUNE_KEEP_PREDS // 3^22, 4^18
+
+constexpr double    C_default_value_tick_volume = 1;
 
 const std::string C_input_queue_table_name_prefix {"q"};
 const std::string C_decon_queue_table_name_prefix {"z"};

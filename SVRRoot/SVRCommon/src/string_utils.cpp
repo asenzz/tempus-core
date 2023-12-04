@@ -11,9 +11,6 @@
 #include <boost/property_tree/json_parser.hpp>
 
 
-using namespace std;
-
-
 namespace svr {
 namespace common {
 
@@ -65,7 +62,7 @@ operator<<(std::ostream &os, const std::vector<double> &v)
     return os;
 }
 
-vector<string> from_sql_array(const string &array_str)
+std::vector<std::string> from_sql_array(const std::string &array_str)
 {
     return split(array_str, ", {}");
 }
@@ -89,13 +86,13 @@ void split(const std::string &s, char delim, std::vector<std::string> &elems)
             elems.push_back(item);
 }
 
-vector<string> split(const string &str, const string &rex)
+std::vector<std::string> split(const std::string &str, const std::string &rex)
 {
-    list<string> list;
+    std::list<std::string> list;
     boost::split(list, str, boost::is_any_of(rex), boost::token_compress_off);
 
-    vector<string> res;
-    for_each(list.begin(), list.end(), [&res](const string &str)
+    std::vector<std::string> res;
+    for_each(list.begin(), list.end(), [&res](const std::string &str)
     { if (str.size() != 0) res.push_back(str); });
 
     return res;
@@ -132,7 +129,7 @@ std::string make_md5_hash(const std::string &in)
     for (int i = 0; i < 16; i++)
         sprintf(&mdString[i * 2], "%02x", (unsigned int) digest[i]);
 
-    return string(mdString);
+    return std::string(mdString);
 }
 
 // const std::string C_mt4_date_time_format {"%Y.%m.%d %H:%M:%S"};
@@ -163,7 +160,7 @@ std::map<std::string, std::string> json_to_map(const std::string &json_str)
     boost::property_tree::json_parser::read_json(is, pt);
 
     for (auto &node:pt)
-        result.insert(std::make_pair(node.first, node.second.get<string>("")));
+        result.insert(std::make_pair(node.first, node.second.get<std::string>("")));
 
     return result;
 }

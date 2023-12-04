@@ -855,8 +855,8 @@ find_good_mask_ffly(
         static size_t G_dev_incr, G_par_incr;
         const auto dev_ix = G_dev_incr;
         const auto par_ix = G_par_incr;
-        G_dev_incr = (G_dev_incr + 1) % gpu_ctxs.size();
-        G_par_incr = (G_par_incr + 1) % C_parallelism;
+        ++G_dev_incr %= gpu_ctxs.size();
+        ++G_par_incr %= C_parallelism;
         ul_incr.unlock();
 
         cudaSetDevice(gpu_ctxs[dev_ix]);

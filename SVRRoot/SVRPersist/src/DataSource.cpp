@@ -8,7 +8,6 @@
 namespace svr{
 namespace dao{
 
-using namespace std;
 
 DataSource::~DataSource()
 {

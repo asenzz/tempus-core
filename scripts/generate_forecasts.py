@@ -2,7 +2,7 @@
 
 import os
 
-first = True # Set to True to SKIP ERASING FIR coefs on first cycle
+first = True # Set to True to generate new (SKIP ERASING) FIR coefs on first cycle
 c_week_len = 115
 offset = 115
 offlimit = 8 * 115
@@ -14,7 +14,7 @@ os.system("psql -c 'delete from multival_results'")
 os.chdir("/mnt/faststore/repo/tempus-core/build")
 while offset < offlimit:
     os.system("pkill SVRDaemon")
-    if not first: 
+    if not first:
         res = os.system("rm -f /mnt/faststore/repo/tempus-core/libs/oemd_fir_masks_xauusd_1s/*")
         if res: print("Got error result ", str(res))
     else:

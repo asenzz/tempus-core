@@ -148,7 +148,7 @@ void modwt_transform::deconstruct(
     wave_object wobj = NULL;
     wt_object wt = NULL;
 
-    int wvlen = filter_order * pow(2, decon_level + 1);
+    int wvlen = filter_order * std::pow(2, decon_level + 1);
 
     double *inp_wave = (double *) malloc(sizeof(double) * wvlen);
 
@@ -183,7 +183,7 @@ void modwt_transform::reconstruct(int filter_order,
     wave_object wobj = NULL;
     wt_object wt = NULL;
 
-    int wvlen = filter_order * pow(2, decon_level + 1);
+    int wvlen = filter_order * std::pow(2, decon_level + 1);
 
     double *recon_out = (double *) malloc(sizeof(double) * wvlen);
 
@@ -271,7 +271,7 @@ modwt_transform::inverse_transform(const std::vector<double> &decon, std::vector
     wave_object wobj = NULL;
     wt_object wt = NULL;
 
-    if (decon.size() < _filer_order * pow(2, _decon_levels + 1)) {
+    if (decon.size() < _filer_order * std::pow(2, _decon_levels + 1)) {
         std::stringstream str;
         str << svr::common::color::modifier(svr::common::color::FG_RED)
             << "Not enough data for modwt_transform::inverse_transform."
@@ -284,7 +284,7 @@ modwt_transform::inverse_transform(const std::vector<double> &decon, std::vector
 //        int wvlen = _filer_order * pow(2, _decon_levels + 1);
     int wvlen = (int) decon.size() / (_decon_levels + 1);
 
-    double *recon_out = (double *) malloc(sizeof(double) * wvlen);
+    auto recon_out = (double *) malloc(sizeof(double) * wvlen);
 
     wobj = wave_init1(_filer_order);
 

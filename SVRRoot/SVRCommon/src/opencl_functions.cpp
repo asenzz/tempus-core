@@ -14,7 +14,7 @@ namespace svr {
 
 #include "common/opencl_functions.hpp"
 
-//using namespace std;
+
 //////////////////////////////////////////////////////////////////////////////
 //! Find the path for a file assuming that
 //! files are found in the searchPath.
