@@ -91,7 +91,7 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
                     *svr::dao::DQScalingFactorDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
                                                          use_threadsafe_dao)), threadsafe_dao(use_threadsafe_dao)
     {
-        svr::common::memory_manager::instance();
+        svr::common::memory_manager::get();
         //svr::common::ThreadPoolAsio::instance();
 
         if (appProperties.get_dao_type() == svr::common::ConcreteDaoType::AsyncDao)

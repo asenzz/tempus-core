@@ -87,7 +87,7 @@ TEST(kernel_ga_1122, k_ga)
     params.set_svr_C(100);
 
     std::vector<double> seq1, seq2;
-    auto kga = svr::IKernel<double>::get_kernel(svr::datamodel::kernel_type::GA, params);
+    auto kga = svr::IKernel<double>::get(params);
 
 //    std::vector<double> s1{1, 2, 3}, s2{4, -7, 9};
 //    double logKGA = kga.logGAK((double*)s1.data(), (double*)s2.data(), (int)s1.size(), (int)s2.size(), 1, 0.00001, 1);

@@ -2,24 +2,17 @@
 // Created by zarko on 6/24/21.
 //
 
-#include <chrono>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <limits>
-#include <utility>
 #include <algorithm>
 #include <common/rtp_thread_pool.hpp>
-#include <common/thread_pool.hpp>
 #include <bitset>
-#include <memory_resource>
 
 #include "appcontext.hpp"
 #include "common/constants.hpp"
 #include "common/defines.h"
 #include "onlinesvr.hpp"
 #include "util/ValidationUtils.hpp"
-#include "util/TimeUtils.hpp"
 #include "spectral_transform.hpp"
 #include "model/User.hpp"
 #include "SVRParametersService.hpp"
@@ -217,12 +210,11 @@ void DatasetService::process_dataset_test_tune(
         std::vector<std::vector<matrix_ptr>> &features,
         std::vector<std::vector<matrix_ptr>> &labels,
         std::vector<std::vector<bpt::ptime>> &last_row_time,
-        const size_t lev_ct,
-        const size_t ens_ix)
+        const size_t levct,
+        const size_t ensix)
 {
     LOG4_DEBUG("Offline test offset " << MANIFOLD_TEST_VALIDATION_WINDOW << ", " << p_ensemble->to_string());
 
-    bool train_ret = true;
     if (p_ensemble->get_aux_decon_queues().size() > 1) LOG4_ERROR("More than one aux decon queue is not supported!");
     const std::string save_column_name = p_ensemble->get_decon_queue()->get_input_queue_column_name();
     const auto p_decon = p_ensemble->get_decon_queue();
@@ -232,30 +224,30 @@ void DatasetService::process_dataset_test_tune(
 #endif
     const auto resolution_factor = double(p_dataset->get_input_queue()->get_resolution().total_microseconds()) / double(p_dataset->get_aux_input_queue(0)->get_resolution().total_microseconds());
     std::vector<bpt::ptime> label_times;
-    const size_t half_levct = lev_ct / 2;
+    const size_t half_levct = levct / 2;
     std::vector<arma::mat> level_features(half_levct), level_labels(half_levct), level_last_knowns(half_levct);
     std::vector<double> predicted_values, actual_values, last_knowns;
-    std::mutex mx;
-    predictions_t tune_predictions(lev_ct);
-    std::vector<double> level_lin_pred_values, level_predicted_values, level_actual_values, scale_label(lev_ct, 1.), dc_offset(lev_ct, 0.);
-    __tbb_spfor(levix, 0, lev_ct, 2,
+    predictions_t tune_predictions(levct);
+    std::vector<double> level_lin_pred_values, level_predicted_values, level_actual_values, scale_label(levct, 1.), dc_offset(levct, 0.);
+#pragma omp parallel for num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number()) schedule(static, 1)
+    for (size_t levix = 0; levix < levct; levix += 2) {
         if (levix == half_levct) continue;
         const auto half_levix = levix / 2;
         const auto p_model = p_ensemble->get_model(levix);
         auto p_params = ensemble_params[levix];
-        train_ret = APP.model_service.get_training_data(
+        APP.model_service.get_training_data(
                 level_features[half_levix],
                 level_labels[half_levix],
                 level_last_knowns[half_levix],
                 label_times,
-                { svr::business::EnsembleService::get_start(
+                {svr::business::EnsembleService::get_start(
                         p_decon->get_data(),
                         p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE + MANIFOLD_TEST_VALIDATION_WINDOW,
                         0,
                         p_model->get_last_modeled_value_time(),
                         p_dataset->get_input_queue()->get_resolution()),
-                        p_decon->get_data().end() - MODEL_TRAIN_OFFSET,
-                        p_decon->get_data() },
+                 p_decon->get_data().end() - MODEL_TRAIN_OFFSET,
+                 p_decon->get_data()},
                 p_aux_decon->get_data(),
                 p_params->get_lag_count(),
                 p_model->get_learning_levels(),
@@ -264,19 +256,21 @@ void DatasetService::process_dataset_test_tune(
                 resolution_factor,
                 p_model->get_last_modeled_value_time(),
                 p_dataset->get_input_queue()->get_resolution());
-        APP.dq_scaling_factor_service.scale(p_dataset, p_aux_decon, p_params, p_model->get_learning_levels(), level_features[half_levix], level_labels[half_levix], level_last_knowns[half_levix]);
+        APP.dq_scaling_factor_service.scale(p_dataset, p_aux_decon, p_params, p_model->get_learning_levels(), level_features[half_levix], level_labels[half_levix],
+                                            level_last_knowns[half_levix]);
         const size_t full_validation_sz = p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE;
-        if (!p_params->get_svr_kernel_param())
-            PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
+        if (!p_params->get_svr_kernel_param()) PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
                 tune_predictions[levix], p_params, level_features[half_levix].rows(0, full_validation_sz - 1), level_labels[half_levix].rows(0, full_validation_sz - 1),
-                    level_last_knowns[half_levix].rows(0, full_validation_sz - 1)), "Tune kernel params for model " << p_params->get_decon_level());
+                level_last_knowns[half_levix].rows(0, full_validation_sz - 1)), "Tune kernel params for model " << p_params->get_decon_level());
         scale_label[levix] = p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), levix);
-        dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), DC_DQ_SCALING_FACTOR);
-    )
+        dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(),
+                                                                               DC_DQ_SCALING_FACTOR);
+    }
 
     PROFILE_EXEC_TIME(recombine_params(tune_predictions, ensemble_params, half_levct, scale_label, dc_offset), "Recombine parameters");
 
-    __tbb_spfor(levix, 0, lev_ct, 2,
+#pragma omp parallel for num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number()) schedule(static, 1)
+    for (size_t levix = 0; levix < levct; levix += 2) {
         if (levix == half_levct) continue;
         const auto half_levix = levix / 2;
         const auto p_model = p_ensemble->get_model(levix);
@@ -294,18 +288,21 @@ void DatasetService::process_dataset_test_tune(
         double level_mae, level_mape, level_lin_mape;
         std::vector<double> level_lin_pred_values, level_predicted_values, level_actual_values;
         std::tie(level_mae, level_mape, level_predicted_values, level_actual_values, level_lin_mape, level_lin_pred_values) =
-                OnlineMIMOSVR::future_validate(full_validation_sz, svr_model, level_features[half_levix], level_labels[half_levix], level_last_knowns[half_levix], label_times, false, scale_label[levix], dc_offset[levix]);
+                OnlineMIMOSVR::future_validate(full_validation_sz, svr_model, level_features[half_levix], level_labels[half_levix], level_last_knowns[half_levix],
+                                               label_times, false, scale_label[levix], dc_offset[levix]);
 
-        const std::scoped_lock lk(mx);
-        if (predicted_values.size() != level_predicted_values.size()) predicted_values.resize(level_predicted_values.size(), 0.);
-        if (actual_values.size() != level_actual_values.size()) actual_values.resize(level_actual_values.size(), 0.);
-        if (last_knowns.size() != level_lin_pred_values.size()) last_knowns.resize(level_lin_pred_values.size(), 0.);
-        for (size_t i = 0; i < std::min<size_t>(level_predicted_values.size(), level_actual_values.size()); ++i) {
-            predicted_values[i] += level_predicted_values[i];
-            actual_values[i] += level_actual_values[i];
-            last_knowns[i] += level_lin_pred_values[i];
+#pragma omp critical
+        {
+            if (predicted_values.size() != level_predicted_values.size()) predicted_values.resize(level_predicted_values.size(), 0.);
+            if (actual_values.size() != level_actual_values.size()) actual_values.resize(level_actual_values.size(), 0.);
+            if (last_knowns.size() != level_lin_pred_values.size()) last_knowns.resize(level_lin_pred_values.size(), 0.);
+            for (size_t i = 0; i < std::min<size_t>(level_predicted_values.size(), level_actual_values.size()); ++i) {
+                predicted_values[i] += level_predicted_values[i];
+                actual_values[i] += level_actual_values[i];
+                last_knowns[i] += level_lin_pred_values[i];
+            }
         }
-    )
+    }
 
     double mae = 0, mae_lk = 0;
     size_t pos_mae = 0, pos_direct = 0;

@@ -53,7 +53,7 @@ memory_manager::~memory_manager()
 }
 
 
-memory_manager &memory_manager::instance()
+memory_manager &memory_manager::get()
 {
     static memory_manager mm;
     return mm;
@@ -83,9 +83,9 @@ void memory_manager::check_memory()
         memory_info_t mem_info;
         read_memory(mem_info);
         const auto ram_free = mem_info.mem_free + mem_info.buffers + mem_info.cached;
-        const double ram_left = static_cast<double>(ram_free) / mem_info.mem_total;
+        const double ram_left = double(ram_free) / double(mem_info.mem_total);
         const auto prev_mem_available = mem_available_;
-        mem_available_ = (ram_left >= MIN_RAM_THRESH) && true;//threads_available();
+        mem_available_ = (ram_left >= FREE_RAM_THRESHOLD) && true;//threads_available();
         if (mem_available_ != prev_mem_available) {
             LOG4_DEBUG("Changed mem_available to " << mem_available_ << " RAM left, " << 100. * ram_left << " pct., free ram " << static_cast<double>(ram_free) / GB_RAM_UNIT_DIVIDER <<
                         " GB" << ", total ram " << static_cast<double>(mem_info.mem_total) / GB_RAM_UNIT_DIVIDER << " GB");
@@ -105,7 +105,7 @@ void memory_manager::check_memory()
 }
 
 
-void memory_manager::wait()
+void memory_manager::barrier()
 {
     std::unique_lock<std::mutex> wl(mx_);
     while (!mem_available_) cv_.wait(wl);

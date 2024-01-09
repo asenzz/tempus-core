@@ -152,7 +152,7 @@ void cpu_thread::work()
         task_future tf;
         bool got_task = queue->pop_task_wait_for(tf, wt);
         if (!got_task) continue;
-        svr::common::memory_manager::instance().wait();
+        svr::common::memory_manager::get().barrier();
         try{
             tf.task->execute();
         }

@@ -10,12 +10,11 @@
 namespace svr {
 namespace common {
 
-#define MIN_RAM_THRESH 0.05
-#define LOOP_INTERVAL 1
+#define FREE_RAM_THRESHOLD .1
 #define GB_RAM_UNIT_DIVIDER (1024*1024) // As current meminfo report is in KB
 #define THREADS_CORES_MULTIPLIER 1
 #define SLEEP_ITERATIONS 160
-#define SLEEP_INTERVAL std::chrono::milliseconds(5)
+#define SLEEP_INTERVAL std::chrono::milliseconds(10)
 
 enum class memory_manager_state { WORK, SHUTDOWN };
 
@@ -27,8 +26,8 @@ public:
         long mem_free{0}, buffers{0}, cached{0}, mem_total{0}, swap_free{0}, swap_total{0};
     };
 
-    void wait();
-    static memory_manager &instance();
+    void barrier();
+    static memory_manager &get();
 
     static void read_memory(memory_info_t &mem_info);
     static size_t read_threads();

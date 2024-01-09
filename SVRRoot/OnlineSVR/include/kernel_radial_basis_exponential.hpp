@@ -30,7 +30,6 @@ public:
             K /= -2.;
         return std::exp(K);
     }
-#endif
 
     void operator() (
             const viennacl::matrix<scalar_type> &features,
@@ -45,26 +44,36 @@ public:
         kernel_matrix = kernel_matrix / (-2. * std::pow(this->parameters.get_svr_kernel_param(), 2.));
         kernel_matrix = viennacl::linalg::element_exp(kernel_matrix);
     }
+#endif
 
 
 #ifdef VIENNACL_WITH_OPENCL
-    void operator() (
-            viennacl::ocl::context &ctx,
-            const viennacl::matrix<scalar_type> &features,
-            viennacl::matrix<scalar_type> &kernel_matrix)
+    void distances(
+            const viennacl::matrix<scalar_type> &d_features,
+            viennacl::matrix<scalar_type> &d_kernel_matrix)
     {
-        kernel_matrix = viennacl::linalg::prod(features, viennacl::trans(features));
-        viennacl::vector<double> diagonal = viennacl::diag(kernel_matrix, 0);
-        viennacl::vector<double> i = viennacl::scalar_vector<double>(diagonal.size(), 1, ctx);
-        viennacl::matrix<double> temp = viennacl::linalg::outer_prod(i, diagonal);
-        kernel_matrix = temp + viennacl::trans(temp) - 2. * kernel_matrix;
-        kernel_matrix = viennacl::linalg::element_sqrt(kernel_matrix);
-        kernel_matrix = kernel_matrix / (-2. * std::pow(this->parameters.get_svr_kernel_param(), 2));
-        kernel_matrix = viennacl::linalg::element_exp(kernel_matrix);
+        d_kernel_matrix = viennacl::linalg::prod(d_features, viennacl::trans(d_features));
+        viennacl::vector<scalar_type> dia = viennacl::diag(d_kernel_matrix, 0);
+        viennacl::vector<scalar_type> i = viennacl::scalar_vector<scalar_type>(dia.size(), 1., d_features.handle().opencl_handle().context()); // d_features.memory_domain() == viennacl::memory_types::OPENCL_MEMORY ? d_features.handle().opencl_handle() : d_features.handle().ram_handle() );
+        viennacl::matrix<scalar_type> tmp = viennacl::linalg::outer_prod(i, dia);
+        d_kernel_matrix = viennacl::linalg::element_sqrt(tmp + viennacl::trans(tmp) - 2. * d_kernel_matrix);
     }
 
-    virtual void operator()(const arma::mat & features, arma::mat & kernel_matrix)
+    void operator() (
+            const viennacl::matrix<scalar_type> &d_features,
+            viennacl::matrix<scalar_type> &d_kernel_matrix)
     {
+        distances(d_features, d_kernel_matrix);
+        d_kernel_matrix = viennacl::linalg::element_exp(d_kernel_matrix / (-2. * std::pow<double>(this->parameters.get_svr_kernel_param(), 2.)));
+    }
+
+    virtual void operator()(const arma::mat &features, arma::mat &kernel_matrix)
+    {
+        const svr::common::gpu_context c;
+        viennacl::matrix<scalar_type> d_kernel_matrix(kernel_matrix.n_rows, kernel_matrix.n_cols, c.ctx());
+        operator()(tovcl(features, c.ctx()), d_kernel_matrix);
+        kernel_matrix = toarma(d_kernel_matrix);
+#if 0
         kernel_matrix = features * features.t();
         arma::vec diagonal = diagvec(kernel_matrix);
         arma::vec i = ones(size(diagonal));
@@ -73,6 +82,7 @@ public:
         kernel_matrix = sqrt(kernel_matrix);
         kernel_matrix = kernel_matrix / (-2. * std::pow(this->parameters.get_svr_kernel_param(), 2));
         kernel_matrix = exp(kernel_matrix);
+#endif
     }
 
 #if 0 // TODO Port to Armadillo
@@ -94,9 +104,10 @@ public:
 #pragma omp parallel for collapse(2)
         for (size_t i = 0; i < x_train.n_rows; ++i)
             for (size_t j = 0; j < x_test.n_rows; ++j)
-                kernel_matrix(i, j) = (*this)(x_train.row(i), x_test.row(j));
+                kernel_matrix(i, j) = this->operator()(x_train.row(i), x_test.row(j));
     }
 
+#if 0
     double arma_distance(const arma::rowvec &a, const arma::rowvec &b)
     {
         double ret = 0.0;
@@ -108,6 +119,7 @@ public:
         return ret > 0.0 ? std::sqrt(ret) : 0.0;
 
     }
+#endif
 
     virtual double operator()(const arma::rowvec &a,  const arma::rowvec &b)
     {

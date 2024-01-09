@@ -1,3 +1,5 @@
+#include "magma_types.h"
+#include "model/SVRParameters.hpp"
 #ifdef USE_CUDA
 
 #include <cassert>
@@ -14,21 +16,12 @@
 
 #include "cuqrsolve.hpp"
 #include <thread>
+#include "magma_v2.h"
 
-#define SOLVE_TIMEOUT 240 // seconds
-#define WATCH_SOLVER
 
-namespace svr::solvers {
+namespace svr {
+namespace solvers {
 
-void __global__
-G_kernel_from_distances(double *__restrict kernel, const double *__restrict dist, const size_t M, const double divisor)
-{
-    const size_t thr_ix = threadIdx.x;
-    const size_t g_thr_ix = thr_ix + blockIdx.x * CUDA_BLOCK_SIZE;
-    const size_t grid_size = CUDA_BLOCK_SIZE * gridDim.x;
-
-    for (size_t i = g_thr_ix; i < M; i += grid_size) kernel[i] = 1. - dist[i] / divisor;
-}
 
 void __global__
 G_score_kernel(
@@ -56,35 +49,88 @@ G_score_kernel(
     if (thr_ix == 0) *score = _sh_sum[0] / (norm_ker * norm_ref);
 }
 
+
+template<unsigned k_block_size> __global__ void
+G_kernel_from_distances_symm(double *__restrict K, const double *__restrict dist, const size_t mm, const size_t m, const double divisor)
+{
+    const auto g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
+    if (g_thr_ix >= mm) return;
+
+    const auto grid_size = k_block_size * gridDim.x;
+//    printf("cu_recombine_parameters: Begin %u, %u, %u.\n", thr_ix, g_thr_ix, grid_size);
+    for (auto i = g_thr_ix; i < mm; i += grid_size)
+        if ((i < mm) && ((i % m) > (i / m)))
+            K[m * (i % m) + i / m] = K[i] = 1. - dist[i] / divisor;
+}
+
+
+template<unsigned k_block_size> __global__ void
+G_kernel_from_distances(double *__restrict K, const double *__restrict dist, const size_t mm, const double divisor)
+{
+    const auto g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
+    if (g_thr_ix >= mm) return;
+
+    const auto grid_size = k_block_size * gridDim.x;
+    for (auto i = g_thr_ix; i < mm; i += grid_size)
+        K[i] = 1. - dist[i] / divisor;
+}
+
+
+void kernel_from_distances(double *K, const double *Z, const size_t m, const double gamma, const datamodel::kernel_type_e kernel_type)
+{
+    double *d_K, *d_Z;
+    const size_t mm = m * m;
+    const size_t mat_size = mm * sizeof(double);
+    common::gpu_context const ctx;
+    cu_errchk(cudaSetDevice(ctx.phy_id()));
+    cu_errchk(cudaMalloc(&d_K, mat_size));
+    cu_errchk(cudaMalloc(&d_Z, mat_size));
+    cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
+
+    switch (kernel_type) {
+        case (datamodel::kernel_type_e::PATH):
+            G_kernel_from_distances<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, 2. * gamma * gamma);
+            break;
+        default:
+            G_kernel_from_distances_symm<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, m, 2. * gamma * gamma);
+    }
+
+    cu_errchk(cudaMemcpy(K, d_K, mat_size, cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(d_K));
+    cu_errchk(cudaFree(d_Z));
+}
+
+
 double
 score_kernel(
         const double *ref_kernel /* colmaj order */,
         const double norm_ref,
         const double *Z /* colmaj order */,
-        const size_t M,
+        const size_t m,
         const double gamma)
 {
     double *d_K, *d_Z, *d_ref;
-    const size_t elem_ct = M * M;
+    const size_t mm = m * m;
+    const size_t mat_size = mm * sizeof(double);
 
     common::gpu_context ctx;
     cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cu_errchk(cudaMalloc(&d_K, elem_ct * sizeof(double)));
-    cu_errchk(cudaMalloc(&d_Z, elem_ct * sizeof(double)));
-    cu_errchk(cudaMemcpy(d_Z, Z, elem_ct * sizeof(double), cudaMemcpyHostToDevice));
-    G_kernel_from_distances<<<CUDA_THREADS_BLOCKS(elem_ct)>>>(d_K, d_Z, elem_ct, 2. * gamma * gamma);
+    cu_errchk(cudaMalloc(&d_K, mat_size));
+    cu_errchk(cudaMalloc(&d_Z, mat_size));
+    cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
+    G_kernel_from_distances_symm<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, m, 2. * gamma * gamma);
     cu_errchk(cudaFree(d_Z));
     cu_errchk(cudaDeviceSynchronize());
     cublasHandle_t cublasH;
     cublas_safe_call(cublasCreate(&cublasH));
     double norm_K;
-    cublas_safe_call(cublasDnrm2(cublasH, elem_ct, d_K, M, &norm_K));
+    cublas_safe_call(cublasDnrm2(cublasH, mm, d_K, m, &norm_K));
     cu_errchk(cudaDeviceSynchronize());
     double *d_score;
     cu_errchk(cudaMalloc(&d_score, sizeof(double)));
-    cu_errchk(cudaMalloc(&d_ref, elem_ct * sizeof(double)));
-    cu_errchk(cudaMemcpy(d_ref, ref_kernel, elem_ct * sizeof(double), cudaMemcpyHostToDevice));
-    G_score_kernel<<<CUDA_THREADS_BLOCKS(M)>>>(d_score, d_K, d_ref, elem_ct, norm_K, norm_ref);
+    cu_errchk(cudaMalloc(&d_ref, mat_size));
+    cu_errchk(cudaMemcpy(d_ref, ref_kernel, mat_size, cudaMemcpyHostToDevice));
+    G_score_kernel<<<CUDA_THREADS_BLOCKS(m)>>>(d_score, d_K, d_ref, mm, norm_K, norm_ref);
     double score;
     cu_errchk(cudaMemcpy(&score, d_score, sizeof(double), cudaMemcpyDeviceToHost));
     cu_errchk(cudaFree(d_score));
@@ -92,23 +138,6 @@ score_kernel(
     cu_errchk(cudaFree(d_K));
     cublas_safe_call(cublasDestroy(cublasH));
     return 2. - score;
-}
-
-void kernel_from_distances(double *K, const double *Z, const size_t M, const double gamma)
-{
-    double *d_K, *d_Z;
-    const size_t elem_ct = M * M;
-    const size_t mat_size = elem_ct * sizeof(double);
-
-    common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cu_errchk(cudaMalloc(&d_K, mat_size));
-    cu_errchk(cudaMalloc(&d_Z, mat_size));
-    cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
-    G_kernel_from_distances<<<CUDA_THREADS_BLOCKS(elem_ct)>>>(d_K, d_Z, elem_ct, 2. * gamma * gamma);
-    cu_errchk(cudaMemcpy(K, d_K, mat_size, cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_K));
-    cu_errchk(cudaFree(d_Z));
 }
 
 
@@ -125,91 +154,192 @@ gpu_copy_upper_submatrix(
 }
 
 
-int
-dyn_qrsolve(const size_t Nrows, const size_t lda, double *d_Ainput, double *d_rhs, double *d_B, const size_t gpu_phy_dev)
+std::tuple<cusolverDnHandle_t, double *, double *, double *, int *, int *>
+init_cusolver(const size_t gpu_phy_id, const size_t m, const size_t n)
 {
-    const size_t Nright = 1;
-    double *d_work = nullptr;
-    int lwork = 0;
-    int rc = 0;
-    const size_t ldb = lda;
-    const size_t Ncols = Nrows;
-    const size_t m = Ncols;
-    thrust::device_vector<int> d_Ipiv_vector(m);
-    int *d_Ipiv = thrust::raw_pointer_cast(d_Ipiv_vector.data());
-    thrust::device_vector<int> d_devInfo_vector(1);
-
-    cusolverDnHandle_t cusolverH = nullptr;
-    cublasHandle_t cublasH = nullptr;
+    cusolverDnHandle_t cusolverH;
     cusolverDnCreate(&cusolverH);
+    cublasHandle_t cublasH;
     cublas_safe_call(cublasCreate(&cublasH));
-    cublas_safe_call(cusolverDnDgetrf_bufferSize(cusolverH, m, m, d_Ainput, lda, &lwork));
-    cu_errchk(cudaMalloc((void **) &d_work, sizeof(double) * lwork));
 
-    cu_errchk(cudaMemcpy(d_B, d_rhs, sizeof(double) * Nright * Nrows, cudaMemcpyDeviceToDevice));
-    if (const auto errc = cusolverDnDgetrf(cusolverH, m, m, d_Ainput, lda, d_work, d_Ipiv, thrust::raw_pointer_cast(d_devInfo_vector.data()))) {
-        LOG4_ERROR("cusolverDnDgetrf call failed with " << int(errc));
-        rc = 255;
-        goto __bail;
-    }
-    if (const auto errc = cusolverDnDgetrs(cusolverH, CUBLAS_OP_N, m, 1, d_Ainput, lda, d_Ipiv, d_B, ldb, thrust::raw_pointer_cast(d_devInfo_vector.data()))) {
-        LOG4_ERROR("cusolverDnDgetrs call failed with " << int(errc));
-        rc = 255;
-        goto __bail;
-    }
-__bail:
-    uint flags;
-    int active;
-    if (cuDevicePrimaryCtxGetState(gpu_phy_dev, &flags, &active) == CUDA_SUCCESS && active) {
-        if (d_work) cu_errchk(cudaFree(d_work));
-        if (cusolverH) cusolverDnDestroy(cusolverH);
-        if (cublasH) cublasDestroy(cublasH);
-    }
-    return rc;
+    int lwork;
+    double *d_Ainput;
+    double *d_B;
+    int *d_Ipiv;
+    int *d_devInfo;
+    double *d_work;
+    cu_errchk(cudaMalloc((void **) &d_Ainput, m * m * sizeof(double)));
+    cublas_safe_call(cusolverDnDgetrf_bufferSize(cusolverH, m, m, d_Ainput, m /* lda */, &lwork));
+    cu_errchk(cudaMalloc((void **) &d_work, sizeof(double) * lwork));
+    cu_errchk(cudaMalloc((void **) &d_B, m * n * sizeof(double)));
+    cu_errchk(cudaMalloc((void **) &d_Ipiv, m * sizeof(int)));
+    cu_errchk(cudaMalloc((void **) &d_devInfo, sizeof(int)));
+    if (!cusolverH || !cublasH || !d_Ainput || !d_B || !d_Ipiv || !d_devInfo || !d_work)
+        LOG4_THROW("Failed allocating one of the following: cusolverH " << cusolverH << ", cublasH " << cublasH << ", d_Ainput " << d_Ainput << ", d_B " <<
+                                                                        d_B << ", d_work " << d_work << ", d_Ipiv " << d_Ipiv << ", d_devInfo " << d_devInfo);
+
+    return {cusolverH, d_Ainput, d_B, d_work, d_Ipiv, d_devInfo};
 }
 
 
-void dyn_gpu_solve(const size_t m, const double *Left, const double *Right, double *output)
+void uninit_cusolver(const cusolverDnHandle_t cusolverH, double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo)
 {
-    svr::common::gpu_context gtx;
-    const size_t gpu_phy_id = gtx.phy_id();
-    cudaSetDevice(gpu_phy_id);
-#ifdef WATCH_SOLVER // A workaround of NVidia's solver looping bug
-    bool done = false;
-    std::mutex done_mx;
-    std::condition_variable cv;
-    std::unique_lock<std::mutex> ul(done_mx);
-    std::thread cu_watcher([&](){
-        cv.wait_for(ul, std::chrono::seconds(SOLVE_TIMEOUT));
-        if (!done) {
-            cudaSetDevice(gpu_phy_id);
-            CUcontext pctx;
-            cuCtxGetCurrent(&pctx);
-            cuDevicePrimaryCtxReset(gpu_phy_id);
-            cuDevicePrimaryCtxRelease(gpu_phy_id);
-            cuCtxDestroy(pctx);
-            LOG4_ERROR("Failed solving matrix of size " << m*m << " elements in specified time-out " << SOLVE_TIMEOUT << " secs.");
-        }
-    });
-#endif
-    thrust::device_vector<double> d_Left(m * m);
-    thrust::device_vector<double> d_Right(m);
-    thrust::device_vector<double> d_output(m);
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_Left.data()), Left, sizeof(double) * m * m, cudaMemcpyHostToDevice));
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_Right.data()), Right, sizeof(double) * m, cudaMemcpyHostToDevice));
-    const auto rc = dyn_qrsolve(m, m, thrust::raw_pointer_cast(d_Left.data()), thrust::raw_pointer_cast(d_Right.data()), thrust::raw_pointer_cast(d_output.data()), gpu_phy_id);
-#ifdef WATCH_SOLVER
-    done = true;
-    cv.notify_one();
-#endif
-    if (!rc) {
-        cu_errchk(cudaMemcpy(output, thrust::raw_pointer_cast(d_output.data()), sizeof(double) * m, cudaMemcpyDeviceToHost));
-    } else {
-        memset(output, 0x80, sizeof(double) * m);
+    if (cusolverH) cusolverDnDestroy(cusolverH);
+    if (d_Ainput) cu_errchk(cudaFree(d_Ainput));
+    if (d_B) cu_errchk(cudaFree(d_B));
+    if (d_work) cu_errchk(cudaFree(d_work));
+    if (d_Ipiv) cu_errchk(cudaFree(d_Ipiv));
+    if (d_devInfo) cu_errchk(cudaFree(d_devInfo));
+}
+
+
+void dyn_gpu_solve(
+        const size_t m, const size_t n, const double *Left, const double *Right, double *output, cusolverDnHandle_t cusolverH,
+        double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo)
+{
+    cu_errchk(cudaMemcpy(d_Ainput, Left, sizeof(double) * m * m, cudaMemcpyHostToDevice));
+    cu_errchk(cudaMemcpy(d_B, Right, sizeof(double) * m * n, cudaMemcpyHostToDevice));
+
+    if (const auto errc = cusolverDnDgetrf(cusolverH, m, m, d_Ainput, m /* lda */, d_work, d_Ipiv, d_devInfo))
+        LOG4_THROW("cusolverDnDgetrf call failed with " << int(errc));
+    if (const auto errc = cusolverDnDgetrs(cusolverH, CUBLAS_OP_N, m, n, d_Ainput, m /* lda */, d_Ipiv, d_B, m /* ldb */, d_devInfo))
+        LOG4_THROW("cusolverDnDgetrs call failed with " << int(errc));
+
+    cu_errchk(cudaMemcpy(output, d_B, sizeof(double) * m * n, cudaMemcpyDeviceToHost));
+}
+
+
+std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaInt_ptr>
+init_magma_solver(const svr::common::gpu_context &gtx, const size_t m, const size_t b_n)
+{
+    magma_queue_t magma_queue = nullptr;
+
+    const magma_int_t phy_dev = gtx.phy_id();
+    cudaSetDevice(phy_dev);
+    magma_init(); // initialize Magma
+    magma_queue_create(phy_dev, &magma_queue);
+    if (!magma_queue) // device memory for a
+        LOG4_THROW("Failed creating MAGMA queue.");
+
+    magma_int_t err;
+    magmaDouble_ptr d_a, d_b, d_w = nullptr;
+    magmaInt_ptr piv = nullptr;
+    if ((err = magma_dmalloc(&d_a, m * m)) < MAGMA_SUCCESS) // device memory for a
+        LOG4_THROW("Failed calling magma_dmalloc d_a with error code " << err);
+    if ((err = magma_dmalloc(&d_b, m * b_n)) < MAGMA_SUCCESS) // device memory for b
+        LOG4_THROW("Failed calling magma_dmalloc d_b with error code " << err);
+//  if ((err = magma_dmalloc(&d_w, m * m)) < MAGMA_SUCCESS) // device memory for w
+//        LOG4_THROW("Failed calling magma_dmalloc d_w with error code " << err);
+//  piv = (magmaInt_ptr) malloc(m * sizeof(magma_int_t)); // host mem.
+
+    return {magma_queue, d_a, d_b, d_w, piv};
+}
+
+
+void uninit_magma_solver(
+        svr::common::gpu_context *&p_ctx, const magma_queue_t &magma_queue,
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_w, const magmaInt_ptr piv)
+{
+    magma_int_t err;
+    if (d_a && (err = magma_free(d_a)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_free d_a with error code " << err);
+    if (d_b && (err = magma_free(d_b)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_free d_b with error code " << err);
+    if (d_w && (err = magma_free(d_w)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_free d_w with error code " << err);
+    if (piv) free(piv);
+
+    if (magma_queue) magma_queue_destroy(magma_queue);
+
+    if ((err = magma_finalize()) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_finalize with error code " << err);
+
+    if (p_ctx) delete p_ctx;
+    // p_ctx = nullptr;
+}
+
+
+void iter_magma_solve(
+        const int m, const int b_n, const double *a, const double *b, double *output, const magma_queue_t magma_queue, svr::common::gpu_context *p_ctx,
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b)
+{
+    // changed rows; a - mxm matrix
+    // const magma_int_t mm = m * m, lda = m, ldb = m/*, ldx = m*/; // size of a, r, c
+    /*, d_x*/; // d_a, d_b - mxm matrix a on the device and mx1 matrix b on the device
+
+    magma_int_t err;
+/*
+    if ((err = magma_dmalloc(&d_x, m * b_n)) < MAGMA_SUCCESS) { // device memory for a
+        LOG4_ERROR("Failed calling magma_dmalloc d_x with error code " << err);
+        return;
     }
-#ifdef WATCH_SOLVER
-    cu_watcher.join();
-#endif
+*/
+    magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue); // copy a -> d_a
+    magma_dsetmatrix(m, b_n, b, m, d_b, m, magma_queue); // copy b -> d_b
+
+/*
+    const auto ldworkd = m * magma_get_dgetri_nb(m); // optimal block size double
+    const auto ldworkf = m * magma_get_sgetri_nb(m); // optimal block size double
+
+    magmaDouble_ptr dworkd; // dwork - device workspace double
+    magmaFloat_ptr dworkf; // dwork - device workspace single
+    if ((err = magma_dmalloc(&dworkd, ldworkd)) < MAGMA_SUCCESS) { // phy_dev. mem. for ldwork
+        LOG4_ERROR("Failed calling magma_dmalloc dworkd of len " << ldworkd << " with error code " << err);
+        return;
+    }
+    if ((err = magma_smalloc(&dworkf, ldworkf)) < MAGMA_SUCCESS) { // phy_dev. mem. for ldwork
+        LOG4_ERROR("Failed calling magma_dmalloc dworkf of len " << ldworkf << " with error code " << err);
+        return;
+    }
+    magma_int_t iter;
+*/
+    magma_int_t info;
+    if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
+/*
+    if (iter < 0)
+        switch (iter) {
+        case -1:
+            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -1 : the routine fell back to full precision for implementation - or machine-specific reasons");
+            break;
+        case -2:
+            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -2 : narrowing the precision induced an overflow, the routine fell back to full precision");
+            break;
+        case -3:
+            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -3 : failure of SPOTRF");
+            break;
+        case -31:
+            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -31: stop the iterative refinement after the 30th iteration");
+            break;
+        default:
+            LOG4_ERROR("Call to magma_dshposv_gpu_expert Iterative refinement has failed, double precision factorization has been performed");
+        }
+    magma_dgetmatrix(m, b_n, d_x, m, output, m, magma_queue); // copy solution d_x -> output
+*/
+    magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
+
+//    magma_free(d_x); // free device memory
+}
+
+
+void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue, svr::common::gpu_context *p_ctx,
+                     const magmaInt_ptr piv, const magmaDouble_ptr d_a, const magmaDouble_ptr d_b)
+{
+    magma_int_t info, err;
+    magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue);
+
+    // find the inverse matrix: d_a*X=I using the LU factorization
+    // with partial pivoting and row interchanges computed by
+    // magma_dgetrf_gpu; row i is interchanged with row piv(i);
+    // d_a -mxm matrix; d_a is overwritten by the inverse
+    if ((err = magma_dgetrf_gpu(m, m, d_a, m, piv, &info)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_dgetrf_gpu with error code " << err << ", info " << info);
+
+    magma_dsetmatrix(m, b_n, b, m, d_b, m, magma_queue);
+    if ((err = magma_dgetrs_gpu(magma_trans_t::MagmaNoTrans, m, b_n, d_a, m /* lda */, piv, d_b, m /* ldb */, &info)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_dgetrs_gpu with error code " << err << ", info " << info);
+
+    magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 }
 
 
@@ -518,6 +648,8 @@ void solve_bi_cg_stab()
 #endif
 }
 
+// Namespaces
+}
 }
 
 #endif /* USE_CUDA */

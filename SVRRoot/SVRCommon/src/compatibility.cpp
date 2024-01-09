@@ -60,16 +60,6 @@ void test_mat_vec_mul()
 }
 
 
-void arma_to_vcl(const arma::mat &input, viennacl::matrix<double> &output)
-{
-    double *raw_vec = (double *) malloc(output.internal_size() * sizeof(double));
-    __omp_tpfor_i(size_t, 0, output.size1(),
-                  for (size_t j = 0; j < output.size2(); ++j)
-            raw_vec[i * output.internal_size2() + j] = input(i, j); )
-    fast_copy(raw_vec, raw_vec + output.internal_size(), output);
-    free(raw_vec);
-}
-
 viennacl::vector<double> arma_to_vcl(const arma::colvec &input)
 {
     viennacl::vector<double> res(input.size());

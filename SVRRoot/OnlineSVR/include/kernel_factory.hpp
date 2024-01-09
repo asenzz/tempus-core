@@ -77,7 +77,7 @@ public:
     static void IKernelInit();
     IKernel();
     ~IKernel() = default;
-    static std::unique_ptr<kernel_base<scalar_type>> get_kernel(const kernel_type_e& ktype, const SVRParameters & params);
+    static std::unique_ptr<kernel_base<scalar_type>> get(const SVRParameters &params);
 };
 }
 

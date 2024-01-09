@@ -1,7 +1,7 @@
 //
 // Created by jarko on 18/01/19.
 //
-
+#if 0 // Deprecated!
 #ifndef SVR_MAT_SOLVE_GPU_HPP
 #define SVR_MAT_SOLVE_GPU_HPP
 
@@ -162,3 +162,4 @@ dlaswp(
 } /* namespace svr */
 
 #endif //SVR_MAT_SOLVE_GPU_HPP
+#endif

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/types.hpp"
+#include "common/Logging.hpp"
 #include <numeric>
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
@@ -24,6 +25,60 @@ template<typename T> constexpr auto pow = [](const T lhs, const long rhs) -> T
     return negexp ? 1./ res : res;
 };
 #endif
+
+
+template<typename T> viennacl::matrix<T>
+tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
+{
+    cl_int rc;
+    auto clbuf = (T *)clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
+    //if (rc != CL_SUCCESS) LOG4_THROW("Failed creating OpenCL buffer of size " << in.n_elem * sizeof(T) << " with error " << rc);
+    viennacl::matrix<T, viennacl::row_major, sizeof(double)> r(clbuf, viennacl::OPENCL_MEMORY, in.n_rows, in.n_cols);
+    viennacl::backend::memory_write(r.handle(), 0, in.n_elem * sizeof(T), in.memptr(), false);
+    LOG4_DEBUG("To VCL size " << arma::size(in) << ", result " << r.size1() << "x" << r.size2());
+    return viennacl::trans(r);
+}
+
+
+template<typename T> viennacl::matrix<T>
+tovcl(const arma::Mat<T> &in)
+{
+    cl_int rc;
+    auto clbuf = (T *) malloc(in.n_elem * sizeof(T));
+    //if (rc != CL_SUCCESS) LOG4_THROW("Failed creating OpenCL buffer of size " << in.n_elem * sizeof(T) << " with error " << rc);
+    viennacl::matrix<T, viennacl::row_major, sizeof(double)> r(clbuf, viennacl::MAIN_MEMORY, in.n_rows, in.n_cols);
+    memcpy(r.handle().ram_handle().get(), in.memptr(), in.n_elem * sizeof(T));
+    LOG4_DEBUG("To VCL size " << arma::size(in) << ", result " << r.size1() << "x" << r.size2());
+    return viennacl::trans(r);
+}
+
+
+template<typename T> arma::Mat<T>
+toarma(const viennacl::matrix<T> &in)
+{
+    arma::Mat<T> r(in.internal_size1(), in.internal_size2());
+
+    switch (in.memory_domain()) {
+        case viennacl::OPENCL_MEMORY:
+        case viennacl::CUDA_MEMORY:
+            viennacl::backend::memory_read(in.handle(), 0, in.internal_size() * sizeof(T), r.memptr());
+            break;
+        case viennacl::MAIN_MEMORY:
+            memcpy(r.memptr(), in.handle().ram_handle().get(), in.internal_size() * sizeof(T));
+            break;
+        case viennacl::MEMORY_NOT_INITIALIZED:
+        default:
+            LOG4_THROW("Memory not initialized or unknown memory domain of matrix!");
+    }
+
+    if (in.row_major()) r = r.t();
+    if (in.size1() != in.internal_size1()) r.shed_rows(in.size1(), in.internal_size1() - 1);
+    if (in.size2() != in.internal_size2()) r.shed_cols(in.size2(), in.internal_size2() - 1);
+    LOG4_DEBUG("To arma size " << in.size1() << "x" << in.size2() << ", result " << arma::size(r));
+    return r;
+}
+
+
 
 template<typename T>
 std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
@@ -119,10 +174,18 @@ is_zero(const T v, const T eps = std::numeric_limits<T>::epsilon())
 
 
 template<typename scalar_t> scalar_t
-vsum(const std::vector<scalar_t> &v)
+sum(const std::vector<scalar_t> &v)
 {
     scalar_t sum = 0;
     for (size_t t = 0; t < v.size(); ++t) sum += v[t];
+    return sum;
+}
+
+template<typename scalar_t> scalar_t
+sumabs(const std::vector<scalar_t> &v)
+{
+    scalar_t sum = 0;
+    for (size_t t = 0; t < v.size(); ++t) sum += std::abs(v[t]);
     return sum;
 }
 
@@ -130,8 +193,8 @@ vsum(const std::vector<scalar_t> &v)
 template<typename scalar_t> void
 normalize(std::vector<scalar_t> &v, const double min, const double max)
 {
-    while (std::abs(vsum(v) - max) > std::numeric_limits<float>::epsilon()) {
-        const scalar_t sum_ma = vsum(v);
+    while (std::abs(sum(v) - max) > std::numeric_limits<float>::epsilon()) {
+        const scalar_t sum_ma = sum(v);
         const scalar_t adjust = (max - sum_ma) / scalar_t(v.size());
         for (size_t t = 0; t < v.size(); ++t)
             v[t] = std::max(min, v[t] + adjust);
@@ -146,7 +209,7 @@ apply_norma(const std::vector<scalar_t> &values, const size_t num_bins)
         //LOG4_ERROR("Number of bins " << num_bins << " smaller than input size " << values.size());
         return ma_values;
     }
-    const auto sum = vsum(values);
+    const auto sumv = sum(values);
     for (size_t t = num_bins; t < values.size(); ++t) {
         scalar_t ma = 0;
         for (size_t t_ma = t - num_bins; t_ma <= t; ++t_ma)
@@ -154,9 +217,9 @@ apply_norma(const std::vector<scalar_t> &values, const size_t num_bins)
         ma /= scalar_t(num_bins);
         ma_values[t] = ma;
     }
-    normalize(ma_values, 0, sum);
-    const auto sum_out = vsum(ma_values);
-    if (sum_out != sum) std::cerr << "Sum output " << sum_out << " differs from sum input " << sum << std::endl;
+    normalize(ma_values, 0, sumv);
+    const auto sum_out = sum(ma_values);
+    if (sum_out != sumv) std::cerr << "Sum output " << sum_out << " differs from sum input " << sumv << std::endl;
     return ma_values;
 }
 
@@ -346,9 +409,8 @@ template<typename T> arma::Mat<T>
 extrude_rows(const arma::Mat<T> &m, const size_t ct)
 {
     arma::Mat<T> r = m;
-    while (r.n_cols < ct)
-        r = arma::join_rows(r, m);
-    if (r.n_cols > ct) r.shed_cols(ct, r.n_cols);
+    while (r.n_cols < ct) r = arma::join_rows(r, m);
+    if (r.n_cols > ct) r.shed_cols(ct, r.n_cols - 1);
     return r;
 }
 

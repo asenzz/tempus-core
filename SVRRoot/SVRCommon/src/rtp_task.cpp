@@ -22,7 +22,7 @@ task::task(task* parent)
 
 void task::run(thread * th)
 {
-    svr::common::memory_manager::instance().wait();
+    svr::common::memory_manager::get().barrier();
     done_ = false;
     thr.store(th);
     try {

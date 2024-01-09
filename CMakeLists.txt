@@ -13,6 +13,7 @@ OPTION(USE_CUDA "Compile for CUDA system." ON)
 if (USE_CUDA)
     FIND_PACKAGE(CUDA)
     ADD_DEFINITIONS(-DUSE_CUDA)
+    # ADD_DEFINITIONS(-DVIENNACL_WITH_CUDA)
     SET(CUDA_ARCH_LIST Auto CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
                                         compute capability versions (6.1, 7.0, etc) to generate code for. \
                                         Set to Auto for automatic detection (default)."

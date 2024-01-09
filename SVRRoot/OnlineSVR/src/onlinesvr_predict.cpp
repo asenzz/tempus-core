@@ -7,7 +7,6 @@
 #include <boost/math/distributions/students_t.hpp>
 #include <mutex>
 #include <cmath>
-#include <cstddef>
 #include <unordered_set>
 #include <vector>
 #include "common/parallelism.hpp"
@@ -15,15 +14,14 @@
 #include "common/exceptions.hpp"
 #include "util/math_utils.hpp"
 #include "onlinesvr.hpp"
-#include "cuda_path.hpp"
-#include "kernel_factory.hpp"
 #include "cuqrsolve.hpp"
+#include "model/SVRParameters.hpp"
 
 namespace svr {
 
 
 arma::mat OnlineMIMOSVR::init_predict_kernel_matrix(
-        const SVRParameters &svr_parameters,
+        const datamodel::SVRParameters &svr_parameters,
         const arma::mat &x_train,
         const arma::mat &x_predict,
         const OnlineMIMOSVR_ptr &p_manifold,
@@ -31,14 +29,14 @@ arma::mat OnlineMIMOSVR::init_predict_kernel_matrix(
 {
     arma::mat predict_kernel_matrix;
     switch (svr_parameters.get_kernel_type()) {
-        case kernel_type_e::DEEP_PATH:
-        case kernel_type_e::DEEP_PATH2: {
+        case datamodel::kernel_type_e::DEEP_PATH:
+        case datamodel::kernel_type_e::DEEP_PATH2: {
             if (!p_manifold) LOG4_THROW("Manifold model not ready!");
             predict_kernel_matrix = init_predict_manifold_matrix(x_train, x_predict, p_manifold);
             break;
         }
 
-        case kernel_type_e::PATH: {
+        case datamodel::kernel_type_e::PATH: {
             // predict_kernel_matrix.set_size(arma::size(Zy));
             // solvers::kernel_from_distances(predict_kernel_matrix.memptr(), Zy.memptr(), Zy.n_rows, svr_parameters.get_svr_kernel_param());
             arma::mat *p_Zy;
@@ -59,7 +57,7 @@ arma::mat OnlineMIMOSVR::init_predict_kernel_matrix(
 
 arma::mat
 OnlineMIMOSVR::init_dist_predict_kernel_matrix(
-        const SVRParameters &svr_parameters,
+        const datamodel::SVRParameters &svr_parameters,
         const arma::mat &x_train,
         const arma::mat &x_predict,
         const OnlineMIMOSVR_ptr &p_manifold)
@@ -85,7 +83,7 @@ OnlineMIMOSVR::init_dist_predict_kernel_matrix(
 arma::mat
 accumulate_chunks(
         const std::vector<unsigned> &outliers, const std::vector<size_t> &min_ixs, const std::vector<size_t> &max_ixs,
-        const std::vector<arma::mat> &chunk_predicted, const SVRParameters &svr_parameters)
+        const std::vector<arma::mat> &chunk_predicted, const datamodel::SVRParameters &svr_parameters)
 {
     arma::mat start_mat = arma::zeros(arma::size(chunk_predicted.front()));
 #pragma omp parallel for
@@ -98,7 +96,7 @@ accumulate_chunks(
             } else if (outliers[i] != 0) {
                 LOG4_WARN(
                         "Outlier found of type " << outliers[i] << " at chunk " << j << " value " << chunk_predicted[j](i, chunk_predicted[j].n_cols - 1) << " params "
-                         << svr_parameters.get_svr_kernel_param() << " " << svr_parameters.get_svr_kernel_param2());
+                         << svr_parameters.to_string());
             }
         }
         start_mat.row(i) = start_mat.row(i) / double(counter);
@@ -121,7 +119,7 @@ outlier_test(
         LOG4_DEBUG("Data is empty!");
         return outliers;
     }
-    if (data.row(0).n_elem < 3) {
+    if (data.n_cols < 3) {
         __omp_pfor_i(0, data.n_rows,
             min_ixs[i] = index_min(data.row(i));
             max_ixs[i] = index_max(data.row(i));
@@ -217,7 +215,7 @@ arma::mat OnlineMIMOSVR::chunk_predict(const arma::mat &x_predict, const bpt::pt
     }
 #endif
     if (ixs.size() == 1 && main_components.size() == 1)
-        return init_predict_kernel_matrix(*p_svr_parameters, *p_features, x_predict, p_manifold, pred_time) * main_components.begin()->second.total_weights;
+        return main_components.begin()->second.epsilon + init_predict_kernel_matrix(*p_svr_parameters, *p_features, x_predict, p_manifold, pred_time) * main_components.begin()->second.total_weights;
 
     std::vector<size_t> min_ixs;
     std::vector<size_t> max_ixs;
@@ -225,42 +223,37 @@ arma::mat OnlineMIMOSVR::chunk_predict(const arma::mat &x_predict, const bpt::pt
     arma::mat start_mat = arma::zeros(x_predict.n_rows, multistep_len);
     std::vector<arma::mat> chunk_predicted;
 
-    std::mutex mx;
     std::vector<double> mae_total(ixs.size(), 0.);
-    for (auto &kv: main_components) __omp_pfor_i(0, mae_total.size(), mae_total[i] += kv.second.mae_chunk_values[i])
+#pragma omp parallel for
+    for (size_t i = 0; i < mae_total.size(); ++i)
+        for (const auto &co: main_components)
+            mae_total[i] += co.second.mae_chunk_values[i];
     auto sorted_ix = sort_indexes(mae_total);
-    std::unordered_set<size_t> best_ixs(sorted_ix.begin(), sorted_ix.size() < 2 ? sorted_ix.end() : sorted_ix.begin() + std::round(sorted_ix.size() / BEST_PREDICT_CHUNKS_DIVISOR));
+    std::unordered_set<size_t> best_ixs(sorted_ix.begin(), sorted_ix.size() < 2 ? sorted_ix.end() : sorted_ix.begin() + std::round(double(sorted_ix.size()) / BEST_PREDICT_CHUNKS_DIVISOR));
     for (auto &kv: main_components) {
-#pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for
         for (size_t i = 0; i < ixs.size(); ++i) {
             if (best_ixs.find(i) != best_ixs.end()) {
-                arma::mat multiplicated(arma::size(p_labels->rows(ixs[i])));
-                if (p_svr_parameters->is_manifold()) {
-                    const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_svr_parameters, x_predict, p_features->rows(ixs[i]), p_manifold, pred_time);
-                    multiplicated = arma::mean(chunk_kernel_matrix + p_labels->rows(ixs[i]));
-                } else {
-                    const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_svr_parameters, p_features->rows(ixs[i]), x_predict, p_manifold, pred_time);
-#pragma omp parallel for
-                    for (size_t col_ix = 0; col_ix < kv.second.chunk_weights[i].n_cols; ++col_ix)
-                        multiplicated.col(col_ix) = kv.second.epsilon + chunk_kernel_matrix * kv.second.chunk_weights[i].col(col_ix);
-                }
+                const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_svr_parameters, p_features->rows(ixs[i]), x_predict, p_manifold, pred_time);
+                const arma::mat multiplicated = kv.second.epsilon + chunk_kernel_matrix * kv.second.chunk_weights[i];
 #pragma omp critical(add_chunk_predicted)
                 chunk_predicted.emplace_back(multiplicated);
             }
         }
 
         arma::mat sum_steps = arma::zeros(x_predict.n_rows, chunk_predicted.size());
-        __tbb_pfor_i(0, chunk_predicted.size(),
+#pragma omp parallel for
+        for (size_t i = 0; i < chunk_predicted.size(); ++i) {
             // last_step.col(i) = chunk_predicted[i].col(multistep_len - 1);
             // Replacing last column check only for sum of all columns
             //arma::colvec sum_of_multistep_predictions = arma::sum(chunk_predicted[i], 1);
-            sum_steps.col(i) = arma::colvec(arma::sum(chunk_predicted[i], 1)); // TODO Is this basically transpose?
-        )
-        std::vector<unsigned> outlier_result = outlier_test(sum_steps, OUTLIER_ALPHA, min_ixs, max_ixs);
-        arma::mat accumulated = accumulate_chunks(outlier_result, min_ixs, max_ixs, chunk_predicted, *p_svr_parameters);
+            sum_steps.col(i) = arma::colvec(arma::sum(chunk_predicted[i], 1));
+        }
+        const std::vector<unsigned> outlier_result = outlier_test(sum_steps, OUTLIER_ALPHA, min_ixs, max_ixs);
+        const arma::mat accumulated = accumulate_chunks(outlier_result, min_ixs, max_ixs, chunk_predicted, *p_svr_parameters);
 #ifdef OUTLIER_TEST
         if (accumulated.max() > SANE_PREDICT or accumulated.min() < -SANE_PREDICT or accumulated.has_nan() or accumulated.has_inf()) {
-            LOG4_ERROR("Accumulated predict abs values are bigger than " << SANE_PREDICT << " max " << accumulated.max() << " min " << accumulated.min());
+            LOG4_ERROR("Accumulated predict abs values are bigger than " << SANE_PREDICT << ", max " << accumulated.max() << ", min " << accumulated.min());
 /*
             static size_t call_ct = 0;
             //svr::common::armd::serialize_mat(svr::common::formatter() << "/mnt/faststore/problematic_xtest_level_" << p_svr_parameters.get_decon_level() << "_" << p_svr_parameters.get_input_queue_column_name() << "_call_" << call_ct << ".txt", x_predict, "Xtest");
@@ -273,7 +266,7 @@ arma::mat OnlineMIMOSVR::chunk_predict(const arma::mat &x_predict, const bpt::pt
 //#pragma omp critical(predict_add)
         predicted.emplace_back(accumulated);
     }
-    arma::mat pred = (std::accumulate(predicted.begin(), predicted.end(), start_mat) / double(predicted.size())) * labels_scaling_factor;
+    const arma::mat pred = std::accumulate(predicted.begin(), predicted.end(), start_mat) / double(predicted.size()) * labels_scaling_factor;
 #ifdef DEBUG_PREDICTIONS // Debug log to file
     const auto prev_pred_find = prev_pred.find({p_svr_parameters.get_decon_level(), p_svr_parameters.get_input_queue_column_name()});
     if (prev_pred_find != prev_pred.end()) {

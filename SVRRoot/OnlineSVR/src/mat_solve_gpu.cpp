@@ -1,7 +1,7 @@
 //
 // Created by jarko on 18/01/19.
 //
-
+#if 0
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
@@ -1961,3 +1961,4 @@ dgels_gpu(
 
 }
 #pragma GCC diagnostic pop
+#endif

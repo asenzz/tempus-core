@@ -61,6 +61,23 @@ typedef enum class kernel_type : int
     number_of_kernel_types = 10 // end of enum = invalid type
 } kernel_type_e, *kernel_type_e_ptr;
 
+template<typename ST>
+ST tostring(const datamodel::kernel_type_e kt)
+{
+    switch (kt) {
+        case kernel_type_e::LINEAR: return "LINEAR";
+        case kernel_type_e::POLYNOMIAL: return "POLYNOMIAL";
+        case kernel_type_e::RBF: return "RBF";
+        case kernel_type_e::RBF_GAUSSIAN: return "RBF_GAUSSIAN";
+        case kernel_type_e::RBF_EXPONENTIAL: return "RBF_EXPONENTIAL";
+        case kernel_type_e::GA: return "GA";
+        case kernel_type_e::PATH: return "PATH";
+        case kernel_type_e::DEEP_PATH: return "DEEP_PATH";
+        case kernel_type_e::DEEP_PATH2: return "DEEP_PATH2";
+        default: return "UNKNOWN";
+    }
+}
+
 inline kernel_type_e operator++(kernel_type_e &k_type)
 {
     int tmp = static_cast<int>(k_type);
@@ -344,7 +361,7 @@ public:
 
     void set_svr_C(const double _svr_C)
     {
-        if (_svr_C < 0) THROW_EX_FS(std::invalid_argument, "Cost parameter " << svr_C << " is less than zero.");
+        // if (_svr_C < 0) THROW_EX_FS(std::invalid_argument, "Applied cost parameter " << _svr_C << " is less than zero.");
         svr_C = _svr_C;
     }
 

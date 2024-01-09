@@ -11,8 +11,8 @@ namespace svr {
 using svr::datamodel::kernel_type_e;
 
 template<typename scalar_type>
-std::map<kernel_type_e, kernel_factory < scalar_type>*>
-IKernel<scalar_type>::kernel_factories;
+std::map<kernel_type_e, kernel_factory<scalar_type> *>
+        IKernel<scalar_type>::kernel_factories;
 
 template<typename scalar_type>
 std::once_flag IKernel<scalar_type>::kernel_init_flag;
@@ -20,16 +20,14 @@ std::once_flag IKernel<scalar_type>::kernel_init_flag;
 template<typename scalar_type>
 void IKernel<scalar_type>::IKernelInit()
 {
-    std::call_once(IKernel<scalar_type>::kernel_init_flag, []()
-    {
+    std::call_once(IKernel<scalar_type>::kernel_init_flag, []() {
         try {
-            for (auto k_type = kernel_type_e(0); (int) k_type < (int) kernel_type_e::number_of_kernel_types; k_type++) {
+            for (auto k_type = kernel_type_e(0); (int) k_type < (int) kernel_type_e::number_of_kernel_types; ++k_type) {
                 IKernel<scalar_type>::kernel_factories.insert(
                         std::make_pair(k_type, new kernel_factory<scalar_type>(k_type)));
             }
         } catch (const std::exception &ex) {
-            LOG4_ERROR ("Something very bad happened during kernel factory init - " << ex.what());
-            throw std::invalid_argument("Incorrect kernel factory init.");
+            LOG4_ERROR("Something very bad happened during kernel factory init - " << ex.what());
         }
     });
 }
@@ -43,20 +41,18 @@ IKernel<scalar_type>::IKernel()
 
 
 template<typename scalar_type>
-std::unique_ptr<kernel_base < scalar_type>>
-
-IKernel<scalar_type>::get_kernel(const kernel_type_e &ktype, const SVRParameters &params)
+std::unique_ptr<kernel_base<scalar_type>>
+IKernel<scalar_type>::get(const SVRParameters &params)
 {
     svr::IKernel<scalar_type>::IKernelInit();
-    auto search = kernel_factories.find(ktype);
+    const auto search = kernel_factories.find(params.get_kernel_type());
     if (search == kernel_factories.end())
-        THROW_EX_FS(std::invalid_argument, "Incorrect kernel init, we don't know what to do yet.");
+        THROW_EX_FS(std::invalid_argument, "Incorrect kernel type " << tostring<const char *>(params.get_kernel_type()) << ", we don't know what to do yet.");
     return search->second->create(params);
 }
 
 template<typename scalar_type>
 std::unique_ptr<kernel_base<scalar_type>>
-
 kernel_factory<scalar_type>::create(const SVRParameters &params)
 {
     switch (kernel_type_) {

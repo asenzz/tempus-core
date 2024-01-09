@@ -1,15 +1,41 @@
 #pragma once
 
+#include <magma_types.h>
+#include <cusolverDn.h>
+
 namespace svr::solvers {
 
-//void kernel_from_distances(double *K, const double *Z, const size_t M, const double gamma);
+void kernel_from_distances(double *K, const double *Z, const size_t m, const double gamma);
 
-//double score_kernel(const double *ref_kernel /* colmaj order */, const double norm_ref, const double *Z /* colmaj order */, const size_t M, const double gamma);
+//double score_kernel(const double *ref_kernel /* colmaj order */, const double norm_ref, const double *Z /* colmaj order */, const size_t M, const double gamma); // TODO  Test
 
-void call_gpu_overdetermined(const size_t Nrows, const size_t Ncols, const size_t Nrhs, const double *cpu_matrix, const double *cpu_rhs, double *cpu_output);
+/* CuSolver */
 
-void dyn_gpu_solve(const size_t m, const double *left, const double *right, double *output);
+std::tuple<cusolverDnHandle_t, double *, double *, double *, int *, int *>
+init_cusolver(const size_t gpu_phy_id, const size_t m, const size_t n);
 
-void qrsolve(const size_t Nrows, const size_t Nright, const double *d_Ainput, const double *d_rhs, double *d_B);
+void uninit_cusolver(const cusolverDnHandle_t cusolverH, double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo);
+
+
+void dyn_gpu_solve(
+        const size_t m, const size_t n, const double *Left, const double *Right, double *output,
+        cusolverDnHandle_t cusolverH,
+        double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo);
+
+
+/* MAGMA */
+
+std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaInt_ptr>
+init_magma_solver(const svr::common::gpu_context &p_ctx, const size_t m, const size_t b_n);
+
+void uninit_magma_solver(svr::common::gpu_context *&p_ctx, const magma_queue_t &magma_queue,
+                         const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_w, const magmaInt_ptr piv);
+
+void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr, svr::common::gpu_context *p_ctx = nullptr,
+                     const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr);
+
+void iter_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr, svr::common::gpu_context *p_ctx = nullptr,
+                      const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr);
+
 
 }

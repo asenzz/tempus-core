@@ -4,6 +4,10 @@
 
 using namespace svr::datamodel;
 
+TEST(datarow_range_tests, time_decomposition)
+{
+}
+
 TEST(datarow_range_tests, datarow_range_basic_tests)
 {
     DataRow::container cont;

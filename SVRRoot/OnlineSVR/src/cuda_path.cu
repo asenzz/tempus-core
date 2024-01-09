@@ -28,12 +28,9 @@ namespace svr::kernel::path {
 __global__  void
 gpu_kernel_xx_compute(
         const size_t sizeX, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const size_t len, const size_t dim, const double *X, double *Z,
-        const double param2, const double param3, const double param4)
+        const double lambda, const double tau, const double w_sum_sym)
 {
     //double sigma = param1; - not used when only computing distance
-    const double lambda = param2;
-    const double tau = param3;
-    const double w_sum_sym = param4;
     const size_t total_len_features = len * dim;
 
     __shared__ double power_mult[TILE_WIDTH];
@@ -46,7 +43,7 @@ gpu_kernel_xx_compute(
 
     const auto tx = threadIdx.x;
     const auto ty = threadIdx.y;
-    //__syncthreads();
+    __syncthreads();
     if ((blockIdx.x * blockDim.x < numX) && (blockIdx.y * blockDim.y < numY) && ((startX + blockIdx.x * blockDim.x) <= (startY + blockIdx.y * blockDim.y + blockDim.y - 1))) {
         size_t kk_internal = 0;
         double matrix_prod_sum = 0;
@@ -131,11 +128,8 @@ gpu_kernel_xx_compute(
 __global__  void
 gpu_kernel_xy_compute(
         const size_t sizeX, const size_t sizeY, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const size_t len, const size_t dim, const double *X, const double *Y,
-        double *Z, const size_t full_sizeZ, const double param2, const double param3, const double param4)
+        double *Z, const size_t full_sizeZ, const double lambda, const double tau, const double w_sum_sym)
 {
-    const double lambda = param2;
-    const double tau = param3;
-    const double w_sum_sym = param4;
     const auto total_len_features = len * dim;
 
     __shared__ double power_mult[TILE_WIDTH];
@@ -149,7 +143,7 @@ gpu_kernel_xy_compute(
 
     const auto tx = threadIdx.x;
     const auto ty = threadIdx.y;
-    //__syncthreads();
+    __syncthreads();
 
     if ((blockIdx.x * blockDim.x < numX) && (blockIdx.y * blockDim.y < numY)) {
         size_t kk_internal = 0;
@@ -204,88 +198,62 @@ gpu_kernel_xy_compute(
 }
 
 
-void
-do_gpu_kernel_compute_mat_xx(const size_t sizeX, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const size_t total_len_features, const size_t dim, const double *X,
-                             double *Z, const double param2, const double param3, const double param4)
-{
-    common::gpu_context ctx;
-    cudaSetDevice(ctx.phy_id());
-
-    const size_t len = total_len_features / dim;
-
-    const size_t full_sizeX = sizeX * total_len_features;
-    const size_t full_sizeZ = sizeX * sizeX;
-    thrust::device_vector<double> d_X(full_sizeX);
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_X.data()), &X[0], sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
-    cu_errchk(cudaPeekAtLastError());
-
-    double *d_Zptr, *d_Xptr = thrust::raw_pointer_cast(d_X.data());
-    cu_errchk(cudaMalloc(&d_Zptr, full_sizeZ * sizeof(double)));
-
-    const size_t tile_x = TILE_WIDTH;
-    const size_t tile_y = TILE_WIDTH;
-    const dim3 thread_dim(tile_x, tile_y);
-
-    const size_t block_x = (sizeX / tile_x) + (sizeX % tile_x == 0 ? 0 : 1);
-    const size_t block_y = (sizeX / tile_y) + (sizeX % tile_y == 0 ? 0 : 1);
-    const dim3 block_dim(block_x, block_y);
-
-    gpu_kernel_xx_compute<<<block_dim, thread_dim>>>(sizeX, startX, startY, numX, numY, len, dim, d_Xptr, d_Zptr, param2, param3, param4);
-    cu_errchk(cudaMemcpy(&Z[0], d_Zptr, full_sizeZ * sizeof(double), cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_Zptr));
-}
-
-
-void
-do_gpu_kernel_compute_mat_xy(const size_t sizeX, const size_t sizeY, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const size_t total_len_features, const size_t dim,
-                             const double *X, const double *Y, double *Z, const double param2, const double param3, const double param4)
-{
-    common::gpu_context ctx;
-    cudaSetDevice(ctx.phy_id());
-    const size_t len = total_len_features / dim;
-
-    const auto full_sizeX = sizeX * total_len_features;
-    const auto full_sizeY = sizeY * total_len_features;
-    const auto full_sizeZ = sizeX * sizeY;
-    thrust::device_vector<double> d_X(full_sizeX);
-    thrust::device_vector<double> d_Y(full_sizeY);
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_X.data()), &X[0], sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_Y.data()), &Y[0], sizeof(double) * full_sizeY, cudaMemcpyHostToDevice));
-
-    double *d_Xptr = thrust::raw_pointer_cast(d_X.data());
-    double *d_Yptr = thrust::raw_pointer_cast(d_Y.data());
-    double *d_Zptr;
-    cu_errchk(cudaMalloc(&d_Zptr, full_sizeZ * sizeof(double)));
-
-    const size_t tile_x = TILE_WIDTH;
-    const size_t tile_y = TILE_WIDTH;
-    const dim3 thread_dim(tile_x, tile_y);
-    const size_t block_x = (sizeX / tile_x) + (sizeX % tile_x == 0 ? 0 : 1);
-    const size_t block_y = (sizeX / tile_y) + (sizeX % tile_y == 0 ? 0 : 1);
-    const dim3 block_dim(block_x, block_y);
-
-    gpu_kernel_xy_compute<<<block_dim, thread_dim>>>(sizeX, sizeY, startX, startY, numX, numY, len, dim, d_Xptr, d_Yptr, d_Zptr, full_sizeZ, param2, param3, param4);
-    cu_errchk(cudaMemcpy(&Z[0], d_Zptr, full_sizeZ * sizeof(double), cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_Zptr));
-}
-
-
 void cu_distances_xx(const size_t total_len_features, const size_t dim, const size_t size_X, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const double *X,
                      const double lambda, const double tau, const double w_sum_sym, double *Z)
 {
-    const double param2 = lambda;
-    const double param3 = tau;
-    const double param4 = w_sum_sym;
-    do_gpu_kernel_compute_mat_xx(size_X, startX, startY, numX, numY, total_len_features, dim, X, Z, param2, param3, param4);
+    const size_t len = total_len_features / dim;
+    const size_t full_sizeX = size_X * total_len_features;
+    const size_t full_sizeZ = size_X * size_X;
+    double *d_Zptr, *d_Xptr;
+    const common::gpu_context ctx;
+    cudaSetDevice(ctx.phy_id());
+
+    cu_errchk(cudaMalloc(&d_Xptr, full_sizeX * sizeof(double)))
+    cu_errchk(cudaMalloc(&d_Zptr, full_sizeZ * sizeof(double)));
+    cu_errchk(cudaMemcpy(d_Xptr, X, sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
+
+    const size_t tile_x = TILE_WIDTH;
+    const size_t tile_y = TILE_WIDTH;
+    const dim3 thread_dim(tile_x, tile_y);
+
+    const size_t block_x = (size_X / tile_x) + (size_X % tile_x == 0 ? 0 : 1);
+    const size_t block_y = (size_X / tile_y) + (size_X % tile_y == 0 ? 0 : 1);
+    const dim3 block_dim(block_x, block_y);
+
+    gpu_kernel_xx_compute<<<block_dim, thread_dim>>>(size_X, startX, startY, numX, numY, len, dim, d_Xptr, d_Zptr, lambda, tau, w_sum_sym);
+    cu_errchk(cudaMemcpy(Z, d_Zptr, full_sizeZ * sizeof(double), cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(d_Zptr));
+    cu_errchk(cudaFree(d_Xptr));
 }
+
 
 void cu_distances_xy(const size_t total_len_features, const size_t dim, const size_t size_X, const size_t size_Y, const size_t startX, const size_t startY, const size_t numX, const size_t numY,
                      const double *X, const double *Y, const double lambda, const double tau, const double w_sum_sym, double *Z)
 {
-    const double param2 = lambda;
-    const double param3 = tau;
-    const double param4 = w_sum_sym;
-    do_gpu_kernel_compute_mat_xy(size_X, size_Y, startX, startY, numX, numY, total_len_features, dim, X, Y, Z, param2, param3, param4);
+    const size_t len = total_len_features / dim;
+
+    const auto full_sizeX = size_X * total_len_features;
+    const auto full_sizeY = size_Y * total_len_features;
+    const auto full_sizeZ = size_X * size_Y;
+    const common::gpu_context ctx;
+    cudaSetDevice(ctx.phy_id());
+    double *d_Xptr, *d_Yptr, *d_Zptr;
+    cu_errchk(cudaMalloc(&d_Xptr, full_sizeX * sizeof(double)));
+    cu_errchk(cudaMalloc(&d_Yptr, full_sizeY * sizeof(double)));
+    cu_errchk(cudaMalloc(&d_Zptr, full_sizeZ * sizeof(double)));
+    cu_errchk(cudaMemcpy(d_Xptr, &X[0], sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
+    cu_errchk(cudaMemcpy(d_Yptr, &Y[0], sizeof(double) * full_sizeY, cudaMemcpyHostToDevice));
+
+    const size_t tile_x = TILE_WIDTH;
+    const size_t tile_y = TILE_WIDTH;
+    const dim3 thread_dim(tile_x, tile_y);
+    const size_t block_x = (size_X / tile_x) + (size_X % tile_x == 0 ? 0 : 1);
+    const size_t block_y = (size_X / tile_y) + (size_X % tile_y == 0 ? 0 : 1);
+    const dim3 block_dim(block_x, block_y);
+
+    gpu_kernel_xy_compute<<<block_dim, thread_dim>>>(size_X, size_Y, startX, startY, numX, numY, len, dim, d_Xptr, d_Yptr, d_Zptr, full_sizeZ, lambda, tau, w_sum_sym);
+    cu_errchk(cudaMemcpy(&Z[0], d_Zptr, full_sizeZ * sizeof(double), cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(d_Zptr));
 }
 
 

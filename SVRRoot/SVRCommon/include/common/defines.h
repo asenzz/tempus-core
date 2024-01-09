@@ -13,8 +13,7 @@
 // #define SEPARATE_PREDICTIONS_BY_COST
 #define MANIFOLD_TEST
 #ifdef MANIFOLD_TEST
-constexpr unsigned TEST_OFFSET_DEFAULT = 430;
-#define MANIFOLD_TEST_VALIDATION_WINDOW (getenv("SVRWAVE_TEST_WINDOW") ? strtoul(getenv("SVRWAVE_TEST_WINDOW"), nullptr, 10) : (TEST_OFFSET_DEFAULT))
+constexpr unsigned TEST_OFFSET_DEFAULT = 345;
 #endif
 
 // #define OUTPUT_LIBSVM_TRAIN_DATA // To output LibSVM train files for every model

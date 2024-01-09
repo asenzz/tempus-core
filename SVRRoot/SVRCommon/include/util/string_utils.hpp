@@ -9,7 +9,27 @@
 #include <vector>
 #include "common/types.hpp"
 
-namespace svr::common {
+namespace svr {
+
+
+static const std::string dd_separator{".."};
+static const std::string cm_separator{","};
+
+std::ostream &operator<<(std::ostream &os, const std::vector<size_t> &v);
+
+std::basic_ostream<char, std::char_traits<char>> &operator<<(std::basic_ostream<char, std::char_traits<char>> &os, const std::vector<uint8_t> &v);
+
+std::ostream &operator<<(std::ostream &os, const std::vector<double> &v);
+
+
+template<typename T, typename C> std::basic_ostream<C> &operator <<(std::basic_ostream<C> &r, const std::complex<T> &v)
+{
+    r << std::real<T>(v) << ":" << std::imag<T>(v) << "i ";
+    return r;
+}
+
+
+namespace common {
 
 class formatter
 {
@@ -45,29 +65,22 @@ public:
     formatter &operator=(formatter &) = delete;
 
     formatter(const formatter &) = delete;
+
 private:
     std::stringstream stream_;
 };
 
-static const std::string dd_separator{".."};
-static const std::string cm_separator{","};
-
-std::ostream &operator<<(std::ostream &os, const std::vector<size_t> &v);
-
-std::basic_ostream<char, std::char_traits<char>> &operator<<(std::basic_ostream<char, std::char_traits<char>> &os, const std::vector<uint8_t> &v);
-
-std::ostream &operator<<(std::ostream &os, const std::vector<double> &v);
 
 static inline std::string &ltrim(std::string &s)
 {
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](const int c) {return !std::isspace(c);}));
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](const int c) { return !std::isspace(c); }));
     return s;
 }
 
 // trim from end
 static inline std::string &rtrim(std::string &s)
 {
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](const int c) {return !std::isspace(c);}).base(), s.end());
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](const int c) { return !std::isspace(c); }).base(), s.end());
     return s;
 }
 
@@ -105,7 +118,8 @@ std::string deep_to_string(const std::vector<T> &v)
 template<>
 std::string deep_to_string(const std::vector<uint8_t> &v);
 
-template<typename T> std::stringstream
+template<typename T>
+std::stringstream
 deep_to_tsvs(const std::vector<T> &v, const char sep = '\t')
 {
     std::stringstream ss;
@@ -115,17 +129,20 @@ deep_to_tsvs(const std::vector<T> &v, const char sep = '\t')
     return ss;
 }
 
-template<> std::stringstream
+template<>
+std::stringstream
 deep_to_tsvs(const std::vector<uint8_t> &v, const char sep);
 
-template<typename T> std::string
+template<typename T>
+std::string
 deep_to_tsv(const std::vector<T> &v, const char sep = '\t')
 {
     return deep_to_tsvs(v, sep).str();
 }
 
 
-template <typename T> std::string
+template<typename T>
+std::string
 to_string_with_precision(const T v, const size_t digits_ct = std::numeric_limits<T>::max_digits10)
 {
     std::ostringstream out;
@@ -137,14 +154,15 @@ to_string_with_precision(const T v, const size_t digits_ct = std::numeric_limits
     return out.str();
 }
 
-template <typename T>
+template<typename T>
 std::string to_string(const T v)
 {
     return to_string_with_precision(v);
 }
 
-template <typename T> std::string
-to_utf8(const std::basic_string<T, std::char_traits<T>, std::allocator<T>>& source)
+template<typename T>
+std::string
+to_utf8(const std::basic_string<T, std::char_traits<T>, std::allocator<T>> &source)
 {
     std::string result;
 
@@ -154,14 +172,16 @@ to_utf8(const std::basic_string<T, std::char_traits<T>, std::allocator<T>>& sour
     return result;
 }
 
-template <typename T> void
-from_utf8(const std::string& source, std::basic_string<T, std::char_traits<T>, std::allocator<T>>& result)
+template<typename T>
+void
+from_utf8(const std::string &source, std::basic_string<T, std::char_traits<T>, std::allocator<T>> &result)
 {
     std::wstring_convert<std::codecvt_utf8_utf16<T>, T> convertor;
     result = convertor.from_bytes(source);
 }
 
-template<typename T, typename L> inline std::string
+template<typename T, typename L>
+inline std::string
 deep_to_string(const std::set<std::shared_ptr<T>, L> &v)
 {
     if (v.size() == 0) return {};
@@ -175,7 +195,8 @@ deep_to_string(const std::set<std::shared_ptr<T>, L> &v)
 }
 
 
-template<typename T, typename L> std::string
+template<typename T, typename L>
+std::string
 deep_to_string(const std::set<T, L> &v)
 {
     if (v.size() == 0) return {};
@@ -219,7 +240,8 @@ std::vector<std::string>
 parse_string_range(const std::string &parameter_string, const std::vector<std::string> &set_parameters);
 
 template<typename T>
-T fromString(const std::string& s) {
+T from_string(const std::string &s)
+{
     std::istringstream is(s);
     T t;
     is >> t;
@@ -227,9 +249,11 @@ T fromString(const std::string& s) {
 }
 
 template<typename T>
-std::string toString(const T& t) {
+std::string to_string(const T &t)
+{
     return to_string<T>(t);
 }
 
 
 } // namespace svr
+}

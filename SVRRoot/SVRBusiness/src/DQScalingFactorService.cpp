@@ -126,6 +126,7 @@ DQScalingFactorService::do_calculate(const datamodel::DataRow::container::const_
     return {arma::conv_to<std::vector<double>>::from(get_coefs(scale_data_features, QUANTIZE_FIXED)),
             arma::conv_to<std::vector<double>>::from(get_coefs(scale_data_labels, MAIN_DECON_QUEUE_RES_SECS))};
 #endif
+    return {};
 }
 
 

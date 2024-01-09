@@ -60,7 +60,7 @@ public:
     //virtual vmatrix<scalar_type> operator()(
         //viennacl::ocl::context &ctx, const vmatrix<scalar_type> &features, vmatrix<scalar_type> &p_kernel_matrices) = 0; // not needed at this point?
         //if implemented, it should be done in this place and will remove code from build_kernel_matrix
-    virtual void operator()(viennacl::ocl::context &ctx, const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) = 0;
+    // virtual void operator()(viennacl::ocl::context &ctx, const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) {};
 
     virtual void operator()(const arma::mat & features, arma::mat & kernel_matrix)
     { LOG4_THROW("Not implemented"); }

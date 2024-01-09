@@ -20,26 +20,27 @@
 namespace svr {
 
 #define CHUNK_SIZE CHUNK_DECREMENT // Higher for higher precision and higher GPU use
-constexpr unsigned IRWLS_ITER = 1e2;
+constexpr unsigned IRWLS_ITER = 2e2;
 constexpr unsigned IRWLS_ITER_ONLINE = 4;
-constexpr unsigned IRWLS_ITER_TUNE = 1;
+constexpr unsigned IRWLS_ITER_TUNE = 4;
 #define OUTLIER_TEST
-
+#define USE_MAGMA
 constexpr double OUTLIER_ALPHA = 1e-6;
 #ifdef OUTLIER_TEST
-constexpr double SANE_PREDICT = 1e6;
+constexpr double SANE_PREDICT = common::C_input_obseg_labels * 1e2;
 #endif
 
 
 /* Auto cost and gamma */
-constexpr double DE_FINE_DIVISOR = 10; // > 1
 // constexpr double MULTIPLE_EPSCO = 2; // TODO Try C_input_obseg * .5, .25  // 2. for price, C_input_obseg for direction, epsilon-cost multiple, above 1, smaller is better and slower
-const std::deque<double> C_gamma_multis {1., 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7}; // Full gamma multipliers span
+// const std::deque<double> C_gamma_multis {1., 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7}; // Full gamma multipliers span
+
 #define FINER_GAMMA_TUNE
 
 // const double TUNE_EPSCOST_MAX = svr::common::C_input_obseg_labels;
 // const double TUNE_EPSCOST_MIN = 1 / svr::common::C_input_obseg_labels; // std::pow<double>(svr::common::C_input_obseg_labels, -1);
 #ifdef FINER_GAMMA_TUNE
+constexpr double DE_FINE_DIVISOR = 1e1; // > 1
 // constexpr double MULTIPLE_EPSCO_FINE = MULTIPLE_EPSCO;
 constexpr double FINE_GAMMA_MULTIPLE = 1. + 1. / DE_FINE_DIVISOR;
 constexpr double C_fine_gamma_div = 1e1;
@@ -48,6 +49,14 @@ constexpr double C_fine_gamma_mult = 1e1;
 // #define MULTIPLE_EPSCO_FINE     (1.33)
 #define FINE_GAMMA_MULTIPLE     (1.66)
 #endif
+
+
+const auto C_gamma_multis = [](){
+    std::deque<double> r = {1., 1e1};
+    for (double it = 1e-1; it < 1e1; it *= FINE_GAMMA_MULTIPLE) r.emplace_back(it);
+    return r;
+} ();
+
 
 constexpr double BEST_PREDICT_CHUNKS_DIVISOR = 1; // above and 1
 constexpr double VALIDATION_SIZE = double(EMO_TUNE_VALIDATION_WINDOW) / double(CHUNK_SIZE); // Grid search validation row count
@@ -174,10 +183,6 @@ class OnlineMIMOSVR
 
 public:
     // Move to solver module
-    static arma::mat call_gpu_oversolve(const arma::mat &Left, const arma::mat &Right);
-    static arma::mat call_gpu_dynsolve(const arma::mat &left, const arma::mat &right);
-    static void call_gpu_dynsolve(const arma::mat &left, const arma::mat &right, arma::subview<double> output);
-    static void call_gpu_dynsolve(const arma::mat &left, const arma::mat &right, arma::Mat<double> &output);
     static void solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters);
     static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
     static void solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters);
@@ -253,7 +258,7 @@ public:
 
     static arma::mat get_reference_distance_matrix(const arma::mat &L);
 
-    static void tune_kernel_params(param_preds_set_t &predictions, datamodel::SVRParameters_ptr &_p_svr_parameters, const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, size_t chunk_ix = std::numeric_limits<size_t>::max());
+    static void tune_kernel_params(param_preds_set_t &mingamma, datamodel::SVRParameters_ptr &_p_svr_parameters, const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, size_t chunk_ix = std::numeric_limits<size_t>::max());
 
     static std::tuple<std::vector<arma::mat>, std::vector<double>> get_reference_matrices(const arma::mat &L, const datamodel::SVRParameters &svr_parameters);
 
@@ -384,16 +389,16 @@ public:
             arma::mat &kernel_matrix,
             const OnlineMIMOSVR_ptr &p_manifold);
 
-    static std::vector<arma::mat> prepare_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features);
-
+    static std::vector<arma::mat> *prepare_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t);
     static arma::mat *prepare_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const double meanabs_labels, const size_t train_len, const arma::mat &labels);
     static arma::mat *prepare_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, size_t len = 0);
-    static arma::mat *prepare_Zy(const datamodel::SVRParameters &params, const arma::mat &features /* transposed*/, const arma::mat &predict_features /* transposed*/, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
-    static std::vector<arma::mat> get_cached_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features /* transposed */, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
-    static arma::mat &
-    get_cached_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, const double meanabs_labels, const size_t train_len);
+    static arma::mat *prepare_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
+
+    static std::vector<arma::mat> &get_cached_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
+    static arma::mat &get_cached_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, const double meanabs_labels, const size_t train_len);
     static arma::mat &get_cached_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, const size_t short_size_X = 0);
-    static arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features /* transposed */, const arma::mat &predict_features /* transposed */, const bpt::ptime &pred_time);
+    static arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &pred_time);
+
     static void clear_Zy_cache();
 
     static size_t get_chunk_num(const size_t decrement);

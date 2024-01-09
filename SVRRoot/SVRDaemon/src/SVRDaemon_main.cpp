@@ -53,30 +53,25 @@ int main(int argc, char** argv)
     signal(SIGINT, signal_handler);
     signal(SIGABRT, signal_handler);
     signal(SIGTERM, signal_handler);
-
+    omp_set_nested(true);
+    omp_set_max_active_levels(std::thread::hardware_concurrency());
     std::shared_ptr<DaemonFacade> p_daemon_facade;
-    try
-    {
+    int rc = 0;
+    try {
         std::string config_path = parse(argc, argv);
         p_daemon_facade = std::make_shared<DaemonFacade>(config_path);
         p_daemon_facade->start_loop();
-    } catch(std::invalid_argument& e) {
+    } catch (const std::invalid_argument &e) {
         LOG4_ERROR(e.what());
-        return 1;
-    }
-/*
-    catch(std::exception& e)
-    {
+        rc = 1;
+    } catch (const std::exception &e) {
         LOG4_ERROR(e.what());
-        return 1;
-    }
-    catch(...)
-    {
+        rc = 0xff;
+    } catch (...) {
         LOG4_ERROR("Unknown exception thrown. ");
-        return 1;
+        rc = 0xff;
     }
-*/
     LOG4_INFO("Daemon process finishing");
 
-    return 0;
+    return rc;
 }

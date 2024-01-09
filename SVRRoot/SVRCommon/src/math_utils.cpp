@@ -369,11 +369,11 @@ void serialize_vec(const std::string &filename, const arma::uvec &input, const s
 }
 
 
-//should replace for with /* cilk_ */ for for the following two functions
 void copy_from_arma_to_vcl(const arma::mat &input, viennacl::matrix<double> &output)
 {
     output.resize(input.n_rows, input.n_cols, false);
-    __omp_pfor_i(0, input.n_rows, for (size_t j = 0; j < input.n_cols; ++j) output(i, j) = input(i, j) )
+    __tbb_pfor_i(0, input.n_rows,
+                 for (size_t j = 0; j < input.n_cols; ++j) output(i, j) = input(i, j) )
 }
 
 void copy_from_vcl_to_arma(const viennacl::matrix<double> &input, arma::mat &output)
