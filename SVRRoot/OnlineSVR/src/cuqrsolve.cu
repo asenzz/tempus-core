@@ -54,29 +54,36 @@ template<unsigned k_block_size> __global__ void
 G_kernel_from_distances_symm(double *__restrict K, const double *__restrict dist, const size_t mm, const size_t m, const double divisor)
 {
     const auto g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
+    const auto row_ix = g_thr_ix % m;
+    const auto col_ix = g_thr_ix / m;
+    if (g_thr_ix >= mm || row_ix <= col_ix) return;
+    K[m * row_ix + col_ix] = K[g_thr_ix] = 1. - dist[g_thr_ix] / divisor;
+/*
     if (g_thr_ix >= mm) return;
-
     const auto grid_size = k_block_size * gridDim.x;
-//    printf("cu_recombine_parameters: Begin %u, %u, %u.\n", thr_ix, g_thr_ix, grid_size);
+    printf("cu_recombine_parameters: Begin %u, %u, %u.\n", thr_ix, g_thr_ix, grid_size);
     for (auto i = g_thr_ix; i < mm; i += grid_size)
         if ((i < mm) && ((i % m) > (i / m)))
             K[m * (i % m) + i / m] = K[i] = 1. - dist[i] / divisor;
+*/
 }
 
 
 template<unsigned k_block_size> __global__ void
-G_kernel_from_distances(double *__restrict K, const double *__restrict dist, const size_t mm, const double divisor)
+G_kernel_from_distances(double *__restrict K, const double *__restrict Z, const size_t mm, const double divisor)
 {
     const auto g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
     if (g_thr_ix >= mm) return;
-
+    K[g_thr_ix] = 1. - Z[g_thr_ix] / divisor;
+    /*
     const auto grid_size = k_block_size * gridDim.x;
     for (auto i = g_thr_ix; i < mm; i += grid_size)
-        K[i] = 1. - dist[i] / divisor;
+        K[i] = 1. - Z[i] / divisor;
+    */
 }
 
 
-void kernel_from_distances(double *K, const double *Z, const size_t m, const double gamma, const datamodel::kernel_type_e kernel_type)
+void kernel_from_distances(double *K, const double *Z, const size_t m, const double gamma)
 {
     double *d_K, *d_Z;
     const size_t mm = m * m;
@@ -86,15 +93,7 @@ void kernel_from_distances(double *K, const double *Z, const size_t m, const dou
     cu_errchk(cudaMalloc(&d_K, mat_size));
     cu_errchk(cudaMalloc(&d_Z, mat_size));
     cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
-
-    switch (kernel_type) {
-        case (datamodel::kernel_type_e::PATH):
-            G_kernel_from_distances<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, 2. * gamma * gamma);
-            break;
-        default:
-            G_kernel_from_distances_symm<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, m, 2. * gamma * gamma);
-    }
-
+    G_kernel_from_distances<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, 2. * gamma * gamma);
     cu_errchk(cudaMemcpy(K, d_K, mat_size, cudaMemcpyDeviceToHost));
     cu_errchk(cudaFree(d_K));
     cu_errchk(cudaFree(d_Z));
@@ -209,8 +208,8 @@ void dyn_gpu_solve(
 }
 
 
-std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaInt_ptr>
-init_magma_solver(const svr::common::gpu_context &gtx, const size_t m, const size_t b_n)
+std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaFloat_ptr, magmaInt_ptr>
+init_magma_solver(const svr::common::gpu_context &gtx, const size_t m, const size_t b_n, const bool psd)
 {
     magma_queue_t magma_queue = nullptr;
 
@@ -218,35 +217,50 @@ init_magma_solver(const svr::common::gpu_context &gtx, const size_t m, const siz
     cudaSetDevice(phy_dev);
     magma_init(); // initialize Magma
     magma_queue_create(phy_dev, &magma_queue);
-    if (!magma_queue) // device memory for a
-        LOG4_THROW("Failed creating MAGMA queue.");
+    if (!magma_queue) LOG4_THROW("Failed creating MAGMA queue.");
 
     magma_int_t err;
-    magmaDouble_ptr d_a, d_b, d_w = nullptr;
-    magmaInt_ptr piv = nullptr;
+    magmaDouble_ptr d_a, d_b, d_x, d_wd;
+    magmaFloat_ptr d_ws;
+    magmaInt_ptr piv;
     if ((err = magma_dmalloc(&d_a, m * m)) < MAGMA_SUCCESS) // device memory for a
         LOG4_THROW("Failed calling magma_dmalloc d_a with error code " << err);
     if ((err = magma_dmalloc(&d_b, m * b_n)) < MAGMA_SUCCESS) // device memory for b
         LOG4_THROW("Failed calling magma_dmalloc d_b with error code " << err);
-//  if ((err = magma_dmalloc(&d_w, m * m)) < MAGMA_SUCCESS) // device memory for w
-//        LOG4_THROW("Failed calling magma_dmalloc d_w with error code " << err);
-//  piv = (magmaInt_ptr) malloc(m * sizeof(magma_int_t)); // host mem.
 
-    return {magma_queue, d_a, d_b, d_w, piv};
+    if (psd) {
+        if ((err = magma_dmalloc(&d_x, m * b_n)) < MAGMA_SUCCESS) // device memory for x
+            LOG4_ERROR("Failed calling magma_dmalloc d_x with error code " << err);
+        if ((err = magma_dmalloc(&d_wd, m * b_n)) < MAGMA_SUCCESS) // device memory for wd
+            LOG4_THROW("Failed calling magma_dmalloc d_wd with error code " << err);
+        if ((err = magma_smalloc(&d_ws, m * (m + b_n) + m)) < MAGMA_SUCCESS) // device memory for ws
+            LOG4_THROW("Failed calling magma_dmalloc d_ws with error code " << err);
+        piv = nullptr;
+    } else {
+        piv = nullptr; // Pivoting used by dyn_solve // (magmaInt_ptr) malloc(m * sizeof(magma_int_t)); // host mem.
+        d_x = nullptr;
+        d_wd = nullptr;
+        d_ws = nullptr;
+    }
+    return {magma_queue, d_a, d_b, d_x, d_wd, d_ws, piv};
 }
 
 
 void uninit_magma_solver(
         svr::common::gpu_context *&p_ctx, const magma_queue_t &magma_queue,
-        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_w, const magmaInt_ptr piv)
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_wd, const magmaFloat_ptr d_ws, const magmaInt_ptr piv)
 {
     magma_int_t err;
     if (d_a && (err = magma_free(d_a)) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_free d_a with error code " << err);
     if (d_b && (err = magma_free(d_b)) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_free d_b with error code " << err);
-    if (d_w && (err = magma_free(d_w)) < MAGMA_SUCCESS)
-        LOG4_THROW("Failed calling magma_free d_w with error code " << err);
+    if (d_x && (err = magma_free(d_x)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_free d_x with error code " << err);
+    if (d_wd && (err = magma_free(d_wd)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_free d_wd with error code " << err);
+    if (d_ws && (err = magma_free(d_ws)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_free d_ws with error code " << err);
     if (piv) free(piv);
 
     if (magma_queue) magma_queue_destroy(magma_queue);
@@ -254,75 +268,55 @@ void uninit_magma_solver(
     if ((err = magma_finalize()) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_finalize with error code " << err);
 
-    if (p_ctx) delete p_ctx;
-    // p_ctx = nullptr;
+    delete p_ctx;
 }
 
 
 void iter_magma_solve(
-        const int m, const int b_n, const double *a, const double *b, double *output, const magma_queue_t magma_queue, svr::common::gpu_context *p_ctx,
-        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b)
+        const int m, const int b_n, const double *a, const double *b, double *output, const magma_queue_t magma_queue,
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_workd, const magmaFloat_ptr d_works, const bool psd)
 {
-    // changed rows; a - mxm matrix
-    // const magma_int_t mm = m * m, lda = m, ldb = m/*, ldx = m*/; // size of a, r, c
-    /*, d_x*/; // d_a, d_b - mxm matrix a on the device and mx1 matrix b on the device
+    magma_int_t err, iter, info;
 
-    magma_int_t err;
-/*
-    if ((err = magma_dmalloc(&d_x, m * b_n)) < MAGMA_SUCCESS) { // device memory for a
-        LOG4_ERROR("Failed calling magma_dmalloc d_x with error code " << err);
-        return;
-    }
-*/
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue); // copy a -> d_a
     magma_dsetmatrix(m, b_n, b, m, d_b, m, magma_queue); // copy b -> d_b
 
-/*
-    const auto ldworkd = m * magma_get_dgetri_nb(m); // optimal block size double
-    const auto ldworkf = m * magma_get_sgetri_nb(m); // optimal block size double
+    if (!psd) goto __solve_dgesv;
 
-    magmaDouble_ptr dworkd; // dwork - device workspace double
-    magmaFloat_ptr dworkf; // dwork - device workspace single
-    if ((err = magma_dmalloc(&dworkd, ldworkd)) < MAGMA_SUCCESS) { // phy_dev. mem. for ldwork
-        LOG4_ERROR("Failed calling magma_dmalloc dworkd of len " << ldworkd << " with error code " << err);
+    if ((err = magma_dshposv_gpu_expert(magma_uplo_t::MagmaLower, m, b_n, d_a, m, d_b, m, d_x, m, d_workd, d_works, &iter, magma_mode_t::MagmaHybrid, 1, 0, 0, 0, &info)) < MAGMA_SUCCESS) {
+        LOG4_WARN("Call to magma_dshposv_gpu_expert failed with error " << err << ", info " << info << ". Trying magma_dgesv_rbt.");
+        if (iter < 0) {
+            switch (iter) {
+                case -1:
+                    LOG4_DEBUG("Iterative magma_dshposv_gpu_expert returned -1 : the routine fell back to full precision for implementation - or machine-specific reasons");
+                    break;
+                case -2:
+                    LOG4_DEBUG("Iterative magma_dshposv_gpu_expert returned -2 : narrowing the precision induced an overflow, the routine fell back to full precision");
+                    break;
+                case -3:
+                    LOG4_DEBUG("Iterative magma_dshposv_gpu_expert returned -3 : failure of SPOTRF");
+                    break;
+                case -31:
+                    LOG4_DEBUG("Iterative magma_dshposv_gpu_expert returned -31: stop the iterative refinement after the 30th iteration");
+                    break;
+                default:
+                    LOG4_ERROR("Iterative refinement magma_dshposv_gpu_expert has failed, double precision factorization has been performed");
+            }
+        }
+    } else {
+        magma_dgetmatrix(m, b_n, d_x, m, output, m, magma_queue); // copy solution d_x -> output
         return;
     }
-    if ((err = magma_smalloc(&dworkf, ldworkf)) < MAGMA_SUCCESS) { // phy_dev. mem. for ldwork
-        LOG4_ERROR("Failed calling magma_dmalloc dworkf of len " << ldworkf << " with error code " << err);
-        return;
-    }
-    magma_int_t iter;
-*/
-    magma_int_t info;
+
+__solve_dgesv:
     if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info)) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
-/*
-    if (iter < 0)
-        switch (iter) {
-        case -1:
-            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -1 : the routine fell back to full precision for implementation - or machine-specific reasons");
-            break;
-        case -2:
-            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -2 : narrowing the precision induced an overflow, the routine fell back to full precision");
-            break;
-        case -3:
-            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -3 : failure of SPOTRF");
-            break;
-        case -31:
-            LOG4_DEBUG("Call to magma_dshposv_gpu_expert returned -31: stop the iterative refinement after the 30th iteration");
-            break;
-        default:
-            LOG4_ERROR("Call to magma_dshposv_gpu_expert Iterative refinement has failed, double precision factorization has been performed");
-        }
-    magma_dgetmatrix(m, b_n, d_x, m, output, m, magma_queue); // copy solution d_x -> output
-*/
-    magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 
-//    magma_free(d_x); // free device memory
+    magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 }
 
 
-void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue, svr::common::gpu_context *p_ctx,
+void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue,
                      const magmaInt_ptr piv, const magmaDouble_ptr d_a, const magmaDouble_ptr d_b)
 {
     magma_int_t info, err;
@@ -332,7 +326,8 @@ void dyn_magma_solve(const int m, const int b_n, const double *a, const double *
     // with partial pivoting and row interchanges computed by
     // magma_dgetrf_gpu; row i is interchanged with row piv(i);
     // d_a -mxm matrix; d_a is overwritten by the inverse
-    if ((err = magma_dgetrf_gpu(m, m, d_a, m, piv, &info)) < MAGMA_SUCCESS)
+    const magma_int_t nb = magma_get_dgetrf_native_nb(m, b_n);
+    if ((err = magma_dgetrf_gpu_expert(m, m, d_a, m, piv, &info, nb, magma_mode_t::MagmaNative)) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_dgetrf_gpu with error code " << err << ", info " << info);
 
     magma_dsetmatrix(m, b_n, b, m, d_b, m, magma_queue);

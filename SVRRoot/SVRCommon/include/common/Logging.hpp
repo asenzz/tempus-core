@@ -62,7 +62,7 @@ extern int SVR_LOG_LEVEL;
 
 #define PROFILE_EXEC_TIME(X, M_NAME)    \
 {                                       \
-    const bpt::ptime __start_time = bpt::microsec_clock::local_time(); \
-    X; \
+    const bpt::ptime __start_time = bpt::microsec_clock::local_time();  \
+    X;                                                                  \
     LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - __start_time) << " process memory RSS " << svr::common::memory_manager::get_process_resident_set() << " MB"); \
 }

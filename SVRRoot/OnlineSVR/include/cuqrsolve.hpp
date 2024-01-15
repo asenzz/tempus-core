@@ -24,18 +24,21 @@ void dyn_gpu_solve(
 
 
 /* MAGMA */
+std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaFloat_ptr, magmaInt_ptr>
+init_magma_solver(const svr::common::gpu_context &p_ctx, const size_t m, const size_t b_n, const bool psd);
 
-std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaInt_ptr>
-init_magma_solver(const svr::common::gpu_context &p_ctx, const size_t m, const size_t b_n);
+void uninit_magma_solver(
+        svr::common::gpu_context *&p_ctx, const magma_queue_t &magma_queue,
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_wd, const magmaFloat_ptr d_ws, const magmaInt_ptr piv);
 
-void uninit_magma_solver(svr::common::gpu_context *&p_ctx, const magma_queue_t &magma_queue,
-                         const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_w, const magmaInt_ptr piv);
+void dyn_magma_solve(
+        const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr, const magmaInt_ptr piv = nullptr,
+        const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr);
 
-void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr, svr::common::gpu_context *p_ctx = nullptr,
-                     const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr);
-
-void iter_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr, svr::common::gpu_context *p_ctx = nullptr,
-                      const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr);
+void iter_magma_solve(
+        const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr,
+        const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr, const magmaDouble_ptr d_x = nullptr, const magmaDouble_ptr d_wd = nullptr,
+        const magmaFloat_ptr d_ws = nullptr, const bool psd = false);
 
 
 }

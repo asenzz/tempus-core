@@ -27,59 +27,6 @@ template<typename T> constexpr auto pow = [](const T lhs, const long rhs) -> T
 #endif
 
 
-template<typename T> viennacl::matrix<T>
-tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
-{
-    cl_int rc;
-    auto clbuf = (T *)clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
-    //if (rc != CL_SUCCESS) LOG4_THROW("Failed creating OpenCL buffer of size " << in.n_elem * sizeof(T) << " with error " << rc);
-    viennacl::matrix<T, viennacl::row_major, sizeof(double)> r(clbuf, viennacl::OPENCL_MEMORY, in.n_rows, in.n_cols);
-    viennacl::backend::memory_write(r.handle(), 0, in.n_elem * sizeof(T), in.memptr(), false);
-    LOG4_DEBUG("To VCL size " << arma::size(in) << ", result " << r.size1() << "x" << r.size2());
-    return viennacl::trans(r);
-}
-
-
-template<typename T> viennacl::matrix<T>
-tovcl(const arma::Mat<T> &in)
-{
-    cl_int rc;
-    auto clbuf = (T *) malloc(in.n_elem * sizeof(T));
-    //if (rc != CL_SUCCESS) LOG4_THROW("Failed creating OpenCL buffer of size " << in.n_elem * sizeof(T) << " with error " << rc);
-    viennacl::matrix<T, viennacl::row_major, sizeof(double)> r(clbuf, viennacl::MAIN_MEMORY, in.n_rows, in.n_cols);
-    memcpy(r.handle().ram_handle().get(), in.memptr(), in.n_elem * sizeof(T));
-    LOG4_DEBUG("To VCL size " << arma::size(in) << ", result " << r.size1() << "x" << r.size2());
-    return viennacl::trans(r);
-}
-
-
-template<typename T> arma::Mat<T>
-toarma(const viennacl::matrix<T> &in)
-{
-    arma::Mat<T> r(in.internal_size1(), in.internal_size2());
-
-    switch (in.memory_domain()) {
-        case viennacl::OPENCL_MEMORY:
-        case viennacl::CUDA_MEMORY:
-            viennacl::backend::memory_read(in.handle(), 0, in.internal_size() * sizeof(T), r.memptr());
-            break;
-        case viennacl::MAIN_MEMORY:
-            memcpy(r.memptr(), in.handle().ram_handle().get(), in.internal_size() * sizeof(T));
-            break;
-        case viennacl::MEMORY_NOT_INITIALIZED:
-        default:
-            LOG4_THROW("Memory not initialized or unknown memory domain of matrix!");
-    }
-
-    if (in.row_major()) r = r.t();
-    if (in.size1() != in.internal_size1()) r.shed_rows(in.size1(), in.internal_size1() - 1);
-    if (in.size2() != in.internal_size2()) r.shed_cols(in.size2(), in.internal_size2() - 1);
-    LOG4_DEBUG("To arma size " << in.size1() << "x" << in.size2() << ", result " << arma::size(r));
-    return r;
-}
-
-
-
 template<typename T>
 std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
 {
@@ -570,10 +517,6 @@ namespace armd {
     void serialize_mat(const std::string &filename, const arma::mat &input, const std::string mat_name = "");
 
     void serialize_vec(const std::string &filename, const arma::uvec &input, const std::string vec_name = "");
-
-    void copy_from_arma_to_vcl(const arma::mat &input, viennacl::matrix<double> &output);
-
-    void copy_from_vcl_to_arma(const viennacl::matrix<double> &input, arma::mat &output);
 
     arma::uvec set_to_arma_uvec(const std::set<size_t> input);
 

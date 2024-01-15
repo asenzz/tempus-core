@@ -35,7 +35,7 @@ constexpr double SANE_PREDICT = common::C_input_obseg_labels * 1e2;
 // constexpr double MULTIPLE_EPSCO = 2; // TODO Try C_input_obseg * .5, .25  // 2. for price, C_input_obseg for direction, epsilon-cost multiple, above 1, smaller is better and slower
 // const std::deque<double> C_gamma_multis {1., 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7}; // Full gamma multipliers span
 
-#define FINER_GAMMA_TUNE
+// #define FINER_GAMMA_TUNE
 
 // const double TUNE_EPSCOST_MAX = svr::common::C_input_obseg_labels;
 // const double TUNE_EPSCOST_MIN = 1 / svr::common::C_input_obseg_labels; // std::pow<double>(svr::common::C_input_obseg_labels, -1);
@@ -183,10 +183,10 @@ class OnlineMIMOSVR
 
 public:
     // Move to solver module
-    static void solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters);
+    static void solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters, const bool psd);
     static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
-    static void solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters);
-    static arma::mat solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, const size_t iters);
+    static void solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters, const bool psd);
+    static arma::mat solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, const size_t iters, const bool psd);
     static arma::mat direct_solve(const arma::mat &a, const arma::mat &b);
 
     ssize_t get_samples_trained_number() const
@@ -258,7 +258,7 @@ public:
 
     static arma::mat get_reference_distance_matrix(const arma::mat &L);
 
-    static void tune_kernel_params(param_preds_set_t &mingamma, datamodel::SVRParameters_ptr &_p_svr_parameters, const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, size_t chunk_ix = std::numeric_limits<size_t>::max());
+    static void tune_kernel_params(param_preds_set_t &pr, datamodel::SVRParameters_ptr &_p_svr_parameters, const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, size_t chunk_ix = std::numeric_limits<size_t>::max());
 
     static std::tuple<std::vector<arma::mat>, std::vector<double>> get_reference_matrices(const arma::mat &L, const datamodel::SVRParameters &svr_parameters);
 
@@ -375,27 +375,13 @@ public:
             const arma::mat &x_predict,
             const OnlineMIMOSVR_ptr &p_manifold);
 
-    static void init_kernel_matrix(
-            const datamodel::SVRParameters &svr_parameters,
-            const arma::mat &x_train,
-            const arma::mat &y_train,
-            arma::mat &kernel_matrix,
-            const OnlineMIMOSVR_ptr &p_manifold);
-
-    static void
-    prepare_manifold_kernel(
-            const arma::mat &x_train,
-            const arma::mat &y_train,
-            arma::mat &kernel_matrix,
-            const OnlineMIMOSVR_ptr &p_manifold);
+    static void init_kernel_matrix(const datamodel::SVRParameters &params, const arma::mat &x, const arma::mat &y, arma::mat &K);
 
     static std::vector<arma::mat> *prepare_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t);
-    static arma::mat *prepare_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const double meanabs_labels, const size_t train_len, const arma::mat &labels);
     static arma::mat *prepare_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, size_t len = 0);
     static arma::mat *prepare_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
 
     static std::vector<arma::mat> &get_cached_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
-    static arma::mat &get_cached_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, const double meanabs_labels, const size_t train_len);
     static arma::mat &get_cached_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, const size_t short_size_X = 0);
     static arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &pred_time);
 

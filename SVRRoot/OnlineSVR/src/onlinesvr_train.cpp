@@ -14,7 +14,7 @@ size_t OnlineMIMOSVR::learn(const arma::mat &new_x_train, const arma::mat &new_y
     return new_x_train.n_rows;
 #endif
 
-    std::scoped_lock learn_lock(learn_mx);
+    const std::scoped_lock learn_lock(learn_mx);
 
     if (new_x_train.empty() or new_y_train.empty()) {
         LOG4_WARN("Features are empty " << new_x_train.empty() << " or labels are empty " << new_y_train.empty());

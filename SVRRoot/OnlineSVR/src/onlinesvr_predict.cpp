@@ -37,11 +37,13 @@ arma::mat OnlineMIMOSVR::init_predict_kernel_matrix(
         }
 
         case datamodel::kernel_type_e::PATH: {
-            // predict_kernel_matrix.set_size(arma::size(Zy));
-            // solvers::kernel_from_distances(predict_kernel_matrix.memptr(), Zy.memptr(), Zy.n_rows, svr_parameters.get_svr_kernel_param());
             arma::mat *p_Zy;
-            PROFILE_EXEC_TIME(p_Zy = prepare_Zy(svr_parameters, x_train.t(), x_predict.t(), predicted_time), "Prepare Zy, params " << svr_parameters.to_string() << ", trained features " << arma::size(x_train) << ", predict features " << arma::size(x_predict));
-            predict_kernel_matrix = 1. - *p_Zy / (2. * std::pow<double>(svr_parameters.get_svr_kernel_param(), 2));
+            PROFILE_EXEC_TIME(
+                    p_Zy = prepare_Zy(svr_parameters, x_train.t(), x_predict.t(), predicted_time),
+                    "Prepare Zy, params " << svr_parameters.to_string() << ", trained features " << arma::size(x_train) << ", predict features " << arma::size(x_predict));
+            predict_kernel_matrix.set_size(arma::size(*p_Zy));
+            solvers::kernel_from_distances(predict_kernel_matrix.memptr(), p_Zy->mem, p_Zy->n_rows, svr_parameters.get_svr_kernel_param());
+            // predict_kernel_matrix = 1. - *p_Zy / (2. * std::pow<double>(svr_parameters.get_svr_kernel_param(), 2));
             delete p_Zy;
             break;
         }

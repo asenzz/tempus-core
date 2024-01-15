@@ -90,27 +90,23 @@ arma::mat OnlineMIMOSVR::get_weights(uint8_t type) const
 
 
 void
-OnlineMIMOSVR::init_kernel_matrix(
-        const SVRParameters &svr_parameters,
-        const arma::mat &x_train,
-        const arma::mat &y_train,
-        arma::mat &kernel_matrix,
-        const OnlineMIMOSVR_ptr &p_manifold)
+OnlineMIMOSVR::init_kernel_matrix(const SVRParameters &params, const arma::mat &x, const arma::mat &y, arma::mat &K)
 {
-    switch (svr_parameters.get_kernel_type()) {
+    switch (params.get_kernel_type()) {
         case kernel_type_e::DEEP_PATH2:
-        case kernel_type_e::DEEP_PATH: {
-            prepare_manifold_kernel(x_train, y_train, kernel_matrix, p_manifold);
-            return;
+        case kernel_type_e::DEEP_PATH:
+            K = get_reference_distance_matrix(y);
+            break;
+
+        case kernel_type_e::PATH: {
+            const arma::mat &Z = get_cached_Z(params, x.t(), y, x.n_rows) / (2. * std::pow(params.get_svr_kernel_param(), 2.));
+            if (arma::size(K) != arma::size(Z)) K.set_size(arma::size(Z));
+            solvers::kernel_from_distances(K.memptr(), Z.mem, Z.n_rows, params.get_svr_kernel_param());
+            break;
         }
 
-        default: {
-            // TODO Not working correctly test first!
-            //const arma::mat &Z = get_cached_Z(svr_parameters, x_train.t(), x_train.n_rows);
-            //kernel_matrix.set_size(arma::size(Z));
-            //solvers::kernel_from_distances(kernel_matrix.memptr(), Z.memptr(), Z.n_rows, svr_parameters.get_svr_kernel_param());
-            kernel_matrix = 1. - get_cached_Z(svr_parameters, x_train.t(), y_train, x_train.n_rows) / (2. * std::pow(svr_parameters.get_svr_kernel_param(), 2.));
-        }
+        default:
+            LOG4_THROW("Unhandled kernel.");
     }
 }
 
@@ -186,18 +182,18 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, cons
 }
 
 #ifndef NEW_SOLVER
-// Best
-void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters)
+
+void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters, const bool psd)
 {
     if (K.n_rows != rhs.n_rows) LOG4_THROW("Illegal size K " << arma::size(K) << ", rhs " << arma::size(rhs));
 
 #ifdef USE_MAGMA
     auto p_ctx = new svr::common::gpu_context();
-    auto [magma_queue, d_K, d_rhs, d_tmp, piv] = solvers::init_magma_solver(*p_ctx, K.n_rows, rhs.n_cols);
+    auto [magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, piv] = solvers::init_magma_solver(*p_ctx, K.n_rows, rhs.n_cols, psd);
 #else
     svr::common::gpu_context gtx;
     const size_t gpu_phy_id = gtx.phy_id();
-    auto [cusolverH, d_K, d_rhs, d_tmp, d_piv, d_devinfo] = solvers::init_cusolver(gpu_phy_id, K.n_rows, rhs.n_cols);
+    auto [cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo] = solvers::init_cusolver(gpu_phy_id, K.n_rows, rhs.n_cols);
 #endif
 
     auto best_sae = std::numeric_limits<double>::max();
@@ -205,10 +201,10 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
         if (solved.n_rows != K.n_rows || solved.n_cols != rhs.n_cols) solved.set_size(K.n_rows, rhs.n_cols);
         const arma::mat left = K + epsilon_eye_K;
 #ifdef USE_MAGMA
-//        svr::solvers::dyn_magma_solve(left.n_rows, rhs.n_cols, left.memptr(), rhs.memptr(), solved.memptr(), magma_queue, p_ctx, d_K, d_rhs, d_tmp, piv);
-        svr::solvers::iter_magma_solve(left.n_rows, rhs.n_cols, left.memptr(), rhs.memptr(), solved.memptr(), magma_queue, p_ctx, d_K, d_rhs);
+//        svr::solvers::dyn_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, piv, d_K, d_rhs);
+        svr::solvers::iter_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd);
 #else
-        svr::solvers::dyn_gpu_solve(left.n_rows, rhs.n_cols, left.memptr(), rhs.memptr(), solved.memptr(), cusolverH, d_K, d_rhs, d_tmp, d_piv, d_devinfo);
+        svr::solvers::dyn_gpu_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
         best_sae = common::sum<double>(arma::abs(K * solved - rhs));
     }
@@ -228,17 +224,17 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
         const arma::mat left = (arma::mean(mult, 1) * arma::ones(1, K.n_cols)) % K + epsilon_eye_K;
         const arma::mat right = rhs % mult;
 #ifdef USE_MAGMA
-//       svr::solvers::dyn_magma_solve(left.n_rows, right.n_cols, left.memptr(), right.memptr(), solved.memptr(), magma_queue, p_ctx, d_K, d_rhs, d_tmp, piv);
-         svr::solvers::iter_magma_solve(left.n_rows, right.n_cols, left.memptr(), right.memptr(), solved.memptr(), magma_queue, p_ctx, d_K, d_rhs);
+//       svr::solvers::dyn_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, piv, d_K, d_rhs);
+       svr::solvers::iter_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd);
 #else
-        svr::solvers::dyn_gpu_solve(left.n_rows, right.n_cols, left.memptr(), right.memptr(), solved.memptr(), cusolverH, d_K, d_rhs, d_tmp, d_piv, d_devinfo);
+        svr::solvers::dyn_gpu_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
     }
 
 #ifdef USE_MAGMA
-    solvers::uninit_magma_solver(p_ctx, magma_queue, d_K, d_rhs, d_tmp, piv);
+    solvers::uninit_magma_solver(p_ctx, magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, piv);
 #else
-    solvers::uninit_cusolver(cusolverH, d_K, d_rhs, d_tmp, d_piv, d_devinfo);
+    solvers::uninit_cusolver(cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
 
     LOG4_DEBUG("IRWLS best SAE " << best_sae << ", kernel dimensions " << arma::size(K) << ", delta " << common::C_singlesolve_delta);
@@ -247,7 +243,6 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
 }
 
 #else
-// Best
 void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters)
 {
 #if defined(SINGLE_SOLVE)
@@ -318,7 +313,7 @@ arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
 #if 0
     if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
     arma::mat solved = arma::zeros(arma::size(b));
-    PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.memptr(), b.memptr(), solved.memptr()), "qrsolve");
+    PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve");
     return solved;
 #endif
     LOG4_THROW("Deprecated");
@@ -327,23 +322,23 @@ arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
 
 
 void
-OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters)
+OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters, const bool psd)
 {
     if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
 
-    PROFILE_EXEC_TIME(solve_irwls(epsilon_eye_K, a, b, solved, iters), "IRWLS solver " << arma::size(a) << ", " << arma::size(b)); // Emo's dynamic (slowest) IRWLS solver
+    PROFILE_EXEC_TIME(solve_irwls(epsilon_eye_K, a, b, solved, iters, psd), "IRWLS solver " << arma::size(a) << ", " << arma::size(b)); // Emo's dynamic (slowest) IRWLS solver
     // PROFILE_EXEC_TIME(call_gpu_oversolve(a, b, solved), "call_gpu_oversolve " << arma::size(a) << ", " << arma::size(b)); // Emo's solver, best
     // PROFILE_EXEC_TIME(call_gpu_dynsolve(a, b, solved), "call_gpu_oversolve " << arma::size(a) << ", " << arma::size(b)); // call_gpu_dynsolve
-    // PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.memptr(), b.memptr(), solved.memptr()), "qrsolve"); // direct CUDA solver, fastest, least precise
+    // PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve"); // direct CUDA solver, fastest, least precise
     // PROFILE_EXEC_TIME(do_mkl_solve(a, b, solved), "lock1 without wait");
 }
 
 
 arma::mat
-OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, const size_t iters)
+OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, const size_t iters, const bool psd)
 {
     arma::mat r;
-    solve_dispatch(epsilon_eye_K, a, b, r, iters);
+    solve_dispatch(epsilon_eye_K, a, b, r, iters, psd);
     return r;
 }
 
@@ -411,7 +406,7 @@ void OnlineMIMOSVR::do_over_train_zero_epsilon(const arma::mat &xx_train, const 
     const arma::mat x_train = xx_train.rows(ixs[chunk_idx]);
     const arma::mat y_train = yy_train.rows(ixs[chunk_idx]);
     if (p_kernel_matrices->at(chunk_idx).empty()) {
-        PROFILE_EXEC_TIME(init_kernel_matrix(*p_svr_parameters, x_train, y_train, p_kernel_matrices->at(chunk_idx), p_manifold), "Init kernel matrix");
+        PROFILE_EXEC_TIME(init_kernel_matrix(*p_svr_parameters, x_train, y_train, p_kernel_matrices->at(chunk_idx)), "Init kernel matrix");
     } else
         LOG4_DEBUG("Using pre-calculated kernel matrix for " << chunk_idx);
 
@@ -450,7 +445,7 @@ void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const mat &y_train, cons
     const arma::mat u_a = u;
 #endif
     //arma::cube eye_K_epscost(p_kernel_matrices->at(chunk_ix).n_rows, p_kernel_matrices->at(chunk_ix).n_cols, 1);
-    solve_dispatch(eye(size(p_kernel_matrices->at(chunk_ix))) * 1. / (2. * C), p_kernel_matrices->at(chunk_ix), y_train, component.chunk_weights[chunk_ix], iters);
+    solve_dispatch(eye(size(p_kernel_matrices->at(chunk_ix))) * 1. / (2. * C), p_kernel_matrices->at(chunk_ix), y_train, component.chunk_weights[chunk_ix], iters, p_kernel_matrices->at(chunk_ix).is_symmetric() && p_kernel_matrices->at(chunk_ix).min() >= 0);
 #pragma omp parallel for schedule(static, 1) num_threads(y_train.n_cols)
     for (size_t col_ix = 0; col_ix < y_train.n_cols; ++col_ix)
         E.col(col_ix) = y_train.col(col_ix) + component.epsilon - p_kernel_matrices->at(chunk_ix) * component.chunk_weights[chunk_ix].col(col_ix);
@@ -514,7 +509,7 @@ OnlineMIMOSVR::produce_kernel_matrices(
     auto p_res_kernel_matrices = std::make_shared<std::vector<arma::mat>>(indexes.size());
     __tbb_pfor_i (
         0, indexes.size(),
-        PROFILE_EXEC_TIME(init_kernel_matrix(svr_parameters, x_train.rows(indexes[i]), y_train.rows(indexes[i]), p_res_kernel_matrices->at(i), p_manifold),
+        PROFILE_EXEC_TIME(init_kernel_matrix(svr_parameters, x_train.rows(indexes[i]), y_train.rows(indexes[i]), p_res_kernel_matrices->at(i)),
         "Init kernel matrix");
     )
     return p_res_kernel_matrices;
@@ -541,7 +536,7 @@ OnlineMIMOSVR::batch_train(
     LOG4_DEBUG(
             "Training on X " << common::present(*p_xtrain) << ", Y " << common::present(*p_ytrain) << ", update R matrix " << update_r_matrix << ", pre-calculated kernel matrices " << (kernel_matrices ? kernel_matrices->size() : 0) <<
                              ", pseudo online " << pseudo_online << ", parameters " << p_svr_parameters->to_string());
-    const std::scoped_lock learn_lock(learn_mx);
+    const std::scoped_lock lk(learn_mx);
 
 #ifdef MANIFOLD_TEST_DEBUG
     if (!p_svr_parameters->get_decon_level() || p_svr_parameters->get_decon_level() == 28 || p_svr_parameters->get_decon_level() == 2) {
@@ -602,8 +597,6 @@ OnlineMIMOSVR::batch_train(
 
     for (auto &kv : main_components) {
         auto &component = kv.second;
-        // the regression parameters
-        //component.total_weights = arma::zeros(n_m, n_k);
         if (component.chunk_weights.size() != ixs.size()) component.chunk_weights.resize(ixs.size());
         if (component.mae_chunk_values.size() != ixs.size()) component.mae_chunk_values.resize(ixs.size(), 0.);
     }
@@ -668,9 +661,9 @@ void mkl_dgesv(const arma::mat &a, const arma::mat &b, arma::mat &solved)
     MKL_INT ldb = n;
     solved = b;
     std::vector<double> a_(a.n_elem);
-    std::memcpy(a_.data(), a.memptr(), sizeof(double) * a.n_elem);
+    std::memcpy(a_.data(), a.mem, sizeof(double) * a.n_elem);
     std::vector<MKL_INT> ipiv(a.n_rows);
-    MKL_INT info = LAPACKE_dgesv(LAPACK_COL_MAJOR, n, nrhs, a_.data(), lda, ipiv.data(), const_cast<double *>(solved.memptr()), ldb);
+    MKL_INT info = LAPACKE_dgesv(LAPACK_COL_MAJOR, n, nrhs, a_.data(), lda, ipiv.data(), solved.memptr(), ldb);
     if (info > 0) LOG4_THROW("Something is wrong in solving LAPACKE_dgesv, error is  " << info << ". The solution could not be computed.");
 }
 
@@ -686,7 +679,7 @@ void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved)
 //    std::scoped_lock lock(solve_mtx);
 //    mkl_set_num_threads_local(40);
     MKL_INT info = LAPACKE_dposv(
-            LAPACK_COL_MAJOR, 'U', n, nrhs, const_cast<double *>(a.memptr()), lda, solved.memptr(), ldb);
+            LAPACK_COL_MAJOR, 'U', n, nrhs, const_cast<double *>(a.mem), lda, solved.memptr(), ldb);
     //if (info != 0) LOG4_THROW("DPOSV failed, the leading minor of order " << info << " is not positive definite.");
     if (info == 0) return;
     LOG4_WARN("DPOSV failed, the leading minor of order " << info << " is not positive definite, trying DGESV . . .");
@@ -705,8 +698,8 @@ void do_mkl_over_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved
     MKL_INT ldb = m;
     std::vector<double> a_(a.n_elem);
     std::vector<double> b_(b.n_elem);
-    std::memcpy(a_.data(), a.memptr(), sizeof(double) * a.n_elem);
-    std::memcpy(b_.data(), b.memptr(), sizeof(double) * b.n_elem);
+    std::memcpy(a_.data(), a.mem, sizeof(double) * a.n_elem);
+    std::memcpy(b_.data(), b.mem, sizeof(double) * b.n_elem);
     solved = zeros(n, nrhs);
 //extern lapack_int LAPACKE_dgels(int matrix_layout, char trans, lapack_int m, lapack_int n, lapack_int nrhs, double* a, lapack_int lda, double* b, lapack_int ldb);
 
@@ -723,7 +716,7 @@ void OnlineMIMOSVR::init_r_matrix()
     r_matrix.resize(p_kernel_matrices->size());
     //const auto cost_factor = 1. / (2. * p_svr_parameters->get_svr_C());
     __omp_pfor_i(0, p_kernel_matrices->size(),
-                 const arma::mat singular = arma::eye(p_kernel_matrices->at(i).n_rows, p_kernel_matrices->at(i).n_cols);
+                 const arma::mat singular = arma::eye(arma::size(p_kernel_matrices->at(i)));
         //solve_dispatch(cost_factor, p_kernel_matrices->at(i) + cost_factor * singular, singular, r_matrix[i]);
     )
 }

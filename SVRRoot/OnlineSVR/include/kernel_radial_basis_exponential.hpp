@@ -3,6 +3,7 @@
 
 #include "kernel_base.hpp"
 #include "util/math_utils.hpp"
+#include "common/compatibility.hpp"
 
 namespace svr
 {
@@ -71,8 +72,8 @@ public:
     {
         const svr::common::gpu_context c;
         viennacl::matrix<scalar_type> d_kernel_matrix(kernel_matrix.n_rows, kernel_matrix.n_cols, c.ctx());
-        operator()(tovcl(features, c.ctx()), d_kernel_matrix);
-        kernel_matrix = toarma(d_kernel_matrix);
+        operator()(common::tovcl(features, c.ctx()), d_kernel_matrix);
+        kernel_matrix = common::toarma(d_kernel_matrix);
 #if 0
         kernel_matrix = features * features.t();
         arma::vec diagonal = diagvec(kernel_matrix);
@@ -85,22 +86,10 @@ public:
 #endif
     }
 
-#if 0 // TODO Port to Armadillo
-    void operator()(const arma::mat &features,  const arma::rowvec &learning, vektor<double> & kernel_values){
-        for(size_t i = 0; i < features.n_rows; ++i){
-                kernel_values[i] = (*this)(features.row(i), learning);
-        }
-    }
-#endif
 
     void operator()(const arma::mat &x_train, const arma::mat &x_test, arma::mat &kernel_matrix)
     {
         kernel_matrix.resize(x_train.n_rows, x_test.n_rows);
-
-        svr::common::armd::print_arma_sizes(x_train, "x_train");
-        svr::common::armd::print_arma_sizes(x_test, "x_test");
-        svr::common::armd::print_arma_sizes(kernel_matrix, "kernel_matrix");
-
 #pragma omp parallel for collapse(2)
         for (size_t i = 0; i < x_train.n_rows; ++i)
             for (size_t j = 0; j < x_test.n_rows; ++j)
@@ -121,16 +110,9 @@ public:
     }
 #endif
 
-    virtual double operator()(const arma::rowvec &a,  const arma::rowvec &b)
+    virtual double operator()(const arma::rowvec &a, const arma::rowvec &b)
     {
-        arma::rowvec V = a - b;
-        double K = norm(V, 2);
-        //double K = arma_distance(a, b);
-        if (this->parameters.get_svr_kernel_param() != 0.)
-            K /= -(2. * std::pow(this->parameters.get_svr_kernel_param(), 2.));
-        else
-            K /= -2.;
-        return std::exp(K);
+        return std::exp(arma::norm(a - b, 2) / (this->parameters.get_svr_kernel_param() ? -(2. * std::pow(this->parameters.get_svr_kernel_param(), 2.)) : -2.));
     }
 
 

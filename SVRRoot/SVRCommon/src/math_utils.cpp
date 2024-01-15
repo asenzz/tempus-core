@@ -19,9 +19,7 @@ std::vector<double> levy(const size_t d) // Return colvec of columns d
     u = u * sigma;
     arma::mat v(1, d, arma::fill::randn);
     arma::mat step = u / arma::pow(arma::abs(v), 1. / beta);
-    std::vector<double> res;
-    common::arma_to_vector(step, res);
-    return res;
+    return common::tovec(step);
 }
 
 double randouble()

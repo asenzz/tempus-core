@@ -34,46 +34,12 @@ namespace std {
 namespace svr {
 namespace common {
 
-// Armadillo's * operator for vector and matrix seems to be broken in a multi-threaded environment
-arma::mat mul_mat_vec(const arma::mat &m, const arma::mat &v)
+
+viennacl::vector<double> tovcl(const arma::colvec &in)
 {
-    arma::mat mul_t(m.n_rows, v.n_cols);
-    //LOG4_DEBUG("size p_kernel_matrices->at(chunk_idx), size component.chunk_weights[chunk_idx] " << arma::size(p_kernel_matrices->at(chunk_idx)) << " " << arma::size(component.chunk_weights[chunk_idx]));
-    __omp_pfor_i(0, mul_t.n_rows, mul_t(i, 0) = arma::sum(m.row(i) * v) )
-    return mul_t;
-}
-
-
-void test_mat_vec_mul()
-{
-    arma::mat m(5, 5);
-    arma::mat v(5, 1);
-    for (size_t i = 0; i < m.n_rows; ++i) {
-        m.row(i).fill(i);
-        v.row(i).fill(i);
-    }
-    arma::mat mul1 = m * v;
-    arma::mat mul2 = mul_mat_vec(m, v);
-    std::cout << "m * v = " << mul1;
-    std::cout << "m mult v = " << mul2;
-    std::cout << "testis " << (mul1 == mul2);
-}
-
-
-viennacl::vector<double> arma_to_vcl(const arma::colvec &input)
-{
-    viennacl::vector<double> res(input.size());
-    viennacl::fast_copy(input.memptr(), input.memptr() + input.n_elem, res.begin());
+    viennacl::vector<double> res(in.size());
+    viennacl::fast_copy(in.mem, in.mem + in.n_elem, res.begin());
     return res;
-}
-
-
-void vcl_to_arma(const viennacl::matrix<double> &input, arma::mat &output)
-{
-    output.set_size(input.internal_size2(), input.internal_size1());
-    viennacl::fast_copy(input, output.memptr());
-    output.resize(input.size2(), input.size1());
-    output = output.t();
 }
 
 

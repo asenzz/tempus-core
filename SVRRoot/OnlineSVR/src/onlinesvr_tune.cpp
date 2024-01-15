@@ -41,7 +41,7 @@
 #include "util/math_utils.hpp"
 #include "util/string_utils.hpp"
 
-#define TUNE_HYBRID_MAIN_THREADS 1 // Increase when code properly parallelized
+#define TUNE_HYBRID_MAIN_THREADS 4 // Increase when code properly parallelized
 
 namespace svr {
 
@@ -117,7 +117,7 @@ OnlineMIMOSVR::future_validate(
     const double alpha_pct = 100. * (lin_mape / mape - 1.);
     LOG4_DEBUG(
             "Future predict from row " << start_ix << " until " << fini_ix << ", MAE " << mae << ", MAPE " << mape << ", Lin MAE " << mae_lk << ", Lin MAPE " << lin_mape
-            << ", alpha " << alpha_pct << " pct., parameters " << online_svr.get_svr_parameters().to_string());
+            << ", alpha " << alpha_pct << " pct., parameters " << online_svr.get_svr_parameters());
 #if 0
     LOG4_DEBUG("Actual values " << common::deep_to_string(actual_values) << ", level " << online_svr.get_svr_parameters().get_decon_level());
     LOG4_DEBUG("Predicted values " << common::deep_to_string(ret_predicted_values) << ", level " << online_svr.get_svr_parameters().get_decon_level());
@@ -138,7 +138,7 @@ std::vector<arma::mat> *OnlineMIMOSVR::prepare_cumulatives(const SVRParameters &
 {
     const auto lag = params.get_lag_count();
     const auto levels = features_t.n_rows / lag;
-    LOG4_TRACE("Preparing " << levels << " cumulatives with " << lag << " lag, parameters " << params.to_string() << ", from features_t " << arma::size(features_t));
+    LOG4_TRACE("Preparing " << levels << " cumulatives with " << lag << " lag, parameters " << params << ", from features_t " << arma::size(features_t));
     const auto p_cums_X = new std::vector<arma::mat>(levels);
 #pragma omp parallel for num_threads(levels)
     for (size_t i = 0; i < levels; ++i)
@@ -188,8 +188,8 @@ LOG4_DEBUG(
  * arma::mat this_first_Z = arma::zeros(short_size_X, short_size_X);
 PROFILE_EXEC_TIME(
         double *d_Z; common::gpu_context ctx;
-        cu_distances_xx(ctx.id(), features_len, levels, short_size_X, 0, 0, short_size_X, short_size_X, cum_XX.memptr(), params.get_svr_kernel_param2(), DEFAULT_TAU_TUNE, w_sum_sym,
-                       this_first_Z.memptr(), d_Z), "CUDA kernel XX " << params.to_string());
+        cu_distances_xx(ctx.id(), features_len, levels, short_size_X, 0, 0, short_size_X, short_size_X, cum_XX.mem, params.get_svr_kernel_param2(), DEFAULT_TAU_TUNE, w_sum_sym,
+                       this_first_Z.memptr(), d_Z), "CUDA kernel XX " << params);
 */
 
 double calc_gamma(const arma::mat &Z, const double train_len, const double mean_L)
@@ -228,7 +228,7 @@ double get_cached_gamma(const SVRParameters &params, const arma::mat &Z, const s
         PROFILE_EXEC_TIME(ins_res = gamma_cache.emplace(params_key, calc_gamma(Z, train_len, meanabs_labels)), "Calc gamma min");
         if (ins_res.second) {
             it_gamma = ins_res.first;
-            LOG4_DEBUG("Returning min gamma " << ins_res.first->second << " for " << params.to_string());
+            LOG4_DEBUG("Returning min gamma " << ins_res.first->second << " for " << params);
         } else
             LOG4_THROW("Error inserting gamma min in cache");
     }
@@ -236,53 +236,10 @@ double get_cached_gamma(const SVRParameters &params, const arma::mat &Z, const s
 }
 
 
-arma::mat *OnlineMIMOSVR::prepare_K(const SVRParameters &params, const arma::mat &features_t, const double meanabs_labels, const size_t train_len, const arma::mat &labels)
-{
-    if (train_len > features_t.n_cols) LOG4_THROW("Invalid train len " << train_len << " for features of size " << arma::size(features_t));
-    const arma::mat *p_Z = prepare_Z(params, features_t, labels);
-    const double opt_gamma = calc_gamma(*p_Z, train_len, meanabs_labels);
-    LOG4_DEBUG("Optimal gamma for lambda " << params.get_svr_kernel_param2() << " is " << opt_gamma << ", level " << params.get_decon_level());
-
-    arma::mat *p_K = new arma::mat(features_t.n_cols, features_t.n_cols, arma::fill::zeros);
-    *p_K = 1. - *p_Z / (2. * opt_gamma * opt_gamma);
-    delete p_Z;
-    LOG4_DEBUG("Returning K of size " << arma::size(*p_K));
-    return p_K;
-}
-
-arma::mat &OnlineMIMOSVR::get_cached_K(const SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, const double meanabs_labels, const size_t train_len)
-{
-    typedef std::tuple<size_t /* dataset id */, std::string /* queue name */, std::string /* column */, size_t /* lambda */, size_t /* lag */, size_t /* decrement */, size_t /* n samples */, size_t /* level */> K_cache_key_t;
-    typedef std::map<K_cache_key_t, arma::mat *> K_cache_t;
-    static K_cache_t K_cache;
-    static std::mutex K_mx;
-
-    const K_cache_key_t params_key {
-            params.get_dataset_id(),
-            params.get_input_queue_table_name(),
-            params.get_input_queue_column_name(),
-            std::round(1e5 * params.get_svr_kernel_param2()),
-            params.get_lag_count(),
-            params.get_svr_decremental_distance(),
-            features_t.n_cols,
-            params.get_decon_level()};
-
-    const std::scoped_lock sl(K_mx);
-    auto it_K = K_cache.find(params_key);
-    if (it_K == K_cache.end()) {
-        std::pair<K_cache_t::iterator, bool> ins_res;
-        PROFILE_EXEC_TIME(ins_res = K_cache.emplace(params_key, prepare_K(params, features_t, meanabs_labels, train_len, labels)), "Prepare K matrix");
-        if (ins_res.second) it_K = ins_res.first;
-        else
-            LOG4_THROW("Error inserting K matrix in cache");
-    }
-    return *it_K->second;
-}
-
 arma::mat *OnlineMIMOSVR::prepare_Z(const SVRParameters &params, const arma::mat &features_t, const arma::mat &labels, size_t len)
 {
     if (!len) len = features_t.n_cols;
-    arma::mat *p_Z = nullptr;
+    arma::mat *p_Z;
     switch (params.get_kernel_type()) {
         case kernel_type_e::PATH: {
             const auto cums_X = get_cached_cumulatives(params, features_t);
@@ -291,17 +248,18 @@ arma::mat *OnlineMIMOSVR::prepare_Z(const SVRParameters &params, const arma::mat
 #pragma omp parallel for num_threads(cums_X.size())
             for (const auto &c_X: cums_X) {
                 arma::mat z = arma::mat(arma::size(*p_Z));
-                kernel::path::cu_distances_xx(c_X.n_rows, 1, len, 0, 0, len, len, c_X.memptr(), params.get_svr_kernel_param2(), DEFAULT_TAU_TUNE, 1, z.memptr());
+                kernel::path::cu_distances_xx(c_X.n_rows, 1, len, 0, 0, len, len, c_X.mem, params.get_svr_kernel_param2(), DEFAULT_TAU_TUNE, 1, z.memptr());
 #pragma omp critical(__prepare_Z)
-                *p_Z += z.t();
+                *p_Z += z;
             }
-            LOG4_DEBUG("Returning path Z " << arma::size(*p_Z) << " for " << params.to_string() << ", cumulative matrices " << cums_X.size() << ", of dimensions " << arma::size(cums_X.front()) << ", features " << arma::size(features_t));
+            *p_Z = p_Z->t();
+            LOG4_DEBUG("Returning path Z " << arma::size(*p_Z) << " for " << params << ", cumulative matrices " << cums_X.size() << ", of dimensions " << arma::size(cums_X.front()) << ", features " << arma::size(features_t));
             break;
         }
         case kernel_type_e::DEEP_PATH:
         case kernel_type_e::DEEP_PATH2:
             p_Z = new arma::mat(get_reference_distance_matrix(labels));
-            LOG4_DEBUG("Returning Z " << arma::size(*p_Z) << " for " << params.to_string() <<  ", labels " << arma::size(labels) << ", features " << arma::size(features_t));
+            LOG4_DEBUG("Returning Z " << arma::size(*p_Z) << " for " << params <<  ", labels " << arma::size(labels) << ", features " << arma::size(features_t));
             break;
         default:
             const auto kf = IKernel<double>::get(params);
@@ -309,11 +267,6 @@ arma::mat *OnlineMIMOSVR::prepare_Z(const SVRParameters &params, const arma::mat
             kf->operator()(features_t.t(), *p_Z);
             break;
     }
-    double meanl, meanu, minz;
-    if ((meanl = arma::mean(arma::vectorise(arma::trimatl(*p_Z)))) != (meanu = arma::mean(arma::vectorise(arma::trimatu(*p_Z)))))
-        LOG4_ERROR("Distance matrix is not symmetric! Parameters " << params.to_string() << ", features_t " << common::present(features_t) << ", labels " << common::present(labels) << ", train len " << len << ", lower mean " << meanl << ", upper mean " << meanu);
-    if (meanl < 0 || meanu < 0 || (minz = p_Z->min()) < 0)
-        LOG4_ERROR("Distance matrix is not positive! Parameters " << params.to_string() << ", features_t " << common::present(features_t) << ", labels " << common::present(labels) << ", train len " << len << ", lower mean " << meanl << ", upper mean " << meanu << ", min " << minz);
     return p_Z;
 }
 
@@ -365,12 +318,13 @@ arma::mat *OnlineMIMOSVR::prepare_Zy(const SVRParameters &params, const arma::ma
                 arma::mat z = arma::mat(arma::size(*p_Zy));
                 kernel::path::cu_distances_xy(
                         cums_X[i].n_rows, 1, cums_X[i].n_cols, p_cums_Y->at(i).n_cols, 0, 0, features_t.n_cols, predict_features_t.n_cols,
-                        cums_X[i].memptr(), p_cums_Y->at(i).memptr(), params.get_svr_kernel_param2(), DEFAULT_TAU_TUNE, 1, z.memptr());
+                        cums_X[i].mem, p_cums_Y->at(i).mem, params.get_svr_kernel_param2(), DEFAULT_TAU_TUNE, 1, z.memptr());
                 p_cums_Y->at(i).clear();
 #pragma omp critical(__omp_prepare_Zy)
                 *p_Zy += z;
             }
-            LOG4_DEBUG("Returning Zy " << arma::size(*p_Zy) << " for " << params.to_string() << ", cumulative matrices " << cums_X.size() << ", of dimensions "
+            *p_Zy = p_Zy->t();
+            LOG4_DEBUG("Returning Zy " << arma::size(*p_Zy) << " for " << params << ", cumulative matrices " << cums_X.size() << ", of dimensions "
                                        << arma::size(cums_X.front()) << " and " << arma::size(p_cums_Y->front()));
             delete p_cums_Y;
         }
@@ -378,7 +332,7 @@ arma::mat *OnlineMIMOSVR::prepare_Zy(const SVRParameters &params, const arma::ma
         case kernel_type_e::DEEP_PATH2:
 #if 0
             p_Zy = new arma::mat(get_reference_distance_matrix(labels));
-            LOG4_DEBUG("Returning Z " << arma::size(*p_Zy) << " for " << params.to_string() <<  ", labels " << arma::size(labels) << ", features " << arma::size(features_t));
+            LOG4_DEBUG("Returning Z " << arma::size(*p_Zy) << " for " << params <<  ", labels " << arma::size(labels) << ", features " << arma::size(features_t));
 #endif
             LOG4_THROW("Manifold not handled!");
             break;
@@ -449,7 +403,7 @@ OnlineMIMOSVR::produce_kernel_inverse_order(
             for (std::size_t i = r.begin(); i < r.end(); ++i) {
                 arma::mat res_kernel_matrix;
                 PROFILE_EXEC_TIME(
-                        init_kernel_matrix(svr_parameters, x_train.rows(indexes[i]), y_train.rows(indexes[i]), res_kernel_matrix, p_manifold),
+                        init_kernel_matrix(svr_parameters, x_train.rows(indexes[i]), y_train.rows(indexes[i]), res_kernel_matrix),
                         "Init kernel matrix " << arma::size(res_kernel_matrix));
                 double cur_err = 0;
                 PROFILE_EXEC_TIME(
@@ -509,7 +463,7 @@ opt_loss_quantiles_lambda(
 #ifdef TUNE_HYBRID
 
 static std::tuple<std::vector<arma::mat> */* p_predictions */, std::vector<arma::mat> */* labels */, std::vector<arma::mat> */* lastknowns */, double>
-calc_direction(const arma::mat &K, const double epsco, const arma::mat &labels, const arma::mat &last_knowns, const size_t train_len, const double meanabs_labels)
+calc_direction(const arma::mat &K, const double epsco, const arma::mat &labels, const arma::mat &last_knowns, const size_t train_len, const double meanabs_labels, const bool is_psd)
 {
     const off_t start_point_K = K.n_rows - EMO_TUNE_TEST_SIZE - train_len;
     const off_t start_point_labels = labels.n_rows - EMO_TUNE_TEST_SIZE - train_len;
@@ -519,7 +473,7 @@ calc_direction(const arma::mat &K, const double epsco, const arma::mat &labels, 
     auto p_out_labels = new std::vector<arma::mat>(EMO_MAX_J);
     auto p_out_last_knowns = new std::vector<arma::mat>(EMO_MAX_J);
     double score = 0;
-#pragma omp parallel for reduction(+:score) num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number() / CTX_PER_GPU)
+#pragma omp parallel for reduction(+:score) num_threads(TUNE_HYBRID_MAIN_THREADS /* common::gpu_handler::get_instance().get_max_running_gpu_threads_number() / CTX_PER_GPU */)
     for (size_t j = 0; j < EMO_MAX_J; ++j) {
         const size_t x_train_start = j * EMO_SLIDE_SKIP;
         const size_t x_train_final = x_train_start + train_len - 1;
@@ -545,7 +499,8 @@ calc_direction(const arma::mat &K, const double epsco, const arma::mat &labels, 
                     arma::eye(x_test_len, x_test_len) * epsco,
                     K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final),
                     labels.rows(start_point_labels + x_train_start, start_point_labels + x_train_final),
-                    IRWLS_ITER_TUNE);
+                    IRWLS_ITER_TUNE,
+                    is_psd);
             const arma::mat K_submat_1 = K.submat(start_point_K + x_test_start, start_point_K + x_train_start, start_point_K + x_test_final, start_point_K + x_train_final);
             //__tbb_pfor_i(0, labels.n_cols, p_out_preds->at(j).col(i) = K_submat_1 * weights.col(i))
             p_out_preds->at(j) = K_submat_1 * weights;
@@ -583,7 +538,7 @@ OnlineMIMOSVR::tune_kernel_params(
         LOG4_DEBUG("Skipping tuning of manifold kernel!");
         return;
     }
-    // TODO Fix tuning for multiple chunks, indexes are not properly validated in loss function
+    // TODO Fix tuning for multiple chunks, indexes_tune are not properly validated in loss function
     LOG4_DEBUG("Tuning parameters " << *p_model_parameters << ", labels " << common::present(labels) << ", features " << common::present(features) << ", last-knowns " << common::present(last_knowns) << ", chunk index " << chunk_ix << ", EMO_SLIDE_SKIP " << EMO_SLIDE_SKIP << /* ", MULTIPLE_EPSCO " << MULTIPLE_EPSCO << */ ", EMO_MAX_J " << EMO_MAX_J << ", EMO_TUNE_VALIDATION_WINDOW " << EMO_TUNE_VALIDATION_WINDOW << ", TUNE_EPSCOST_MAX " << common::C_tune_crass_epscost.front() << ", TUNE_EPSCOST_MIN " << common::C_tune_crass_epscost.back());
     const std::string original_input_queue_column_name = p_model_parameters->get_input_queue_column_name();
     const std::string original_input_queue_table_name = p_model_parameters->get_input_queue_table_name();
@@ -591,12 +546,13 @@ OnlineMIMOSVR::tune_kernel_params(
     p_model_parameters->set_input_queue_table_name("TUNE_TABLE_" + p_model_parameters->get_input_queue_table_name());
     const double meanabs_all_labels = common::meanabs(labels);
     const double mean_train_labels = arma::mean(arma::vectorise(labels.rows(labels.n_rows - p_model_parameters->get_svr_decremental_distance(), labels.n_rows - 1)));
-    // const double meanabs_all_labels = common::medianabs(labels); // .rows(labels.n_rows - EMO_TUNE_TEST_SIZE, labels.n_rows - 1)
-    const auto indexes = get_indexes(labels.n_rows, *p_model_parameters);
-    if (chunk_ix >= indexes.size()) chunk_ix = indexes.size() - 1;
-    const size_t train_len = indexes[chunk_ix].n_elem;
+    const auto indexes_tune = get_indexes(labels.n_rows - EMO_TUNE_TEST_SIZE, *p_model_parameters);
+    if (chunk_ix >= indexes_tune.size()) chunk_ix = indexes_tune.size() - 1;
+    std::vector<arma::ucolvec> indexes_train;
+    for (const auto &ixtu: indexes_tune) indexes_train.emplace_back(ixtu + EMO_TUNE_TEST_SIZE);
+    const size_t train_len = indexes_tune[chunk_ix].n_elem;
     std::vector<arma::mat> feature_chunks_t, label_chunks, lastknown_chunks;
-    for (const auto &chunk_ixs: indexes) {
+    for (const auto &chunk_ixs: indexes_tune) {
         feature_chunks_t.emplace_back(features.rows(chunk_ixs).t());
         label_chunks.emplace_back(labels.rows(chunk_ixs));
         lastknown_chunks.emplace_back(last_knowns.rows(chunk_ixs));
@@ -605,74 +561,65 @@ OnlineMIMOSVR::tune_kernel_params(
         lastknown_chunks.back() = arma::join_cols(lastknown_chunks.back(), last_knowns.rows(last_knowns.n_rows - EMO_TUNE_TEST_SIZE, last_knowns.n_rows - 1));
     }
 
-    auto best_score = std::numeric_limits<double>::max();
     const arma::mat k_eye = arma::eye(train_len, train_len);
-    SVRParameters best_params = *p_model_parameters;
     std::mutex add_predictions_mx;
 #ifdef FINER_GAMMA_TUNE
     double gamma_mult_fine_start, gamma_mult_fine_end, epsco_fine_start, epsco_fine_end;
 #endif
     const auto validate_gammas = [&](const double mingamma, const arma::mat &Z, const std::deque<double> &gamma_multis, const SVRParameters &score_params, const std::deque<double> &epscos) {
-        LOG4_DEBUG("Validating " << gamma_multis.size() << " gamma multipliers, starting from " << gamma_multis.front() << " to " << gamma_multis.back() << ", min gamma " <<
-                                 mingamma << ", Z " << arma::size(Z) << ", using " << epscos.size() << " epscos starting " << epscos.front() << ", last epsco " << epscos.back() << ", level " << p_model_parameters->get_decon_level());
-        double lambda_score = 0;
+        LOG4_DEBUG("Validating " << gamma_multis.size() << " gamma multipliers, starting from " << gamma_multis.front() << " to " << gamma_multis.back() <<
+                    ", min gamma " << mingamma << ", Z " << arma::size(Z) << ", using " << epscos.size() << " epscos starting " << epscos.front() << ", last epsco " <<
+                    epscos.back() << ", params " << score_params);
 #pragma omp parallel for num_threads(TUNE_HYBRID_MAIN_THREADS)
         for (const double gamma_mult: gamma_multis) {
             auto gamma_params = score_params;
             gamma_params.set_svr_kernel_param(gamma_mult * mingamma);
-            /*
-            common::memory_manager::get().barrier();
-            arma::mat K(arma::size(Z));
-            solvers::kernel_from_distances(K.memptr(), Z.memptr(), Z.n_rows, gamma_params.get_svr_kernel_param());
-            */
-            const arma::mat K = 1. - Z / (2. * std::pow<double>(gamma_params.get_svr_kernel_param(), 2.));
 
+            arma::mat K(arma::size(Z));
+            PROFILE_EXEC_TIME(solvers::kernel_from_distances(K.memptr(), Z.mem, Z.n_rows, gamma_params.get_svr_kernel_param()), "Kernel from distances"); // const arma::mat K = 1. - Z / (2. * std::pow<double>(gamma_params.get_svr_kernel_param(), 2.));
+            constexpr bool is_psd = false; // K.is_symmetric() && K.min() >= 0;
             const auto epscos_gen = [&gamma_params, &K, &train_len]() -> std::deque<double> {
                 double epsco;
                 switch (gamma_params.get_kernel_type()) {
                     case kernel_type_e::PATH: // Path matrix is not PSD
+                    case kernel_type_e::DEEP_PATH:
+                    case kernel_type_e::DEEP_PATH2:
                         epsco = arma::mean(arma::vectorise(K.submat(K.n_rows - train_len, K.n_cols - train_len, K.n_rows - 1, K.n_cols - 1)));
                         break;
                     default:
                         epsco = arma::mean(arma::vectorise(arma::trimatl(K.submat(K.n_rows - train_len, K.n_cols - train_len, K.n_rows - 1, K.n_cols - 1))));
                         break;
                 }
-
-                return {epsco, epsco / double(train_len)};
+                return {epsco , epsco / double(train_len)};
             } ();
 
 #pragma omp parallel for num_threads(TUNE_HYBRID_MAIN_THREADS)
             for (const auto epsco: epscos_gen) {
-                if (epsco <= 0)
-                    LOG4_WARN("Auto epsco is " << epsco << ",  K: " << common::present(K) << ", gamma params " << gamma_params.to_string());// << ", contents of K: " << arma::trimatl(K));
+                if (epsco <= 0) LOG4_WARN("Auto epsco is negative indefinite " << epsco << ",  K: " << common::present(K) << ", gamma params " << gamma_params);// << ", contents of K: " << arma::trimatl(K));
                 auto p_cost_params = std::make_shared<SVRParameters>(gamma_params);
-                const auto [p_out_preds, p_out_labels, p_out_last_knowns, score] = calc_direction(K, epsco, label_chunks[chunk_ix], lastknown_chunks[chunk_ix], train_len, meanabs_all_labels);
-                p_cost_params->set_svr_C(1. / (2. * epsco));
+                const auto [p_out_preds, p_out_labels, p_out_last_knowns, score] = calc_direction(K, epsco, label_chunks[chunk_ix], lastknown_chunks[chunk_ix], train_len, meanabs_all_labels, is_psd);
                 const std::scoped_lock sl(add_predictions_mx);
-                if (score < best_score) {
-                    best_score = score;
+#ifdef SEPARATE_PREDICTIONS_BY_COST
+                const uint64_t epsco_key = 1e6 * epsco;
+#else
+                constexpr uint64_t epsco_key = 0;
+#endif
+                if (score < predictions[epsco_key].begin()->get()->score || predictions[epsco_key].size() < size_t(common::C_tune_keep_preds)) {
+                    p_cost_params->set_svr_C(1. / (2. * epsco));
+                    p_cost_params->set_input_queue_table_name(original_input_queue_table_name);
+                    p_cost_params->set_input_queue_column_name(original_input_queue_column_name);
+                    predictions[epsco_key].emplace(std::make_shared<t_param_preds>(score, p_cost_params, p_out_preds, p_out_labels, p_out_last_knowns));
+                    LOG4_DEBUG("Lambda, gamma tune best score " << score << ", for " << *p_cost_params);
+                    while (predictions[epsco_key].size() > size_t(common::C_tune_keep_preds)) predictions[epsco_key].erase(--predictions[epsco_key].end());
 #ifdef FINER_GAMMA_TUNE
                     gamma_mult_fine_start = gamma_mult / C_fine_gamma_div;
                     gamma_mult_fine_end = gamma_mult * C_fine_gamma_mult;
                     epsco_fine_start = epsco;
                     epsco_fine_end = epsco;
 #endif
-                    best_params = *p_cost_params;
-                    LOG4_DEBUG("Lambda, gamma tune best score " << best_score << ", for " << best_params.to_string());
                }
-               lambda_score += score;
-               p_cost_params->set_input_queue_table_name(original_input_queue_table_name);
-               p_cost_params->set_input_queue_column_name(original_input_queue_column_name);
-#ifdef SEPARATE_PREDICTIONS_BY_COST
-               const uint64_t epsco_key = 1e6 * epsco;
-#else
-               constexpr uint64_t epsco_key = 0;
-#endif
-               predictions[epsco_key].emplace(std::make_shared<t_param_preds>(score, p_cost_params, p_out_preds, p_out_labels, p_out_last_knowns));
-               while (predictions[epsco_key].size() > size_t(common::C_tune_keep_preds)) predictions[epsco_key].erase(--predictions[epsco_key].end());
             }
         }
-        return lambda_score;
     };
 
     std::deque<double> tuned_lambdas;
@@ -686,7 +633,6 @@ OnlineMIMOSVR::tune_kernel_params(
 
 #pragma omp parallel for num_threads(TUNE_HYBRID_MAIN_THREADS)
     for (const double lambda: tuned_lambdas) {
-        best_score = std::numeric_limits<double>::max();
         auto lambda_params = *p_model_parameters;
         lambda_params.set_svr_kernel_param2(lambda);
         // common::memory_manager::get().barrier();
@@ -694,29 +640,28 @@ OnlineMIMOSVR::tune_kernel_params(
         const arma::mat &Z = get_cached_Z(lambda_params, feature_chunks_t[chunk_ix], label_chunks[chunk_ix]);
         {
             auto tmp_params = lambda_params;
-            tmp_params.set_input_queue_table_name("tmp_" + tmp_params.get_input_queue_table_name());
-            tmp_params.set_input_queue_column_name("tmp_" + tmp_params.get_input_queue_column_name());
-            const arma::mat *p_last_Z = prepare_Z(
-                    tmp_params, features.rows(features.n_rows - train_len, features.n_rows - 1).t(),
-                    labels.rows(labels.n_rows - p_model_parameters->get_svr_decremental_distance(), labels.n_rows - 1), train_len);
-            mingamma = get_cached_gamma(tmp_params, *p_last_Z, train_len, mean_train_labels);
-            delete p_last_Z;
+            tmp_params.set_input_queue_table_name("TMP_" + tmp_params.get_input_queue_table_name());
+            tmp_params.set_input_queue_column_name("TMP_" + tmp_params.get_input_queue_column_name());
+            const arma::mat *p_train_Z = prepare_Z(tmp_params, features.rows(indexes_train[chunk_ix]).t(), labels.rows(indexes_train[chunk_ix]), train_len);
+            mingamma = calc_gamma(*p_train_Z, train_len, mean_train_labels);
+            delete p_train_Z;
         }
-        PROFILE_EXEC_TIME(validate_gammas(mingamma, Z, C_gamma_multis, lambda_params, common::C_tune_crass_epscost), "Validate gammas " << lambda_params.to_string());
-        LOG4_DEBUG("Crass gamma pass score " << best_score << ", mingamma " << mingamma << ", best parameters " << best_params.to_string());
+        PROFILE_EXEC_TIME(validate_gammas(mingamma, Z, C_gamma_multis, lambda_params, common::C_tune_crass_epscost), "Validate gammas " << lambda_params);
+        for (const auto &p: predictions)
+            LOG4_DEBUG("Crass gamma pass score " << p.second.begin()->get()->score << ", mingamma " << mingamma << ", best parameters " << *p.second.begin()->get()->p_params);
 #ifdef NEW_FINER_GAMMA_TUNE
         std::deque<double> gamma_fine_multis;
         for (double gamma_mult = gamma_mult_fine_start; gamma_mult < gamma_mult_fine_end; gamma_mult *= FINE_GAMMA_MULTIPLE)
             gamma_fine_multis.emplace_back(gamma_mult);
         validate_gammas(mingamma, Z, gamma_fine_multis, best_params, common::C_tune_crass_epscost);
-        LOG4_DEBUG("Fine gamma pass score " << best_score << ", mingamma " << mingamma << ", best parameters " << best_params.to_string());
+        for (const auto &p: predictions)
+            LOG4_DEBUG("Fine gamma pass score " << p.second.begin()->get()->score << ", mingamma " << mingamma << ", best parameters " << *p.second.begin()->get()->p_params);
 #endif
     }
-    best_params = *predictions.begin()->second.begin()->get()->p_params;
-    LOG4_DEBUG("First pass score " << best_score << ", best parameters " << best_params.to_string());
-    *p_model_parameters = best_params;
-#ifndef FINER_GAMMA_TUNE
-    const arma::mat &Z = get_cached_Z(best_params, feature_chunks_t[chunk_ix], label_chunks[chunk_ix]);
+    for (const auto &p: predictions)
+        LOG4_DEBUG("First pass score " << p.second.begin()->get()->score << ", best parameters " << *p.second.begin()->get()->p_params);
+#ifdef FINER_GAMMA_TUNE
+    const arma::mat &Z = get_cached_Z(*p.second.begin()->get()->p_params, feature_chunks_t[chunk_ix], label_chunks[chunk_ix]);
 
 #if 0 // Fine epsco tuning
     std::deque<double> epsco_fine_grid;
@@ -724,31 +669,21 @@ OnlineMIMOSVR::tune_kernel_params(
         epsco_fine_grid.emplace_back(epsco);
 #endif
 
-    const double min_gamma = get_cached_gamma(best_params, Z, train_len, mean_train_labels);
+    const double min_gamma = get_cached_gamma(*p.second.begin()->get()->p_params, Z, train_len, mean_train_labels);
     std::deque<double> gamma_fine_multis;
     for (double gamma_mult = gamma_mult_fine_start; gamma_mult < gamma_mult_fine_end; gamma_mult *= FINE_GAMMA_MULTIPLE)
         gamma_fine_multis.emplace_back(gamma_mult);
-    validate_gammas(min_gamma, Z, gamma_fine_multis, *p_model_parameters, common::C_tune_crass_epscost);
+    validate_gammas(min_gamma, Z, gamma_fine_multis, *p.second.begin()->get()->p_params, common::C_tune_crass_epscost);
     gamma_fine_multis.clear();
     *p_model_parameters = best_params;
 #endif
-#if 0
-    // or remove every nth prediction
-    size_t ctr = 0;
-    const size_t keep_every = predictions.size() / C_tune_keep_preds;
-    for (auto prediter = predictions.begin(); prediter != predictions.end(); ++prediter, ++ctr)
-        if (ctr++ % keep_every) predictions.erase(prediter--);
-#endif
-    for (auto &cost_preds: predictions) {
-        if (cost_preds.second.size() > common::C_tune_keep_preds)
-            for_each(std::next(cost_preds.second.begin(), common::C_tune_keep_preds), cost_preds.second.end(), [&](auto &tune_prediction) { tune_prediction->clear(); });
-        cost_preds.second.erase(std::next(cost_preds.second.begin(), common::C_tune_keep_preds), cost_preds.second.end());
+    for (auto &p: predictions) {
+        if (p.second.size() > common::C_tune_keep_preds)
+            for_each(std::next(p.second.begin(), common::C_tune_keep_preds), p.second.end(), [&](auto &pr){pr->clear();} );
+        p.second.erase(std::next(p.second.begin(), common::C_tune_keep_preds), p.second.end());
 
         size_t ctr = 0;
-        for (const auto &preds_cost: cost_preds.second) {
-            LOG4_INFO("Best " << ctr << " score " << preds_cost->score << ", final parameters " << preds_cost->p_params->to_string() << ", returning best " << predictions.begin()->second.size() << " parameter sets.");
-            ++ctr;
-        }
+        for (const auto &pr: p.second) LOG4_INFO("Final best " << ctr++ << " score " << pr->score << ", final parameters " << *pr->p_params);
     }
 }
 
@@ -774,7 +709,7 @@ OnlineMIMOSVR::tune_kernel_params(SVRParameters_ptr &p_model_parameters, const a
             /* TODO Test CUDA port seems buggy !
              * double err1;
                PROFILE_EXEC_TIME(
-                    err1 = svr::solvers::score_kernel(ref_kmatrices[i].memptr(), norm_ref_kmatrices[i], Z.memptr(), k_stride, svr_parameters.get_svr_kernel_param()),
+                    err1 = svr::solvers::score_kernel(ref_kmatrices[i].mem, norm_ref_kmatrices[i], Z.mem, k_stride, svr_parameters.get_svr_kernel_param()),
                               "Calc GPU kernel matrix error " << err << " chunk " << i << " level " << svr_parameters.get_decon_level());
               */
             double err2;

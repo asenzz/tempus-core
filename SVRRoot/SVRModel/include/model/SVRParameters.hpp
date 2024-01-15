@@ -610,6 +610,15 @@ struct Bounds
     }
 };
 
+template<typename T>
+std::basic_ostream<T> &operator <<(std::basic_ostream<T> &os, const SVRParameters &e)
+{
+    os << e.to_string();
+    return os;
+}
+
+
+
 using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
 using ensemble_svr_parameters_t = std::map<
 /* input queue table name */ std::pair<std::string,

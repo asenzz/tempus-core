@@ -1,5 +1,6 @@
 #pragma once
 
+#include <armadillo>
 #include "onlinesvr.hpp"
 #include "common/parallelism.hpp"
 
@@ -150,8 +151,7 @@ OnlineMIMOSVR::load_online_svr(S &input_stream)
                                   *p_loaded_object->p_svr_parameters,
                                   p_loaded_object->p_features->rows(p_loaded_object->ixs[i]),
                                   p_loaded_object->p_labels->rows(p_loaded_object->ixs[i]),
-                                  p_loaded_object->p_kernel_matrices->at(i),
-                                  p_loaded_object->p_manifold)
+                                  p_loaded_object->p_kernel_matrices->at(i))
             )
         }
     } catch (const std::exception &ex) {

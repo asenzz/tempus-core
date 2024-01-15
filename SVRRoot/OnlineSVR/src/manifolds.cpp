@@ -36,7 +36,7 @@ OnlineMIMOSVR::get_reference_distance_matrix(const arma::mat &L)
     arma::mat labels_abs_diff(n_labels, n_labels);
     const arma::rowvec row_L = L.t();
 
-    __tbb_pfor(row_ix, 0, n_labels, labels_abs_diff.row(row_ix) = arma::abs(L(row_ix, 0) - row_L)) // Do we really need a positive matrix?
+    __tbb_pfor(row_ix, 0, n_labels, labels_abs_diff.row(row_ix) = L(row_ix, 0) - row_L) // Asymmetric distance matrix
     LOG4_DEBUG("Generated reference distances matrix " << common::present(labels_abs_diff) << " for labels " << common::present(L));
 
     return labels_abs_diff;
@@ -297,42 +297,6 @@ size_t OnlineMIMOSVR::get_manifold_nrows(const size_t n_rows)
 #else
     return n_rows * n_rows;
 #endif
-}
-
-// |Li - Lj| = K(Fi, Fj)
-void
-OnlineMIMOSVR::prepare_manifold_kernel(
-        const arma::mat &x_train,
-        const arma::mat &y_train,
-        arma::mat &kernel_matrix,
-        const OnlineMIMOSVR_ptr &p_manifold)
-{
-    kernel_matrix.set_size(x_train.n_rows, x_train.n_rows);
-    size_t row_ix = 0;
-    arma::mat manifold_kernel_predict_matrix(get_manifold_nrows(x_train.n_rows), x_train.n_cols * 2);
-    for (size_t i = 0; i < x_train.n_rows; ++i) { // TODO Parallelize
-#ifdef PSD_MANIFOLD
-        for (size_t j = 0; j <= i; ++j)
-#else
-        for (size_t j = 0; j < x_train.n_rows; ++j)
-#endif
-            manifold_kernel_predict_matrix.row(row_ix++) = manifold_join_feature_rows(x_train.row(i), x_train.row(j));
-    }
-    if (row_ix != manifold_kernel_predict_matrix.n_rows)
-        LOG4_THROW("row_ix " << row_ix << " != " << manifold_kernel_predict_matrix.n_rows << " manifold_kernel_predict_matrix.n_rows");
-    const auto manifold_predictions = p_manifold->chunk_predict(manifold_kernel_predict_matrix);
-    row_ix = 0;
-    for (size_t i = 0; i < x_train.n_rows; ++i) { // TODO Parallelize
-#ifdef PSD_MANIFOLD
-        for (size_t j = 0; j <= i; ++j)
-            kernel_matrix(i, j) = kernel_matrix(j, i) = manifold_predictions(row_ix++, 0);
-#else
-        for (size_t j = 0; j < x_train.n_rows; ++j)
-            kernel_matrix(i, j) = manifold_predictions(row_ix++, 0);
-#endif
-    }
-    if (row_ix != get_manifold_nrows(kernel_matrix.n_rows))
-        LOG4_THROW("row_ix " << row_ix << " != " << get_manifold_nrows(kernel_matrix.n_rows) << " kernel_matrix.n_rows^2");
 }
 
 

@@ -59,7 +59,7 @@ void OnlineMIMOSVR::best_forget(const bool dont_update_r_matrix)
                         /*
                         PROFILE_EXEC_TIME(
                                 kv.second.chunk_weights[i] = do_gpu_solve(
-                                        kernel_chunk.memptr(), reference_chunk.memptr(),
+                                        kernel_chunk.mem, reference_chunk.mem,
                                         kernel_chunk.n_rows, reference_chunk.n_cols),
                                 "do_ocl_solve online forget");
                         */

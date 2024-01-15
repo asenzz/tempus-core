@@ -318,7 +318,7 @@ do_vmd_freqs(
             arma::mat real_ran(K, 1);
             __tbb_pfor_i(0, K, real_ran(i, 0) = exp(log(fs) + (log(.5) - log(fs)) * common::randouble()))
             real_ran = arma::sort(real_ran);
-            memcpy(omega_plus.data(), real_ran.memptr(), K * sizeof(double));
+            memcpy(omega_plus.data(), real_ran.mem, K * sizeof(double));
             break;
         }
         case 0: {

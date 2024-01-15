@@ -137,32 +137,68 @@ to_times(const std::map<bpt::ptime, std::shared_ptr<T>> &data_rows)
 
 
 template<typename T> void
-arma_to_vector(const arma::Mat<T> &input, std::vector<T> &output)
+tovec(const arma::Mat<T> &input, std::vector<T> &output)
 {
     output.resize(input.n_elem);
-    size_t ctr = 0;
-    for (size_t row_ix = 0; row_ix < input.n_rows; ++row_ix)
-        for (size_t col_ix = 0; col_ix < input.n_cols; ++col_ix)
-            output[ctr++] = input(row_ix, col_ix);
+    output.shrink_to_fit();
+    memcpy(output.data(), input.mem, input.n_elem * sizeof(T));
 }
 
 template<typename T> std::vector<T>
-arma_to_vector(const arma::Mat<T> &input)
+tovec(const arma::Mat<T> &input)
 {
     std::vector<T> output(input.n_elem);
-    arma_to_vector(input, output);
+    tovec(input, output);
     return output;
 }
 
-void arma_to_vcl(const arma::mat &input, viennacl::matrix<double> &out_vcl);
+viennacl::vector<double> tovcl(const arma::colvec &in);
 
-void vcl_to_arma(const viennacl::matrix<double> &inmat, arma::mat &outmat);
+template<typename T> viennacl::matrix<T>
+tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
+{
+    cl_int rc;
+    auto clbuf = (T *)clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
+    if (rc != CL_SUCCESS) throw std::runtime_error("Failed creating OpenCL buffer of size " + std::to_string(in.n_elem * sizeof(T)) + " with error " + std::to_string(rc));
+    viennacl::matrix<T> r(clbuf, viennacl::OPENCL_MEMORY, in.n_cols, in.n_rows);
+    viennacl::backend::memory_write(r.handle(), 0, in.n_elem * sizeof(T), in.memptr(), false);
+    return viennacl::trans(r);
+};
 
-viennacl::vector<double> arma_to_vcl(const arma::colvec &input);
+template<typename T> viennacl::matrix<T>
+tovcl(const arma::Mat<T> &in)
+{
+    cl_int rc;
+    auto hostbuf = (T *) malloc(in.n_elem * sizeof(T));
+    viennacl::matrix<T> r(hostbuf, viennacl::MAIN_MEMORY, in.n_cols, in.n_rows);
+    memcpy(r.handle().ram_handle().get(), in.mem, in.n_elem * sizeof(T));
+    return viennacl::trans(r);
+};
 
-arma::mat mul_mat_vec(const arma::mat &m, const arma::mat &v);
 
-void test_mat_vec_mul();
+template<typename T> arma::Mat<T>
+toarma(const viennacl::matrix<T> &in)
+{
+    arma::Mat<T> r(in.internal_size1(), in.internal_size2());
+
+    switch (in.memory_domain()) {
+        case viennacl::memory_types::OPENCL_MEMORY:
+        case viennacl::memory_types::CUDA_MEMORY:
+            viennacl::backend::memory_read(in.handle(), 0, in.internal_size() * sizeof(T), r.memptr());
+            break;
+        case viennacl::memory_types::MAIN_MEMORY:
+            memcpy(r.memptr(), in.handle().ram_handle().get(), in.internal_size() * sizeof(T));
+            break;
+        default:
+            throw std::invalid_argument("Unknown memory domain of matrix " + std::to_string(in.memory_domain()));
+    }
+
+    if (in.row_major()) r = r.t();
+    if (in.size1() != in.internal_size1()) r.shed_rows(in.size1(), in.internal_size1() - 1);
+    if (in.size2() != in.internal_size2()) r.shed_cols(in.size2(), in.internal_size2() - 1);
+    return r;
+};
+
 
 template<typename Container, typename ConstIterator>
 typename Container::iterator remove_constness(Container &c, ConstIterator it)

@@ -16,7 +16,7 @@ public:
     void set_id(const bigint _id);
     virtual std::string to_string() const = 0;
 
-    virtual std::ostream &operator <<(std::ostream &os) const;
+    virtual std::basic_ostream<char> &operator <<(std::basic_ostream<char> &os) const;
 protected:
     bigint id;
 
@@ -24,7 +24,7 @@ private:
     virtual void on_set_id() {}
 };
 
-std::ostream &operator <<(std::ostream &os, Entity &e);
+std::basic_ostream<char> &operator <<(std::basic_ostream<char> &os, Entity &e);
 
 }
 }
