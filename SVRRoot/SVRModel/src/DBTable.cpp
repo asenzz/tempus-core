@@ -34,11 +34,12 @@ void Queue::update_data(const DataRow::container &new_data, const bool overwrite
 {
     LOG4_BEGIN();
 
-    if (!data_.empty() && !new_data.empty() && data_.back()->get_value_time() < new_data.front()->get_value_time()) {
-        auto overlap_it = lower_bound(data_, new_data.front()->get_value_time());
-        if (overlap_it != data_.end()) data_.erase(overlap_it, data_.end());
-    }
-    for (const auto &new_elem: new_data) data_.emplace_back(new_elem);
+    if (!data_.empty()
+        && !new_data.empty()
+        && new_data.front()->get_value_time() < data_.back()->get_value_time())
+        data_.erase(lower_bound_back(data_, new_data.front()->get_value_time()), data_.end());
+
+    data_.insert(data_.end(), new_data.begin(), new_data.end());
 
     LOG4_END();
 }

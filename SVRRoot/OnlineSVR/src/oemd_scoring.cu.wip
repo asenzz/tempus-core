@@ -47,7 +47,7 @@ static sem_t sem_fft;
 static std::mutex current_mask_mutex;
 
 // TODO Do a GPU handler and ctx from a queue
-bool is_file_exist(const std::string &filename)
+bool file_exists(const std::string &filename)
 {
     return std::ifstream(filename).good();
 }
@@ -70,10 +70,10 @@ save_mask(
     auto rev_mask = mask;
     std::reverse(rev_mask.begin(), rev_mask.end());
     size_t ctr = 0;
-    while (is_file_exist(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels))) { ++ctr; }
-    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels));
+    while (file_exists(svr::common::formatter() << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels))) { ++ctr; }
+    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels));
     if (myfile.is_open()) {
-        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels));
+        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels));
         myfile << std::setprecision(std::numeric_limits<double>::max_digits10);
         for (auto it = rev_mask.cbegin(); it != rev_mask.cend(); ++it)
             if (it != std::prev(rev_mask.cend()))
@@ -82,7 +82,7 @@ save_mask(
                 myfile << *it;
         myfile.close();
     } else
-        LOG4_ERROR("Aborting saving! Unable to open file " << std::filesystem::current_path() << "/" << MASK_FILE_NAME(ctr, level, levels) << " for writing.");
+        LOG4_ERROR("Aborting saving! Unable to open file " << std::filesystem::current_path() << "/" << mask_file_name(ctr, level, levels) << " for writing.");
     return 0;
 }
 
@@ -285,7 +285,7 @@ sum_expanded(
 
 
 void
-transform_values(double *d_values, double *h_mask, const size_t input_size, const size_t mask_size, const size_t siftings, double *d_temp, const size_t gpu_id)
+transform(double *d_values, double *h_mask, const size_t input_size, const size_t mask_size, const size_t siftings, double *d_temp, const size_t gpu_id)
 {
     //probably these sizes are not important
     cudaSetDevice(gpu_id);
@@ -425,13 +425,19 @@ sift_the_mask(
 
 double
 evaluate_mask(
-        const size_t mask_size, const size_t expanded_size, const size_t siftings, double *h_mask, const double *dev_values,
+        const size_t mask_size, const size_t expanded_size, const size_t siftings, double *h_mask, const double *values,
         const cufftDoubleComplex *dev_values_fft, const size_t val_start, const size_t full_input_size,
-        const cufftHandle plan_expanded_forward, const cufftHandle plan_expanded_backward, const cufftHandle plan_mask_forward, const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
-        bool &filter, thrust::device_vector<double> &d_mask, thrust::device_vector<double> &d_expanded_mask, thrust::device_vector<double> &d_global_sift_matrix, const size_t current_level, const size_t gpu_id)
+        const cufftHandle plan_expanded_forward, const cufftHandle plan_expanded_backward, const cufftHandle plan_mask_forward,
+        const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
+        bool &filter, const std::vector<double> &global_sift_matrix, const size_t current_level, const size_t gpu_id)
 {
     double result = 0;
     cudaSetDevice(gpu_id);
+
+    thrust::device_vector<double> d_mask(mask_size);
+    thrust::device_vector<double> d_expanded_mask(mask_size * C_mask_expander);
+    const auto d_global_sift_matrix = cuda_malloccopy(global_sift_matrix);
+    const auto dev_values = cuda_malloccopy(values, full_input_size, cudaMemcpyHostToDevice);
     cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_mask.data()), h_mask, mask_size * sizeof(double), cudaMemcpyHostToDevice));
 
     std::vector<cufftDoubleComplex> h_mask_fft(expanded_size / 2 + 1);
@@ -893,7 +899,7 @@ optimize_levels(
         const size_t window_end)
 {
     std::vector<size_t> gpu_ctxs;
-    for (size_t dev_ix = 0; dev_ix < common::gpu_handler::get_instance().get_free_gpus() / CTX_PER_GPU; ++dev_ix)
+    for (size_t dev_ix = 0; dev_ix < common::gpu_handler::get().get_free_gpus() / CTX_PER_GPU; ++dev_ix)
         gpu_ctxs.emplace_back(dev_ix);
 
     const size_t window_len = window_end - window_start;
@@ -922,6 +928,7 @@ optimize_levels(
     std::vector<double *> d_temp_ptr(gpu_ctxs.size(), nullptr);
 #pragma omp parallel for
     for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
+        cudaSetDevice(gpu_ctxs[dev_ix]);
         *d_values[dev_ix] = h_values;
         d_values_ptr[dev_ix] = thrust::raw_pointer_cast(d_values[dev_ix]->data());
         d_values_fft_ptr[dev_ix] = thrust::raw_pointer_cast(d_values_fft[dev_ix]->data());
@@ -1005,7 +1012,7 @@ optimize_levels(
             cudaSetDevice(gpu_ctxs[dev_ix]);
             d_imf[dev_ix][mask_ix] = std::make_shared<thrust::device_vector<double>>(*d_values[dev_ix]); // copy
             double *d_imf_ptr = thrust::raw_pointer_cast(d_imf[dev_ix][mask_ix]->data());
-            transform_values(d_imf_ptr, masks[mask_ix].data(), window_len, masks[mask_ix].size(), siftings[mask_ix], d_temp_ptr[dev_ix], gpu_ctxs[dev_ix]);
+            transform(d_imf_ptr, masks[mask_ix].data(), window_len, masks[mask_ix].size(), siftings[mask_ix], d_temp_ptr[dev_ix], gpu_ctxs[dev_ix]);
             vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_values_ptr[dev_ix], d_imf_ptr, window_len);
             valid_pointer += siftings[mask_ix] * (masks[mask_ix].size() - 1); // is it -1 really?
             h_imf[mask_ix] = *d_imf[dev_ix][mask_ix];

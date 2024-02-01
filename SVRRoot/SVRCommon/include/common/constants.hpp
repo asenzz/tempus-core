@@ -13,12 +13,12 @@
 
 #ifdef MANIFOLD_TEST
 const unsigned MANIFOLD_TEST_VALIDATION_WINDOW = getenv("SVRWAVE_TEST_WINDOW") ? strtoul(getenv("SVRWAVE_TEST_WINDOW"), nullptr, 10) : TEST_OFFSET_DEFAULT;
+#else
+constexpr unsigned MANIFOLD_TEST_VALIDATION_WINDOW = 0;
 #endif
 
 namespace svr {
 namespace common {
-
-constexpr unsigned MAX_TUNE_CHUNKS = 1;
 
 constexpr double C_input_obseg_labels = 1; // 83.3553;
 constexpr double C_input_obseg_features = C_input_obseg_labels; // / 1660.; // Best for direction .12, .07324079159, .05547593844
@@ -41,7 +41,7 @@ const auto C_tune_crass_epscost = []() {
 } ();
 */
 
-const std::deque<double> C_tune_lambdas_path {0., 1e-3, .2, .5, .75, 1., 1.5, 2., 3., 15., 75.};
+const std::deque<double> C_tune_lambdas_path {1.}; //{0., 1e-3, .2, .5, .75, 1., 1.5, 2., 3., 15., 75.};
 // const std::deque<double> C_tune_lambdas_path {0., 1., 1e1, 1e2};
 // const std::deque<double> C_tune_lambdas_path {1.};
 // const std::deque<double> C_tune_lambdas_path {0., .2, .75, 1., 3., 75.};

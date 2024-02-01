@@ -60,30 +60,27 @@ double drander(t_drand48_data_ptr buffer)
     return result;
 }
 
-int
+void
 save_mask(
         const std::vector<double> &mask,
-        const std::string &log_prefix,
+        const std::string &queue_name,
         const size_t level,
         const size_t levels)
 {
-    auto rev_mask = mask;
-    std::reverse(rev_mask.begin(), rev_mask.end());
     size_t ctr = 0;
-    while (is_file_exist(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels))) { ++ctr; }
-    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels));
+    while (is_file_exist(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels, queue_name))) { ++ctr; }
+    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels, queue_name));
     if (myfile.is_open()) {
-        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels));
+        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << MASK_FILE_NAME(ctr, level, levels, queue_name));
         myfile << std::setprecision(std::numeric_limits<double>::max_digits10);
-        for (auto it = rev_mask.cbegin(); it != rev_mask.cend(); ++it)
-            if (it != std::prev(rev_mask.cend()))
+        for (auto it = mask.cbegin(); it != mask.cend(); ++it)
+            if (it != std::prev(mask.cend()))
                 myfile << *it << ",";
             else
                 myfile << *it;
         myfile.close();
     } else
-        LOG4_ERROR("Aborting saving! Unable to open file " << std::filesystem::current_path() << "/" << MASK_FILE_NAME(ctr, level, levels) << " for writing.");
-    return 0;
+        LOG4_ERROR("Aborting saving! Unable to open file " << std::filesystem::current_path() << "/" << MASK_FILE_NAME(ctr, level, levels, queue_name) << " for writing.");
 }
 
 #if 0
@@ -114,22 +111,25 @@ fill_auto_matrix(
         const size_t M,
         const size_t siftings,
         const size_t N,
-        double *__restrict__ x,
+        const double *__restrict__ x,
         thrust::device_vector<double> &d_global_sift_matrix,
         const size_t gpu_id)
 {
     cudaSetDevice(gpu_id);
     std::vector<double> diff(N - 1);
-    __tbb_pfor_i(0, N - 1, diff[i] = x[i + 1] - x[i])
+#pragma omp parallel for
+    for (size_t i = 0; i < N - 1; ++i)
+        diff[i] = x[i + 1] - x[i];
 
     const size_t Msift = M * siftings;
     std::vector<double> global_sift_matrix(Msift);
-    __tbb_pfor_i(0, Msift,
+#pragma omp parallel for
+    for (size_t i = 0; i < Msift; ++i) {
         double sum = 0;
         for (size_t j = N / 2; j < N - 1 - i; ++j)
             sum += diff[j] * diff[j + i];
         global_sift_matrix[i] = sum / double(N - 1. - i - N / 2.);
-    )
+    }
     d_global_sift_matrix.resize(Msift);
     cudaMemcpy(thrust::raw_pointer_cast(d_global_sift_matrix.data()), global_sift_matrix.data(), sizeof(double) * Msift, cudaMemcpyHostToDevice);
 }
@@ -285,7 +285,7 @@ sum_expanded(
 
 
 void
-transform_values(double *d_values, double *h_mask, const size_t input_size, const size_t mask_size, const size_t siftings, double *d_temp, const size_t gpu_id)
+transform(double *d_values, double *h_mask, const size_t input_size, const size_t mask_size, const size_t siftings, double *d_temp, const size_t gpu_id)
 {
     //probably these sizes are not important
     cudaSetDevice(gpu_id);
@@ -822,8 +822,9 @@ create_random_mask(
 
 void find_good_mask_ffly(
         const size_t gpu_id, const size_t full_input_size, const size_t mask_size, const size_t siftings, const size_t valid_pointer,
-        double *dev_values, cufftDoubleComplex *dev_values_fft, double *h_mask, cufftHandle plan_full_forward[C_parallelism],
-        cufftHandle plan_full_backward[C_parallelism], cufftHandle plan_mask_forward[C_parallelism], cufftHandle plan_sift_forward[C_parallelism], cufftHandle plan_sift_backward[C_parallelism], double &result,
+        double *dev_values, cufftDoubleComplex *dev_values_fft, double *h_mask, std::deque<cufftHandle> &plan_full_forward,
+        std::deque<cufftHandle> &plan_full_backward, std::deque<cufftHandle> &plan_mask_forward, std::deque<cufftHandle> &plan_sift_forward,
+        std::deque<cufftHandle> &plan_sift_backward, double &result,
         thrust::device_vector<double> &d_global_sift_matrix, const size_t current_level)
 {
     svr::optimizer::loss_callback_t loss_function = [&](std::vector<double>& x) -> double
@@ -842,7 +843,7 @@ void find_good_mask_ffly(
         gl_incr = (gl_incr + 1) % C_parallelism;
         ul.unlock();
 
-        static std::vector<std::mutex> mxs(C_parallelism);
+        static std::deque<std::mutex> mxs(C_parallelism);
         const std::scoped_lock lg(mxs[l_incr]);
         return evaluate_mask(
                 mask_size, mask_size * C_mask_expander, siftings, y.data(), dev_values, dev_values_fft, size_t(valid_pointer), full_input_size,
@@ -863,52 +864,60 @@ void find_good_mask_ffly(
 // TODO Pass a vector of all available GPU-IDs at the time of call and use them all up
 void
 optimize_levels(
-        const std::vector<double> &val,
-        std::vector<std::vector<double>> &masks,
-        std::vector<size_t> &siftings,
+        const datamodel::datarow_range<> &input,
+        const std::vector<double> &tail,
+        std::deque<std::vector<double>> &masks,
+        std::deque<size_t> &siftings,
         const size_t window_start,
-        const size_t window_end)
+        const size_t window_end,
+        const std::string &queue_name)
 {
+    // const auto max_gpus = common::gpu_handler().get().get_max_running_gpu_threads_number();
     common::gpu_context ctx;
     const auto gpu_id = ctx.phy_id();
+    const auto window_len = window_end - window_start;
+    const auto in_colix = input.begin()->get()->get_values().size() / 2;
     cudaSetDevice(gpu_id);
-    const size_t window_len = window_end - window_start;
     srand48(928171);
     sem_init(&sem_fft, 0, C_parallelism);
 
-    thrust::host_vector<double> h_imf[masks.size()];
-    thrust::host_vector<double> h_values(window_len);
-    thrust::host_vector<double> h_values_temp(window_len);
-    thrust::device_vector<double> d_values(window_len);
-    thrust::device_vector<cufftDoubleComplex> d_values_fft(window_len / 2 + 1);
-    thrust::device_vector<double> d_imf[masks.size()];
+    thrust::host_vector<double> h_workspace(window_len);
+    //thrust::host_vector<double> h_temp(window_len);
+    thrust::device_vector<double> d_workspace(window_len);
     thrust::device_vector<double> d_temp(window_len);
-    std::memcpy(thrust::raw_pointer_cast(h_values.data()), &val[window_start], window_len * sizeof(double));
-    d_values = h_values;
-    size_t valid_pointer = 0; // first correct values start from this position inside d_values
-    double *d_values_ptr = thrust::raw_pointer_cast(d_values.data());
+#pragma omp parallel for
+    for (size_t i = 0; i < window_len; ++i)
+        h_workspace[i] = i < tail.size() ? tail[i] : input[i - tail.size()]->get_value(in_colix);
+    d_workspace = h_workspace;
+    std::deque<thrust::host_vector<double>> h_imf(masks.size());
+    thrust::device_vector<cufftDoubleComplex> d_values_fft(window_len / 2 + 1);
+    std::deque<thrust::device_vector<double>> d_imf(masks.size());
+    double *d_workspace_ptr = thrust::raw_pointer_cast(d_workspace.data());
     cufftDoubleComplex *d_values_fft_ptr = thrust::raw_pointer_cast(d_values_fft.data());
     double *d_temp_ptr = thrust::raw_pointer_cast(d_temp.data());
-    cufftHandle plan_full_forward[C_parallelism];
-    cufftHandle plan_full_backward[C_parallelism];
+    std::deque<cufftHandle> plan_full_forward(C_parallelism);
+    std::deque<cufftHandle> plan_full_backward(C_parallelism);
+    size_t start_valid_ix = 0; // first correct values start from this position inside d_workspace
 
-    const int n_batch = 1;
-    __omp_pfor_i(0, C_parallelism,
-                 cudaSetDevice(gpu_id);
+    constexpr int n_batch = 1;
+#pragma omp parallel for
+    for (size_t i = 0; i < C_parallelism; ++i) {
+        cudaSetDevice(gpu_id);
         cufft_errchk(cufftPlan1d(&plan_full_forward[i], window_len, CUFFT_D2Z, n_batch));
         cufft_errchk(cufftPlan1d(&plan_full_backward[i], window_len, CUFFT_Z2D, n_batch));
-    )
+    }
     for (size_t i = 0; i < masks.size(); ++i) {
         cudaSetDevice(gpu_id);
         thrust::device_vector<double> d_global_sift_matrix;
-        cufftHandle plan_sift_forward[C_parallelism];
-        cufftHandle plan_sift_backward[C_parallelism];
-        __omp_pfor (j, 0, C_parallelism,
-                    cudaSetDevice(gpu_id);
+        std::deque<cufftHandle> plan_sift_forward(C_parallelism);
+        std::deque<cufftHandle> plan_sift_backward(C_parallelism);
+#pragma omp parallel for
+        for (size_t j = 0; j < C_parallelism; ++j) {
+            cudaSetDevice(gpu_id);
             cufft_errchk(cufftPlan1d(&plan_sift_forward[j], siftings[i] * masks[i].size(), CUFFT_D2Z, n_batch));
             cufft_errchk(cufftPlan1d(&plan_sift_backward[j], siftings[i] * masks[i].size(), CUFFT_Z2D, n_batch));
-        )
-        fill_auto_matrix(masks[i].size(), siftings[i], window_len - valid_pointer, thrust::raw_pointer_cast(h_values.data() + valid_pointer), d_global_sift_matrix, gpu_id);
+        }
+        fill_auto_matrix(masks[i].size(), siftings[i], window_len - start_valid_ix, input.data() + window_start + start_valid_ix, d_global_sift_matrix, gpu_id);
 #ifndef USE_FIREFLY_SEARCH
         std::vector<double> good_mask(masks[i].size());
         double csum = 0;
@@ -919,56 +928,61 @@ optimize_levels(
         }
 #pragma omp simd
         for (size_t j = 0; j < masks[i].size(); ++j) good_mask[j] = good_mask[j] / csum;
-        // do_osqp(masks[i].size(), good_mask, window_len - valid_pointer, thrust::raw_pointer_cast(h_values.data() + valid_pointer), gpu_id);
+        // do_osqp(masks[i].size(), good_mask, window_len - start_valid_ix, thrust::raw_pointer_cast(h_workspace.data() + start_valid_ix), gpu_id);
 #endif
-        double result;
-        cufftHandle plan_mask_forward[C_parallelism];
-        cufftHandle plan_mask_backward[C_parallelism];
-        __omp_pfor (j, 0, C_parallelism,
-                    cudaSetDevice(gpu_id);
+        std::deque<cufftHandle> plan_mask_forward(C_parallelism);
+        std::deque<cufftHandle> plan_mask_backward(C_parallelism);
+#pragma omp parallel for
+        for (size_t j = 0; j < C_parallelism; ++j) {
+            cudaSetDevice(gpu_id);
             cufft_errchk(cufftPlan1d(&plan_mask_forward[j], C_mask_expander * masks[i].size(), CUFFT_D2Z, n_batch));
             cufft_errchk(cufftPlan1d(&plan_mask_backward[j], C_mask_expander * masks[i].size(), CUFFT_Z2D, n_batch));
-        )
+        }
 
-        cufft_errchk(cufftExecD2Z(plan_full_forward[0], d_values_ptr, d_values_fft_ptr));
+        cufft_errchk(cufftExecD2Z(plan_full_forward[0], d_workspace_ptr, d_values_fft_ptr));
 
+        double result;
 #ifdef USE_FIREFLY_SEARCH
         find_good_mask_ffly(
-                gpu_id, window_len, masks[i].size(), siftings[i], valid_pointer, d_values_ptr, d_values_fft_ptr,
+                gpu_id, window_len, masks[i].size(), siftings[i], start_valid_ix, d_workspace_ptr, d_values_fft_ptr,
                 masks[i].data(), plan_full_forward, plan_full_backward, plan_mask_forward, plan_sift_forward, plan_sift_backward, result, d_global_sift_matrix, i);
 #else
         find_good_mask_anneal(
-                i, window_len, masks[i].size(), siftings[i], valid_pointer, d_values_ptr,
+                i, window_len, masks[i].size(), siftings[i], start_valid_ix, d_workspace_ptr,
                 d_values_fft_ptr, masks[i].data(), plan_full_forward, plan_full_backward, plan_mask_forward, plan_mask_backward,
                 plan_sift_forward, plan_sift_backward, good_mask, result, d_global_sift_matrix, gpu_id);
 #endif
+        save_mask(masks[i], queue_name, i, masks.size() + 1);
         cudaSetDevice(gpu_id);
-        save_mask(masks[i], "Mask level " + std::to_string(i) + " final ", i, masks.size() + 1);
-        d_imf[i] = d_values; // copy
+        d_imf[i] = d_workspace; // copy
         double *d_imf_ptr = thrust::raw_pointer_cast(d_imf[i].data());
-        transform_values(d_imf_ptr, masks[i].data(), window_len, masks[i].size(), siftings[i], d_temp_ptr, gpu_id);
-        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_values_ptr, d_imf_ptr, window_len);
-        valid_pointer += siftings[i] * (masks[i].size() - 1); // is it -1 really?
+        transform(d_imf_ptr, masks[i].data(), window_len, masks[i].size(), siftings[i], d_temp_ptr, gpu_id);
+        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_workspace_ptr, d_imf_ptr, window_len);
+        start_valid_ix += siftings[i] * (masks[i].size() - 1); // is it -1 really?
         h_imf[i] = d_imf[i];
-        h_values_temp = d_values;
-
-        for (size_t j = 0; j < h_values.size(); ++j) h_values_temp[j] += h_imf[i][j];
-        h_values = d_values;
+/*
+        h_temp = d_workspace;
+#pragma omp parallel for
+        for (size_t j = 0; j < window_len; ++j) h_temp[j] += h_imf[i][j];
+*/
+        h_workspace = d_workspace;
         best_result.store(std::numeric_limits<double>::max());
         best_quality.store(1);
-        __omp_pfor (j, 0, C_parallelism,
-                    cudaSetDevice(gpu_id);
+#pragma omp parallel for
+        for (size_t j = 0; j < C_parallelism; ++j) {
+            cudaSetDevice(gpu_id);
             cufftDestroy(plan_mask_forward[j]);
             cufft_errchk(cufftDestroy(plan_sift_forward[j]));
             cufft_errchk(cufftDestroy(plan_sift_backward[j]));
-        )
+        }
     }
 
-    __omp_pfor_i(0, C_parallelism,
-                 cudaSetDevice(gpu_id);
+#pragma omp parallel for
+    for (size_t i = 0; i < C_parallelism; ++i) {
+        cudaSetDevice(gpu_id);
         cufftDestroy(plan_full_forward[i]);
         cufftDestroy(plan_full_backward[i]);
-    )
+    }
 }
 
 

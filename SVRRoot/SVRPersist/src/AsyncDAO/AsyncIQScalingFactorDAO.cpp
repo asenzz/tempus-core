@@ -36,36 +36,36 @@ AsyncIQScalingFactorDAO::AsyncIQScalingFactorDAO(svr::common::PropertiesFileRead
 
 AsyncIQScalingFactorDAO::~AsyncIQScalingFactorDAO()
 {
-    delete & pImpl;
+    delete &pImpl;
 }
 
 bigint AsyncIQScalingFactorDAO::get_next_id()
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.get_next_id();
 }
 
-bool AsyncIQScalingFactorDAO::exists(bigint id)
+bool AsyncIQScalingFactorDAO::exists(const bigint id)
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.exists(id);
 }
 
 int AsyncIQScalingFactorDAO::save(const IQScalingFactor_ptr& iQScalingFactor)
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.save(iQScalingFactor);
 }
 
 int AsyncIQScalingFactorDAO::remove(const IQScalingFactor_ptr& iQScalingFactor)
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.remove(iQScalingFactor);
 }
 
-std::vector<IQScalingFactor_ptr> AsyncIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
+std::deque<IQScalingFactor_ptr> AsyncIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.find_all_by_dataset_id(dataset_id);
 }
 

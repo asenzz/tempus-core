@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 set(PROJECT_NAME wavelib)
 project(${PROJECT_NAME} C)

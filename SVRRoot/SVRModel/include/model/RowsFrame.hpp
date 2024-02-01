@@ -86,7 +86,7 @@ public:
         ss  <<"Frame size: " << get_frame_size()
             << ", First time: " << bpt::to_simple_string(get_first_time())
             << ", resolution: " << bpt::to_simple_string(get_resolution())
-            << ", value columns: " << svr::common::deep_to_string(get_value_columns());
+            << ", value columns: " << svr::common::to_string(get_value_columns());
 
         return ss.str();
     }

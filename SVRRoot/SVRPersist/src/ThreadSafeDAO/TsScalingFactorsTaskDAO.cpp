@@ -12,7 +12,7 @@ bigint TsScalingFactorsTaskDAO::get_next_id()
 }
 
 
-bool TsScalingFactorsTaskDAO::exists(bigint id)
+bool TsScalingFactorsTaskDAO::exists(const bigint id)
 {
     return ts_call<bool>(&ScalingFactorsTaskDAO::exists, id);
 }
@@ -30,7 +30,7 @@ int TsScalingFactorsTaskDAO::remove(const ScalingFactorsTask_ptr& scalingFactors
 }
 
 
-    ScalingFactorsTask_ptr TsScalingFactorsTaskDAO::get_by_id(bigint id)
+    ScalingFactorsTask_ptr TsScalingFactorsTaskDAO::get_by_id(const bigint id)
 {
     return ts_call<ScalingFactorsTask_ptr>(&ScalingFactorsTaskDAO::get_by_id, id);
 }

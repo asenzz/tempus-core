@@ -15,16 +15,16 @@ OnlineMIMOSVR::save_online_svr(const OnlineMIMOSVR &osvr, S &output_stream)
 {
     output_stream.precision(std::numeric_limits<double>::max_digits10);
 
-    const auto svr_parameters = osvr.get_svr_parameters();
+    const auto p_params = osvr.get_params_ptr();
     try {
         output_stream << "SamplesDimension: " << osvr.p_features->n_cols << std::endl;
-        output_stream << "C: " << svr_parameters.get_svr_C() << std::endl;
-        output_stream << "Epsilon: " << svr_parameters.get_svr_epsilon() << std::endl;
-        output_stream << "KernelType: " << kernel_type_to_string(svr_parameters.get_kernel_type()) << std::endl;
-        output_stream << "KernelParam: " << svr_parameters.get_svr_kernel_param() << std::endl;
-        output_stream << "KernelParam2: " << svr_parameters.get_svr_kernel_param2() << std::endl;
-        output_stream << "LagCount: " << svr_parameters.get_lag_count() << std::endl;
-        output_stream << "MimoType: " << int(osvr.get_mimo_type()) << std::endl;
+        output_stream << "C: " << p_params->get_svr_C() << std::endl;
+        output_stream << "Epsilon: " << p_params->get_svr_epsilon() << std::endl;
+        output_stream << "KernelType: " << kernel_type_to_string(p_params->get_kernel_type()) << std::endl;
+        output_stream << "KernelParam: " << p_params->get_svr_kernel_param() << std::endl;
+        output_stream << "KernelParam2: " << p_params->get_svr_kernel_param2() << std::endl;
+        output_stream << "LagCount: " << p_params->get_lag_count() << std::endl;
+        output_stream << "MimoType: " << int(osvr.get_model_type()) << std::endl;
         output_stream << "MultistepLen: " << osvr.get_multistep_len() << std::endl;
         output_stream << "SaveKernelMatrix: " << (osvr.save_kernel_matrix ? 1 : 0) << std::endl;
 
@@ -47,8 +47,8 @@ OnlineMIMOSVR::save_online_svr(const OnlineMIMOSVR &osvr, S &output_stream)
         output_stream << std::endl;
 
         for (auto &kv: osvr.main_components) {
-            for (size_t i = 0; i < kv.second.chunk_weights.size(); ++i) {
-                arma::mat weights = kv.second.chunk_weights[i];
+            for (size_t i = 0; i < kv->chunk_weights.size(); ++i) {
+                arma::mat weights = kv->chunk_weights[i];
                 output_stream << "Weights.rows: " << weights.n_rows << std::endl;
                 output_stream << "Weights.cols: " << weights.n_cols << std::endl;
                 for (size_t r = 0; r < weights.n_rows; r++)
@@ -80,7 +80,7 @@ OnlineMIMOSVR::load_online_svr(S &input_stream)
         std::string kernel_type;
         size_t multistep_len;
         size_t i_mimo_type;
-        MimoType mimo_type;
+        // mimo_type_e mimo_type;
         bool save_kernel_matrix;
         datamodel::SVRParameters_ptr svr_parameters = std::make_shared<datamodel::SVRParameters>();
 
@@ -98,14 +98,16 @@ OnlineMIMOSVR::load_online_svr(S &input_stream)
         input_stream >> trash >> lag_count;
         svr_parameters->set_lag_count(lag_count);
         input_stream >> trash >> i_mimo_type;
-        mimo_type = i_mimo_type == 1 ? MimoType::single : MimoType::twin;
+        // mimo_type = i_mimo_type == 1 ? mimo_type_e::single : mimo_type_e::twin;
         input_stream >> trash >> multistep_len;
         input_stream >> trash >> X2;
         save_kernel_matrix = X2 > 0;
 
         if (trash != "SaveKernelMatrix:") LOG4_THROW("Error during loading.");
 
-        p_loaded_object = std::make_shared<OnlineMIMOSVR>(svr_parameters, mimo_type, multistep_len);
+        auto param_set = std::make_shared<datamodel::t_param_set>();
+        param_set->emplace(svr_parameters);
+        p_loaded_object = std::make_shared<OnlineMIMOSVR>(param_set, multistep_len, CHUNK_DECREMENT);
 
         size_t xrows, xcols;
         input_stream >> trash >> xrows;
@@ -130,28 +132,27 @@ OnlineMIMOSVR::load_online_svr(S &input_stream)
                 input_stream >> p_loaded_object->p_labels->at(i, j);
 
         for (auto &kv: p_loaded_object->main_components) {
-            for (size_t i = 0; i < kv.second.chunk_weights.size(); ++i) {
-                arma::mat weights = kv.second.chunk_weights[i];
+            for (size_t i = 0; i < kv->chunk_weights.size(); ++i) {
+                arma::mat weights = kv->chunk_weights[i];
                 input_stream >> trash >> xrows;
                 input_stream >> trash >> xcols;
 
                 if (trash != "Weights.cols:") LOG4_THROW("Error during loading labels.");
 
-                kv.second.chunk_weights[i].resize(xrows, xcols);
+                kv->chunk_weights[i].resize(xrows, xcols);
                 for (size_t r = 0; r < xrows; ++r)
                     for (size_t c = 0; c < xcols; ++c)
-                        input_stream >> kv.second.chunk_weights[i](r, c);
+                        input_stream >> kv->chunk_weights[i](r, c);
             }
         }
 
-        p_loaded_object->ixs = p_loaded_object->get_indexes(xrows, *p_loaded_object->p_svr_parameters);
+        p_loaded_object->ixs = p_loaded_object->get_indexes(xrows, p_loaded_object->get_params());
         if (p_loaded_object->save_kernel_matrix) {
             __omp_tpfor_i(size_t, 0, p_loaded_object->ixs.size(),
-                          init_kernel_matrix(
-                                  *p_loaded_object->p_svr_parameters,
+                          p_loaded_object->p_kernel_matrices->at(i) = init_kernel_matrix(
+                                  p_loaded_object->get_params(),
                                   p_loaded_object->p_features->rows(p_loaded_object->ixs[i]),
-                                  p_loaded_object->p_labels->rows(p_loaded_object->ixs[i]),
-                                  p_loaded_object->p_kernel_matrices->at(i))
+                                  p_loaded_object->p_labels->rows(p_loaded_object->ixs[i]))
             )
         }
     } catch (const std::exception &ex) {
@@ -167,15 +168,15 @@ bool OnlineMIMOSVR::save_onlinemimosvr_no_weights_no_kernel(const OnlineMIMOSVR 
 {
     output_stream.precision(std::numeric_limits<double>::max_digits10);
 
-    const auto svr_parameters = osvr.get_svr_parameters();
+    const auto p_params = osvr.get_params_ptr();
     try {
-        output_stream << "C: " << svr_parameters.get_svr_C() << std::endl;
-        output_stream << "Epsilon: " << svr_parameters.get_svr_epsilon() << std::endl;
-        output_stream << "KernelType: " << kernel_type_to_string(svr_parameters.get_kernel_type()) << std::endl;
-        output_stream << "KernelParam: " << svr_parameters.get_svr_kernel_param() << std::endl;
-        output_stream << "KernelParam2: " << svr_parameters.get_svr_kernel_param2() << std::endl;
-        output_stream << "LagCount: " << svr_parameters.get_lag_count() << std::endl;
-        output_stream << "MimoType: " << int(osvr.get_mimo_type()) << std::endl;
+        output_stream << "C: " << p_params->get_svr_C() << std::endl;
+        output_stream << "Epsilon: " << p_params->get_svr_epsilon() << std::endl;
+        output_stream << "KernelType: " << kernel_type_to_string(p_params->get_kernel_type()) << std::endl;
+        output_stream << "KernelParam: " << p_params->get_svr_kernel_param() << std::endl;
+        output_stream << "KernelParam2: " << p_params->get_svr_kernel_param2() << std::endl;
+        output_stream << "LagCount: " << p_params->get_lag_count() << std::endl;
+        output_stream << "MimoType: " << int(osvr.get_model_type()) << std::endl;
         output_stream << "MultistepLen: " << osvr.get_multistep_len() << std::endl;
 
         output_stream << "X.rows: " << osvr.p_features->n_rows << std::endl;
@@ -213,29 +214,31 @@ OnlineMIMOSVR::load_onlinemimosvr_no_weights_no_kernel(S &input_stream)
         double _C, _epsilon, _kp1, _kp2;
         std::string _kernel_type;
         size_t _multistep_len;
-        size_t _i_mimo_type;
-        MimoType _mimo_type;
-        datamodel::SVRParameters_ptr _svr_parameters = std::make_shared<datamodel::SVRParameters>();
+//        size_t _i_mimo_type;
+//        mimo_type_e _mimo_type;
+        datamodel::SVRParameters_ptr p_params = std::make_shared<datamodel::SVRParameters>();
 
         input_stream >> trash >> _C;
-        _svr_parameters->set_svr_C(_C);
+        p_params->set_svr_C(_C);
         input_stream >> trash >> _epsilon;
-        _svr_parameters->set_svr_epsilon(_epsilon);
+        p_params->set_svr_epsilon(_epsilon);
         input_stream >> trash >> _kernel_type;
-        _svr_parameters->set_kernel_type(get_kernel_type_from_string(_kernel_type));
+        p_params->set_kernel_type(get_kernel_type_from_string(_kernel_type));
         input_stream >> trash >> _kp1;
-        _svr_parameters->set_svr_kernel_param(_kp1);
+        p_params->set_svr_kernel_param(_kp1);
         input_stream >> trash >> _kp2;
-        _svr_parameters->set_svr_kernel_param2(_kp2);
+        p_params->set_svr_kernel_param2(_kp2);
         input_stream >> trash >> lag_count;
-        _svr_parameters->set_lag_count(lag_count);
-        input_stream >> trash >> _i_mimo_type;
-        _mimo_type = (_i_mimo_type == 1) ? MimoType::single : MimoType::twin;
+        p_params->set_lag_count(lag_count);
+//        input_stream >> trash >> _i_mimo_type;
+//        _mimo_type = (_i_mimo_type == 1) ? mimo_type_e::single : mimo_type_e::twin;
         input_stream >> trash >> _multistep_len;
 
         if (trash != "MultistepLen:") LOG4_THROW("Error during loading.");
 
-        p_loaded_object = std::make_shared<OnlineMIMOSVR>(_svr_parameters, _mimo_type, _multistep_len);
+        auto param_set = std::make_shared<datamodel::t_param_set>();
+        param_set->emplace(p_params);
+        p_loaded_object = std::make_shared<OnlineMIMOSVR>(param_set, CHUNK_DECREMENT, _multistep_len);
 
         size_t xrows, xcols;
         input_stream >> trash >> xrows;

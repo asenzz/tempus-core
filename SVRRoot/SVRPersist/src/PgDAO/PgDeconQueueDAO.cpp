@@ -16,12 +16,12 @@ PgDeconQueueDAO::PgDeconQueueDAO(svr::common::PropertiesFileReader& sqlPropertie
 : DeconQueueDAO(sqlProperties, dataSource)
 {}
 
-DeconQueue_ptr PgDeconQueueDAO::get_decon_queue_by_table_name(const std::string &tableName) {
+datamodel::DeconQueue_ptr PgDeconQueueDAO::get_decon_queue_by_table_name(const std::string &tableName) {
     DeconQueueRowMapper rowMapper;
     return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_decon_queue_by_table_name"), tableName);
 }
 
-std::deque<DataRow_ptr> PgDeconQueueDAO::get_data(const std::string& deconQueueTableName, bpt::ptime const &timeFrom, bpt::ptime const &timeTo, const size_t limit) {
+std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_data(const std::string& deconQueueTableName, bpt::ptime const &timeFrom, bpt::ptime const &timeTo, const size_t limit) {
     reject_empty(deconQueueTableName);
 
     boost::format sqlFormat (AbstractDAO::get_sql("get_data"));
@@ -37,7 +37,7 @@ std::deque<DataRow_ptr> PgDeconQueueDAO::get_data(const std::string& deconQueueT
     return data_source.query_for_deque(rowMapper, sql, timeFrom, timeTo);
 }
 
-std::deque<DataRow_ptr> PgDeconQueueDAO::get_latest_data(const std::string& deconQueueTableName, bpt::ptime const &timeTo, const size_t limit)
+std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_latest_data(const std::string& deconQueueTableName, bpt::ptime const &timeTo, const size_t limit)
 {
     reject_empty(deconQueueTableName);
 
@@ -51,7 +51,7 @@ std::deque<DataRow_ptr> PgDeconQueueDAO::get_latest_data(const std::string& deco
     return data_source.query_for_deque(rowMapper, sql, timeTo, limit);
 }
 
-bool PgDeconQueueDAO::exists(const DeconQueue_ptr& deconQueue) {
+bool PgDeconQueueDAO::exists(const datamodel::DeconQueue_ptr& deconQueue) {
     return exists(deconQueue->get_table_name());
 }
 
@@ -64,7 +64,7 @@ bool PgDeconQueueDAO::exists(const std::string &tableName) {
             data_source.query_for_type<int>(AbstractDAO::get_sql("table_exists"), tableName) == 1;
 }
 
-void PgDeconQueueDAO::save(DeconQueue_ptr const &p_decon_queue, const boost::posix_time::ptime &start_time)
+void PgDeconQueueDAO::save(datamodel::DeconQueue_ptr const &p_decon_queue, const boost::posix_time::ptime &start_time)
 {
     int res = save_metadata(p_decon_queue);
     save_data(p_decon_queue, res == 100 ? bpt::min_date_time : start_time);
@@ -78,7 +78,7 @@ namespace {
 
 
 
-bool PgDeconQueueDAO::decon_table_needs_recreation(DeconQueue_ptr const & existing_queue, DeconQueue_ptr const & new_queue)
+bool PgDeconQueueDAO::decon_table_needs_recreation(datamodel::DeconQueue_ptr const & existing_queue, datamodel::DeconQueue_ptr const & new_queue)
 {
     return existing_queue->get_input_queue_column_name() != new_queue->get_input_queue_column_name()
            || (existing_queue->get_dataset_id() != 0 && new_queue->get_dataset_id() != 0 && (existing_queue->get_dataset_id() != new_queue->get_dataset_id()))
@@ -86,11 +86,11 @@ bool PgDeconQueueDAO::decon_table_needs_recreation(DeconQueue_ptr const & existi
 }
 
 
-int PgDeconQueueDAO::save_metadata(DeconQueue_ptr const &p_decon_queue) {
+int PgDeconQueueDAO::save_metadata(datamodel::DeconQueue_ptr const &p_decon_queue) {
 
     int ret = 0;
 
-    DeconQueue_ptr existing = get_decon_queue_by_table_name(p_decon_queue->get_table_name());
+    datamodel::DeconQueue_ptr existing = get_decon_queue_by_table_name(p_decon_queue->get_table_name());
     if (existing)
     {
         scoped_transaction_guard_ptr tx = data_source.open_transaction();
@@ -122,7 +122,7 @@ int PgDeconQueueDAO::save_metadata(DeconQueue_ptr const &p_decon_queue) {
     return ret;
 }
 
-int PgDeconQueueDAO::remove(DeconQueue_ptr const &deconQueue)
+int PgDeconQueueDAO::remove(datamodel::DeconQueue_ptr const &deconQueue)
 {
     scoped_transaction_guard_ptr trx = data_source.open_transaction();
 
@@ -137,14 +137,14 @@ int PgDeconQueueDAO::remove(DeconQueue_ptr const &deconQueue)
     );
 }
 
-long PgDeconQueueDAO::save_data(const DeconQueue_ptr& p_decon_queue, const boost::posix_time::ptime &start_time)
+long PgDeconQueueDAO::save_data(const datamodel::DeconQueue_ptr& p_decon_queue, const boost::posix_time::ptime &start_time)
 {
     if (p_decon_queue->get_data().size() < 0) return 0;
     if (count(p_decon_queue) > 0) data_source.cleanup_queue_table(p_decon_queue->get_table_name(), p_decon_queue->get_data(), start_time);
     return data_source.batch_update(p_decon_queue->get_table_name(), p_decon_queue->get_data(), start_time);
 }
 
-std::deque<DataRow_ptr> PgDeconQueueDAO::get_data_having_update_time_greater_than(const std::string &deconQueueTableName, const bpt::ptime &updateTime, const size_t limit)
+std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_data_having_update_time_greater_than(const std::string &deconQueueTableName, const bpt::ptime &updateTime, const size_t limit)
 {
     DataRowRowMapper rowMapper;
     std::string sql = get_sql("get_data_having_update_time_greater_than");
@@ -154,7 +154,7 @@ std::deque<DataRow_ptr> PgDeconQueueDAO::get_data_having_update_time_greater_tha
     return data_source.query_for_deque(rowMapper, sqlFormat.str(), updateTime, limit);
 }
 
-int PgDeconQueueDAO::clear(const DeconQueue_ptr &deconQueue) {
+int PgDeconQueueDAO::clear(const datamodel::DeconQueue_ptr &deconQueue) {
 
     boost::format sqlFormat(get_sql("clear_table"));
     sqlFormat % deconQueue->get_table_name();
@@ -162,14 +162,14 @@ int PgDeconQueueDAO::clear(const DeconQueue_ptr &deconQueue) {
     return data_source.update(sqlFormat.str());
 }
 
-long PgDeconQueueDAO::count(const DeconQueue_ptr &deconQueue) {
+long PgDeconQueueDAO::count(const datamodel::DeconQueue_ptr &deconQueue) {
     boost::format sqlFormat(get_sql("count"));
     sqlFormat % deconQueue->get_table_name();
 
     return data_source.query_for_type<long>(sqlFormat.str());
 }
 
-void PgDeconQueueDAO::create_decon_table_no_trx(const DeconQueue_ptr& decon_queue)
+void PgDeconQueueDAO::create_decon_table_no_trx(const datamodel::DeconQueue_ptr& decon_queue)
 {
     std::string create_table_sql = AbstractDAO::get_sql("create_decon_table");
 
@@ -191,7 +191,7 @@ void PgDeconQueueDAO::create_decon_table_no_trx(const DeconQueue_ptr& decon_queu
     data_source.update(sql_format.str());
 }
 
-void PgDeconQueueDAO::remove_decon_table_no_trx(DeconQueue_ptr const & decon_queue)
+void PgDeconQueueDAO::remove_decon_table_no_trx(datamodel::DeconQueue_ptr const & decon_queue)
 {
     std::string dropTableSql = AbstractDAO::get_sql("remove_decon_queue_table");
     boost::format sqlFormat(dropTableSql);
@@ -200,7 +200,7 @@ void PgDeconQueueDAO::remove_decon_table_no_trx(DeconQueue_ptr const & decon_que
     data_source.update(sqlFormat.str());
 }
 
-int  PgDeconQueueDAO::update_metadata_no_trx(DeconQueue_ptr const & decon_queue)
+int  PgDeconQueueDAO::update_metadata_no_trx(datamodel::DeconQueue_ptr const & decon_queue)
 {
     return data_source.update(AbstractDAO::get_sql("update_metadata"),
                             decon_queue->get_input_queue_table_name(),
@@ -210,9 +210,9 @@ int  PgDeconQueueDAO::update_metadata_no_trx(DeconQueue_ptr const & decon_queue)
                             );
 }
 
-size_t PgDeconQueueDAO::get_level_count(const DeconQueue_ptr &p_decon_queue)
+size_t PgDeconQueueDAO::get_level_count(const datamodel::DeconQueue_ptr &p_decon_queue)
 {
-    Dataset_ptr p_dataset;
+    datamodel::Dataset_ptr p_dataset;
     size_t result = 0;
 
     if (p_decon_queue->get_decon_level_number() > 0) {
@@ -238,7 +238,7 @@ __bail:
 }
 
 
-size_t PgDeconQueueDAO::get_level_count_db(DeconQueue_ptr const & queue ) {
+size_t PgDeconQueueDAO::get_level_count_db(datamodel::DeconQueue_ptr const & queue ) {
     auto ret = data_source.query_for_type<int>(AbstractDAO::get_sql("get_db_column_number"), queue->get_table_name());
     if (ret < 3) return 0;
     return ret - 3;

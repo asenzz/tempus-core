@@ -24,7 +24,7 @@ int PredictionTaskService::save(PredictionTask_ptr &predictionTask)
     return predictionTaskDao.save(predictionTask);
 }
 
-PredictionTask_ptr PredictionTaskService::get_by_id(bigint id)
+PredictionTask_ptr PredictionTaskService::get_by_id(const bigint id)
 {
     return predictionTaskDao.get_by_id(id);
 }

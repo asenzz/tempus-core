@@ -46,8 +46,7 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
     double ystar;
     double z;
 
-    size_t icount{0};
-    size_t numres{0};
+    size_t icount = 0;
     std::vector<double> start = initial_values;
     jcount = check_for_convergence;
     dn = (double) (n);
@@ -311,7 +310,6 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
         start = xmin;
         memcpy(start.data(), xmin.data(), n * sizeof(start[0]));
         del = eps;
-        ++numres;
     }
 
     LOG4_INFO("NM: number of iterations: " << icount);

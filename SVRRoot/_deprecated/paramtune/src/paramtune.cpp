@@ -25,17 +25,17 @@ static const bpt::ptime time_first_call(bpt::second_clock::local_time());
 double
 loss(
         const std::vector<double> &parameters,
-        Dataset_ptr &p_original_dataset,
+        datamodel::Dataset_ptr &p_original_dataset,
         validation_parameters_t &validation_parameters,
         const score_metric_e score_metric,
-        const DeconQueue_ptr &p_decon_queue,
-        const std::vector<DeconQueue_ptr> &aux_decon_queues)
+        const datamodel::DeconQueue_ptr &p_decon_queue,
+        const std::vector<datamodel::DeconQueue_ptr> &aux_decon_queues)
 {
     svr::common::memory_manager::instance().wait();
     LOG4_BEGIN();
 
     svr::datamodel::Dataset fresh_dataset(*p_original_dataset);
-    Dataset_ptr p_dataset = std::make_shared<svr::datamodel::Dataset>(fresh_dataset);
+    datamodel::Dataset_ptr p_dataset = std::make_shared<svr::datamodel::Dataset>(fresh_dataset);
 
     ResourceMeasure loss_resource_measure;
     loss_resource_measure.set_start_time();
@@ -59,7 +59,7 @@ loss(
         return LOSS_WORSE_SCORE;
     }
 
-    const SVRParameters_ptr p_svr_parameters = p_dataset->get_svr_parameters(
+    const datamodel::SVRParameters_ptr p_svr_parameters = p_dataset->get_svr_parameters(
             p_dataset->get_input_queue()->get_table_name(), validation_parameters.column_name_,
             validation_parameters.model_number_);
 
@@ -335,9 +335,9 @@ score(const svr::datamodel::DataRow::container &ethalon, const svr::datamodel::D
 /* This method is expecting input queues with at least frame length data size */
 void
 prepare_decon_data(
-        Dataset_ptr &p_dataset,
-        const InputQueue_ptr &p_input_queue,
-        std::vector<DeconQueue_ptr> &decon_queues,
+        datamodel::Dataset_ptr &p_dataset,
+        const datamodel::InputQueue_ptr &p_input_queue,
+        std::vector<datamodel::DeconQueue_ptr> &decon_queues,
         bool force_recalculate)
 {
     if (p_input_queue->get_data().empty()) LOG4_THROW("No data in input queue!");
@@ -350,7 +350,7 @@ prepare_decon_data(
 
 
 size_t
-get_max_lag_count(const Dataset_ptr &p_dataset, const std::vector<Bounds> &all_bounds)
+get_max_lag_count(const datamodel::Dataset_ptr &p_dataset, const std::vector<Bounds> &all_bounds)
 {
     LOG4_BEGIN();
 
@@ -374,18 +374,18 @@ get_max_lag_count(const Dataset_ptr &p_dataset, const std::vector<Bounds> &all_b
 
 struct tune_column_task : svr::common::rtp::task
 {
-    Dataset_ptr p_current_dataset;
+    datamodel::Dataset_ptr p_current_dataset;
     const validation_parameters_t local_validation_parameters;
     const svr::optimizer::NM_parameters nm_parameters;
     const svr::optimizer::PSO_parameters pso_parameters;
-    const DeconQueue_ptr p_decon_queue;
-    const std::vector<DeconQueue_ptr> aux_decon_queues;
+    const datamodel::DeconQueue_ptr p_decon_queue;
+    const std::vector<datamodel::DeconQueue_ptr> aux_decon_queues;
 
-    std::pair<std::string, std::pair<double, SVRParameters_ptr>> result;
+    std::pair<std::string, std::pair<double, datamodel::SVRParameters_ptr>> result;
 
-    tune_column_task(Dataset_ptr p_current_dataset, const validation_parameters_t &local_validation_parameters,
+    tune_column_task(datamodel::Dataset_ptr p_current_dataset, const validation_parameters_t &local_validation_parameters,
                      const svr::optimizer::NM_parameters &nm_parameters, const svr::optimizer::PSO_parameters &pso_parameters,
-                     const DeconQueue_ptr &p_decon_queue, const std::vector<DeconQueue_ptr> &aux_decon_queues)
+                     const datamodel::DeconQueue_ptr &p_decon_queue, const std::vector<datamodel::DeconQueue_ptr> &aux_decon_queues)
             : p_current_dataset(p_current_dataset), local_validation_parameters(local_validation_parameters),
               nm_parameters(nm_parameters), pso_parameters(pso_parameters), p_decon_queue(p_decon_queue),
               aux_decon_queues(aux_decon_queues)
@@ -397,11 +397,11 @@ struct tune_column_task : svr::common::rtp::task
                              p_decon_queue, aux_decon_queues);
     }
 
-    std::pair<std::string, std::pair<double, SVRParameters_ptr>>
-    tune_column(const Dataset_ptr &p_current_dataset,
+    std::pair<std::string, std::pair<double, datamodel::SVRParameters_ptr>>
+    tune_column(const datamodel::Dataset_ptr &p_current_dataset,
                 const validation_parameters_t &local_validation_parameters,
                 const svr::optimizer::NM_parameters &nm_parameters, const svr::optimizer::PSO_parameters &pso_parameters,
-                const DeconQueue_ptr &p_decon_queue, const std::vector<DeconQueue_ptr> &aux_decon_queues)
+                const datamodel::DeconQueue_ptr &p_decon_queue, const std::vector<datamodel::DeconQueue_ptr> &aux_decon_queues)
     {
         svr::optimizer::loss_callback_t f = std::bind(
                 svr::paramtune::loss,
@@ -481,14 +481,14 @@ struct tune_column_task : svr::common::rtp::task
 };
 
 void prepare_datasets_tweaking(
-        const Dataset_ptr &p_current_dataset, std::vector<Dataset_ptr> &datasets_for_tweaking)
+        const datamodel::Dataset_ptr &p_current_dataset, std::vector<datamodel::Dataset_ptr> &datasets_for_tweaking)
 {
     // Creating vector of datasets: first - original, all another - for
     datasets_for_tweaking.push_back(p_current_dataset);
 
 }
 
-void calculate_scaling_factors(Dataset_ptr p_current_dataset_, bool force_recalculate)
+void calculate_scaling_factors(datamodel::Dataset_ptr p_current_dataset_, bool force_recalculate)
 {
     // Scaling factors computation here.
     auto p_input_queue = p_current_dataset_->get_input_queue()->clone_empty();
@@ -497,18 +497,18 @@ void calculate_scaling_factors(Dataset_ptr p_current_dataset_, bool force_recalc
             p_input_queue, std::numeric_limits<int>::max()));
 
     // Calculate and save scaling factors.
-    std::vector<DeconQueue_ptr> decon_queues;
+    std::vector<datamodel::DeconQueue_ptr> decon_queues;
     prepare_decon_data(p_current_dataset_, p_input_queue, decon_queues, force_recalculate);
 }
 
 
-DeconQueue_ptr
+datamodel::DeconQueue_ptr
 get_decon_queue_column(
-        const std::vector<DeconQueue_ptr> &decon_queues,
+        const std::vector<datamodel::DeconQueue_ptr> &decon_queues,
         const std::string &input_queue_table_name,
         const std::string &input_queue_column_name)
 {
-    for (const DeconQueue_ptr &p_decon_queue: decon_queues)
+    for (const datamodel::DeconQueue_ptr &p_decon_queue: decon_queues)
         if (p_decon_queue->get_input_queue_column_name() == input_queue_column_name &&
             p_decon_queue->get_input_queue_table_name() == input_queue_table_name)
             return p_decon_queue;
@@ -519,24 +519,24 @@ get_decon_queue_column(
 
 struct tune_level_task : svr::common::rtp::task
 {
-    const Dataset_ptr p_current_dataset;
+    const datamodel::Dataset_ptr p_current_dataset;
     const svr::paramtune::validation_parameters_t validation_params;
     const svr::optimizer::NM_parameters &nm_parameters;
     const svr::optimizer::PSO_parameters &pso_parameters;
-    const InputQueue_ptr &p_input_queue;
-    const std::vector<DeconQueue_ptr> &decon_queues;
-    const std::vector<DeconQueue_ptr> &aux_decon_queues;
+    const datamodel::InputQueue_ptr &p_input_queue;
+    const std::vector<datamodel::DeconQueue_ptr> &decon_queues;
+    const std::vector<datamodel::DeconQueue_ptr> &aux_decon_queues;
 
-    std::pair<std::map<std::string, double>, std::map<std::string, SVRParameters_ptr>> result;
+    std::pair<std::map<std::string, double>, std::map<std::string, datamodel::SVRParameters_ptr>> result;
 
     tune_level_task(
-            const Dataset_ptr p_current_dataset,
+            const datamodel::Dataset_ptr p_current_dataset,
             const svr::paramtune::validation_parameters_t &validation_params,
             const svr::optimizer::NM_parameters &nm_parameters,
             const svr::optimizer::PSO_parameters &pso_parameters,
-            const InputQueue_ptr &p_input_queue,
-            const std::vector<DeconQueue_ptr> &decon_queues,
-            const std::vector<DeconQueue_ptr> &aux_decon_queues
+            const datamodel::InputQueue_ptr &p_input_queue,
+            const std::vector<datamodel::DeconQueue_ptr> &decon_queues,
+            const std::vector<datamodel::DeconQueue_ptr> &aux_decon_queues
     )
             : p_current_dataset(p_current_dataset), validation_params(validation_params),
               nm_parameters(nm_parameters),
@@ -551,22 +551,22 @@ struct tune_level_task : svr::common::rtp::task
     }
 
 
-    std::pair<std::map<std::string, double>, std::map<std::string, SVRParameters_ptr>>
+    std::pair<std::map<std::string, double>, std::map<std::string, datamodel::SVRParameters_ptr>>
     tune_level(
-            const Dataset_ptr &p_current_dataset,
+            const datamodel::Dataset_ptr &p_current_dataset,
             const svr::paramtune::validation_parameters_t &validation_params,
             const svr::optimizer::NM_parameters &nm_parameters,
             const svr::optimizer::PSO_parameters &pso_parameters,
-            const InputQueue_ptr &p_input_queue,
-            const std::vector<DeconQueue_ptr> &decon_queues,
-            const std::vector<DeconQueue_ptr> &aux_decon_queues)
+            const datamodel::InputQueue_ptr &p_input_queue,
+            const std::vector<datamodel::DeconQueue_ptr> &decon_queues,
+            const std::vector<datamodel::DeconQueue_ptr> &aux_decon_queues)
     {
         LOG4_INFO("tuning dataset " << p_current_dataset->get_dataset_name() << " with level "
                                     << validation_params.model_number_);
         size_t level = validation_params.model_number_;
 
         std::map<std::string, double> best_column_mse;
-        std::map<std::string, SVRParameters_ptr> best_column_params;
+        std::map<std::string, datamodel::SVRParameters_ptr> best_column_params;
 
         std::vector<svr::future<std::shared_ptr<tune_column_task>>> tune_column_tasks;
 
@@ -579,7 +579,7 @@ struct tune_level_task : svr::common::rtp::task
             }
 
 
-            DeconQueue_ptr p_main_decon_queue = get_decon_queue_column(decon_queues, p_input_queue->get_table_name(),
+            datamodel::DeconQueue_ptr p_main_decon_queue = get_decon_queue_column(decon_queues, p_input_queue->get_table_name(),
                                                                        column_name);
             if (!p_main_decon_queue) {
                 LOG4_ERROR("Could not find decon queue for column " << column_name << " input queue "
@@ -588,7 +588,7 @@ struct tune_level_task : svr::common::rtp::task
                 continue;
             }
 
-            std::vector<DeconQueue_ptr> this_column_aux_decon_queues(aux_decon_queues);
+            std::vector<datamodel::DeconQueue_ptr> this_column_aux_decon_queues(aux_decon_queues);
             if (AppContext::get_instance().app_properties.get_main_columns_aux())
                 for (const auto &p_aux_column_decon_queue: decon_queues)
                     if (p_aux_column_decon_queue->get_input_queue_column_name() !=
@@ -656,11 +656,11 @@ struct tune_level_task : svr::common::rtp::task
 };
 
 void
-tune_transformation(Dataset_ptr &p_current_dataset,
+tune_transformation(datamodel::Dataset_ptr &p_current_dataset,
                     const std::vector<std::vector<size_t>> &svr_kernel_types_range,
                     const validation_parameters_t &validation_parameters, const svr::optimizer::NM_parameters &nm_parameters,
-                    const svr::optimizer::PSO_parameters &pso_parameters, best_mse_t &best_mse, Dataset_ptr &p_best_dataset,
-                    const InputQueue_ptr &p_input_queue)
+                    const svr::optimizer::PSO_parameters &pso_parameters, best_mse_t &best_mse, datamodel::Dataset_ptr &p_best_dataset,
+                    const datamodel::InputQueue_ptr &p_input_queue)
 {
 
     single_progress_step =
@@ -668,7 +668,7 @@ tune_transformation(Dataset_ptr &p_current_dataset,
             p_best_dataset->get_input_queue()->get_value_columns().size();
     std::vector<svr::future<std::shared_ptr<tune_level_task>>> tune_level_tasks;
 
-    std::vector<DeconQueue_ptr> decon_queues, aux_decon_queues;
+    std::vector<datamodel::DeconQueue_ptr> decon_queues, aux_decon_queues;
     prepare_decon_data(p_current_dataset, p_input_queue, decon_queues, false);
 
     for (size_t idx_level = 0; idx_level <= p_current_dataset->get_transformation_levels(); ++idx_level) {
@@ -689,10 +689,10 @@ tune_transformation(Dataset_ptr &p_current_dataset,
                     p_svr_parameters->set_kernel_type(static_cast<kernel_type>(svr_kernel_type));
 
 
-            std::vector<Dataset_ptr> datasets_for_tweaking;
+            std::vector<datamodel::Dataset_ptr> datasets_for_tweaking;
             prepare_datasets_tweaking(p_current_dataset, datasets_for_tweaking);
 
-            for (Dataset_ptr &p_current_tweaking_dataset: datasets_for_tweaking) {
+            for (datamodel::Dataset_ptr &p_current_tweaking_dataset: datasets_for_tweaking) {
 
                 validation_parameters_t local_validation_parameters(validation_parameters);
                 local_validation_parameters.model_number_ = idx_level;
@@ -738,7 +738,7 @@ tune_transformation(Dataset_ptr &p_current_dataset,
 
 
 void init_best_mse(
-        const Dataset_ptr &p_dataset, size_t max_transformation_levels, best_mse_t best_mse)
+        const datamodel::Dataset_ptr &p_dataset, size_t max_transformation_levels, best_mse_t best_mse)
 {
     for (const std::string &column_name: p_dataset->get_input_queue()->get_value_columns())
         best_mse[std::make_pair(p_dataset->get_input_queue()->get_table_name(), column_name)] =
@@ -746,18 +746,18 @@ void init_best_mse(
 }
 
 
-InputQueue_ptr
+datamodel::InputQueue_ptr
 get_input_data(
-        InputQueue_ptr p_input_queue,
+        datamodel::InputQueue_ptr p_input_queue,
         const size_t frame_length,
         const size_t max_lag_count,
         const bpt::time_period &needed_data_time_period)
 {
-    InputQueue_ptr p_res_input_queue = AppContext::get_instance().input_queue_service.clone_with_data(
+    datamodel::InputQueue_ptr p_res_input_queue = AppContext::get_instance().input_queue_service.clone_with_data(
             p_input_queue, needed_data_time_period);
 
     p_res_input_queue->update_data(
-            AppContext::get_instance().input_queue_service.get_latest_queue_data(
+            AppContext::get_instance().input_queue_service.load_latest(
                     p_res_input_queue,
                     max_lag_count + frame_length + 1,
                     needed_data_time_period.begin()));
@@ -789,13 +789,13 @@ get_full_time_span(
 }
 
 
-InputQueue_ptr
+datamodel::InputQueue_ptr
 prepare_input_data(
-        const Dataset_ptr &p_dataset,
+        const datamodel::Dataset_ptr &p_dataset,
         const size_t frame_length,
         const validation_parameters_t &validation_parameters,
         const size_t max_lag_count,
-        InputQueue_ptr &p_input_queue) /* out */
+        datamodel::InputQueue_ptr &p_input_queue) /* out */
 {
     LOG4_BEGIN();
     bpt::time_period needed_data_time_period = get_full_time_span(
@@ -829,7 +829,7 @@ prepare_input_data(
 
 
 size_t calculate_total_loss_calls(
-        const Dataset_ptr &p_dataset,
+        const datamodel::Dataset_ptr &p_dataset,
         const std::vector<size_t> &transformation_levels_range,
         const std::vector<std::string> &transformation_names_range,
         const std::vector<std::vector<size_t>> &svr_kernel_types_range,
@@ -846,9 +846,9 @@ size_t get_longest_wavelet_order(const std::vector<std::string> &transformation_
     return result;
 }
 
-Dataset_ptr
+datamodel::Dataset_ptr
 tune_dataset(
-        const Dataset_ptr &p_dataset,
+        const datamodel::Dataset_ptr &p_dataset,
         const std::vector<size_t> &transformation_levels_range,
         const std::vector<std::string> &transformation_names_range,
         const std::vector<std::vector<size_t>> &svr_kernel_types_range,
@@ -857,7 +857,7 @@ tune_dataset(
         const svr::optimizer::PSO_parameters &pso_parameters)
 {
     resource_measure.set_start_time();
-    Dataset_ptr p_best_dataset = std::make_shared<Dataset>(*p_dataset);
+    datamodel::Dataset_ptr p_best_dataset = std::make_shared<Dataset>(*p_dataset);
     const size_t max_transformation_levels = transformation_levels_range.empty() ? 1 : *std::max_element(
             transformation_levels_range.begin(),
             transformation_levels_range.end());
@@ -879,13 +879,13 @@ tune_dataset(
     const auto min_frame_length = svr::spectral_transform::get_min_frame_length(
             max_transformation_levels, max_lag_count, longest_wavelet_order, transformation_names_range[0]);
 
-    InputQueue_ptr p_input_queue;
+    datamodel::InputQueue_ptr p_input_queue;
     prepare_input_data(p_dataset, min_frame_length, validation_parameters, max_lag_count, p_input_queue);
 
     // TODO Parallelize
     for (const size_t &transformation_levels: transformation_levels_range) {
         for (const std::string &transformation_name: transformation_names_range) {
-            Dataset_ptr p_current_dataset = std::make_shared<Dataset>(*p_dataset);
+            datamodel::Dataset_ptr p_current_dataset = std::make_shared<Dataset>(*p_dataset);
             p_current_dataset->set_transformation_levels(transformation_levels);
             p_current_dataset->set_transformation_name(transformation_name);
             p_current_dataset->set_id(p_dataset->get_id());
@@ -902,7 +902,7 @@ tune_dataset(
 
 size_t
 calculate_total_loss_calls(
-        const Dataset_ptr &p_dataset,
+        const datamodel::Dataset_ptr &p_dataset,
         const std::vector<size_t> &transformation_levels_range,
         const std::vector<std::string> &transformation_names_range,
         const std::vector<std::vector<size_t>> &svr_kernel_types_range,
@@ -921,13 +921,13 @@ calculate_total_loss_calls(
 }
 
 /* TODO first fix then use or drop the whole concept, now its unusable */
-Dataset_ptr tune_interchangable_level(
-        const Dataset_ptr &p_dataset,
+datamodel::Dataset_ptr tune_interchangable_level(
+        const datamodel::Dataset_ptr &p_dataset,
         const boost::posix_time::time_period &training_range,
         const boost::posix_time::time_period &prediction_range,
         bool divide_lower_from_upper)
 {
-    Dataset_ptr p_best_dataset = std::make_shared<Dataset>(*p_dataset);
+    datamodel::Dataset_ptr p_best_dataset = std::make_shared<Dataset>(*p_dataset);
     auto best_params = p_best_dataset->get_ensemble_svr_parameters();
 
     for (auto column_name: p_dataset->get_input_queue()->get_value_columns()) {
@@ -935,9 +935,9 @@ Dataset_ptr tune_interchangable_level(
         auto key = std::make_pair(p_dataset->get_input_queue()->get_table_name(),
                                   column_name);
         for (size_t idx_level = 0; idx_level <= p_dataset->get_transformation_levels(); ++idx_level) {
-            Dataset_ptr p_current_dataset = std::make_shared<Dataset>(*p_best_dataset);
+            datamodel::Dataset_ptr p_current_dataset = std::make_shared<Dataset>(*p_best_dataset);
             auto params = p_current_dataset->get_ensemble_svr_parameters();
-            std::vector<SVRParameters_ptr> new_params = p_current_dataset->get_ensemble_svr_parameters()[key];
+            std::vector<datamodel::SVRParameters_ptr> new_params = p_current_dataset->get_ensemble_svr_parameters()[key];
             if (divide_lower_from_upper) {
                 std::fill(new_params.begin(), std::next(new_params.begin(), idx_level),
                           params[key][idx_level]);
@@ -951,7 +951,7 @@ Dataset_ptr tune_interchangable_level(
             AppContext::get_instance().dataset_service.run(
                     p_current_dataset, training_range, prediction_range, predict_result);
             auto p_orig_input_queue = p_current_dataset->get_input_queue()->clone_empty();
-            p_orig_input_queue->set_data(AppContext::get_instance().input_queue_service.get_queue_data(
+            p_orig_input_queue->set_data(AppContext::get_instance().input_queue_service.load(
                     p_current_dataset->get_input_queue()->get_table_name(),
                     prediction_range.begin(), prediction_range.last()));
             const auto column_mse = std::numeric_limits<double>::quiet_NaN();

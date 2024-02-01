@@ -1,6 +1,5 @@
 #include "appcontext.hpp"
 
-#include "DAO/common.hpp"
 #include "DAO/UserDAO.hpp"
 #include "DAO/DataSource.hpp"
 #include "DAO/SVRParametersDAO.hpp"
@@ -142,13 +141,7 @@ AppContext::AppContext(const std::string &config_path, bool use_threadsafe_dao)
           svr_parameters_service(
                   *new svr::business::SVRParametersService(p_impl.svrParametersDao)),
           model_service(
-                  *new svr::business::ModelService(
-                          p_impl.modelDao,
-                          !app_properties.get_dont_update_r_matrix(),
-                          app_properties.get_max_smo_iterations(),
-                          app_properties.get_smo_epsilon_divisor(),
-                          app_properties.get_max_segment_size(),
-                          app_properties.get_multistep_len())),
+                  *new svr::business::ModelService(p_impl.modelDao)),
           decon_queue_service(
                   *new svr::business::DeconQueueService(p_impl.deconQueueDao, input_queue_service)),
           ensemble_service(

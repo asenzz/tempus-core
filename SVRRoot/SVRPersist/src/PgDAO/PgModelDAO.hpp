@@ -12,19 +12,19 @@ public:
 
     bigint get_next_id();
 
-    bool exists(bigint model_id);
+    bool exists(const bigint model_id);
 
-    int save(const Model_ptr& model);
+    int save(const datamodel::Model_ptr& model);
 
-    int remove(const Model_ptr& model);
+    int remove(const datamodel::Model_ptr& model);
 
-    int remove_by_ensemble_id(bigint ensemble_id);
+    int remove_by_ensemble_id(const bigint ensemble_id);
 
-    Model_ptr get_by_id(bigint model_id);
+    datamodel::Model_ptr get_by_id(const bigint model_id);
 
-    Model_ptr get_by_ensemble_id_and_decon_level(bigint ensemble_id, size_t decon_level);
+    datamodel::Model_ptr get_by_ensemble_id_and_decon_level(const bigint ensemble_id, size_t decon_level);
 
-    std::vector<Model_ptr> get_all_ensemble_models(bigint ensemble_id);
+    std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id);
 };
 
 }

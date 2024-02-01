@@ -8,6 +8,7 @@
 #include <cufft.h>
 #include <sstream>
 #include <cstdint>
+#include <thrust/device_vector.h>
 #include "common/Logging.hpp"
 #include "common/defines.h"
 
@@ -116,10 +117,20 @@ inline void gpu_assert(const cudaError_t errc, bool abort = false)
 #define cu_errchk(ans) { gpu_assert((ans)); }
 
 #ifndef cublas_safe_call
-#define cublas_safe_call(err) \
-    if (const auto errc = err) {                \
-        LOG4_ERROR("Cublas call failed with " << int(errc)); \
-    }
+#define cublas_safe_call(cmd)                                       \
+{                                                                   \
+        if (const auto __ec = (cmd))                                \
+            LOG4_THROW("Cublas call failed with " << int(__ec));    \
+}
+#endif
+
+#ifndef cusolver_safe_call
+#define cusolver_safe_call(cmd)                                     \
+{                                                                   \
+        cusolverStatus_t __ec;                                      \
+        if ((__ec = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
+            LOG4_THROW("Cublas call failed with " << int(__ec));    \
+}
 #endif
 
 template<typename T> T *
@@ -142,12 +153,26 @@ cuda_malloccopy(const T *source, const size_t size, const cudaMemcpyKind kind)
 }
 
 template<typename T> std::vector<T>
-cuda_copy(const T *source, const size_t length, const cudaMemcpyKind kind)
+cuda_copy(const T *source, const size_t length)
 {
-    std::vector<double> res(length);
+    std::vector<T> res(length);
     cu_errchk(cudaMemcpy(res.data(), source, length * sizeof(T), cudaMemcpyDeviceToHost));
-    //cu_errchk(cudaDeviceSynchronize());
     return res;
+}
+
+template<typename T> std::vector<T>
+cuda_copy(const thrust::device_vector<T> &source)
+{
+    std::vector<T> res(source.size());
+    cu_errchk(cudaMemcpy(res.data(), thrust::raw_pointer_cast(source.data()), source.size() * sizeof(T), cudaMemcpyDeviceToHost));
+    return res;
+}
+
+template<typename T> void
+cuda_copy(std::vector<T> &res, const T *source, const size_t length)
+{
+    if (res.size() != length) res.resize(length);
+    cu_errchk(cudaMemcpy(res.data(), source, length * sizeof(T), cudaMemcpyDeviceToHost));
 }
 
 template<typename T> T *

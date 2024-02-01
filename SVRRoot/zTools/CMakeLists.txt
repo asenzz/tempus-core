@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(Tools)
 
 #Define project dependencies
@@ -12,8 +12,6 @@ FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED)
 
 INCLUDE_DIRECTORIES(include ${Boost_INCLUDE_DIR})
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PEDANTIC_FLAGS}")
-        
 MACRO(SUBDIRLIST result curdir)
   FILE(GLOB children RELATIVE "${curdir}" "${curdir}/*")
   SET(dirlist "")

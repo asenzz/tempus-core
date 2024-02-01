@@ -3,7 +3,7 @@
 //
 
 #include <gtest/gtest.h>
-#include <mkl_lapacke.h>
+#include </opt/intel/oneapi/mkl/latest/include/mkl_lapacke.h>
 #include <sstream>
 #include <vector>
 #include <cstdlib>
@@ -49,7 +49,7 @@ TEST(mimo_train_predict, batch_train)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineMIMOSVR online_svr_(mimo_model->get_svr_parameters_ptr(), svr::MimoType::single, mimo_model->get_multistep_len());
+    svr::OnlineMIMOSVR online_svr_(mimo_model->get_param_set_ptr(), mimo_model->get_multistep_len());
 
     LOG4_DEBUG("multistep_len is " << mimo_model->get_multistep_len());
 
@@ -61,7 +61,7 @@ TEST(mimo_train_predict, batch_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), false), "Batch Train");
+    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train)), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(2,3), mimo_model->get_weights(0)(2,3), TOLERANCE);
@@ -83,7 +83,7 @@ TEST(mimo_train_predict, chunk_train)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineMIMOSVR online_svr_(mimo_model->get_svr_parameters_ptr(), mimo_model->get_mimo_type(), mimo_model->get_multistep_len());
+    svr::OnlineMIMOSVR online_svr_(mimo_model->get_param_set_ptr(), mimo_model->get_multistep_len());
 
     LOG4_DEBUG("multistep_len is " << mimo_model->get_multistep_len());
 
@@ -95,7 +95,7 @@ TEST(mimo_train_predict, chunk_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), false), "Batch Train");
+    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train)), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(2,3), mimo_model->get_weights(0)(2,3), TOLERANCE);
@@ -569,7 +569,7 @@ TEST(mimo_online_train, multiple_forget_learn)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_multistep_len());
+    svr::OnlineSVR online_svr_(mimo_model->get_param_set(), mimo_model->get_multistep_len());
 
     arma::mat learning = mimo_model->get_learning_matrix();
     arma::mat reference = mimo_model->get_reference_matrix();
@@ -611,7 +611,7 @@ TEST(mimo_online_train, multiple_forget_learn)
     const auto final_k = mimo_model_.get_kernel_matrix();
     const auto final_r = mimo_model_.get_r_matrix();
 
-    const double correction = 1. / (2. * mimo_model_.get_svr_parameters().get_svr_C());
+    const double correction = 1. / (2. * mimo_model_.get_param_set().get_svr_C());
 //    arma::mat test = final_k * final_r;
 //    LOG4_DEBUG("some values are " << test(0, 0) << " " << test(12, 2) << " " << test(44, 11));
     const auto error = error_mult(final_k + arma::eye(k.n_rows,k.n_cols) * correction, final_r);
@@ -620,16 +620,6 @@ TEST(mimo_online_train, multiple_forget_learn)
 }
 #endif
 
-
-TEST(mimo_common, sort_ixs)
-{
-    std::vector<double> rmse_total = {5., 1., -2., 12., 6., 7., 8., 9., 10., 9.4,
-                                      -4, 1.4, 22., 12.1, 13., 4., 5.5, 5.6, 5.8, 2.3};
-    std::vector<size_t> expected_ixs = {10, 2, 1, 11, 19, 15, 0, 16, 17, 18, 4, 5, 6, 7, 9, 8, 3, 13, 14, 12};
-    std::vector<size_t> computed_ixs = svr::OnlineMIMOSVR::sort_indexes(rmse_total);
-    for (size_t i = 0; i < 20; ++i)
-        EXPECT_EQ(expected_ixs[i], computed_ixs[i]);
-}
 
 TEST(mimo_common, fixed_shuffle_returns_the_same){
     arma::mat i_full = arma::cumsum(arma::ones(1000, 1)) - 1;

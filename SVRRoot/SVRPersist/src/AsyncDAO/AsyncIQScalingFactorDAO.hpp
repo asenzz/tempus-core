@@ -15,7 +15,7 @@ public:
     virtual bool exists(const bigint id);
     virtual int save(const IQScalingFactor_ptr& iQScalingFactor);
     virtual int remove(const IQScalingFactor_ptr& iQscalingFactor);
-    virtual std::vector<IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
+    virtual std::deque<IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
 
 private:
     class AsyncImpl;

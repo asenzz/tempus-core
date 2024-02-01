@@ -12,6 +12,8 @@
 namespace svr {
 namespace datamodel{
 
+class DataRow;
+using DataRow_ptr = std::shared_ptr<DataRow>;
 
 class DataRow
 {
@@ -20,7 +22,6 @@ private:
     bpt::ptime update_time_;
     double tick_volume_;
     std::vector<double> values_;
-    bool anchor = false;
 
 public:
     using container = std::deque<std::shared_ptr<DataRow>>;
@@ -36,45 +37,6 @@ public:
      *  }
      *
      */
-#if 0
-    static std::vector<double>
-    diff_return(const std::vector<double> &inp)
-    {
-        LOG4_DEBUG("inp size " << inp.size());
-        if (inp.size() < 2) THROW_EX_FS(std::invalid_argument, "Illegal input size " << inp.size());
-        std::vector<double> res(inp.size() - 1);
-        __omp_tpfor(size_t, t, 1, inp.size(), res[t - 1] = inp[t] - inp[t - 1])
-        return res;
-    }
-
-    static void
-    inv_diff_return(const double anchor, arma::rowvec &inp)
-    {
-        inp[0] = anchor + inp[0];
-        for (size_t t = 1; t < inp.size(); ++t)
-            inp[t] = inp[t - 1] + inp[t];
-    }
-#endif
-
-    static void
-    inv_diff_return( // Convert container contents from diffs to actual prices
-            const container &orig_data,
-            container &inp,
-            const size_t orig_col)
-    {
-        for (auto iter = inp.begin(); iter != inp.end(); ++iter) {
-            double anchor_val = 0;
-            auto orig_iter = find(orig_data, iter->get()->get_value_time(), bpt::seconds(0));
-            if (orig_iter != orig_data.end())
-                anchor_val = std::prev(orig_iter)->get()->get_value(orig_col);
-            else if (std::prev(iter)->get()->is_anchor())
-                anchor_val = std::prev(iter)->get()->get_value(0);
-            else
-                LOG4_THROW("Could not find anchor value for " << iter->get()->get_value_time());
-            iter->get()->set_value(0, anchor_val + iter->get()->get_value(0));
-            iter->get()->set_anchor(true);
-        }
-    }
 
     static bpt::ptime // Returns last inserted row value time
     insert_rows(
@@ -85,17 +47,16 @@ public:
 
 
     static container
-    construct(const std::vector<MultivalResponse_ptr> &responses)
+    construct(const std::deque<datamodel::MultivalResponse_ptr> &responses)
     {
         container result;
         for (auto iter_res = responses.begin(); iter_res != responses.end(); ++iter_res) {
             const auto response = **iter_res;
-            const std::vector<double> v{response.value};
             result.push_back(std::make_shared<DataRow>(
                     response.value_time,
                     bpt::second_clock::local_time(),
-                    svr::common::C_default_value_tick_volume,
-                    v));
+                    common::C_default_value_tick_volume,
+                    std::vector{response.value}));
         }
         return result;
     }
@@ -108,21 +69,32 @@ public:
     DataRow(
             const bpt::ptime& value_time,
             const bpt::ptime& update_time = bpt::second_clock::local_time(),
-            double tick_volume = svr::common::C_default_value_tick_volume,
+            double tick_volume = common::C_default_value_tick_volume,
             const std::vector<double> &values = {}) :
         value_time_(value_time),
         update_time_(update_time),
         tick_volume_(tick_volume),
         values_(values)
     {}
-#pragma GCC diagnostic pop
 
-    void set_anchor(const bool new_anchor_val) { anchor = new_anchor_val; }
-    bool is_anchor() { return anchor; }
+    DataRow(
+            const bpt::ptime& value_time,
+            const bpt::ptime& update_time,
+            double tick_volume = common::C_default_value_tick_volume,
+            double *values_ptr = nullptr,
+            const size_t values_size = 0) :
+            value_time_(value_time),
+            update_time_(update_time),
+            tick_volume_(tick_volume),
+            values_(common::wrap_vector<double>(values_ptr, values_size))
+    {}
+
+#pragma GCC diagnostic pop
 
     std::vector<double>& get_values() { return values_; }
     void set_values(const std::vector<double>& values) { values_ = values; }
-    double get_value(const size_t column_index) { return values_[column_index]; } const
+    double get_value(const size_t column_index) const { return values_[column_index]; }
+    double &get_value(const size_t column_index) { return values_[column_index]; }
     double operator() (const size_t column_index) { return values_[column_index]; }
     void set_value(const size_t column_index, const double value)
     {
@@ -178,20 +150,22 @@ public:
                 lhs.begin()->get()->get_value_time() == rhs.begin()->get()->get_value_time() and
                 lhs.rbegin()->get()->get_value_time() == rhs.rbegin()->get()->get_value_time();
     }
-
-    DataRow::container::const_iterator static find(
-            const DataRow::container &data,
-            const boost::posix_time::ptime &row_time,
-            const boost::posix_time::time_duration &deviation);
 };
 
 
-class datarow_range
+template<typename C = DataRow::container, typename C_range_iter = typename C::iterator, typename T = typename C::value_type>
+class container_range
 {
+    using C_iter = typename C::iterator;
+    using C_citer = typename C::const_iterator;
+    using C_riter = typename C::reverse_iterator;
+
+    ssize_t distance_;
+    C_range_iter begin_, end_;
+    C &container_;
+
 public:
-    datarow_range(
-            DataRow::container &container
-    )
+    explicit container_range(C &container)
         : begin_(container.begin())
         , end_(container.end())
         , container_(container)
@@ -199,47 +173,41 @@ public:
         reinit();
     }
 
-    datarow_range(
-            const DataRow::container::iterator &start,
-            const DataRow::container::iterator &end,
-            DataRow::container &container
+    container_range(
+            const C_range_iter &start,
+            const C_range_iter &end,
+            C &container
     )
-        : begin_(start)
-        , end_(end)
-        , container_(container)
+            : begin_(start)
+            , end_(end)
+            , container_(container)
     {
         reinit();
     }
 
-
-    size_t distance() const { return static_cast<size_t>(std::abs(std::distance(begin_, end_))); } // TODO Rewrite this container or remove it
-
-    DataRow::container::iterator begin() const { return begin_; }
-    DataRow::container::iterator end() const { return end_; }
-    DataRow::container::iterator begin() { return begin_; }
-    DataRow::container::iterator end() { return end_; }
-
-    DataRow::container::reverse_iterator rbegin() const { return DataRow::container::reverse_iterator(end_); }
-    DataRow::container::reverse_iterator rend() const { return DataRow::container::reverse_iterator(begin_); }
-    DataRow::container::reverse_iterator rbegin() { return DataRow::container::reverse_iterator(end_); }
-    DataRow::container::reverse_iterator rend() { return DataRow::container::reverse_iterator(begin_);}
-
-    const DataRow::container &get_container() const { return container_; }
-    DataRow::container &get_container() { return container_; }
-
-    void set_begin(const DataRow::container::iterator &begin)
+    container_range(
+            C_range_iter start,
+            C &container
+    )
+            : begin_(start)
+            , end_(container.end())
+            , container_(container)
     {
-        begin_ = begin;
         reinit();
     }
 
-    void set_end(const DataRow::container::iterator &end)
+    container_range(
+            C &container,
+            C_range_iter end
+    )
+            : begin_(container.start())
+            , end_(end)
+            , container_(container)
     {
-        end_ = end;
         reinit();
     }
 
-    datarow_range(const datarow_range &rhs) :
+    container_range(const container_range &rhs) :
             begin_(rhs.begin_),
             end_(rhs.end_),
             container_(rhs.container_)
@@ -247,8 +215,17 @@ public:
         reinit();
     }
 
-    datarow_range &operator = (const datarow_range &rhs)
+    container_range(container_range &rhs) :
+            begin_(rhs.begin_),
+            end_(rhs.end_),
+            container_(rhs.container_)
     {
+        reinit();
+    }
+
+    container_range &operator = (const container_range &rhs)
+    {
+        if (this == &rhs) return *this;
         begin_ = rhs.begin_;
         end_ = rhs.end_;
         container_ = rhs.container_;
@@ -256,102 +233,86 @@ public:
         return *this;
     }
 
-    datarow_range() = delete;
-
-private:
-    size_t distance_;
-    DataRow::container::iterator begin_, end_;
-    DataRow::container &container_;
-
-    void reinit()
+    T &operator[](const size_t index)
     {
-        distance_ = std::abs<ssize_t>(std::distance(begin_, end_));
+        return *(begin_ + index);
+    }
+
+
+    T operator[](const size_t index) const
+    {
+        return *(begin_ + index);
+    }
+
+    container_range() = delete;
+
+    ssize_t distance() const { return distance_; } // TODO Rewrite this container or remove it
+
+    C_range_iter begin() const { return begin_; }
+    C_range_iter end() const { return end_; }
+    C_riter rbegin() const { return C_riter(end_); }
+    C_riter rend() const { return C_riter(begin_); }
+
+    C &get_container() const { return container_; }
+    // C &get_container() { return container_; }
+
+    void set_range(const C_range_iter &start, const C_range_iter &end)
+    {
+        begin_ = start;
+        end_ = end;
+        reinit();
+    }
+
+    void set_begin(C_range_iter &begin)
+    {
+        begin_ = begin;
+        reinit();
+    }
+
+    void set_end(C_range_iter &end)
+    {
+        end_ = end;
+        reinit();
+    }
+
+    void reinit() // Call whenever changes to the container are made
+    {
+        distance_ = std::distance(begin_, end_);
     }
 };
 
+typedef container_range<const DataRow::container, DataRow::container::const_iterator> datarow_crange;
+typedef container_range<DataRow::container, DataRow::container::reverse_iterator> datarow_rrange;
+typedef container_range<DataRow::container, DataRow::container::iterator> datarow_range;
+
 }
-}
 
-svr::datamodel::DataRow::container::const_iterator
-lower_bound(const svr::datamodel::DataRow::container &c, const bpt::ptime &t);
+using data_row_container = datamodel::DataRow::container;
+using data_row_container_ptr = std::shared_ptr<data_row_container>;
 
-svr::datamodel::DataRow::container::iterator
-lower_bound(svr::datamodel::DataRow::container &c, const bpt::ptime &t);
+data_row_container::const_iterator
+lower_bound(const data_row_container &c, const bpt::ptime &t);
 
-svr::datamodel::DataRow::container::const_iterator
-upper_bound(const svr::datamodel::DataRow::container &c, const bpt::ptime &t);
+data_row_container::iterator
+lower_bound(data_row_container &c, const bpt::ptime &t);
 
-svr::datamodel::DataRow::container::iterator
-upper_bound(svr::datamodel::DataRow::container &c, const bpt::ptime &t);
+data_row_container::const_iterator
+upper_bound(const data_row_container &c, const bpt::ptime &t);
 
-svr::datamodel::DataRow::container::iterator find(svr::datamodel::DataRow::container &data, const bpt::ptime &value_time);
+data_row_container::iterator
+upper_bound(data_row_container &c, const bpt::ptime &t);
 
-svr::datamodel::DataRow::container::const_iterator find(const svr::datamodel::DataRow::container &data, const bpt::ptime &value_time);
+data_row_container::const_iterator
+upper_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key);
 
+data_row_container::iterator
+upper_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
-svr::datamodel::DataRow::container::const_iterator
-find_nearest_before(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
+data_row_container::iterator
+upper_bound_back(data_row_container &data, const bpt::ptime &time_key);
 
-svr::datamodel::DataRow::container::iterator
-find_nearest_before(
-        svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
-
-svr::datamodel::DataRow::container::iterator
-find_nearest(
-        svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time);
-
-svr::datamodel::DataRow::container::const_iterator
-find_nearest(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time);
-
-svr::datamodel::DataRow::container::const_iterator
-find_nearest(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        bool &check);
-
-svr::datamodel::DataRow::container::iterator
-find_nearest(
-        svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
-
-svr::datamodel::DataRow::container::const_iterator
-find_nearest(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
-
-using DataRow_ptr = std::shared_ptr<svr::datamodel::DataRow>;
-using data_row_container = svr::datamodel::DataRow::container;
-using data_row_container_ptr = std::shared_ptr<svr::datamodel::DataRow::container>;
-
-/*
-template<typename T> T
-lower_bound(const data_row_container &data, const T &hint_start, const bpt::ptime &key)
-{
-    return std::lower_bound(hint_start, data.end(), key, [](const DataRow_ptr &el, const bpt::ptime &tt){
-        return el->get_value_time() < tt;
-    });
-}
-*/
-
-svr::datamodel::DataRow::container::const_iterator
-find_nearest_after(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count);
+data_row_container::const_iterator
+upper_bound_back(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
 lower_bound(const data_row_container &data, const data_row_container::const_iterator &hint_start, const bpt::ptime &key);
@@ -362,24 +323,81 @@ lower_bound_back(const data_row_container &data, const data_row_container::const
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const bpt::ptime &time_key);
 
-svr::datamodel::DataRow::container::const_iterator
+data_row_container::const_iterator
 lower_bound_back_before(
-        const svr::datamodel::DataRow::container &data,
-        const svr::datamodel::DataRow::container::const_iterator &hint,
+        const data_row_container &data,
+        const data_row_container::const_iterator &hint,
         const bpt::ptime &time_key);
 
-svr::datamodel::DataRow::container::const_iterator
+data_row_container::const_iterator
 lower_bound_back_before(
-        const svr::datamodel::DataRow::container &data,
+        const data_row_container &data,
         const bpt::ptime &time_key);
 
-svr::datamodel::DataRow::container::const_iterator
-lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
+data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
+data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
+
+data_row_container::iterator find(data_row_container &data, const bpt::ptime &value_time);
+
+data_row_container::const_iterator find(const data_row_container &data, const bpt::ptime &value_time);
+
+
+data_row_container::const_iterator
+find_nearest_before(
+        const data_row_container &data,
+        const boost::posix_time::ptime &time,
+        const boost::posix_time::time_duration &max_gap,
+        const size_t lag_count = std::numeric_limits<size_t>::max());
+
+data_row_container::iterator
+find_nearest_before(
+        data_row_container &data,
+        const boost::posix_time::ptime &time,
+        const size_t lag_count = std::numeric_limits<size_t>::max());
+
+data_row_container::iterator
+find_nearest(
+        data_row_container &data,
+        const boost::posix_time::ptime &time);
+
+data_row_container::const_iterator
+find_nearest(
+        const data_row_container &data,
+        const boost::posix_time::ptime &time);
+
+data_row_container::const_iterator
+find_nearest(
+        const data_row_container &data,
+        const boost::posix_time::ptime &time,
+        bool &check);
+
+data_row_container::iterator
+find_nearest(
+        data_row_container &data,
+        const boost::posix_time::ptime &time,
+        const boost::posix_time::time_duration &max_gap,
+        const size_t lag_count = std::numeric_limits<size_t>::max());
+
+data_row_container::const_iterator
+find_nearest(
+        const data_row_container &data,
+        const boost::posix_time::ptime &time,
+        const boost::posix_time::time_duration &max_gap,
+        const size_t lag_count = std::numeric_limits<size_t>::max());
+
+data_row_container::const_iterator
+find_nearest_after(
+        const data_row_container &data,
+        const boost::posix_time::ptime &time,
+        const boost::posix_time::time_duration &max_gap,
+        const size_t lag_count);
+
 
 bool
 generate_labels(
-        const svr::datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
-        const svr::datamodel::DataRow::container::const_iterator &it_end,
+        const data_row_container::const_iterator &start_iter, // At start time or before
+        const data_row_container::const_iterator &it_end,
         const bpt::ptime &start_time,
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
@@ -387,9 +405,11 @@ generate_labels(
         arma::rowvec &labels_row);
 
 double calc_twap(
-        const svr::datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
-        const svr::datamodel::DataRow::container::const_iterator &it_end,
+        const data_row_container::const_iterator &start_iter, // At start time or before
+        const data_row_container::const_iterator &it_end,
         const boost::posix_time::ptime &start_time,
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
         const size_t col_ix);
+
+}

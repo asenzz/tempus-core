@@ -79,7 +79,7 @@ public:
     // Attributes Operations
     SVRParameters &get_svr_parameters();
 
-    void set_svr_parameters(const SVRParameters &);
+    void set_param_set(const SVRParameters &);
 
     bool get_stabilized_learning() const;
 

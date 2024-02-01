@@ -13,19 +13,19 @@ PgInputQueueDAO::PgInputQueueDAO(svr::common::PropertiesFileReader& sql_properti
 : InputQueueDAO(sql_properties, data_source) {
 }
 
-InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution) {
+datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution) {
 
     InputQueueRowMapper row_mapper;
     std::string sql = AbstractDAO::get_sql("get_queue_metadata");
     return data_source.query_for_object(&row_mapper, sql, user_name, logical_name, resolution);
 }
 
-InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &table_name) {
+datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &table_name) {
     InputQueueRowMapper row_mapper;
     return data_source.query_for_object(&row_mapper, get_sql("get_queue_metadata_by_table_name"), table_name);
 }
 
-std::deque<DataRow_ptr> PgInputQueueDAO::get_queue_data_by_table_name(
+std::deque<datamodel::DataRow_ptr> PgInputQueueDAO::get_queue_data_by_table_name(
         const std::string &table_name,
         const bpt::ptime &time_from,
         const bpt::ptime &time_to,
@@ -41,7 +41,7 @@ std::deque<DataRow_ptr> PgInputQueueDAO::get_queue_data_by_table_name(
     return data_source.query_for_deque(row_mapper, sql, time_from, time_to, limit);
 }
 
-std::deque<DataRow_ptr> PgInputQueueDAO::get_latest_queue_data_by_table_name(
+std::deque<datamodel::DataRow_ptr> PgInputQueueDAO::get_latest_queue_data_by_table_name(
         const std::string &table_name,
         const size_t limit,
         const bpt::ptime &last_time)
@@ -53,7 +53,7 @@ std::deque<DataRow_ptr> PgInputQueueDAO::get_latest_queue_data_by_table_name(
     return data_source.query_for_deque(row_mapper, sql, last_time, limit);
 }
 
-DataRow_ptr PgInputQueueDAO::get_nth_last_row(
+datamodel::DataRow_ptr PgInputQueueDAO::get_nth_last_row(
         const std::string &table_name,
         const size_t position,
         const bpt::ptime target_time)
@@ -61,7 +61,7 @@ DataRow_ptr PgInputQueueDAO::get_nth_last_row(
     LOG4_DEBUG("Reading data from queue " << table_name);
     DataRowRowMapper row_mapper;
 
-    std::string sql = (boost::format(AbstractDAO::get_sql("get_nth_last_row")) % table_name).str();
+    std::string sql = (boost::format(AbstractDAO::get_sql("load_nth_last_row")) % table_name).str();
 
     return data_source.query_for_object(&row_mapper, sql, target_time, position);
 }
@@ -73,7 +73,7 @@ size_t PgInputQueueDAO::get_count_from_start(const std::string &table_name, cons
     return data_source.query_for_type<long>(sql, target_time);
 }
 
-size_t PgInputQueueDAO::save_metadata(const InputQueue_ptr& p_input_queue)
+size_t PgInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr& p_input_queue)
 {
     std::string sql = AbstractDAO::get_sql("create_queue_table");
     std::string table_name = p_input_queue->get_table_name();
@@ -118,7 +118,7 @@ size_t PgInputQueueDAO::save_metadata(const InputQueue_ptr& p_input_queue)
     return ret;
 }
 
-size_t PgInputQueueDAO::save(const InputQueue_ptr& p_input_queue, const bpt::ptime &start_time)
+size_t PgInputQueueDAO::save(const datamodel::InputQueue_ptr& p_input_queue, const bpt::ptime &start_time)
 {
     long ret = 0;
 
@@ -133,13 +133,13 @@ size_t PgInputQueueDAO::save(const InputQueue_ptr& p_input_queue, const bpt::pti
     return ret;
 }
 
-size_t PgInputQueueDAO::save_data(const InputQueue_ptr& p_input_queue, const bpt::ptime &start_time)
+size_t PgInputQueueDAO::save_data(const datamodel::InputQueue_ptr& p_input_queue, const bpt::ptime &start_time)
 {
     data_source.cleanup_queue_table(p_input_queue->get_table_name(), p_input_queue->get_data(), start_time);
     return data_source.batch_update(p_input_queue->get_table_name(), p_input_queue->get_data(), start_time);
 }
 
-size_t PgInputQueueDAO::update_metadata(const InputQueue_ptr& inputQueue) {
+size_t PgInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr& inputQueue) {
 
     LOG4_DEBUG("Updating InputQueue table metadata: " << inputQueue->get_table_name());
     std::string sql = AbstractDAO::get_sql("update_metadata");
@@ -166,7 +166,7 @@ bool PgInputQueueDAO::exists(
     return exists(svr::datamodel::InputQueue::make_queue_table_name(user_name, logical_name, resolution));
 }
 
-bool PgInputQueueDAO::exists(const InputQueue_ptr &p_input_queue)
+bool PgInputQueueDAO::exists(const datamodel::InputQueue_ptr &p_input_queue)
 {
     if (p_input_queue == nullptr) return false;
     std::string table_name = p_input_queue->get_table_name();
@@ -174,7 +174,7 @@ bool PgInputQueueDAO::exists(const InputQueue_ptr &p_input_queue)
     return exists(table_name);
 }
 
-size_t PgInputQueueDAO::remove(const InputQueue_ptr& p_input_queue)
+size_t PgInputQueueDAO::remove(const datamodel::InputQueue_ptr& p_input_queue)
 {
     std::string table_name = svr::datamodel::InputQueue::make_queue_table_name(
                 p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
@@ -192,7 +192,7 @@ size_t PgInputQueueDAO::remove(const InputQueue_ptr& p_input_queue)
 
 }
 
-size_t PgInputQueueDAO::clear(const InputQueue_ptr& p_input_queue)
+size_t PgInputQueueDAO::clear(const datamodel::InputQueue_ptr& p_input_queue)
 {
     std::string table_name = svr::datamodel::InputQueue::make_queue_table_name(
             p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
@@ -208,7 +208,7 @@ size_t PgInputQueueDAO::clear(const InputQueue_ptr& p_input_queue)
     return data_source.update(sql, table_name);
 }
 
-DataRow_ptr PgInputQueueDAO::find_oldest_record(const InputQueue_ptr& p_input_queue) {
+datamodel::DataRow_ptr PgInputQueueDAO::find_oldest_record(const datamodel::InputQueue_ptr& p_input_queue) {
     std::string sql_format = get_sql("find_oldest_record");
     InputQueueRowRowMapper row_mapper;
 
@@ -218,7 +218,7 @@ DataRow_ptr PgInputQueueDAO::find_oldest_record(const InputQueue_ptr& p_input_qu
     return data_source.query_for_object(&row_mapper, sql.str());
 }
 
-DataRow_ptr PgInputQueueDAO::find_newest_record(const InputQueue_ptr& queue) {
+datamodel::DataRow_ptr PgInputQueueDAO::find_newest_record(const datamodel::InputQueue_ptr& queue) {
     std::string sql_format = get_sql("find_newest_record");
     InputQueueRowRowMapper row_mapper;
 
@@ -228,7 +228,7 @@ DataRow_ptr PgInputQueueDAO::find_newest_record(const InputQueue_ptr& queue) {
     return data_source.query_for_object(&row_mapper, sql.str());
 }
 
-std::vector<std::shared_ptr<std::string>> PgInputQueueDAO::get_db_table_column_names(const InputQueue_ptr& queue)
+std::vector<std::shared_ptr<std::string>> PgInputQueueDAO::get_db_table_column_names(const datamodel::InputQueue_ptr& queue)
 {
     std::string query = get_sql("get_db_table_column_names");
 
@@ -236,13 +236,13 @@ std::vector<std::shared_ptr<std::string>> PgInputQueueDAO::get_db_table_column_n
     return data_source.query_for_array(row_mapper, query, queue->get_table_name());
 }
 
-std::vector<InputQueue_ptr> PgInputQueueDAO::get_all_user_queues(const std::string &user_name) {
+std::vector<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_user_queues(const std::string &user_name) {
     InputQueueRowMapper row_mapper;
     return data_source.query_for_array(row_mapper, get_sql("get_all_user_queues"), user_name);
 }
 
 
-std::vector<InputQueue_ptr> PgInputQueueDAO::get_all_queues_with_sign(bool uses_fix_connection) {
+std::vector<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_queues_with_sign(bool uses_fix_connection) {
     InputQueueRowMapper rowMapper;
     return data_source.query_for_array(rowMapper, get_sql("get_all_queues_with_sign"), uses_fix_connection);
 }
@@ -335,7 +335,7 @@ void mark_interval_reconciled_impl(InputQueueDAO & dao, DataSource & data_source
 
 }
 
-OptionalTimeRange PgInputQueueDAO::get_missing_hours(InputQueue_ptr const &queue, TimeRange const & fromRange)
+OptionalTimeRange PgInputQueueDAO::get_missing_hours(datamodel::InputQueue_ptr const &queue, TimeRange const & fromRange)
 {
     size_t const sec = queue->get_resolution().total_seconds();
     bpt::time_duration one_month = bpt::hours(24 * 30);
@@ -378,7 +378,7 @@ OptionalTimeRange PgInputQueueDAO::get_missing_hours(InputQueue_ptr const &queue
     return OptionalTimeRange();
 }
 
-void PgInputQueueDAO::purge_missing_hours(InputQueue_ptr const & queue) {
+void PgInputQueueDAO::purge_missing_hours(datamodel::InputQueue_ptr const & queue) {
     std::string sql_format = get_sql("purge_missing_hours");
     data_source.update(sql_format, queue->get_table_name());
 }

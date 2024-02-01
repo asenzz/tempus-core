@@ -44,7 +44,7 @@ bigint AsyncAutotuneTaskDAO::get_next_id()
     return pImpl.pgDao.get_next_id();
 }
 
-bool AsyncAutotuneTaskDAO::exists(bigint id)
+bool AsyncAutotuneTaskDAO::exists(const bigint id)
 {
     AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
     value->set_id(id);
@@ -67,7 +67,7 @@ int AsyncAutotuneTaskDAO::remove(const AutotuneTask_ptr &autotuneTask)
     return pImpl.remove(autotuneTask);
 }
 
-AutotuneTask_ptr AsyncAutotuneTaskDAO::get_by_id(bigint id)
+AutotuneTask_ptr AsyncAutotuneTaskDAO::get_by_id(const bigint id)
 {
     AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
     value->set_id(id);

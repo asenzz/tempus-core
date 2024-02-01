@@ -4,6 +4,8 @@
 #include <model/DeconQueue.hpp>
 #include <model/Dataset.hpp>
 
+using namespace svr;
+
 TEST_F(DaoTestFixture, DQSavePerfTests)
 {
     using namespace std::chrono;
@@ -16,11 +18,11 @@ TEST_F(DaoTestFixture, DQSavePerfTests)
 
     aci.user_service.save(user1);
 
-    InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
-            "SomeInputQueue", "SomeInputQueue", user1->get_name(), "SomeInputQueue", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "left", "right"} );
+    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+            "SomeInputQueue", "SomeInputQueue", user1->get_name(), "SomeInputQueue", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::vector<InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, "sym7");
+   datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -31,7 +33,7 @@ TEST_F(DaoTestFixture, DQSavePerfTests)
 
     for(size_t j = 0UL; j < m; ++j)
     {
-        DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+        datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
 
         bpt::ptime nw = bpt::second_clock::local_time();
 
@@ -41,7 +43,7 @@ TEST_F(DaoTestFixture, DQSavePerfTests)
         {
             tm = nw + bpt::minutes(i);
 
-            DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>(tm);
+            svr::datamodel::DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>(tm);
             row->set_values({0, 1, 2});
 
             dq->get_data().push_back(row);

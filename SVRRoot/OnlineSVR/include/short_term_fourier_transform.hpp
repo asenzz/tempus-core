@@ -18,7 +18,7 @@
 
 namespace svr {
 
-class short_term_fourier_transform_cpu: public spectral_transform
+class short_term_fourier_transform_cpu final: public spectral_transform
 {
 public:
     explicit short_term_fourier_transform_cpu(const size_t levels);

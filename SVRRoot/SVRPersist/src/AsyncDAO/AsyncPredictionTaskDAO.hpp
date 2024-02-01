@@ -13,10 +13,10 @@ public:
     ~AsyncPredictionTaskDAO();
 
     bigint get_next_id();
-    bool exists(bigint id);
+    bool exists(const bigint id);
     int save(const PredictionTask_ptr& predictionTask);
     int remove(const PredictionTask_ptr& predictionTask);
-    PredictionTask_ptr get_by_id(bigint id);
+    PredictionTask_ptr get_by_id(const bigint id);
 private:
     struct AsyncImpl;
     AsyncImpl & pImpl;

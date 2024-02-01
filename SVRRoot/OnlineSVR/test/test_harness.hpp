@@ -72,7 +72,7 @@ pretty_print(std::basic_ostream<char> &ostr, Cont const &cont, char const *delim
     ostr << delimiters<decltype(*beg)>::closer;
 }
 
-#define ASSERT_FP_EQ(op1, op2) ASSERT_TRUE(svr::common::is_equal(op1, op2)) << " op1: " << (op1) << " op2: " << (op2)
+#define ASSERT_FP_EQ(op1, op2) ASSERT_TRUE(svr::common::equals(op1, op2)) << " op1: " << (op1) << " op2: " << (op2)
 
 
 #endif /* TEST_HARNESS_HPP */

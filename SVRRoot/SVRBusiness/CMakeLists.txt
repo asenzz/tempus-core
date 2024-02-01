@@ -42,21 +42,3 @@ list (FIND MODULES "SVRFix" idx)
 if (${idx} GREATER -1)
     TARGET_LINK_LIBRARIES(${PROJECT_NAME} SVRFix-shared)
 endif()
-
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PEDANTIC_FLAGS}")
-
-if (USE_CUDA)
-    SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-    INCLUDE_DIRECTORIES(include ${CUDA_INCLUDE_DIRS} ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${JEMALLOC_LIBRARIES} ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_cusolver_LIBRARY} ${CUDA_cusparse_LIBRARY})
-    #TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PUBLIC -Wno-error)
-    SET(CUDA_ARCH_LIST Auto CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
-					compute capability versions (6.1, 7.0, etc) to generate code for. \
-					Set to Auto for automatic detection (default)."
-            )
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}") # -Wno-error")
-    CUDA_SELECT_NVCC_ARCH_FLAGS(CUDA_ARCH_FLAGS ${CUDA_ARCH_LIST})
-    TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-            -gencode arch=compute_70,code=sm_70 -forward-unknown-to-host-compiler
-            >)
-endif()

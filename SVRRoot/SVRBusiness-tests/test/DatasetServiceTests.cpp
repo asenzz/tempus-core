@@ -48,7 +48,7 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
     combos.row(combos.n_rows / 2).fill(0);
     std::vector<uint8_t> best_params_ixs(colct, uint8_t(0));
     PROFILE_EXEC_TIME(business::recombine_parameters(rowct, colct, combos.memptr(), params_preds.data(), &best_score, best_params_ixs.data()), "recombine_parameters");
-    LOG4_DEBUG("Best score " << best_score << ", best params ixs " << common::deep_to_string(best_params_ixs));
+    LOG4_DEBUG("Best score " << best_score << ", best params ixs " << common::to_string(best_params_ixs));
 }
 
 
@@ -59,15 +59,15 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
 
     aci.user_service.save(user1);
 
-    InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
-            "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "left", "right"} );
+    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+            "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::vector<InputQueue_ptr>{}
-            , svr::datamodel::Priority::Normal, "", 4, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}
+            , svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
-    ds->set_max_lookback_time_gap(svr::common::date_time_string_to_seconds ("38,21:22:23"));
+    ds->set_max_lookback_time_gap(svr::common::date_time_string_to_seconds("38,21:22:23"));
 
     aci.dataset_service.save(ds);
 
@@ -75,7 +75,7 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
     aci.dataset_service.update_active_datasets(dsu);
     ASSERT_EQ(2UL, dsu.size());
 
-    Dataset_ptr &p_dataset = dsu[0].dataset;
+    datamodel::Dataset_ptr &p_dataset = dsu[0].dataset;
     p_dataset->set_input_queue(
             aci.input_queue_service.get_queue_metadata(
                     p_dataset->get_input_queue()->get_table_name()));
@@ -94,12 +94,12 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     aci.user_service.save(user1Low);
 
-    InputQueue_ptr iq1 = std::make_shared<svr::datamodel::InputQueue>(
-            "InputQueue1", "InputQueue1", user1Low->get_name(), "InputQueue1", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "left", "right"} );
+    datamodel::InputQueue_ptr iq1 = std::make_shared<svr::datamodel::InputQueue>(
+            "InputQueue1", "InputQueue1", user1Low->get_name(), "InputQueue1", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq1);
 
-    Dataset_ptr ds1 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Low", user1Low->get_user_name(), iq1, std::vector<InputQueue_ptr>{}
-            , svr::datamodel::Priority::Low, "", 4, "sym7");
+    datamodel::Dataset_ptr ds1 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Low", user1Low->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}
+            , svr::datamodel::Priority::Low, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
     ds1->set_is_active(true);
 
     aci.dataset_service.save(ds1);
@@ -123,13 +123,13 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     aci.user_service.save(user2Normal);
 
-    InputQueue_ptr iq2 = std::make_shared<svr::datamodel::InputQueue>(
-            "InputQueue2", "InputQueue2", user2Normal->get_name(), "InputQueue2", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "left", "right"} );
+    datamodel::InputQueue_ptr iq2 = std::make_shared<svr::datamodel::InputQueue>(
+            "InputQueue2", "InputQueue2", user2Normal->get_name(), "InputQueue2", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq2);
 
-    Dataset_ptr ds2 =
-            std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Below", user2Normal->get_user_name(), iq1, std::vector<InputQueue_ptr>{},
-                                                      svr::datamodel::Priority::BelowNormal, "", 4, "sym7");
+    datamodel::Dataset_ptr ds2 =
+            std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Below", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{},
+                                                      svr::datamodel::Priority::BelowNormal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
     ds2->set_is_active(true);
 
     aci.dataset_service.save(ds2);
@@ -165,7 +165,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     ////////////////////////////////////////////////////////////////////////////
 
-    Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::vector<InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 4, "sym7");
+    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
     ds3->set_is_active(true);
 
     aci.dataset_service.save(ds3);

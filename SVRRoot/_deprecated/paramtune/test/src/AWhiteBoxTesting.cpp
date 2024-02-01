@@ -21,11 +21,11 @@ protected:
     ScopedTransaction_ptr trx;
 
 
-    InputQueue_ptr ethalon_input_queue;
-    std::vector<DeconQueue_ptr> ethalon_decon_queues;
+    datamodel::InputQueue_ptr ethalon_input_queue;
+    std::vector<datamodel::DeconQueue_ptr> ethalon_decon_queues;
     std::vector<std::vector<double>> ethalon_train_matrix;
     std::vector<double> ethalon_response_vector;
-    Dataset_ptr testDataset;
+    datamodel::Dataset_ptr testDataset;
 
     string input_queue_table_name = "q_svrwave_eurusd_60";
 
@@ -115,7 +115,7 @@ protected:
         f.close();
         for (size_t i = 0; i < value_columns.size(); ++i)
         {
-            DeconQueue_ptr decon = make_shared<DeconQueue>("", input_queue_table_name,value_columns[i],
+            datamodel::DeconQueue_ptr decon = make_shared<DeconQueue>("", input_queue_table_name,value_columns[i],
                                                            testDataset->get_id());
             decon->set_data(ethalon_decon_data[i]);
             ethalon_decon_queues.push_back(decon);
@@ -146,8 +146,8 @@ protected:
     virtual void SetUp() override
     {
         loadEthalonData();
-        testDataset = std::make_shared<Dataset>(0, dataset_name, user_name, ethalon_input_queue, std::vector<InputQueue_ptr>(),
-                                            priority, "", transformation_levels, transformation_name, max_lookback_time_gap);
+        testDataset = std::make_shared<Dataset>(0, dataset_name, user_name, ethalon_input_queue, std::vector<datamodel::InputQueue_ptr>(),
+                                            priority, "", 0, CHUNK_DECREMENT, transformation_levels, transformation_name, max_lookback_time_gap);
     }
 
     virtual void TearDown() override {
@@ -172,7 +172,7 @@ TEST_F(WhiteBoxTests, checkEthalonData)
     }
 
     // deconQueue checking
-    std::vector<DeconQueue_ptr> decon_queues = AppContext::get_instance().decon_queue_service.deconstruct(ethalon_input_queue, testDataset);
+    std::vector<datamodel::DeconQueue_ptr> decon_queues = AppContext::get_instance().decon_queue_service.deconstruct(ethalon_input_queue, testDataset);
     ASSERT_EQ(decon_queues.size(), ethalon_decon_queues.size());
     for (size_t i = 0; i < decon_queues.size(); ++i)
     {

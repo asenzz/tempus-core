@@ -2,34 +2,66 @@
 
 #include <set>
 #include <model/Entity.hpp>
+#include "SVRParameters.hpp"
 #include "relations/ensemble_relation.hpp"
+#include "SVRParametersService.hpp"
+
 
 namespace svr {
-namespace datamodel {
-class SVRParameters;
-}
-class OnlineMIMOSVR;
-}
 
-typedef std::shared_ptr<svr::datamodel::SVRParameters> SVRParameters_ptr;
+class OnlineMIMOSVR;
 typedef std::shared_ptr<svr::OnlineMIMOSVR> OnlineMIMOSVR_ptr;
 
-namespace svr {
 namespace datamodel {
 
-typedef std::set<size_t, std::less<size_t>> levels_set_t;
 
 class Model : public Entity
 {
+    ensemble_relation ensemble;
+    size_t decon_level; // This model's prediction level
+    size_t multiout_;
+    size_t gradient_ct;
+    size_t chunk_size;
+    std::set<size_t> learning_levels; // Features are gathered from learning levels specified here
+    std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
+    bpt::ptime last_modified {bpt::max_date_time}; // model modified (system) time
+    bpt::ptime last_modeled_value_time {bpt::min_date_time}; // last input queue modeled value time
+    t_param_set_ptr p_param_set; // parameters used by SVR models for every gradient, chunk and manifold of this level
 public:
-    bool operator==(Model const &o) const;
-
     Model() = default;
 
-    Model(bigint id, bigint ensemble_id, size_t decon_level, const std::set<size_t> &learning_levels,
-          OnlineMIMOSVR_ptr svr_model, bpt::ptime const &last_modified,
-          bpt::ptime const &last_modeled_value_time
-    );
+    Model(const bigint id, const bigint ensemble_id, const size_t decon_level, const size_t multiout_, const size_t gradient_ct, const size_t chunk_size,
+          const std::set<size_t> &learning_levels = {}, std::deque<OnlineMIMOSVR_ptr> svr_models = {},
+          const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time, t_param_set_ptr p_param_set = {});
+
+    OnlineMIMOSVR_ptr &get_gradient(const size_t i);
+    OnlineMIMOSVR_ptr get_gradient(const size_t i) const;
+    std::deque<OnlineMIMOSVR_ptr> &get_gradients();
+    std::deque<OnlineMIMOSVR_ptr> get_gradients() const;
+    void set_gradient(const size_t i, const OnlineMIMOSVR_ptr &m);
+    void set_gradients(const std::deque<OnlineMIMOSVR_ptr> &_svr_models);
+    size_t get_gradient_count() const { return gradient_ct; }
+    size_t get_chunk_size() const { return chunk_size; }
+    size_t get_multiout() const { return multiout_; }
+    datamodel::SVRParameters &get_params(const size_t chunk_ix = 0, const size_t grad_ix = 0);
+    datamodel::SVRParameters get_params(const size_t chunk_ix = 0, const size_t grad_ix = 0) const;
+    datamodel::SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0, const size_t grad_ix = 0);
+    datamodel::SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0, const size_t grad_ix = 0) const;
+
+    void set_params(const datamodel::SVRParameters_ptr &p) {
+        datamodel::SVRParameters_ptr existing_p;
+        if ((existing_p = business::SVRParametersService::find(*p_param_set, p->get_chunk_ix(), p->get_grad_level())))
+            *existing_p = *p;
+        else
+            p_param_set->emplace(p);
+    }
+
+    t_param_set &get_param_set() { return *p_param_set; }
+    void set_param_set(const t_param_set &ps) { *p_param_set = ps; }
+    t_param_set_ptr &get_param_set_ptr() { return p_param_set; }
+    void set_param_set_ptr(const t_param_set_ptr &pps) { p_param_set = pps; }
+
+    bool operator==(const Model &o) const;
 
     void reset();
 
@@ -39,42 +71,31 @@ public:
 
     size_t get_decon_level() const;
 
-    void set_decon_level(const size_t decon_level);
+    void set_decon_level(const size_t _decon_level);
 
     /** Get/set learning wavelet deconstruction level indexes this model is trained against. */
     std::set<size_t> get_learning_levels() const;
 
-    void set_learning_levels(const std::set<size_t> &learning_levels);
-
-    OnlineMIMOSVR_ptr &get_svr_model();
-
-    OnlineMIMOSVR_ptr get_svr_model() const;
-
-    void set_svr_model(OnlineMIMOSVR_ptr svr_model);
+    void set_learning_levels(const std::set<size_t> &_learning_levels);
 
     bpt::ptime const &get_last_modified() const;
 
-    void set_last_modified(bpt::ptime const &last_modified);
+    void set_last_modified(bpt::ptime const &_last_modified);
 
     bpt::ptime const &get_last_modeled_value_time() const;
 
-    void set_last_modeled_value_time(bpt::ptime const &last_modeled_value_time);
+    void set_last_modeled_value_time(bpt::ptime const &_last_modeled_value_time);
 
     virtual std::string to_string() const override;
-
-    std::vector<size_t> get_sub_vector_indices() const;
-
-private:
-    ensemble_relation ensemble;
-    size_t decon_level;
-    std::set<size_t> learning_levels;
-    OnlineMIMOSVR_ptr svr_model;
-    bpt::ptime last_modified {bpt::max_date_time};
-    bpt::ptime last_modeled_value_time {bpt::min_date_time};
 };
 
-}
-}
+using Model_ptr = std::shared_ptr<Model>;
 
-using Model_ptr = std::shared_ptr<svr::datamodel::Model>;
-using Model_vector = std::vector<Model_ptr>;
+datamodel::Model_ptr
+find_model(const std::deque<datamodel::Model_ptr> &models, const size_t levix);
+
+template<typename T> std::basic_ostream<T> &
+operator<<(std::basic_ostream<T> &s, const datamodel::Model &m) { return s << m.to_string(); }
+
+}
+}

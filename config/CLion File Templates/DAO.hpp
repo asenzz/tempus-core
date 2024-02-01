@@ -23,10 +23,10 @@ public:
 	explicit ${NAME}DAO(MessageSource_ptr sqlProperties, DataSource_ptr dataSource):
 		AbstractDAO(sqlProperties, dataSource), PropertiesFile("${NAME}DAO.properties"){}
 
-    ${NAME}_ptr     get_by_id(bigint id);
+    ${NAME}_ptr     get_by_id(const bigint id);
 	bigint          get_next_id();
 
-	bool        exists(bigint ${NAME}Id);	
+	bool        exists(const bigint ${NAME}Id);
 	bool        exists(const ${NAME}_ptr& ${NAME});
 
 	int         save(const ${NAME}_ptr& ${NAME});

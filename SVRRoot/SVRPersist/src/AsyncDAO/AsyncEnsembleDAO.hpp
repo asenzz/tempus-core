@@ -14,17 +14,17 @@ public:
 
     virtual bigint get_next_id();
 
-    virtual Ensemble_ptr get_by_id(bigint id);
+    virtual datamodel::Ensemble_ptr get_by_id(const bigint id);
 
-    virtual bool exists(bigint ensemble_id);
-    virtual bool exists(const Ensemble_ptr &ensemble);
+    virtual bool exists(const bigint ensemble_id);
+    virtual bool exists(const datamodel::Ensemble_ptr &ensemble);
 
-    virtual Ensemble_ptr get_by_dataset_and_decon_queue(const Dataset_ptr &dataset, const DeconQueue_ptr& decon_queue);
+    virtual datamodel::Ensemble_ptr get_by_dataset_and_decon_queue(const datamodel::Dataset_ptr &dataset, const datamodel::DeconQueue_ptr& decon_queue);
 
-    virtual std::vector<Ensemble_ptr> find_all_ensembles_by_dataset_id(bigint dataset_id);
+    virtual std::deque<datamodel::Ensemble_ptr> find_all_ensembles_by_dataset_id(const bigint dataset_id);
 
-    virtual int save(const Ensemble_ptr &Ensemble);
-    virtual int remove(const Ensemble_ptr &Ensemble);
+    virtual int save(const datamodel::Ensemble_ptr &Ensemble);
+    virtual int remove(const datamodel::Ensemble_ptr &Ensemble);
 private:
     struct AsyncImpl;
     AsyncImpl & pImpl;

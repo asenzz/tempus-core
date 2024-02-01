@@ -96,25 +96,10 @@ public:
                 kernel_matrix(i, j) = this->operator()(x_train.row(i), x_test.row(j));
     }
 
-#if 0
-    double arma_distance(const arma::rowvec &a, const arma::rowvec &b)
-    {
-        double ret = 0.0;
-        for(size_t i = 0; i < a.n_elem; ++i){
-
-            double dist = a(i) - b(i);
-            ret += dist * dist;
-        }
-        return ret > 0.0 ? std::sqrt(ret) : 0.0;
-
-    }
-#endif
-
     virtual double operator()(const arma::rowvec &a, const arma::rowvec &b)
     {
-        return std::exp(arma::norm(a - b, 2) / (this->parameters.get_svr_kernel_param() ? -(2. * std::pow(this->parameters.get_svr_kernel_param(), 2.)) : -2.));
+        return std::exp(/* distance */arma::norm(a - b, 2) / (this->parameters.get_svr_kernel_param() ? -(2. * std::pow(this->parameters.get_svr_kernel_param(), 2.)) : -2.));
     }
-
 
 
 #endif /* #ifdef VIENNACL_WITH_OPENCL */

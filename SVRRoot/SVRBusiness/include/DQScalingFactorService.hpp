@@ -1,135 +1,118 @@
 #pragma once
 
 #include <armadillo>
+#include <oneapi/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_map.h>
 #include "model/DQScalingFactor.hpp"
 #include "model/DataRow.hpp"
-
-// #define CUDA_SCALING_FACTORS
-#define DC_DQ_SCALING_FACTOR 10000
-
-namespace svr {
-    namespace dao { class DQScalingFactorDAO; }
-    namespace datamodel { class InputQueue; class DeconQueue; class Dataset; class Ensemble; class SVRParameters; }
-}
-
-using InputQueue_ptr = std::shared_ptr<svr::datamodel::InputQueue>;
-using DeconQueue_ptr = std::shared_ptr<svr::datamodel::DeconQueue>;
-using Dataset_ptr = std::shared_ptr<svr::datamodel::Dataset>;
-using Ensemble_ptr = std::shared_ptr<svr::datamodel::Ensemble>;
-using SVRParameters_ptr = std::shared_ptr<svr::datamodel::SVRParameters>;
+#include "model/Dataset.hpp"
+#include "model/DeconQueue.hpp"
+#include "model/SVRParameters.hpp"
 
 class DaoTestFixture_DQScalingFactorScalingUnscaling_Test;
 
-namespace svr::business {
+namespace svr {
 
+namespace dao { class DQScalingFactorDAO; }
+
+namespace business {
+
+constexpr unsigned DC_INDEX = 10000;
 
 class DQScalingFactorService
 {
     friend class ::DaoTestFixture_DQScalingFactorScalingUnscaling_Test;
+
 public:
-    explicit DQScalingFactorService(svr::dao::DQScalingFactorDAO& dq_scaling_factor_dao) :
-        dq_scaling_factor_dao(dq_scaling_factor_dao)
+    explicit DQScalingFactorService(dao::DQScalingFactorDAO &dq_scaling_factor_dao) :
+            dq_scaling_factor_dao(dq_scaling_factor_dao)
     {}
 
     bool exists(const DQScalingFactor_ptr &dq_scaling_factor);
     // bool exists_by_dataset_id(const bigint dataset_id); // TODO Implement as needed!
 
-    int save(const DQScalingFactor_ptr& p_dq_scaling_factor);
-    int remove(const DQScalingFactor_ptr& p_dq_scaling_factor);
+    int save(const DQScalingFactor_ptr &p_dq_scaling_factor);
 
-    static svr::datamodel::dq_scaling_factor_container_t slice(const Dataset_ptr &p_dataset, const DeconQueue_ptr &p_decon_queue);
-    svr::datamodel::dq_scaling_factor_container_t calculate(const Dataset_ptr &p_dataset);
-    svr::datamodel::dq_scaling_factor_container_t prepare_decon_queue_scaling_factors(const Dataset_ptr &p_dataset, const DeconQueue_ptr &p_decon_queue);
-    svr::datamodel::dq_scaling_factor_container_t prepare_decon_queue_scaling_factors(const Dataset_ptr &p_dataset, const std::string &input_queue_table_name, const std::string &input_queue_column_name);
+    int remove(const DQScalingFactor_ptr &p_dq_scaling_factor);
+
+    static datamodel::dq_scaling_factor_container_t slice(const datamodel::Dataset_ptr &p_dataset, const datamodel::DeconQueue_ptr &p_decon_queue);
+
 private:
-    svr::dao::DQScalingFactorDAO &dq_scaling_factor_dao;
+    dao::DQScalingFactorDAO &dq_scaling_factor_dao;
 
-    static svr::datamodel::dq_scaling_factor_container_t
+    static datamodel::dq_scaling_factor_container_t
     slice(
-            const svr::datamodel::dq_scaling_factor_container_t &scaling_factors,
+            const datamodel::dq_scaling_factor_container_t &scaling_factors,
             const size_t dataset_id,
-            const std::string& input_queue_table_name,
-            const std::string& input_queue_column_name);
-
-    static std::pair<std::vector<double>, std::vector<double>>
-    do_calculate(const svr::datamodel::DataRow::container::const_iterator &begin, const size_t rows_size);
-
-    static svr::datamodel::dq_scaling_factor_container_t calculate(
-            const svr::datamodel::DataRow::container::const_iterator &begin,
-            const svr::datamodel::DataRow::container::const_iterator &end,
             const std::string &input_queue_table_name,
-            const std::string &input_queue_column_name,
-            const size_t dataset_id,
-            const size_t levels_ct);
+            const std::string &input_queue_column_name);
 
 public:
-    static datamodel::dq_scaling_factor_container_t slice(
-            const svr::datamodel::dq_scaling_factor_container_t &scaling_factors,
+    datamodel::dq_scaling_factor_container_t find_all_by_dataset_id(const bigint dataset_id);
+
+    static datamodel::dq_scaling_factor_container_t
+    slice(
+            const datamodel::dq_scaling_factor_container_t &scaling_factors,
             const size_t dataset_id,
             const std::string &input_queue_table_name,
             const std::string &input_queue_column_name,
             const std::set<size_t> &feat_levels);
 
-    static datamodel::dq_scaling_factor_container_t calculate(
-            const std::string &input_queue_table_name,
-            const std::string &input_queue_column_name,
+    static datamodel::dq_scaling_factor_container_t
+    slice(
+            const datamodel::dq_scaling_factor_container_t &scaling_factors,
             const size_t dataset_id,
+            const std::deque <datamodel::DeconQueue_ptr> &decon_queues,
+            const std::set<size_t> &feat_levels);
+
+    static datamodel::dq_scaling_factor_container_t
+    check(const std::deque <datamodel::DeconQueue_ptr> &decon_queues, const datamodel::SVRParameters_ptr &p_head_params, const std::set<size_t> feat_levels,
+          const datamodel::dq_scaling_factor_container_t &scaling_factors);
+
+    static datamodel::dq_scaling_factor_container_t
+    calculate(
+            const std::deque <datamodel::DeconQueue_ptr> &decon_queues,
+            const datamodel::SVRParameters_ptr &p_params,
             const std::set<size_t> &feat_levels,
-            const size_t level,
-            const size_t lag,
             const arma::mat &features,
-            const arma::mat &labels);
+            const arma::mat &labels,
+            const datamodel::dq_scaling_factor_container_t &req_factors);
 
-    datamodel::dq_scaling_factor_container_t calculate(
-            const Dataset_ptr &p_dataset,
-            const DeconQueue_ptr &p_decon_queue,
-            const SVRParameters_ptr &p_params,
-            const std::set<size_t> &feat_levels,
-            const size_t expected_factors_ct,
+    datamodel::dq_scaling_factor_container_t
+    calculate(
+            const datamodel::Dataset_ptr &p_dataset,
+            const std::deque <datamodel::DeconQueue_ptr> &decon_queues,
+            const datamodel::SVRParameters_ptr &p_params,
             const arma::mat &features,
-            const arma::mat &labels);
+            const arma::mat &labels,
+            std::set<size_t> feat_levels = {},
+            datamodel::dq_scaling_factor_container_t req_factors = {});
 
-    void scale(
-            const Dataset_ptr &p_dataset,
-            const DeconQueue_ptr &p_decon_queue,
-            const SVRParameters_ptr &p_params,
-            const std::set<size_t> &feature_levels,
-            arma::mat &features,
-            arma::mat &labels,
-            arma::mat &last_known);
+    void
+    scale(const datamodel::Dataset_ptr &p_dataset, const std::deque <datamodel::DeconQueue_ptr> &aux_decon_queues, // labels and features are created from aux decon data
+          const datamodel::SVRParameters_ptr &p_head_params, arma::mat &features, arma::mat &labels, arma::mat &last_known);
 
-    datamodel::dq_scaling_factor_container_t find_all_by_dataset_id(const bigint dataset_id);
-    template<typename T> static T unscale_decon_prediction( // TODO optimize
-            T prediction, const size_t level_idx, const svr::datamodel::dq_scaling_factor_container_t &decon_queue_scaling_factors)
+    void scale(const datamodel::Dataset_ptr &p_dataset, const std::deque <datamodel::DeconQueue_ptr> &aux_decon_queues, const datamodel::SVRParameters_ptr &p_head_params, arma::mat &features);
+
+    static void scale(
+            const std::deque <datamodel::DeconQueue_ptr> &aux_decon_queues, const svr::datamodel::SVRParameters_ptr &p_head_params, arma::mat &features,
+            const std::set<size_t> &feat_levels, const tbb::concurrent_map<size_t, double> &dc_offset_features,
+            const tbb::concurrent_map<std::pair<size_t, size_t>, double> &features_scaling_factors);
+
+    template<typename T> static T
+    unscale(T prediction, const size_t levix, const datamodel::dq_scaling_factor_container_t &scaling_factors)
     {
         LOG4_BEGIN();
         std::map<size_t, double> label_scales;
-        for (const auto &p_scaling_factor: decon_queue_scaling_factors)
+        for (const auto &p_scaling_factor: scaling_factors)
             label_scales[p_scaling_factor->get_decon_level()] = p_scaling_factor->get_labels_factor();
-        LOG4_TRACE("Decon scaling factor for level " << level_idx << ", label scale " << label_scales[level_idx]);
-        if (!level_idx) prediction += label_scales[DC_DQ_SCALING_FACTOR];
-        prediction *= label_scales[level_idx];
+        LOG4_TRACE("Decon scaling factor for level " << levix << ", label scale " << label_scales[levix]);
+        if (!levix) prediction += label_scales[DC_INDEX];
+        prediction *= label_scales[levix];
         return prediction;
-        LOG4_END();
     }
 };
 
-template<typename T> inline T // TODO Optimize
-scale(const T &val, const size_t level, const svr::datamodel::dq_scaling_factor_container_t &scaling_factors, const bool scale_labels = false)
-{
-    double dc_offset = 0;
-    if (!level) {
-        for (const auto &sf: scaling_factors)
-            if (sf->get_decon_level() == DC_DQ_SCALING_FACTOR)
-                dc_offset = scale_labels ? sf->get_labels_factor() : sf->get_features_factor();
-        if (!dc_offset) LOG4_ERROR("DC offset not found!");
-    }
-    for (const auto &sf: scaling_factors)
-        if (sf->get_decon_level() == level)
-            return (val - dc_offset) / (scale_labels ? sf->get_labels_factor() : sf->get_features_factor());
-    throw std::runtime_error("Scaling factor for level " + std::to_string(level) + " not found!");
-}
 
 }
-
-using DQScalingTaskService_ptr = std::shared_ptr<svr::business::DQScalingFactorService>;
+}

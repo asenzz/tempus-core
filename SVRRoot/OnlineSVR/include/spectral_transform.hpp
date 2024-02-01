@@ -9,18 +9,37 @@
 
 #pragma once
 
+#include <deque>
 #include <vector>
 #include <string>
 #include <memory>
+#include "model/DataRow.hpp"
 
 
 namespace svr {
+
+static const std::deque<std::string> transformation_names {
+        // 0 - 14
+        "db1", "db2", "db3", "db4", "db5", "db6", "db7", "db8", "db9", "db10", "db11", "db12", "db13", "db14", "db15",
+        // 15 - 29
+        "bior1.1", "bior1.3", "bior1.5", "bior2.2", "bior2.4", "bior2.6", "bior2.8",
+        "bior3.1", "bior3.3", "bior3.5", "bior3.7", "bior3.9", "bior4.4", "bior5.5", "bior6.8",
+        // 30 - 34
+        "coif1", "coif2", "coif3", "coif4", "coif5",
+        // 35 - 44
+        "sym1", "sym2", "sym3", "sym4", "sym5", "sym6", "sym7", "sym8", "sym9", "sym10",
+        // 45 - 55
+        "sym11", "sym12", "sym13", "sym14", "sym15", "sym16", "sym17", "sym18", "sym19", "sym20",
+        "stft", "oemd", "cvmd"
+};
 
 
 class spectral_transform {
 
 
 public:
+    static void mirror_tail(const datamodel::datarow_range &input, const size_t needed_data_ct, std::vector<double> &tail);
+
     static size_t modwt_levels_to_frame_length(const size_t modwt_levels, const size_t wavelet_order);
 
     static size_t modwt_residuals_length(const size_t modwt_levels);

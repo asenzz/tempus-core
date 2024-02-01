@@ -9,7 +9,6 @@
 #define TUNE_KEEP_PREDS (2)
 
 #define NEW_SCALING // Shortest time-frame scaling
-#define MODEL_TRAIN_OFFSET 0 // Use for MQL5 backtests, shows how many main queue samples backward to shift the signal
 // #define SEPARATE_PREDICTIONS_BY_COST
 #define MANIFOLD_TEST
 #ifdef MANIFOLD_TEST
@@ -22,9 +21,7 @@ constexpr unsigned TEST_OFFSET_DEFAULT = 345;
 
 #define PRIMARY_COLUMN "xauusd_avg_bid" // Ignore tuning or validating other input queue columns in case of aux columns
 #define NO_MAIN_DECON
-constexpr unsigned MAIN_DECON_QUEUE_RES_SECS = 3600;
 //#define LAST_KNOWN_LABEL
-#define MULTISTEP_PRED_PERIOD       bpt::seconds(MAIN_DECON_QUEUE_RES_SECS)
 constexpr unsigned CHUNK_DECREMENT = 6000;
 // #define LAST_QUANT_FEAT // The feature is average of QUANTIZE_FIXED number of features vs the last value of the range
 // #define EMO_DIFF
@@ -40,9 +37,8 @@ constexpr unsigned CHUNK_DECREMENT = 6000;
 #define QUANTIZE_FEAT_MUL   (600. /* Max number of samples per feature */ * 1. / MAIN_DECON_QUEUE_RES_SECS) // (1./(double(MAIN_DECON_QUEUE_RES_SECS)/double(OEMD_STRETCH_COEF))) // (1. / (3600. /* * double(OMEGA_DIVISOR) */ / double(OEMD_STRETCH_COEF))) // 3600 is main to aux resolution ratio // prev QUANTIZE_FEAT_MUL 0.001
 #endif
 
-#define OEMD_STRETCH_COEF   1 // MAIN_DECON_QUEUE_RES_SECS * OMEGA_DIVISOR // 10 * MAIN_DECON_QUEUE_RES_SECS * OMEGA_DIVISOR // Fat OEMD transformer
 #define OFFSET_PRED_MUL     .1
-#define EVENING_FACTOR      0.
+// #define EVENING_FACTOR      0. // Increase to flatten equalization, accentuate higher frequencies
 
 // Tuning
 
@@ -68,8 +64,6 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 #endif
 
 
-//#define MAX_TUNE_CHUNKS 1 // Less than num_chunks
-
 #define FFA_ALPHA       .2   // Starting randomness
 #define FFA_BETAMIN     .5   // Attraction
 #define FFA_GAMMA       1.   // Visibility
@@ -87,9 +81,6 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 
 #define SAVE_DECON
 #define SAVE_OUTPUT_LOCATION    ("/mnt/slowstore/var/tmp/")
-
-
-// #define COMPRESS_LABEL_TIME 6
 
 
 // Default configuration
@@ -135,6 +126,7 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 #define DEFAULT_SVRPARAM_DECON_LEVEL 0
 #define DEFAULT_SVRPARAM_CHUNK_IX 0
 #define DEFAULT_SVRPARAM_GRAD_LEVEL 0
+#define DEFAULT_SVRPARAM_MIMO_TYPE (svr::mimo_type_e::single)
 #define DEFAULT_SVRPARAM_SVR_COST 0
 #define DEFAULT_SVRPARAM_SVR_EPSILON 0
 #define DEFAULT_SVRPARAM_KERNEL_PARAM_1 0
@@ -155,14 +147,6 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 #define PSO_INDEX_ADJACENT_LEVELS_RATIO (5)
 #define PSO_INDEX_LAG_COUNT (6)
 
-
-#ifndef MANIFOLD_TEST
-#define MANIFOLD_TEST_VALIDATION_WINDOW 0
-#ifdef MODEL_TRAIN_OFFSET
-#undef MODEL_TRAIN_OFFSET
-#define MODEL_TRAIN_OFFSET 0
-#endif
-#endif
 
 constexpr double BAD_VALIDATION = 1e6;
 

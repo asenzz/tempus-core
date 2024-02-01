@@ -16,10 +16,10 @@ public:
     explicit AutotuneTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
 
     virtual bigint get_next_id() = 0;
-    virtual bool exists(bigint id) = 0;
+    virtual bool exists(const bigint id) = 0;
     virtual int save(const AutotuneTask_ptr& autotuneTask) = 0;
     virtual int remove(const AutotuneTask_ptr& autotuneTask) = 0;
-    virtual AutotuneTask_ptr get_by_id(bigint id) = 0;
+    virtual AutotuneTask_ptr get_by_id(const bigint id) = 0;
     virtual std::vector<AutotuneTask_ptr> find_all_by_dataset_id(const bigint dataset_id) = 0;
 };
 

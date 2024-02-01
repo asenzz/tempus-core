@@ -253,8 +253,6 @@ min(const T &arg1, const T &arg2, const T &arg3)
 }
 
 
-void mirror_tail(std::vector<double> &input, const size_t last_data_ct);
-
 arma::mat fmod(const arma::mat &a, const double n);
 
 std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, const size_t level_count);
@@ -263,20 +261,13 @@ bool is_power_of_two(size_t value);
 
 size_t next_power_of_two(size_t value);
 
-template<typename T> size_t
-max_size(const std::vector<std::vector<T>> &c)
+template<typename C, typename T = typename C::value_type> T
+max(const C &container)
 {
-    size_t max = 0;
-    for (const auto &cc: c) if (cc.size() > max) max = cc.size();
-    //std::cout << "Max size " << max << std::endl;
-    return max;
-}
-
-template<typename T> T
-max(const std::vector<T> &c)
-{
-    T max = std::numeric_limits<T>::min();
-    for (const T &v: c) if (v > max) max = v;
+    T max = 0;
+    for (const auto &elem: container)
+        if (elem > max)
+            max = elem;
     return max;
 }
 
@@ -324,6 +315,15 @@ medianabs(const arma::Mat<T> &m)
 
 template<typename T> T
 meanabs(const std::vector<T> &v)
+{
+    double res = 0;
+#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none)
+    for (const auto _v: v) res += std::abs(_v);
+    return res / double(v.size());
+}
+
+template<typename T> T
+meanabs(const std::deque<T> &v)
 {
     double res = 0;
 #pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none)
@@ -474,24 +474,7 @@ std::vector<double> operator^(const double a, const std::vector<double>& v);
 
 double dot_product(double const * a, double const * b, const size_t size);
 
-#define DEFAULT_T_EPSILON (std::numeric_limits<float>::epsilon())
-
-inline bool is_equal(double const &t1, double const &t2)
-{
-    static double const epsilon = std::numeric_limits<float>::epsilon();
-    if(t1 == t2)
-        return true;
-
-    if (fabs(t1) < epsilon && fabs(t2) < epsilon)
-        return true;
-
-    if(t2 == 0)
-        return false;
-
-    return fabs(1. - t1/t2) < epsilon;
-}
-
-inline bool equals(const double t1, const double t2, const double epsilon)
+template<typename T> inline bool equals(const T t1, const T t2, const T epsilon = std::numeric_limits<T>::epsilon())
 {
     return fabs(t1 - t2) < epsilon;
 }
@@ -503,11 +486,13 @@ v.resize(_n_elem + 1); \
 v(_n_elem) = (val); }
 
 // Add to vector thread safe
-#define AVEC_PUSH_TS(v, val, m) { \
-    std::scoped_lock l(m); \
-    const auto _n_elem  = v.size(); \
-    v.resize(_n_elem + 1); \
-    v(_n_elem) = (val); }
+#define AVEC_PUSH_TS(v, val)            \
+_Pragma("omp critical")                 \
+    {                                   \
+        const auto _n_elem  = v.size(); \
+        v.resize(_n_elem + 1);          \
+        v(_n_elem) = (val);             \
+    }
 
 namespace armd {
     void check_mat(const arma::mat &input);
@@ -518,7 +503,7 @@ namespace armd {
 
     void serialize_vec(const std::string &filename, const arma::uvec &input, const std::string vec_name = "");
 
-    arma::uvec set_to_arma_uvec(const std::set<size_t> input);
+    arma::uvec set_to_arma_uvec(const std::set<size_t> &input);
 
     arma::uvec complement_vectors(std::set<size_t> svi, arma::uvec new_ixs);
 
@@ -542,7 +527,7 @@ namespace armd {
 }
 
 double calc_quant_offset_mul(const double main_to_aux_period_ratio, const double level, const double levels_count);
-
+double get_quantization_max(const double main_to_aux_period_ratio);
 
 }
 }

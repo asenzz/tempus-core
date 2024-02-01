@@ -58,7 +58,7 @@ firefly::firefly(
 {
     LOG4_DEBUG(
             "Init, particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma); // <<
-            // ", mins " << common::deep_to_string(lb) << ", maxes " << common::deep_to_string(ub));
+            // ", mins " << common::to_string(lb) << ", maxes " << common::to_string(ub));
     this->fbest.resize(MaxGeneration, std::numeric_limits<double>::max());
     this->levy_random = common::levy(D);
 
@@ -86,7 +86,7 @@ firefly::firefly(
             }
         }
         fireflies[p].I = fireflies[p].f = 1;            // initialize attractiveness
-        if (D < 5) LOG4_DEBUG("Particle " << p << ", parameters " << common::deep_to_string(ffa[p]));
+        if (D < 5) LOG4_DEBUG("Particle " << p << ", parameters " << common::to_string(ffa[p]));
     }
 
     PROFILE_EXEC_TIME(ffa_main(), "FFA with particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma << ", final score " << fbest[MaxGeneration - 1]);
@@ -133,7 +133,10 @@ void firefly::replace_ffa()
     ffa_tmp = ffa;
 
     // generational selection in sense of EA
-    __tbb_pfor_i(0, n, for (size_t j = 0; j < D; ++j) ffa[i][j] = ffa_tmp[fireflies[i].Index][j]; )
+#pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < n; ++i)
+        for (size_t j = 0; j < D; ++j)
+            ffa[i][j] = ffa_tmp[fireflies[i].Index][j];
 }
 
 void firefly::findlimits(const size_t k)
@@ -146,12 +149,15 @@ void firefly::findlimits(const size_t k)
             ffa[k][i] = ub[i];
     )
 #else // Bounce
-    __tbb_pfor(l, 0, D,
+
+#pragma omp parallel for
+    for (size_t l = 0; l < D; ++l) {
         if (ffa[k][l] < lb[l])
             ffa[k][l] = lb[l] + std::fmod(lb[l] - ffa[k][l], ub[l] - lb[l]);
         if (ffa[k][l] > ub[l])
             ffa[k][l] = ub[l] - std::fmod(ffa[k][l] - ub[l], ub[l] - lb[l]);
-    )
+    }
+
 #endif
 }
 
@@ -181,10 +187,13 @@ void firefly::move_ffa()
 void firefly::move_ffa_adaptive(const double rate)
 {
     arma::mat scale(D, 1);
-    __tbb_pfor_i(0, D, scale(i, 0) = abs(ub[i] - lb[i]))
+#pragma omp parallel for
+    for (size_t i = 0; i < D; ++i)
+        scale(i, 0) = abs(ub[i] - lb[i]);
 
     const auto ffa_prev = ffa;
-    __tbb_pfor_i(0, n,
+#pragma omp parallel for
+    for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
             if (i == j || fireflies[i].I <= fireflies[j].I) continue;    // brighter and more attractive
             double r = 0;
@@ -201,12 +210,14 @@ void firefly::move_ffa_adaptive(const double rate)
             }
         }
         findlimits(i);
-    )
+    }
 }
 
 void firefly::run_iteration()
 {
-    __tbb_pfor(ptcl, 0, n, fireflies[ptcl].I = fireflies[ptcl].f = function(ffa[ptcl]))
+#pragma omp parallel for
+    for (size_t ptcl = 0; ptcl < n; ++ptcl)
+        fireflies[ptcl].I = fireflies[ptcl].f = function(ffa[ptcl]);
 }
 
 /* display syntax messages */
@@ -238,7 +249,7 @@ void firefly::ffa_main()
         for (size_t i = 0; i < D; ++i) nbest[i] = ffa[0][i];
         fbest[t - 1] = fireflies[0].I;
         if (t > 1 && fbest[t - 1] < fbest[t - 2])
-            LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << fbest[t - 1] << ", previous best score " << fbest[t - 2] << ", improvement " << 100. * (1. - fbest[t - 1] / fbest[t - 2]) << " pct."); // << ", parameters " << common::deep_to_string(nbest));
+            LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << fbest[t - 1] << ", previous best score " << fbest[t - 2] << ", improvement " << 100. * (1. - fbest[t - 1] / fbest[t - 2]) << " pct."); // << ", parameters " << common::to_string(nbest));
 
         // move all fireflies to the better locations
         double rate;

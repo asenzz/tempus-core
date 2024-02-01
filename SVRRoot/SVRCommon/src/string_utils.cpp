@@ -17,7 +17,7 @@ namespace svr {
 namespace common {
 
 template<>
-std::string deep_to_string(const std::vector<uint8_t> &v)
+std::string to_string(const std::vector<uint8_t> &v)
 {
     if (v.empty()) return "";
 
@@ -30,7 +30,7 @@ std::string deep_to_string(const std::vector<uint8_t> &v)
 }
 
 template<> std::stringstream
-deep_to_tsvs(const std::vector<uint8_t> &v, const char sep)
+to_tsvs(const std::vector<uint8_t> &v, const char sep)
 {
     std::stringstream ss;
     ss.precision(std::numeric_limits<double>::max_digits10);
@@ -64,7 +64,7 @@ operator<<(std::ostream &os, const std::vector<double> &v)
     return os;
 }
 
-std::vector<std::string> from_sql_array(const std::string &array_str)
+std::deque<std::string> from_sql_array(const std::string &array_str)
 {
     return split(array_str, ", {}");
 }
@@ -88,12 +88,12 @@ void split(const std::string &s, char delim, std::vector<std::string> &elems)
             elems.push_back(item);
 }
 
-std::vector<std::string> split(const std::string &str, const std::string &rex)
+std::deque<std::string> split(const std::string &str, const std::string &rex)
 {
     std::list<std::string> list;
     boost::split(list, str, boost::is_any_of(rex), boost::token_compress_off);
 
-    std::vector<std::string> res;
+    std::deque<std::string> res;
     for_each(list.begin(), list.end(), [&res](const std::string &str)
     { if (str.size() != 0) res.push_back(str); });
 

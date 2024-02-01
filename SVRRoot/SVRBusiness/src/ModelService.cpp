@@ -1,55 +1,83 @@
 #include <iostream>
-#include <fstream>
-#include <tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_for.h>
 
 #include "ModelService.hpp"
+#include "EnsembleService.hpp"
 #include "appcontext.hpp"
 #include "DAO/ModelDAO.hpp"
 #include "common/thread_pool.hpp"
+#include "model/Model.hpp"
 #include "util/TimeUtils.hpp"
+#include "util/ValidationUtils.hpp"
 #include "util/math_utils.hpp"
-
-
-using namespace svr::common;
-using namespace svr::datamodel;
 
 
 namespace svr {
 namespace business {
 
 
-ModelService::ModelService(
-        svr::dao::ModelDAO &model_dao,
-        const bool update_r_matrix,
-        const size_t max_smo_iterations,
-        const double smo_epsilon_divisor,
-        const size_t max_segment_length,
-        const size_t multistep_len)
-        : model_dao(model_dao)
-          //svm_batch(update_r_matrix, max_smo_iterations, smo_epsilon_divisor, multistep_len)
+ModelService::ModelService(svr::dao::ModelDAO &model_dao) : model_dao(model_dao)
 {}
 
 
-Model_ptr ModelService::get_model_by_id(const bigint model_id)
+datamodel::Model_ptr ModelService::get_model_by_id(const bigint model_id)
 {
-    return model_id ? model_dao.get_by_id(model_id) : nullptr;
+    return model_dao.get_by_id(model_id);
 }
 
-int ModelService::save(const Model_ptr &model)
+
+datamodel::Model_ptr
+ModelService::find(const std::deque<datamodel::Model_ptr> &models, const size_t levix)
 {
-    reject_nullptr(model);
+    for (const auto &m: models)
+        if (m->get_decon_level() == levix)
+            return m;
+    LOG4_WARN("Model for level " << levix << " not found among " << models.size() << " models.");
+    return nullptr;
+}
+
+void ModelService::load(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble_ptr &p_ensemble, datamodel::Model_ptr &p_model)
+{
+    const auto default_num_chunks = DEFAULT_SVRPARAM_DECREMENT_DISTANCE / p_dataset->get_chunk_size();
+
+    auto params = APP.svr_parameters_service.get_by_dataset_column_level(
+            p_ensemble->get_dataset_id(), p_ensemble->get_decon_queue()->get_input_queue_column_name(), p_model->get_decon_level());
+
+    std::deque<OnlineMIMOSVR_ptr> svr_models(p_dataset->get_gradients());
+#pragma omp parallel for
+    for (size_t g = 0; g < svr_models.size(); ++g) {
+        datamodel::t_param_set_ptr grad_params = SVRParametersService::slice(params, std::numeric_limits<size_t>::max(), g);
+        if (grad_params->empty())
+            for (size_t c = 0; c < default_num_chunks; ++c)
+                grad_params->emplace(std::make_shared<datamodel::SVRParameters>(
+                        0, p_dataset->get_id(),
+                        p_ensemble->get_decon_queue()->get_input_queue_table_name(),
+                        p_ensemble->get_decon_queue()->get_input_queue_column_name(),
+                        p_model->get_decon_level(), c, g));
+        svr_models[g] = std::make_shared<svr::OnlineMIMOSVR>(grad_params, p_dataset->get_multiout(), p_dataset->get_chunk_size());
+    }
+
+    p_model->set_learning_levels(
+            common::get_adjacent_indexes(
+                    p_model->get_decon_level(), svr_models.front()->get_params().get_svr_adjacent_levels_ratio(), p_dataset->get_transformation_levels()));
+}
+
+
+int ModelService::save(const datamodel::Model_ptr &model)
+{
+    common::reject_nullptr(model);
     if (!model->get_id()) model->set_id(model_dao.get_next_id());
     return model_dao.save(model);
 }
 
-bool ModelService::exists(const Model_ptr &model)
+bool ModelService::exists(const datamodel::Model_ptr &model)
 {
     return model_dao.exists(model->get_id());
 }
 
-int ModelService::remove(const Model_ptr &model)
+int ModelService::remove(const datamodel::Model_ptr &model)
 {
-    reject_nullptr(model);
+    common::reject_nullptr(model);
     return model_dao.remove(model);
 }
 
@@ -58,17 +86,17 @@ int ModelService::remove_by_ensemble_id(const bigint ensemble_id)
     return model_dao.remove_by_ensemble_id(ensemble_id);
 }
 
-std::vector<Model_ptr> ModelService::get_all_models_by_ensemble_id(const bigint ensemble_id)
+std::deque<datamodel::Model_ptr> ModelService::get_all_models_by_ensemble_id(const bigint ensemble_id)
 {
     try {
         return model_dao.get_all_ensemble_models(ensemble_id);
     } catch (...) {
-        LOG4_ERROR("Cannot read models from the DB.");
+        LOG4_ERROR("Cannot read models from the database.");
         return {};
     }
 }
 
-Model_ptr ModelService::get_model(const bigint ensemble_id, const size_t decon_level)
+datamodel::Model_ptr ModelService::get_model(const bigint ensemble_id, const size_t decon_level)
 {
     return model_dao.get_by_ensemble_id_and_decon_level(ensemble_id, decon_level);
 }
@@ -90,7 +118,8 @@ ModelService::get_quantized_feature(const size_t pos, const data_row_container::
     result = (row_iter + quantization_mul - 1)->get()->get_value(level);
 #endif
     if (std::isnan(result) or std::isinf(result))
-        LOG4_WARN("Corrupt value " << result << " at " << row_iter->get()->get_value_time() << " pos " << pos << " level " << level << " lag count " << lag << " quantization mul " << quantization_mul);
+        LOG4_WARN("Corrupt value " << result << " at " << row_iter->get()->get_value_time() << " pos " << pos << " level " <<
+                    level << " lag count " << lag << " quantization mul " << quantization_mul);
     return result;
 }
 
@@ -101,13 +130,10 @@ ModelService::prepare_features(
         const data_row_container::const_iterator &end_iter,
         const bpt::time_duration &max_gap,
         const double main_to_aux_period_ratio,
-#ifndef NEW_SCALING
-        const svr::datamodel::dq_scaling_factor_container_t &scaling_factors,
-#endif
         arma::rowvec &row)
 {
     LOG4_TRACE("Processing row with lag " << lag << " until " << std::prev(end_iter)->get()->get_value_time());
-
+    const auto r_start = row.size();
     row.resize(row.size() + adjacent_levels.size() * lag);
     size_t adj_ix = 0;
     for (const auto adjacent_level: adjacent_levels) {
@@ -126,10 +152,7 @@ ModelService::prepare_features(
 #endif
 
         LOG4_TRACE("Unscaled features " << adjacent_level << " vector for time " << end_iter->get()->get_value_time() << ", first " << level_row.front() << ", last " << level_row.back() << ", max " << level_row.max() << ", min " << level_row.min());
-#ifndef NEW_SCALING
-        level_row = scale(level_row, adjacent_level, scaling_factors, false);
-#endif
-        row.cols(adj_ix * lag, (adj_ix + 1) * lag - 1) = level_row;
+        row.cols(r_start + adj_ix * lag, r_start + (adj_ix + 1) * lag - 1) = level_row;
         ++adj_ix;
     }
     LOG4_TRACE("Scaled features row for time " << end_iter->get()->get_value_time() << ", first " << row.front() << ", last " << row.back() << ", max " << row.max() << ", min " << row.min());
@@ -190,13 +213,13 @@ ModelService::prepare_time_features(
 // TODO Rewrite dysfunctional
 inline void
 prepare_tick_volume_features(
-        const std::vector<double>::const_iterator it_tick_volume_begin,
+        const std::deque<double>::const_iterator it_tick_volume_begin,
         const size_t lag,
         arma::rowvec &row)
 {
     LOG4_THROW("Not implemented!");
 #if 0
-    std::vector<double>::const_iterator it{it_tick_volume_begin};
+    std::deque<double>::const_iterator it{it_tick_volume_begin};
     for (size_t i = 0; i < lag; ++i, it += QUANTIZE_FIXED) row[i] = *it;
 #endif
 }
@@ -207,13 +230,10 @@ ModelService::get_training_data(
         arma::mat &all_features,
         arma::mat &all_labels,
         arma::mat &all_last_knowns,
-        std::vector<bpt::ptime> &all_times,
-#ifndef NEW_SCALING
-        const datamodel::dq_scaling_factor_container_t &scaling_factors,
-        const datamodel::dq_scaling_factor_container_t &aux_scaling_factors,
-#endif
-        const datamodel::datarow_range &main_data_range,
-        const datamodel::datarow_range &aux_data_range,
+        std::deque<bpt::ptime> &all_times,
+        const datamodel::datarow_range &main_data,
+        const datamodel::datarow_range &labels_aux,
+        const std::deque<datamodel::datarow_range> &features_aux,
         const size_t lag,
         const std::set<size_t> &adjacent_levels,
         const bpt::time_duration &max_gap,
@@ -224,94 +244,104 @@ ModelService::get_training_data(
 {
     LOG4_BEGIN();
     const auto aux_queue_res = main_queue_resolution / main_to_aux_period_ratio;
-    const size_t req_rows = main_data_range.distance();
-    if (req_rows < 1 or main_data_range.get_container().empty()) LOG4_THROW("Main data level " << level << " is empty!");
-    LOG4_DEBUG("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data_range.begin()->get()->get_value_time() <<
-                                  " until " << main_data_range.rbegin()->get()->get_value_time() << ", main to aux period ratio " << main_to_aux_period_ratio);
-#ifdef COMPRESS_LABEL_TIME
-    const auto last_label_time = std::next(main_data_range.begin(), main_data_range.distance() - 1)->get()->get_value_time();
-#endif
+    const size_t req_rows = main_data.distance();
+    if (req_rows < 1 or main_data.get_container().empty()) LOG4_THROW("Main data level " << level << " is empty!");
+    LOG4_DEBUG("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data.begin()->get()->get_value_time() <<
+                                  " until " << main_data.rbegin()->get()->get_value_time() << ", main to aux period ratio " << main_to_aux_period_ratio);
     auto harvest_rows = [&](const datamodel::datarow_range &harvest_range) {
-        std::mutex mx_resize, mx_shedded_rows;
-        arma::uvec shedded_rows;
+        tbb::concurrent_vector<arma::uword> shedded_rows;
         const size_t expected_rows = harvest_range.distance();
         arma::mat labels(expected_rows, PROPS.get_multistep_len()), features(expected_rows, 0), last_knowns(expected_rows, 1);
-        std::vector<bpt::ptime> label_times(expected_rows);
+        std::deque<bpt::ptime> label_times;
+        if (!level) label_times.resize(expected_rows);
         LOG4_DEBUG("Processing range " << harvest_range.begin()->get()->get_value_time() << " to " << harvest_range.rbegin()->get()->get_value_time() << ", expected " << expected_rows << " rows.");
 
-        __tbb_pfor(row_ix, 0, expected_rows,
-            const auto label_start_iter = harvest_range.begin() + row_ix;
-            const bpt::ptime label_start_time = label_start_iter->get()->get_value_time();
+#pragma omp parallel for
+        for (size_t rowix = 0; rowix < expected_rows; ++rowix) {
+            const auto label_start_iter = *(harvest_range.begin() + rowix);
+            const bpt::ptime label_start_time = label_start_iter->get_value_time();
             if (label_start_time <= last_modeled_value_time) {
                 LOG4_DEBUG("Skipping already modeled row with value time " << label_start_time);
-                AVEC_PUSH_TS(shedded_rows, row_ix, mx_shedded_rows);
+                shedded_rows.emplace_back(rowix);
                 continue;
             }
             LOG4_TRACE("Adding row to training matrix with value time " << label_start_time);
-            arma::rowvec features_row;
             arma::rowvec labels_row(PROPS.get_multistep_len());
-            const auto label_aux_start_iter = lower_bound(aux_data_range.get_container(), aux_decon_hint + row_ix * main_to_aux_period_ratio, label_start_time);
-            if (label_aux_start_iter == aux_data_range.get_container().end()) {
+            const auto label_aux_start_iter = lower_bound(labels_aux.get_container(), labels_aux.begin() + rowix * main_to_aux_period_ratio, label_start_time);
+            if (label_aux_start_iter == labels_aux.get_container().end()) {
                 LOG4_ERROR("Can't find aux labels start " << label_start_time);
-                AVEC_PUSH_TS(shedded_rows, row_ix, mx_shedded_rows);
+                shedded_rows.emplace_back(rowix);
                 continue;
             } else if (label_aux_start_iter->get()->get_value_time() >= label_start_time + .5 * main_queue_resolution) {
-                LOG4_ERROR("label_aux_start_iter->get()->get_value_time() > label_start_time " << label_aux_start_iter->get()->get_value_time() << " > " << label_start_time + .7 * main_queue_resolution);
-                AVEC_PUSH_TS(shedded_rows, row_ix, mx_shedded_rows);
+                LOG4_ERROR("label aux start iter value time > label start time " << label_aux_start_iter->get()->get_value_time() << " > "
+                                                                                               << label_start_time + .7 * main_queue_resolution);
+                shedded_rows.emplace_back(rowix);
                 continue;
             }
-            const auto label_aux_end_iter = lower_bound(aux_data_range.get_container(), label_aux_start_iter, label_start_time + main_queue_resolution);
-            const auto feature_end_iter = lower_bound_back(aux_data_range.get_container(), label_aux_start_iter, label_start_time - main_queue_resolution * OFFSET_PRED_MUL);
-            if (prepare_features(adjacent_levels, lag, feature_end_iter, max_gap, main_to_aux_period_ratio, features_row) and
-                prepare_labels(level, label_aux_start_iter, label_aux_end_iter, label_start_time, label_start_time + main_queue_resolution, labels_row, aux_queue_res)) {
-
-                std::unique_lock l(mx_resize);
+            const auto label_aux_end_iter = lower_bound(labels_aux.get_container(), label_aux_start_iter, label_start_time + main_queue_resolution);
+            arma::rowvec features_row;
+            bool feat_rc = true;
+#pragma omp parallel for ordered schedule(static, 1)
+            for (const auto &f: features_aux) {
+                const auto feature_end_iter = lower_bound_back(f.get_container(), f.end(), label_start_time - main_queue_resolution * OFFSET_PRED_MUL);
+#pragma omp ordered
+                feat_rc &= prepare_features(adjacent_levels, lag, feature_end_iter, max_gap, main_to_aux_period_ratio, features_row);
+            }
+            if (feat_rc && prepare_labels(level, label_aux_start_iter, label_aux_end_iter, label_start_time, label_start_time + main_queue_resolution, labels_row, aux_queue_res)) {
                 if (features_row.size() % lag > 0) LOG4_ERROR("features_row.size() != lag " << features_row.size() << " != " << lag);
-                if (features.n_rows != expected_rows || features.n_cols != features_row.size()) features.set_size(expected_rows, features_row.size()); // Last row is special, contains the last known value
-                if (labels.n_rows != expected_rows || labels.n_cols != PROPS.get_multistep_len()) labels.set_size(expected_rows, PROPS.get_multistep_len());
-                if (last_knowns.n_rows != expected_rows || last_knowns.n_cols != 1) last_knowns.set_size(expected_rows, 1);
-                l.unlock();
+#pragma omp critical
+                {
+                    if (features.n_rows != expected_rows || features.n_cols != features_row.size()) features.set_size(expected_rows, features_row.size());
+                    if (labels.n_rows != expected_rows || labels.n_cols != PROPS.get_multistep_len()) labels.set_size(expected_rows, PROPS.get_multistep_len());
+                    if (last_knowns.n_rows != expected_rows || last_knowns.n_cols != 1) last_knowns.set_size(expected_rows, 1);
+                }
 
-                features.row(row_ix) = features_row;
-                const auto p_anchor_row = std::prev(feature_end_iter)->get();
+                features.row(rowix) = features_row;
+                const auto p_anchor_row = *std::prev(lower_bound_back(labels_aux.get_container(), label_aux_start_iter, label_start_time - main_queue_resolution * OFFSET_PRED_MUL));
 #ifdef EMO_DIFF
                 labels_row = labels_row - p_anchor_row->get_value(level);
 #endif
-                labels.row(row_ix) = labels_row;
-                last_knowns(row_ix, 0) = p_anchor_row->get_value(level);
-                label_times[row_ix] = label_start_time;
-                if (row_ix >= harvest_range.distance() - 1)
+                labels.row(rowix) = labels_row;
+                last_knowns(rowix, 0) = p_anchor_row->get_value(level);
+                if (!level) label_times[rowix] = label_start_time;
+                if (ssize_t(rowix) >= harvest_range.distance() - 1)
                     LOG4_DEBUG(
-                            "Last data row " << row_ix << ", value time " << label_start_time << ", label aux start time " << label_aux_start_iter->get()->get_value_time() << ", last known time " << p_anchor_row->get_value_time() <<
-                                             ", last last-known value " << last_knowns(row_ix, 0) << ", label " << labels.row(row_ix).back() << ", level " << level);
+                            "Last data row " << rowix << ", value time " << label_start_time << ", label aux start time "
+                                             << label_aux_start_iter->get()->get_value_time() << ", last known time " << p_anchor_row->get_value_time() <<
+                                             ", last last-known value " << last_knowns(rowix, 0) << ", label " << labels.row(rowix).back() << ", level " << level);
             } else {
-                LOG4_WARN("For row at " << label_start_time << " can't assemble features " << arma::size(features_row) << " or labels " << arma::size(labels_row) << ", skipping.");
-                AVEC_PUSH_TS(shedded_rows, row_ix, mx_shedded_rows);
+                LOG4_WARN("For row at " << label_start_time << " can't assemble features " << arma::size(features_row) << " or labels " << arma::size(labels_row)
+                                        << ", skipping.");
+                shedded_rows.emplace_back(rowix);
             }
-        );
-        if (!shedded_rows.empty()) {
-            LOG4_DEBUG("Shedding rows " << shedded_rows);
-            features.shed_rows(shedded_rows);
-            labels.shed_rows(shedded_rows);
-            last_knowns.shed_rows(shedded_rows);
-            std::vector<bpt::ptime> clean_label_times;
-            for (arma::uword r = 0; r < label_times.size(); ++r) {
-                if (!arma::find(shedded_rows == r).is_empty()) continue;
-                clean_label_times.emplace_back(label_times[r]);
-            }
-            label_times = clean_label_times;
         }
-        if (!labels.empty() && !features.empty() && !last_knowns.empty()) LOG4_DEBUG("Returning labels " << common::present(labels) << ", features " << common::present(features) << ", last knowns " << common::present(last_knowns) << " for level " << level);
+        if (!shedded_rows.empty()) {
+            const arma::uvec ashedded_rows = common::toarmacol(shedded_rows);
+            shedded_rows.clear();
+            LOG4_DEBUG("Shedding rows " << ashedded_rows);
+            features.shed_rows(ashedded_rows);
+            labels.shed_rows(ashedded_rows);
+            last_knowns.shed_rows(ashedded_rows);
+            if (!level) {
+                std::deque<bpt::ptime> clean_label_times;
+                for (arma::uword r = 0; r < label_times.size(); ++r) {
+                    if (!arma::find(ashedded_rows == r).is_empty()) continue;
+                    clean_label_times.emplace_back(label_times[r]);
+                }
+                label_times = clean_label_times;
+            }
+        }
+        if (!labels.empty() && !features.empty() && !last_knowns.empty())
+            LOG4_DEBUG("Returning labels " << common::present(labels) << ", features " << common::present(features) << ", last knowns " << common::present(last_knowns) << " for level " << level);
         return std::make_tuple(features, labels, last_knowns, label_times);
     };
 
-    for (datamodel::datarow_range harvest_range = main_data_range;
-        all_labels.n_rows < req_rows && harvest_range.begin()->get()->get_value_time() >= main_data_range.get_container().begin()->get()->get_value_time() && harvest_range.begin()->get()->get_value_time() > last_modeled_value_time;
-        harvest_range = datamodel::datarow_range(harvest_range.begin() - req_rows + all_labels.n_rows, harvest_range.begin(), harvest_range.get_container()))
+    for (auto harvest_range = main_data;
+        all_labels.n_rows < req_rows && harvest_range.begin()->get()->get_value_time() >= main_data.get_container().begin()->get()->get_value_time()
+        && harvest_range.begin()->get()->get_value_time() > last_modeled_value_time;
+        harvest_range.set_range(harvest_range.begin() - req_rows + all_labels.n_rows, harvest_range.begin()))
     {
-        arma::mat features, labels, last_knowns;
-        std::vector<bpt::ptime> label_times;
-        std::tie(features, labels, last_knowns, label_times) = harvest_rows(harvest_range);
+        const auto [features, labels, last_knowns, label_times] = harvest_rows(harvest_range);
         if (all_features.n_cols != features.n_cols) all_features.set_size(all_features.n_rows, features.n_cols);
         if (all_labels.n_cols != labels.n_cols) all_labels.set_size(all_labels.n_rows, labels.n_cols);
         if (all_last_knowns.n_cols != 1) all_last_knowns.set_size(all_last_knowns.n_rows, 1);
@@ -325,16 +355,21 @@ ModelService::get_training_data(
 #ifdef LAST_KNOWN_LABEL
     // Add last known value if preparing online train
     if (last_modeled_value_time > bpt::min_date_time) {
-        auto label_aux_start_iter = lower_bound(aux_data_range.get_container(), aux_decon_hint + main_data_range.distance() * .5, (main_data_range.begin() + main_data_range.distance() - 1)->get()->get_value_time() + main_queue_resolution + main_queue_resolution * (1. - OFFSET_PRED_MUL));
-        if (label_aux_start_iter == aux_data_range.get_container().end()) --label_aux_start_iter;
+        auto label_aux_start_iter = lower_bound(labels_aux.get_container(), labels_aux.begin() + main_data.distance() * .5, (main_data.begin() + main_data.distance() - 1)->get()->get_value_time() + main_queue_resolution + main_queue_resolution * (1. - OFFSET_PRED_MUL));
+        if (label_aux_start_iter == labels_aux.get_container().end()) --label_aux_start_iter;
         const bpt::ptime label_start_time = label_aux_start_iter->get()->get_value_time();
-        const auto feature_end_iter = lower_bound_back(aux_data_range.get_container(), label_aux_start_iter, label_start_time - main_queue_resolution * OFFSET_PRED_MUL);
         arma::rowvec features_row;
-        arma::rowvec labels_row(PROPS.get_multistep_len());
-        if (prepare_features(adjacent_levels, lag, feature_end_iter, max_gap, main_to_aux_period_ratio, features_row)) {
+        bool feat_rc = true;
+        for (const auto &f: features_aux) {
+            const auto feature_end_iter = lower_bound_back(f.get_container(), f.end(), label_start_time - main_queue_resolution * OFFSET_PRED_MUL);
+            feat_rc &= prepare_features(adjacent_levels, lag, feature_end_iter, max_gap, main_to_aux_period_ratio, features_row);
+        }
+
+        if (feat_rc) {
+            arma::rowvec labels_row(PROPS.get_multistep_len());
             all_features = arma::join_cols(all_features, features_row);
             labels_row.fill(label_aux_start_iter->get()->get_value(level));
-            const auto p_anchor_row = std::prev(feature_end_iter)->get();
+            const auto p_anchor_row = std::prev(lower_bound_back(labels_aux.get_container(), label_aux_start_iter, label_start_time - main_queue_resolution * OFFSET_PRED_MUL))->get();
 #ifdef EMO_DIFF
             labels_row = labels_row - p_anchor_row->get_value(level);
 #endif
@@ -343,7 +378,7 @@ ModelService::get_training_data(
             if (!level) all_times.emplace_back(label_start_time);
             LOG4_DEBUG("Temporary data last row, time " << label_start_time << " anchor time " << p_anchor_row->get_value_time());
         } else {
-            LOG4_ERROR("Failed adding temporary row with time " << label_start_time << ", features size " << arma::size(features_row) << ", labels " << labels_row);
+            LOG4_ERROR("Failed adding temporary row with time " << label_start_time << ", features size " << arma::size(features_row));
         }
     }
 #endif
@@ -355,11 +390,11 @@ ModelService::get_training_data(
 #if 0 // Save training data to file
     if (level == 0) {
         static size_t call_ct;
-        labels.save(
+        all_labels.save(
                 svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << level << "_" << call_ct << ".out", arma::csv_ascii);
-        features.save(
+        all_features.save(
                 svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << level << "_" << call_ct << ".out", arma::csv_ascii);
-        p_last_knowns.save(
+        all_last_knowns.save(
                 svr::common::formatter() << "/mnt/slowstore/var/tmp/last_knowns_" << level << "_" << call_ct << ".out", arma::csv_ascii);
         ++call_ct;
     }
@@ -372,55 +407,44 @@ ModelService::get_training_data(
 void
 ModelService::get_features_row(
         const bpt::ptime &pred_time,
-        const datarow_range &aux_data_range,
-        const svr::datamodel::dq_scaling_factor_container_t &aux_scaling_factors,
+        const std::deque<datamodel::DeconQueue_ptr> &aux_decons,
         const std::set<size_t> &adjacent_levels,
-        const size_t current_level,
+        const size_t level,
         const bpt::time_duration &max_gap,
         const double main_to_aux_period_ratio,
         const size_t lag,
-        const bpt::time_duration &main_queue_resolution,
+        const bpt::time_duration &main_resolution,
         arma::rowvec &features_row)
 {
     LOG4_BEGIN();
 
-    if (aux_data_range.get_container().empty()) {
+    if (aux_decons.empty()) {
         LOG4_ERROR("Features queue is empty to predict " << pred_time);
         features_row.clear();
         return;
     }
 
-    const bpt::ptime last_feat_expected_time = pred_time - main_queue_resolution * OFFSET_PRED_MUL;
-    const auto feature_aux_end_iter = lower_bound_back(aux_data_range.get_container(), last_feat_expected_time);
-    const size_t distance_from_start = std::distance(aux_data_range.get_container().begin(), feature_aux_end_iter);
-    if (distance_from_start < (1 + lag) * QUANTIZE_FIXED) {
-        LOG4_ERROR("Not enough data to predict " << pred_time << ", found " << distance_from_start);
-        features_row.clear();
-        return;
-    }
+    const bpt::ptime last_feat_expected_time = pred_time - main_resolution * OFFSET_PRED_MUL;
+#pragma omp parallel for ordered schedule(static, 1)
+    for (const auto &d: aux_decons) {
+        const auto feature_aux_end_iter = lower_bound_back(d->get_data(), last_feat_expected_time);
+        const size_t distance_from_start = std::distance(d->get_data().begin(), feature_aux_end_iter);
+        if (distance_from_start < (1 + lag) * QUANTIZE_FIXED)
+            LOG4_THROW("Not enough data to predict " << pred_time << ", found " << distance_from_start);
 
-    if (std::prev(feature_aux_end_iter)->get()->get_value_time() != last_feat_expected_time - onesec) {
-        LOG4_ERROR(
-                "Last feature time " << std::prev(feature_aux_end_iter)->get()->get_value_time() << " does not match expected " << last_feat_expected_time - onesec << " for " << pred_time << " of " <<
-                                     aux_data_range.get_container().size() << " rows, starting " << aux_data_range.get_container().front()->get_value_time() << ", ending " << aux_data_range.get_container().back()->get_value_time() << ", p_predictions will be of lower quality, skipping!");
-        features_row.clear();
-        return;
-    }
+        if (std::prev(feature_aux_end_iter)->get()->get_value_time() != last_feat_expected_time - onesec)
+            LOG4_THROW(
+                    "Last feature time " << std::prev(feature_aux_end_iter)->get()->get_value_time() << " does not match expected " << last_feat_expected_time - onesec
+                     << " for " << pred_time << " of " << d->get_data().size() << " rows, starting " << d->get_data().front()->get_value_time() << ", ending " << d->get_data().back()->get_value_time() << ", p_predictions will be of lower quality, skipping!");
+#pragma omp ordered
+        if (!prepare_features(adjacent_levels, lag, feature_aux_end_iter, max_gap, main_to_aux_period_ratio, features_row))
+            LOG4_THROW("Failed preparing features for time " << pred_time);
 
-#ifndef NEW_SCALING
-    if (!prepare_features(adjacent_levels, lag, feature_aux_end_iter, max_gap, main_to_aux_period_ratio, aux_scaling_factors, features_row)) {
-#else
-    if (!prepare_features(adjacent_levels, lag, feature_aux_end_iter, max_gap, main_to_aux_period_ratio, features_row)) {
-#endif
-        LOG4_ERROR("Failed preparing features for time " << pred_time);
-        features_row.clear();
-        return;
+        LOG4_DEBUG("Prepared prediction features for label at " << pred_time << " level " << level << " row size " << arma::size(features_row) <<
+                                                                " features until " << std::prev(feature_aux_end_iter)->get()->get_value_time() << ", main to aux ratio " << main_to_aux_period_ratio << ", lag " << lag);
     }
 
     if (features_row.size() % lag) LOG4_ERROR("Features row size dubious " << arma::size(features_row));
-
-    LOG4_DEBUG("Prepared prediction features for label at " << pred_time << " level " << current_level << " row size " << arma::size(features_row) <<
-                " features until " << std::prev(feature_aux_end_iter)->get()->get_value_time() << ", main to aux ratio " << main_to_aux_period_ratio << ", lag " << lag);
 
     LOG4_END();
 }
@@ -428,34 +452,33 @@ ModelService::get_features_row(
 
 void
 ModelService::train(
-        SVRParameters_ptr &p_svr_parameters, Model_ptr &p_model, const matrix_ptr &p_features,
-        const matrix_ptr &p_labels, const bpt::ptime &new_last_modeled_value_time)
+        datamodel::Model_ptr p_model,
+        const matrix_ptr &p_features,
+        const matrix_ptr &p_labels,
+        const bpt::ptime &new_last_modeled_value_time)
 {
-    if (p_svr_parameters->get_skip()) {
+    if (p_model->get_params().get_skip()) {
         LOG4_DEBUG("Skipping training on model " << p_model->get_decon_level());
         p_model->set_last_modified(bpt::second_clock::local_time());
         return;
     }
     if (p_labels->empty() or p_features->empty() or p_labels->n_rows != p_features->n_rows) {
-        LOG4_ERROR(
-                "Invalid learning data, labels matrix row count is " << arma::size(*p_labels) << " training features matrix row count is "
-                                                                     << arma::size(*p_features));
+        LOG4_ERROR("Invalid learning data, labels matrix row count is " << arma::size(*p_labels) << " training features matrix row count is " << arma::size(*p_features));
         return;
     }
 
-    if (p_model->get_svr_model())
-        train_online(*p_features, *p_labels, p_model->get_svr_model());
+    if (p_model->get_last_modeled_value_time() > bpt::min_date_time)
+        train_online(*p_features, *p_labels, p_model->get_gradients());
     else
-        train_batch(p_svr_parameters, p_model, p_features, p_labels);
+        train_batch(p_model->get_param_set_ptr(), p_model, p_features, p_labels);
 
 
     p_model->set_last_modeled_value_time(new_last_modeled_value_time);
     p_model->set_last_modified(bpt::second_clock::local_time());
     LOG4_INFO(
-            "Finished training model for level " << p_model->get_svr_model()->get_svr_parameters().get_decon_level()
-             << ", input queue name " << p_model->get_svr_model()->get_svr_parameters().get_input_queue_table_name()
-             << ", input queue column " << p_model->get_svr_model()->get_svr_parameters().get_input_queue_column_name()
-             << ", samples trained number " << p_model->get_svr_model()->get_samples_trained_number()
+            "Finished training model for level " << p_model->get_params().get_decon_level()
+             << ", input queue name " << p_model->get_params().get_input_queue_table_name()
+             << ", input queue column " << p_model->get_params().get_input_queue_column_name()
              << ", last modeled value time " << new_last_modeled_value_time
              << ", last modified time " << p_model->get_last_modified());
 }
@@ -465,7 +488,7 @@ void
 ModelService::train_online(
         const arma::mat &features_data,
         const arma::mat &labels_data,
-        OnlineMIMOSVR_ptr &p_svr_model)
+        std::deque<OnlineMIMOSVR_ptr> &svr_models)
 {
 #ifdef LAST_KNOWN_LABEL
     for (size_t r = 0; r < labels_data.n_rows - 1; ++r) // TODO Implement online batch training of multiple rows
@@ -474,39 +497,44 @@ ModelService::train_online(
                 "Online SVM train");
     p_svr_model->learn(features_data.row(features_data.n_rows - 1), labels_data.row(labels_data.n_rows - 1), true, PROPS.get_dont_update_r_matrix());
 #else
-    for (size_t r = 0; r < labels_data.n_rows; ++r) // TODO Implement online batch training of multiple rows
-        PROFILE_EXEC_TIME(p_svr_model->learn(features_data.row(r), labels_data.row(r), false, PROPS.get_dont_update_r_matrix()), "Online SVM train");
+    for (auto &m: svr_models)
+        PROFILE_EXEC_TIME(m->learn(features_data, labels_data, false), "Online SVM train");
 #endif
 }
 
 
 void
 ModelService::train_batch(
-        SVRParameters_ptr &p_svr_parameters,
-        Model_ptr &p_model,
+        datamodel::t_param_set_ptr &p_param_set,
+        datamodel::Model_ptr &p_model,
         const matrix_ptr &p_features,
         const matrix_ptr &p_labels)
 {
     LOG4_BEGIN();
 
-    const bool save_parameters = p_svr_parameters->get_svr_kernel_param() == 0 || p_svr_parameters->get_svr_kernel_param2() == 0;
-    auto p_svr_model = std::make_shared<OnlineMIMOSVR>(
-            p_svr_parameters, p_features, p_labels, not PROPS.get_dont_update_r_matrix(), nullptr, false, MimoType::single, PROPS.get_multistep_len());
-
-    if (save_parameters) {
-        APP.svr_parameters_service.remove(p_svr_model->get_svr_parameters());
-        APP.svr_parameters_service.save(p_svr_model->get_svr_parameters());
+#pragma omp parallel for
+    for (size_t g = 0; g < p_model->get_gradient_count(); ++g) {
+        auto gradient_params = SVRParametersService::slice(*p_param_set, std::numeric_limits<size_t>::max(), g);
+        if (gradient_params->empty()) LOG4_THROW("Parameters for model " << *p_model << " not initialized.");
+        bool save_parameters = false;
+        for (auto &p: *gradient_params)
+            save_parameters |= p->get_svr_kernel_param() == 0;
+        p_model->set_gradient(g, std::make_shared<OnlineMIMOSVR>(gradient_params, p_features, p_labels, nullptr, p_model->get_multiout(), p_model->get_chunk_size()));
+        if (save_parameters) {
+            for (const auto &p: *gradient_params) {
+                APP.svr_parameters_service.remove(p);
+                APP.svr_parameters_service.save(p);
+            }
+        }
     }
-
-    p_model->set_svr_model(p_svr_model);
 
     LOG4_END();
 }
 
 
-const datarow_range
+const datamodel::datarow_range
 ModelService::prepare_feat_range(
-        const DataRow::container &data,
+        const datamodel::DataRow::container &data,
         const boost::posix_time::time_duration &max_gap,
         const boost::posix_time::ptime &predict_time,
         const ssize_t lag_count)
@@ -522,17 +550,17 @@ ModelService::prepare_feat_range(
     LOG4_TRACE("Prepared feature range for predict time " << predict_time << " feature start time " <<
                                                           it_lookback->get()->get_value_time() << " features end time - 1 "
                                                           << std::prev(it_last_feature)->get()->get_value_time());
-    return datarow_range(
-            remove_constness(const_cast<DataRow::container &>(data), it_lookback),
-            remove_constness(const_cast<DataRow::container &>(data), it_last_feature),
-            const_cast<DataRow::container &>(data));
+    return datamodel::datarow_range(
+            common::remove_constness(const_cast<datamodel::DataRow::container &>(data), it_lookback),
+            common::remove_constness(const_cast<datamodel::DataRow::container &>(data), it_last_feature),
+            const_cast<datamodel::DataRow::container &>(data));
 }
 
 
 void
 ModelService::check_feature_data(
-        const DataRow::container &data,
-        const DataRow::container::const_iterator &iter,
+        const datamodel::DataRow::container &data,
+        const datamodel::DataRow::container::const_iterator &iter,
         const bpt::time_duration &max_gap,
         const bpt::ptime &feat_time,
         const ssize_t lag_count)
@@ -548,8 +576,8 @@ ModelService::check_feature_data(
 
 void
 ModelService::check_feature_data(
-        const DataRow::container &data,
-        const DataRow::container::const_iterator &iter,
+        const datamodel::DataRow::container &data,
+        const datamodel::DataRow::container::const_iterator &iter,
         const bpt::time_duration &max_gap,
         const bpt::ptime &feat_time)
 {
@@ -560,16 +588,17 @@ ModelService::check_feature_data(
                 (iter == data.end() ? "not found" : "at " + bpt::to_simple_string(iter->get()->get_value_time())));
 }
 
+// TODO Rewrite
 arma::colvec
 ModelService::predict(
-        const Model_ptr &p_model,
+        const datamodel::Model_ptr &p_model,
         const data_row_container &main_decon_data,
-        const std::vector<data_row_container_ptr> &aux_data_rows_containers,
+        const std::deque<data_row_container_ptr> &aux_data_rows_containers,
         const boost::posix_time::ptime &prediction_time,
         const boost::posix_time::time_duration &resolution,
         const bpt::time_duration &max_gap)
 {
-    if (!p_model->get_svr_model() or p_model->get_svr_model()->get_svr_parameters().get_skip())
+    if (p_model->get_gradients().empty() or p_model->get_params().get_skip())
     {
         LOG4_DEBUG("Skipping prediction on model " << p_model->get_decon_level());
         return arma::colvec(PROPS.get_multistep_len()).fill(0.);
@@ -578,23 +607,23 @@ ModelService::predict(
     LOG4_DEBUG("Predicting using " << p_model->to_string());
 
     if (main_decon_data.empty())
-        THROW_EX_F(svr::common::insufficient_data,"Decon queue is empty for model " << p_model->get_decon_level());
+        THROW_EX_F(svr::common::insufficient_data, "Decon queue is empty for model " << p_model->get_decon_level());
 
-    const auto lag_count = p_model->get_svr_model()->get_svr_parameters().get_lag_count();
+    const auto lag_count = p_model->get_params().get_lag_count();
     const auto lookback_range = prepare_feat_range(main_decon_data, max_gap, prediction_time, lag_count);
 
     LOG4_DEBUG(
             "Predicting time " << prediction_time <<
                                ", model for level " << p_model->get_decon_level() <<
-                               ", learning levels " << svr::common::deep_to_string(p_model->get_learning_levels()) <<
-                               ", samples trained " << p_model->get_svr_model()->get_samples_trained_number() <<
+                               ", learning levels " << svr::common::to_string(p_model->get_learning_levels()) <<
+                               ", samples trained " << p_model->get_gradient(0)->get_samples_trained_number() <<
                                ", lookback range begin " << lookback_range.begin()->get()->get_value_time() <<
                                ", lookback range end " << lookback_range.rbegin()->get()->get_value_time() <<
                                ", lookback range size " << lookback_range.get_container().size() <<
                                ", lookback range distance " << lookback_range.distance() <<
                                ", lookback range duration " << lookback_range.rbegin()->get()->get_value_time() - lookback_range.begin()->get()->get_value_time());
 
-    std::vector<datarow_range> aux_lookback_ranges;
+    std::deque<datamodel::datarow_range> aux_lookback_ranges;
     for (const data_row_container_ptr &p_aux_data: aux_data_rows_containers)
         if (p_aux_data) aux_lookback_ranges.push_back(prepare_feat_range(*p_aux_data, max_gap, prediction_time, lag_count));
         else LOG4_WARN("Aux data pointer is empty!");
@@ -619,8 +648,8 @@ ModelService::predict(
     }
 
     arma::rowvec prediction_vector;
-    //get_features_row(
-    //        lookback_range, p_model->get_learning_levels(), p_model->get_decon_level(), max_gap, prediction_vector);
+//    get_features_row(
+//            pred_time, lookback_range, p_model->get_learning_levels(), p_model->get_decon_level(), max_gap, prediction_vector);
     if (prediction_vector.size() < 1) THROW_EX_F(svr::common::missing_data_fatal, "Unable to assemble features for " << prediction_time);
 #ifdef WHITEBOX_TEST // WHITEBOX_TEST
     {
@@ -640,13 +669,13 @@ ModelService::predict(
         using namespace svr::common;
         auto old_cm_separator = cm_separator;
         cm_separator = '_';
-        const auto &p_svr_parameters = p_model->get_svr_model()->get_svr_parameters();
+        const auto &p_param_set = p_model->get_gradients()->get_param_set();
         ss <<
-           "predict_dataset_" << p_svr_parameters.get_dataset_id() << "_" <<
-           p_svr_parameters.get_input_queue_table_name() << "_" << p_svr_parameters.get_input_queue_column_name() <<
+           "predict_dataset_" << p_param_set.get_dataset_id() << "_" <<
+           p_param_set.get_input_queue_table_name() << "_" << p_param_set.get_input_queue_column_name() <<
            "_level_" << p_model->get_decon_level() <<
            "_adjacent_levels_" << p_model->get_learning_levels().size() <<
-           "_lag_" << p_svr_parameters.get_lag_count() <<
+           "_lag_" << p_param_set.get_lag_count() <<
            "_call_" << call_counter++ <<
            ".libsvm.txt";
         std::ofstream of(ss.str());
@@ -660,7 +689,7 @@ ModelService::predict(
 #endif /* #ifdef OUTPUT_LIBSVM_TRAIN_DATA */
 
     arma::mat ret_values;
-    PROFILE_EXEC_TIME(ret_values = p_model->get_svr_model()->chunk_predict(prediction_vector), "Predict MIMO values");
+    //PROFILE_EXEC_TIME(ret_values = p_model->get_gradients()->predict(prediction_vector), "Predict MIMO values");
     {
         std::stringstream ss;
         ss.precision(11);
@@ -690,22 +719,22 @@ ModelService::predict(
 // Used by paramtune
 data_row_container
 ModelService::predict(
-        const Model_ptr &p_model,
-        const datarow_range &main_data_range,
-        const std::vector<datarow_range> &aux_data_ranges,
+        const datamodel::Model_ptr &p_model,
+        const datamodel::datarow_range &main_data,
+        const std::deque<datamodel::datarow_range> &aux_data_ranges,
         const ptimes_set_t &prediction_times,
         const bpt::time_duration &max_gap,
         const bpt::time_duration &resolution)
 {
     LOG4_BEGIN();
 
-    if (main_data_range.distance() < 1) LOG4_THROW("Decon queue is empty.");
-    if (!p_model->get_svr_model()) LOG4_THROW("Model is not initialized!");
+    if (main_data.distance() < 1) LOG4_THROW("Decon queue is empty.");
+    if (p_model->get_gradients().empty()) LOG4_THROW("Model is not initialized!");
 
-    const auto lag_count = p_model->get_svr_model()->get_svr_parameters().get_lag_count();
+    const auto lag_count = p_model->get_params().get_lag_count();
     { // Do initial sanity checks of input data
         const auto feat_time = *prediction_times.begin();
-        (void) find_nearest_before(main_data_range.get_container(), feat_time, max_gap, lag_count);
+        (void) find_nearest_before(main_data.get_container(), feat_time, max_gap, lag_count);
         for (auto &aux_data_range: aux_data_ranges)
             (void) find_nearest_before(aux_data_range.get_container(), feat_time, max_gap, lag_count);
     }
@@ -713,14 +742,14 @@ ModelService::predict(
     data_row_container result;
     const auto multistep_len = PROPS.get_multistep_len();
     LOG4_DEBUG("Predicting range " << *prediction_times.begin() << " to " << *prediction_times.rbegin());
-    const auto multistep_prediction_times = to_multistep_times(prediction_times, resolution, multistep_len);
+    const auto multistep_prediction_times = common::to_multistep_times(prediction_times, resolution, multistep_len);
     arma::mat prediction_matrix(multistep_prediction_times.size(), 0);
     for (size_t time_ix = 0; time_ix < multistep_prediction_times.size(); ++time_ix) { // TODO Parallelize
-        const auto &prediction_time = *std::next(multistep_prediction_times.begin(), time_ix);
+        const auto &prediction_time = multistep_prediction_times^time_ix;
         LOG4_TRACE("Preparing prediction features for " << prediction_time);
         try {
             //const auto pred_range = prepare_feat_range(
-            //        main_data_range.get_container(), max_gap, prediction_time, lag_count);
+            //        main_data.get_container(), max_gap, prediction_time, lag_count);
             arma::rowvec prediction_vector;
             //get_features_row(
             //        pred_range, p_model->get_learning_levels(), p_model->get_decon_level(), max_gap, prediction_vector);
@@ -748,23 +777,23 @@ ModelService::predict(
     }
 
     for (const auto &prediction_time: prediction_times)
-        result.push_back(std::make_shared<DataRow>(prediction_time));
+        result.push_back(std::make_shared<datamodel::DataRow>(prediction_time));
 
     LOG4_DEBUG(
             "Predicting range " << *prediction_times.begin() << " to " << *prediction_times.rbegin() <<
                                 ", model: " << p_model->to_string() <<
-                                ", learning levels " << svr::common::deep_to_string(p_model->get_learning_levels()) <<
-                                ", samples trained " << p_model->get_svr_model()->get_samples_trained_number() <<
-                                ", data range begin " << main_data_range.begin()->get()->get_value_time() <<
-                                ", data range end " << main_data_range.rbegin()->get()->get_value_time() <<
-                                ", data range size " << main_data_range.get_container().size() <<
-                                ", data range distance " << main_data_range.distance() <<
-                                ", data range duration " << main_data_range.rbegin()->get()->get_value_time() - main_data_range.begin()->get()->get_value_time() <<
+                                ", learning levels " << svr::common::to_string(p_model->get_learning_levels()) <<
+                                ", samples trained " << p_model->get_gradient(0)->get_samples_trained_number() <<
+                                ", data range begin " << main_data.begin()->get()->get_value_time() <<
+                                ", data range end " << main_data.rbegin()->get()->get_value_time() <<
+                                ", data range size " << main_data.get_container().size() <<
+                                ", data range distance " << main_data.distance() <<
+                                ", data range duration " << main_data.rbegin()->get()->get_value_time() - main_data.begin()->get()->get_value_time() <<
                                 ", aux lookback ranges count " << aux_data_ranges.size() <<
                                 ", features matrix columns count " << prediction_matrix.n_cols <<
                                 ", features matrix rows count " << prediction_matrix.n_cols);
 
-    const auto result_values = p_model->get_svr_model()->chunk_predict(prediction_matrix);
+    const auto result_values = p_model->get_gradient(0)->predict(prediction_matrix);
 
     if (result.size() < decltype(result.size())(prediction_times.size()))
         LOG4_WARN("Predicted values size " << result.size() << " less than prediction times requested " << prediction_times.size());
@@ -789,102 +818,6 @@ ModelService::predict(
     return result;
 }
 
-
-/*
- * TODO Deadlock in algorithm below, fix!
- */
-#if 1
-
-static arma::colvec
-predict_wrapper(
-        const Model_ptr &p_model,
-        const data_row_container &p_main_decon_data,
-        const std::vector<data_row_container_ptr> &aux_data_rows_containers,
-        const boost::posix_time::ptime &prediction_time,
-        const boost::posix_time::time_duration &resolution,
-        const bpt::time_duration &max_gap)
-{
-    return ModelService::predict(
-            p_model, p_main_decon_data, aux_data_rows_containers, prediction_time, resolution, max_gap);
-}
-
-arma::mat
-ModelService::predict(
-        const std::vector<Model_ptr> &models,
-        const boost::posix_time::ptime &prediction_time,
-        const boost::posix_time::time_duration &resolution,
-        const boost::posix_time::time_duration &max_gap,
-        const svr::datamodel::DataRow::container &main_decon_data,
-        const std::vector<data_row_container_ptr> &aux_decon_data)
-{
-    LOG4_DEBUG("Predicting MIMO time " << prediction_time);
-
-#ifdef PRINTOUT_PER_LEVEL_VALUES
-    {
-        std::stringstream ss;
-        ss << "Actual values at " << main_decon_data.rbegin()->get()->get_value_time() << ": ";
-        for (const auto val: main_decon_data.rbegin()->get()->get_values()) ss << val << ", ";
-        LOG4_DEBUG(ss.str());
-    }
-#endif
-
-    const auto multistep_len = PROPS.get_multistep_len();
-    arma::mat predicted_values(multistep_len, models.size());
-    predicted_values.fill(0);
-    std::vector<svr::future<arma::colvec>> results;
-    for (size_t model_counter = 0; model_counter < models.size(); ++model_counter)
-        results.push_back(svr::async(predict_wrapper, std::cref(models[model_counter]), main_decon_data, aux_decon_data, prediction_time, resolution, max_gap));
-
-    for (size_t model_counter = 0; model_counter < results.size(); ++model_counter) {
-        try {
-            predicted_values.col(model_counter) = results[model_counter].get();
-        } catch (const svr::common::missing_data &ex) {
-            LOG4_WARN("Caught missing value exception. " << ex.what());
-            std::rethrow_exception(std::current_exception());
-        } catch (const std::exception &ex) {
-            LOG4_ERROR(
-                    "Failed predicting all coefficients for time " << prediction_time << ". " << ex.what());
-            throw;
-        }
-    }
-
-#ifdef PRINTOUT_PER_LEVEL_VALUES
-    {
-        std::stringstream ss;
-        ss << "Predicted values at " << prediction_time << ": ";
-        for (ssize_t i = 0; i < predicted_values.get_length_cols(); ++i) ss << predicted_values(0, i) << ", ";
-        LOG4_DEBUG(ss.str());
-    }
-#endif
-
-    return predicted_values;
-}
-
-#else
-
-vmatrix<double>
-ModelService::predict(
-        const std::vector<Model_ptr> &models,
-        const boost::posix_time::ptime &prediction_time,
-        const boost::posix_time::time_duration &resolution,
-        const boost::posix_time::time_duration &max_gap,
-        const svr::datamodel::DataRow::container &main_decon_data,
-        const std::vector<data_row_container_ptr> &aux_decon_data)
-{
-    LOG4_DEBUG("Predicting MIMO time " << prediction_time);
-    const auto multistep_len = PROPS.get_multistep_len();
-    vmatrix<double> predicted_values(multistep_len, models.size());
-    std::vector<std::future<vektor<double>>> results(models.size());
-    for (size_t model_counter = 0; model_counter < models.size(); ++model_counter)
-        predicted_values.set_col_copy_at(
-                predict(models[model_counter], main_decon_data, aux_decon_data,
-                                                 prediction_time, resolution, max_gap), model_counter);
-
-    LOG4_END();
-    return predicted_values;
-}
-
-#endif
 
 } // business
 } // svr

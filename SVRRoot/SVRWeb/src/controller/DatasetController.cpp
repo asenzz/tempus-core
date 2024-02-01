@@ -13,7 +13,7 @@ namespace web {
 void DatasetController::show(std::string datasetName) {
     content::Dataset model;
     model.pageTitle = "Dataset";
-    Dataset_ptr dataset = AppContext::get_instance().dataset_service.get_user_dataset(DEFAULT_WEB_USER /* session()["user"] */, datasetName);
+    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.get_user_dataset(DEFAULT_WEB_USER /* session()["user"] */, datasetName);
 
     if(dataset.get() == nullptr){
         model.pageError = "No such dataset exists!";
@@ -24,6 +24,9 @@ void DatasetController::show(std::string datasetName) {
         //!!TODO fix!!!
 //        model.lookback_time = bpt::to_simple_string(dataset->get_lookback_time());
         model.priority = svr::datamodel::to_string(dataset->get_priority());
+        model.gradients = std::to_string(dataset->get_gradients());
+        model.chunk_size = std::to_string(dataset->get_chunk_size());
+        model.multiout = std::to_string(dataset->get_multiout());
         model.transformation_levels = std::to_string(dataset->get_transformation_levels());
         model.transformation_wavelet = dataset->get_transformation_name();
     }
@@ -45,7 +48,8 @@ void DatasetController::create() {
 }
 
 void DatasetView::getAllDatasets() {
-    return_result(AppContext::get_instance().dataset_service.find_all_user_datasets(DEFAULT_WEB_USER /* session()["user"] */));
+    const auto r = APP.dataset_service.find_all_user_datasets(DEFAULT_WEB_USER /* session()["user"] */);
+    return_result(std::vector<datamodel::Dataset_ptr>{r.begin(), r.end()});
 }
 
 void DatasetController::handle_create_get() {

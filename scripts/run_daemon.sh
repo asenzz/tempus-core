@@ -47,7 +47,7 @@ if [ $WEB_ONLY -eq 1 ]; then
 fi
 
 if [ $DEBUG_SESSION -eq 1 ]; then
-	$DBG --ex catch\ throw --ex run --ex continue --args ./SVRDaemon -c ${DAEMON_CONFIG} 2>&1 | tee -a ${DAEMON_OUTPUT}.debug 2>&1
+	$DBG --ex catch\ throw --ex run --ex where --args ./SVRDaemon -c ${DAEMON_CONFIG} 2>&1 | tee -a ${DAEMON_OUTPUT}.debug 2>&1
 elif [ $LOG_OUTPUT -eq 1 ]; then
   ./SVRDaemon -c ${DAEMON_CONFIG} >> ${DAEMON_OUTPUT} 2>&1 &
 else	

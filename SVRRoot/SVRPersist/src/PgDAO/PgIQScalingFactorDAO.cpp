@@ -52,10 +52,10 @@ int PgIQScalingFactorDAO::remove(const IQScalingFactor_ptr& iQscalingFactor)
     return data_source.update(AbstractDAO::get_sql("remove"), iQscalingFactor->get_id());
 }
 
-std::vector<IQScalingFactor_ptr> PgIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
+std::deque<IQScalingFactor_ptr> PgIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
 {
     IQScalingFactorRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, AbstractDAO::get_sql("find_all_by_dataset_id"), dataset_id);
+    return data_source.query_for_deque(rowMapper, AbstractDAO::get_sql("find_all_by_dataset_id"), dataset_id);
 }
 
 }

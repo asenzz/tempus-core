@@ -12,7 +12,7 @@ std::recursive_mutex & common_mutex_instance();
 template <class ConcreteDao>
 class TsDaoBase {
 protected:
-    std::recursive_mutex & mutex;
+    std::recursive_mutex &mutex;
     std::unique_ptr<ConcreteDao> dao;
 public:
     TsDaoBase(std::unique_ptr<ConcreteDao> dao)

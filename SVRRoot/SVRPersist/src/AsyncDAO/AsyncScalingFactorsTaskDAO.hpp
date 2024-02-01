@@ -13,10 +13,10 @@ public:
     ~AsyncScalingFactorsTaskDAO();
 
     bigint get_next_id();
-    bool exists(bigint id);
+    bool exists(const bigint id);
     int save(const ScalingFactorsTask_ptr& ScalingFactorsTask);
     int remove(const ScalingFactorsTask_ptr& ScalingFactorsTask);
-    ScalingFactorsTask_ptr get_by_id(bigint id);
+    ScalingFactorsTask_ptr get_by_id(const bigint id);
 private:
     struct AsyncImpl;
     AsyncImpl & pImpl;

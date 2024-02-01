@@ -29,7 +29,7 @@ public:
 
     User() = default;
 
-    User(bigint user_id,
+    User(const bigint user_id,
          const std::string &username,
          const std::string &email,
          const std::string &password,

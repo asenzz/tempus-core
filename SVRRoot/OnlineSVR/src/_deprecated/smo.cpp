@@ -487,7 +487,7 @@ kernel_matrix::kernel_matrix(
 
 #if defined(VIENNACL_WITH_OPENCL) && !defined(AVITOHOL)
     //const auto limit_num_rows = (size_t) std::sqrt( // TODO Fix calculation, gives too little GPU memory!
-    //       svr::common::gpu_handler::get_instance().get_max_gpu_data_chunk_size() / sizeof(double)) * 0.8;
+    //       svr::common::gpu_handler::get().get_max_gpu_data_chunk_size() / sizeof(double)) * 0.8;
     if (true) { //(size_t) learning_data.get_length_rows() < limit_num_rows) {
         ocl_prepare(learning_data, param);
     } else {
@@ -509,7 +509,7 @@ kernel_matrix::kernel_matrix(
 
 #if defined(VIENNACL_WITH_OPENCL) && !defined(AVITOHOL)
     //const auto limit_num_rows = (size_t) std::sqrt( // TODO Fix calculation, gives too little GPU memory!
-    //       svr::common::gpu_handler::get_instance().get_max_gpu_data_chunk_size() / sizeof(double)) * 0.8;
+    //       svr::common::gpu_handler::get().get_max_gpu_data_chunk_size() / sizeof(double)) * 0.8;
     if (true) { //(size_t) learning_data.get_length_rows() < limit_num_rows) {
         ocl_prepare(learning_data, param);
     } else {

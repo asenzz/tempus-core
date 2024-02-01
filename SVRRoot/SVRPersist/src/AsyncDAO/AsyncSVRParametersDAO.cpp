@@ -8,12 +8,12 @@ namespace svr { namespace dao {
 using svr::datamodel::SVRParameters;
 
 namespace {
-    static bool cmp_primary_key(SVRParameters_ptr const & lhs, SVRParameters_ptr const & rhs)
+    static bool cmp_primary_key(datamodel::SVRParameters_ptr const & lhs, datamodel::SVRParameters_ptr const & rhs)
     {
         return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
                 && lhs->get_id() == rhs->get_id();
     }
-    static bool cmp_whole_value(SVRParameters_ptr const & lhs, SVRParameters_ptr const & rhs)
+    static bool cmp_whole_value(datamodel::SVRParameters_ptr const & lhs, datamodel::SVRParameters_ptr const & rhs)
     {
         return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
                 && *lhs == *rhs;
@@ -21,7 +21,7 @@ namespace {
 }
 
 struct AsyncSVRParametersDAO::AsyncImpl
-    : AsyncImplBase<SVRParameters_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgSVRParametersDAO>
+    : AsyncImplBase<datamodel::SVRParameters_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgSVRParametersDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
     :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
@@ -46,7 +46,7 @@ bigint AsyncSVRParametersDAO::get_next_id()
 
 bool AsyncSVRParametersDAO::exists(const bigint id)
 {
-    SVRParameters_ptr svrParams {new SVRParameters()};
+    auto svrParams = std::make_shared<SVRParameters>();
     svrParams->set_id(id);
 
     if (pImpl.cached(svrParams)) return true;
@@ -55,13 +55,13 @@ bool AsyncSVRParametersDAO::exists(const bigint id)
     return pImpl.pgDao.exists(id);
 }
 
-int AsyncSVRParametersDAO::save(const SVRParameters_ptr &svr_parameters)
+int AsyncSVRParametersDAO::save(const datamodel::SVRParameters_ptr &svr_parameters)
 {
     pImpl.cache(svr_parameters);
     return 1;
 }
 
-int AsyncSVRParametersDAO::remove(const SVRParameters_ptr& svr_parameters)
+int AsyncSVRParametersDAO::remove(const datamodel::SVRParameters_ptr& svr_parameters)
 {
     return pImpl.remove(svr_parameters);
 }
@@ -69,7 +69,7 @@ int AsyncSVRParametersDAO::remove(const SVRParameters_ptr& svr_parameters)
 int AsyncSVRParametersDAO::remove_by_dataset_id(const bigint dataset_id)
 {
     pImpl.flush();
-    std::vector<SVRParameters_ptr> params;
+    std::deque<datamodel::SVRParameters_ptr> params;
     {  // Important to unlock before calling remove()
         const std::scoped_lock lg(pImpl.pgMutex);
         params = pImpl.pgDao.get_all_svrparams_by_dataset_id(dataset_id);
@@ -80,21 +80,30 @@ int AsyncSVRParametersDAO::remove_by_dataset_id(const bigint dataset_id)
     return params.size();
 }
 
-std::vector<SVRParameters_ptr> AsyncSVRParametersDAO::get_all_svrparams_by_dataset_id(const bigint dataset_id)
+std::deque<datamodel::SVRParameters_ptr> AsyncSVRParametersDAO::get_all_svrparams_by_dataset_id(const bigint dataset_id)
 {
     pImpl.flush();
-    std::scoped_lock lg(pImpl.pgMutex);
-    std::vector<SVRParameters_ptr> params = pImpl.pgDao.get_all_svrparams_by_dataset_id(dataset_id);
+    const std::scoped_lock lg(pImpl.pgMutex);
+    std::deque<datamodel::SVRParameters_ptr> params = pImpl.pgDao.get_all_svrparams_by_dataset_id(dataset_id);
 
     for(const auto &p: params) pImpl.cache_no_store(p);
 
     return params;
 }
 
+std::deque<datamodel::SVRParameters_ptr> AsyncSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
+{
+    pImpl.flush();
+    const std::scoped_lock lg(pImpl.pgMutex);
+    std::deque<datamodel::SVRParameters_ptr> params = pImpl.pgDao.get_svrparams(dataset_id, input_queue_column_name, decon_level);
+    for(const auto &p: params) pImpl.cache_no_store(p);
+    return params;
+}
+
 size_t AsyncSVRParametersDAO::get_dataset_levels(const bigint dataset_id)
 {
     pImpl.flush();
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.get_dataset_levels(dataset_id);;
 }
 

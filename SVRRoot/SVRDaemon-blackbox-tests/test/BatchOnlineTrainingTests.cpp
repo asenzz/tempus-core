@@ -4,6 +4,7 @@
 #include <model/User.hpp>
 #include <model/Request.hpp>
 
+using namespace svr;
 using svr::datamodel::MultivalRequest;
 
 
@@ -21,16 +22,16 @@ namespace svr {
 const bigint default_dataset_id = 100;
 
 void
-update_with_new_data(const InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter);
+update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter);
 
 void
-prepare_forecast_request(const InputQueue_ptr &iq, const bpt::ptime &start_predict_time);
+prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &start_predict_time);
 
 std::tuple<double, double, double, double>
 verify_results(
         const bpt::ptime &forecast_start_time,
-        const InputQueue_ptr &iq,
-        const InputQueue_ptr &new_iq_ohlc_aux);
+        const datamodel::InputQueue_ptr &iq,
+        const datamodel::InputQueue_ptr &new_iq_ohlc_aux);
 
 }
 
@@ -40,19 +41,19 @@ TEST_F(DaoTestFixture, backtest_xauusd)
 
     tdb.prepareSvrConfig(tdb.TestDbUserName, tdb.dao_type, -1);
 
-    Dataset_ptr p_dataset = aci.dataset_service.get(svr::default_dataset_id);
-    InputQueue_ptr iq = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_QUEUE);
-    iq->set_data(aci.input_queue_service.get_queue_data(BATCH_TRAIN_QUEUE));
-//    InputQueue_ptr iq_aux = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_AUX_QUEUE);
-//    iq_aux->set_data(aci.input_queue_service.get_queue_data(BATCH_TRAIN_AUX_QUEUE));
+    datamodel::Dataset_ptr p_dataset = aci.dataset_service.get(svr::default_dataset_id);
+    datamodel::InputQueue_ptr iq = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_QUEUE);
+    iq->set_data(aci.input_queue_service.load(BATCH_TRAIN_QUEUE));
+//    datamodel::InputQueue_ptr iq_aux = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_AUX_QUEUE);
+//    iq_aux->set_data(aci.input_queue_service.load(BATCH_TRAIN_AUX_QUEUE));
 
-    InputQueue_ptr new_iq = aci.input_queue_service.get_queue_metadata(NEW_VALUES_QUEUE);
-    new_iq->set_data(aci.input_queue_service.get_queue_data(NEW_VALUES_QUEUE));
-    InputQueue_ptr new_iq_aux = aci.input_queue_service.get_queue_metadata(NEW_VALUES_AUX_QUEUE);
-    new_iq_aux->set_data(aci.input_queue_service.get_queue_data(NEW_VALUES_AUX_QUEUE));
+    datamodel::InputQueue_ptr new_iq = aci.input_queue_service.get_queue_metadata(NEW_VALUES_QUEUE);
+    new_iq->set_data(aci.input_queue_service.load(NEW_VALUES_QUEUE));
+    datamodel::InputQueue_ptr new_iq_aux = aci.input_queue_service.get_queue_metadata(NEW_VALUES_AUX_QUEUE);
+    new_iq_aux->set_data(aci.input_queue_service.load(NEW_VALUES_AUX_QUEUE));
     // new_iq_aux->get_data().erase(new_iq_aux->get_data().begin(), lower_bound(new_iq_aux->get_data(), new_iq->get_data().begin()->get()->get_value_time()));
     //InputQueue_ptr new_ohlc_iq = aci.input_queue_service.get_queue_metadata(NEW_VALUES_QUEUE_OHLC);
-    //new_ohlc_iq->set_data(aci.input_queue_service.get_queue_data(NEW_VALUES_QUEUE_OHLC));
+    //new_ohlc_iq->set_data(aci.input_queue_service.load(NEW_VALUES_QUEUE_OHLC));
 
 // Setting up daemon communication
     diagnostic_interface_alpha di;
@@ -105,20 +106,20 @@ TEST_F(DaoTestFixture, backtest_xauusd)
 namespace svr {
 
 void
-update_with_new_data(const InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter)
+update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter)
 {
     LOG4_DEBUG("Adding new datarow for time " << new_iq_iter->get()->get_value_time());
     const auto prev_last_time = iq->get_data().rbegin()->get()->get_value_time() + iq->get_resolution() - bpt::seconds(1);
     iq->get_data().emplace_back(*new_iq_iter);
-    APP.input_queue_service.save_data(iq, prev_last_time);
+    APP.input_queue_service.save(iq, prev_last_time);
     APP.flush_dao_buffers();
 }
 
 
 void
-prepare_forecast_request(const InputQueue_ptr &iq, const bpt::ptime &start_predict_time)
+prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &start_predict_time)
 {
-    MultivalRequest_ptr p_request = std::make_shared<MultivalRequest>(
+    datamodel::MultivalRequest_ptr p_request = std::make_shared<MultivalRequest>(
             bigint(0),
             iq->get_owner_user_name(),
             default_dataset_id,
@@ -135,7 +136,7 @@ prepare_forecast_request(const InputQueue_ptr &iq, const bpt::ptime &start_predi
 
 
 data_row_container
-get_results(const bpt::ptime &request_time, const InputQueue_ptr &iq, const std::string &column_name)
+get_results(const bpt::ptime &request_time, const datamodel::InputQueue_ptr &iq, const std::string &column_name)
 {
     const auto results = APP.request_service.get_multival_results(
             iq->get_owner_user_name(),
@@ -327,8 +328,8 @@ compare_by_value_error_ohlcaux(
 std::tuple<double, double, double, double>
 verify_results(
         const bpt::ptime &forecast_start_time,
-        const InputQueue_ptr &new_iq,
-        const InputQueue_ptr &new_iq_ohlc_aux)
+        const datamodel::InputQueue_ptr &new_iq,
+        const datamodel::InputQueue_ptr &new_iq_ohlc_aux)
 {
     const auto forecasts = get_results(forecast_start_time, new_iq, PRIMARY_COLUMN);
     if (forecasts.empty()) {

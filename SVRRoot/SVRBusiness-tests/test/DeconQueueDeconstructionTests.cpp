@@ -1,15 +1,18 @@
 #include "include/DaoTestFixture.h"
+#include "util/math_utils.hpp"
 #include <iostream>
 #include <memory>
 #include <model/User.hpp>
+
+using namespace svr;
 
 namespace
 {
     std::string new_datarow_container = "new_datarow_container";
 }
 
-void save_datarow_containers(std::vector<DeconQueue_ptr> decon_queues, std::string path);
-std::vector<svr::datamodel::DataRow::container> load_datarow_containers(const std::string &file_path);
+void save_datarow_containers(std::vector<datamodel::DeconQueue_ptr> &decon_queues, std::string path);
+std::deque<svr::datamodel::DataRow::container> load_datarow_containers(const std::string &file_path);
 void compare_datarow_containers(svr::datamodel::DataRow::container const & lhs, svr::datamodel::DataRow::container const & rhs);
 
 TEST_F(DaoTestFixture, BasicDeconstructionTest)
@@ -17,30 +20,28 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
     bpt::time_period times{bpt::time_from_string("2017-05-02 22:00:00"), bpt::time_from_string("2017-05-05 05:59:00")};
     std::string const test_iq_name = "q_svrwave_eurusd_60";
 
-    InputQueue_ptr test_iq = aci.input_queue_service.get_queue_metadata(test_iq_name);
+    datamodel::InputQueue_ptr test_iq = aci.input_queue_service.get_queue_metadata(test_iq_name);
 
-    const data_row_container test_iq_data
-        = aci.input_queue_service.get_queue_data( test_iq_name
-                                                , times.begin()
-                                                , times.end());
+    const svr::data_row_container test_iq_data
+        = aci.input_queue_service.load(test_iq_name, times.begin(), times.end());
 
     test_iq->set_data(test_iq_data);
 
-    Dataset_ptr dataset_100 = aci.dataset_service.get_user_dataset("svrwave", "eurusd");
+ datamodel::Dataset_ptr dataset_100 = aci.dataset_service.get_user_dataset("svrwave", "eurusd");
 
     ////////////////////////////////////////////////////////////////////////////
     //
     // Test deconstruction
     //
 
-    std::vector<DeconQueue_ptr> decon_queues = aci.decon_queue_service.deconstruct(test_iq, dataset_100);
+    std::deque<datamodel::DeconQueue_ptr> decon_queues;// = aci.decon_queue_service.deconstruct(test_iq, dataset_100);
 
 //    save_datarow_containers(decon_queues, "../SVRRoot/SVRBusiness-tests/test/test_data/etalon_decon_output.txt");
 
     std::string etalon_decon_output_path = exec("find ../SVRRoot/SVRBusiness-tests/test/test_data -name etalon_decon_output.txt");
     erase_after(etalon_decon_output_path, '\n');
 
-    std::vector<svr::datamodel::DataRow::container> etalon_decon_containers = load_datarow_containers(etalon_decon_output_path);
+    auto etalon_decon_containers = load_datarow_containers(etalon_decon_output_path);
 
     ASSERT_EQ(etalon_decon_containers.size(), decon_queues.size());
 
@@ -65,15 +66,12 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
 
     /* TODO add auxilliary decon queue tests */
     arma::mat features, labels, last_knowns;
-    std::vector<bpt::ptime> label_times;
+    std::deque<bpt::ptime> label_times;
     aci.model_service.get_training_data(
             features, labels, last_knowns, label_times,
-#ifndef NEW_SCALING
-            aci.dq_scaling_factor_service.slice(dataset_100, decon_queues[column_index]),
-            aci.dq_scaling_factor_service.slice(dataset_100, decon_queues[column_index]),
-#endif
-            decon_queues[column_index]->get_data(),
-            decon_queues[column_index]->get_data(),
+            datamodel::datarow_range{decon_queues[column_index]->get_data()},
+            datamodel::datarow_range{decon_queues[column_index]->get_data()},
+            {datamodel::datarow_range{decon_queues[column_index]->get_data()}},
             lookback_rows,
             adjacent_levels,
             max_lookback_time_gap,
@@ -81,13 +79,14 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             model_number,
             bpt::min_date_time,
             test_iq->get_resolution());
+
 #ifdef NEW_SCALING
     const auto params = std::make_shared<svr::datamodel::SVRParameters>(
             0,
             dataset_100->get_id(),
             test_iq_name,
             "eurusd",
-            0, 0, 0,
+            0, 0, 0, mimo_type_e::single,
             DEFAULT_SVRPARAM_SVR_COST,
             DEFAULT_SVRPARAM_SVR_EPSILON,
             DEFAULT_SVRPARAM_KERNEL_PARAM_1,
@@ -96,7 +95,8 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             adjacent_levels_ratio,
             DEFAULT_SVRPARAM_KERNEL_TYPE,
             lookback_rows);
-    APP.dq_scaling_factor_service.scale(dataset_100, decon_queues[column_index], params, adjacent_levels, features, labels, last_knowns);
+
+    //APP.dq_scaling_factor_service.scale(dataset_100, params, adjacent_levels, labels, last_knowns);
 #endif
     auto real_training_matrix = std::make_shared<arma::mat>(features);
     auto real_response_matrix = std::make_shared<arma::mat>(labels);
@@ -126,7 +126,7 @@ void compare_datarow_containers(svr::datamodel::DataRow::container const & lhs, 
     }
 }
 
-void save_datarow_containers(std::vector<DeconQueue_ptr> decon_queues, std::string &path)
+void save_datarow_containers(std::deque<datamodel::DeconQueue_ptr> &decon_queues, std::string &path)
 {
     std::ofstream ofs(path);
     for (auto it = decon_queues.begin(); it != decon_queues.end(); ++it)
@@ -137,13 +137,13 @@ void save_datarow_containers(std::vector<DeconQueue_ptr> decon_queues, std::stri
     }
 }
 
-std::vector<svr::datamodel::DataRow::container> load_datarow_containers(const std::string &file_path)
+std::deque<svr::datamodel::DataRow::container> load_datarow_containers(const std::string &file_path)
 {
     std::ifstream ifile(file_path.c_str());
     if(ifile.bad())
         throw std::runtime_error("load_datarow_containers: Error while openinig the file");
 
-    std::vector<svr::datamodel::DataRow::container> result;
+    std::deque<svr::datamodel::DataRow::container> result;
     svr::datamodel::DataRow::container current_container;
 
     size_t valuation_counter = -1;
@@ -182,7 +182,7 @@ std::vector<svr::datamodel::DataRow::container> load_datarow_containers(const st
             if(!str_tmp2.empty())
                 str_tmp2.resize(str_tmp2.size()-1);
 
-            DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>();
+            svr::datamodel::DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>();
             row->set_value_time(bpt::time_from_string(str_tmp1 + " " + str_tmp2));
 
             //Skipping update_time

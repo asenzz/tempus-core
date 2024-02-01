@@ -57,7 +57,7 @@ future_validate(
     const size_t num_preds = 1 + to_row_idx - from_idx;
     arma::mat predicted_values;
     try {
-        PROFILE_EXEC_TIME(predicted_values = online_svr.chunk_predict(features.rows(from_idx, to_row_idx)), "Chunk predict");
+        PROFILE_EXEC_TIME(predicted_values = online_svr.predict(features.rows(from_idx, to_row_idx)), "Chunk predict");
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error predicting values: " << ex.what());
         predicted_values.set_size(num_preds, 1);
@@ -237,7 +237,7 @@ kernel_single_run_test(
 {
     LOG4_BEGIN();
 
-    SVRParameters_ptr param = std::make_shared<SVRParameters>(model_svr_parameters);
+ datamodel::SVRParameters_ptr param = std::make_shared<SVRParameters>(model_svr_parameters);
     svr::OnlineMIMOSVR online_svr_(param, svr::MimoType::single, TEST_MULTISTEP_LEN);
 
     const vmatrix<double> features_data = svr::datamodel::vmatrix<double>::load(features_data_file);

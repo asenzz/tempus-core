@@ -8,7 +8,7 @@ namespace dao{
 
 class DatasetRowMapper : public IRowMapper<svr::datamodel::Dataset>{
 public:
-    Dataset_ptr mapRow(const pqxx_tuple& row_set) const override{
+    datamodel::Dataset_ptr mapRow(const pqxx_tuple& row_set) const override{
 
         using svr::common::ignoreCaseEquals;
         
@@ -20,20 +20,23 @@ public:
                 svr::common::from_sql_array(row_set["aux_input_queues_table_names"].as<std::string>("")),
                 static_cast<svr::datamodel::Priority>(row_set["priority"].as<int>((int)svr::datamodel::Priority::Normal)),
                 row_set["description"].as<std::string>(""),
-                row_set["swt_levels"].as<size_t>(0),
-                row_set["swt_wavelet_name"].as<std::string>(""),
+                row_set["gradients"].as<size_t>(0),
+                row_set["chunk_size"].as<size_t>(0),
+                row_set["multiout"].as<size_t>(0),
+                row_set["levels"].as<size_t>(0),
+                row_set["deconstruction"].as<std::string>(""),
                 row_set["max_gap"].is_null() ? bpt::time_duration() : bpt::duration_from_string(row_set["max_gap"].as<std::string>()),
-                std::vector<Ensemble_ptr>(),
+                std::deque<datamodel::Ensemble_ptr>(),
                 row_set["is_active"].as<bool>(false)
         );
     }
 };
 
-class UserDatasetRowMapper : public IRowMapper<std::pair<std::string, Dataset_ptr>>{
+class UserDatasetRowMapper : public IRowMapper<std::pair<std::string, datamodel::Dataset_ptr>>{
     DatasetRowMapper datasetRowMapper;
 public:
-    std::shared_ptr<std::pair<std::string, Dataset_ptr>> mapRow(const pqxx_tuple& row_set) const override {
-        return std::make_shared<std::pair<std::string, Dataset_ptr>>
+    std::shared_ptr<std::pair<std::string, datamodel::Dataset_ptr>> mapRow(const pqxx_tuple& row_set) const override {
+        return std::make_shared<std::pair<std::string, datamodel::Dataset_ptr>>
         (
               row_set["linked_user_name"].as<std::string>()
             , datasetRowMapper.mapRow(row_set)

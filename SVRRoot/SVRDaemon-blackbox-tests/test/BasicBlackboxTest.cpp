@@ -6,7 +6,8 @@
 #include <model/Dataset.hpp>
 #include <model/InputQueue.hpp>
 
-using svr::datamodel::MultivalRequest;
+using namespace svr;
+using datamodel::MultivalRequest;
 
 TEST_F(DaoTestFixture, BasicWhiteboxTest)
 {
@@ -24,7 +25,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
     if(DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::full || DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::first_half)
     {
 
-        MultivalRequest_ptr request = MultivalRequest_ptr( new
+        datamodel::MultivalRequest_ptr request = datamodel::MultivalRequest_ptr( new
             MultivalRequest(bigint(0), default_user_name, default_dataset_id, nw
             , default_request_time, default_request_time + default_resolution * 15, default_resolution.total_seconds()
             , "{open,high,low,close}")
@@ -41,7 +42,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
 
     if(DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::full || DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::second_half)
     {
-        std::vector<MultivalResponse_ptr> results = aci.request_service.get_multival_results
+        auto results = aci.request_service.get_multival_results
         (
               default_user_name
             , default_dataset_id
@@ -118,7 +119,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
         for(auto const & result : results)
             actual_data[result->value_time][result->value_column] = result->value;
 
-        for(auto actd : actual_data)
+        for(auto &actd : actual_data)
         {
             std::cout << bpt::to_simple_string(actd.first);
             for(auto vls : actd.second)
@@ -186,7 +187,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
 //
 //    if(DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::full || DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::first_half)
 //    {
-//        std::map<std::pair<std::string, std::string>, std::vector<SVRParameters_ptr>> parameters_pairs
+//        std::map<std::pair<std::string, std::string>, std::vector<datamodel::SVRParameters_ptr>> parameters_pairs
 //                = aci.svr_parameters_service.get_all_by_dataset_id(default_dataset_id);
 //        for(auto parameters_pair : parameters_pairs)
 //            for(auto parameters : parameters_pair.second)
@@ -195,7 +196,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
 //                aci.svr_parameters_service.save(parameters);
 //            }
 //
-//        MultivalRequest_ptr request = MultivalRequest_ptr(
+//        datamodel::MultivalRequest_ptr request = datamodel::MultivalRequest_ptr(
 //           new MultivalRequest( bigint(0),
 //                                default_user_name,
 //                                default_dataset_id,
@@ -216,7 +217,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
 //
 //    if(DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::full || DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::second_half)
 //    {
-//        std::vector<MultivalResponse_ptr>  results = aci.request_service.get_multival_results
+//        std::vector<datamodel::MultivalResponse_ptr>  results = aci.request_service.get_multival_results
 //        (
 //             default_user_name,
 //             default_dataset_id,

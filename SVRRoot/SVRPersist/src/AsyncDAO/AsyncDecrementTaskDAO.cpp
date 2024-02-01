@@ -45,7 +45,7 @@ bigint AsyncDecrementTaskDAO::get_next_id()
     return pImpl.pgDao.get_next_id();
 }
 
-bool AsyncDecrementTaskDAO::exists(bigint id)
+bool AsyncDecrementTaskDAO::exists(const bigint id)
 {
     std::scoped_lock scope_guard(pImpl.pgMutex);
     return pImpl.pgDao.exists(id);
@@ -63,7 +63,7 @@ int AsyncDecrementTaskDAO::remove(const DecrementTask_ptr& decrementTask)
     return pImpl.pgDao.remove(decrementTask);
 }
 
-DecrementTask_ptr AsyncDecrementTaskDAO::get_by_id(bigint id)
+DecrementTask_ptr AsyncDecrementTaskDAO::get_by_id(const bigint id)
 {
     std::scoped_lock scope_guard(pImpl.pgMutex);
     return pImpl.pgDao.get_by_id(id);

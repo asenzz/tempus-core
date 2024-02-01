@@ -37,7 +37,7 @@ void RequestView::makeMultivalRequest(cppcms::json::object data)
     std::string vctemp = ivalCols == data.end() ? std::string() : ivalCols->second.str();
     string const valueColumns = std::string("{") + (vctemp.empty() ? "high,low,open,close" : vctemp) + "}";
 
-    Dataset_ptr dataset = AppContext::get_instance().dataset_service.get(dataset_id);
+    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.get(dataset_id);
     if (!dataset) {
         string error = "No dataset with id " + data["dataset"].str();
         LOG4_ERROR(error);
@@ -46,7 +46,7 @@ void RequestView::makeMultivalRequest(cppcms::json::object data)
     }
 
     time_duration resolution = dataset->get_input_queue()->get_resolution();
-    MultivalRequest_ptr request = AppContext::get_instance().request_service.get_multival_request(user, dataset_id, valueTimeStart, valueTimeEnd, resolution.total_seconds(), valueColumns);
+    datamodel::MultivalRequest_ptr request = AppContext::get_instance().request_service.get_multival_request(user, dataset_id, valueTimeStart, valueTimeEnd, resolution.total_seconds(), valueColumns);
     if (request.get() != nullptr) {
         string msg = "Cannot make forecast request because it already exists! [" + request->to_string() + "]";
         LOG4_ERROR(msg);
@@ -88,7 +88,7 @@ void RequestView::getMultivalResults(json::object data)
     size_t const intervals = iintervals == data.end() ? 1 : boost::lexical_cast<size_t>(iintervals->second.str());
     reject_not_positive(intervals);
 
-    MultivalRequest_ptr request = AppContext::get_instance().request_service.get_multival_request(user, dataset_id, value_time_start, value_time_end);
+    datamodel::MultivalRequest_ptr request = AppContext::get_instance().request_service.get_multival_request(user, dataset_id, value_time_start, value_time_end);
     if (!request) {
         std::string error = "No such request has been submitted: user: " + user + " dataset_id: " + to_string(dataset_id)
                             + " start time: " + to_simple_string(value_time_start) + " end time: " + to_simple_string(value_time_end);
@@ -97,7 +97,7 @@ void RequestView::getMultivalResults(json::object data)
         return;
     }
 
-    std::vector<MultivalResponse_ptr> responses = AppContext::get_instance().request_service.get_multival_results(
+    auto responses = AppContext::get_instance().request_service.get_multival_results(
             user, dataset_id, value_time_start, value_time_end, resolution.total_seconds());
     if (responses.empty()) {
         string error = "Response is not ready yet.";

@@ -1,78 +1,63 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 IF(USE_CUDA)
 	PROJECT(OnlineSVR LANGUAGES CXX CUDA)
-	INCLUDE(FindCUDA)
+    FIND_PACKAGE(CUDA REQUIRED)
+    LINK_LIBRARIES(${CUDA_CUBLAS_LIBRARIES} ${CUDA_cusolver_LIBRARY} ${CUDA_cufft_LIBRARY})
 ELSE()
 	PROJECT(OnlineSVR CXX)
 ENDIF()
 
-#Define project dependencies
 SET(DEPENDENCIES SVRCommon SVRModel)
-
 FOREACH(DEP ${DEPENDENCIES})
     INCLUDE_DIRECTORIES(../${DEP}/include)
 ENDFOREACH(DEP)
 
-FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
-IF(IDE STREQUAL "QT_CREATOR")
-    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
-ENDIF(IDE STREQUAL "QT_CREATOR")
-
+FILE(GLOB SOURCE_FILES "src/*.c" "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
 IF(USE_CUDA)
-    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc" "src/*.cu" "src/*.cuh")
-ELSE()
-    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
+    FILE(GLOB SOURCE_FILES_CUDA "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc" "src/*.cu" "src/*.cuh")
+    LIST(APPEND SOURCE_FILES ${SOURCE_FILES_CUDA})
 ENDIF()
 
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system REQUIRED)
-FIND_PACKAGE(MKL REQUIRED)
-LINK_DIRECTORIES("/usr/local/magma/lib")
-INCLUDE_DIRECTORIES("/usr/local/magma/include")
 
-IF(EXPERIMENTAL_FEATURES)
+IF (EXPERIMENTAL_FEATURES)
     #FIND_PACKAGE(OSQP REQUIRED)
     #FIND_PACKAGE(Eigen3 REQUIRED)
     LINK_DIRECTORIES(${MATLAB_LINK_DIR} "/usr/lib/google/tensorflow")
-    execute_process(COMMAND python3-config --includes OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE PYINCLUDES)
-    string(REGEX REPLACE "[\n ]" "" PYINCLUDES "${PYINCLUDES}")
+    EXECUTE_PROCESS(COMMAND python3-config --includes OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE PYINCLUDES)
+    STRING(REGEX REPLACE "[\n ]" "" PYINCLUDES "${PYINCLUDES}")
     FIND_PACKAGE(Python3 REQUIRED)
     INCLUDE_DIRECTORIES("${MATLAB_INCLUDE_DIR}" "${PYINCLUDES}" "/usr/include/python3.6m") # "/usr/local/include/eigen3" "/usr/local/include/google/protobuf"
-    #find_package(Torch REQUIRED)
+    #FIND_PACKAGE(Torch REQUIRED)
 ENDIF(EXPERIMENTAL_FEATURES)
 
-INCLUDE_DIRECTORIES(BEFORE SYSTEM ${MKL_INCLUDE_DIRS} "/opt/intel/oneapi/mkl/latest/include/")
-INCLUDE_DIRECTORIES(BEFORE SYSTEM ${TBB_INCLUDE_DIRS} "/opt/intel/oneapi/tbb/latest/include/")
-
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -liomp5") # -Wno-error")
-
-IF (USE_CUDA)
-    ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES} ${CUDA_SOURCE_FILES})
+LINK_LIBRARIES(${DEPENDENCIES} ${JEMALLOC_LIBRARIES} magma armadillo ${OMP_LIBRARY} TBB::tbb)
+IF(EXPERIMENTAL_FEATURES)
+    LINK_LIBRARIES(fftw3 MatlabDataArray MatlabEngine python3.6m) # osqp::osqpstatic clblast tensorflow_all ${TORCH_LIBRARIES}
+    SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRBusiness SVRCommon SVRModel wavelib fftw3 python3.6m) # tensorflow_all ${TORCH_LIBRARIES}
 ELSE()
-    ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES})
-ENDIF()
-
-IF(EXPERIMENTAL_FEATURES)
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${DEPENDENCIES} armadillo pthread fftw3 ${OMP_LIBRARY} ${MKL_LIBRARIES} MatlabDataArray MatlabEngine TBB::tbb python3.6m ${JEMALLOC_LIBRARIES} /usr/local/magma/lib/libmagma.so) # osqp::osqpstatic clblast
-ELSE(EXPERIMENTAL_FEATURES)
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${DEPENDENCIES} ${JEMALLOC_LIBRARIES} armadillo ${OMP_LIBRARY} TBB::tbb /usr/local/magma/lib/libmagma.so)
-ENDIF(EXPERIMENTAL_FEATURES)
-
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PEDANTIC_FLAGS}")
-
-IF(EXPERIMENTAL_FEATURES)
-    SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRBusiness SVRCommon SVRModel wavelib fftw3 python3.6m) # tensorflow_all "${TORCH_LIBRARIES}"
-ELSE(EXPERIMENTAL_FEATURES)
     SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRBusiness SVRCommon SVRModel wavelib fftw3)
 ENDIF()
 
-include ("../../cmake/UnitTester.cmake")
+IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
+    MESSAGE("~~ Building ${PROJECT_NAME}-test")
 
-if (USE_CUDA)
-    SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_cusolver_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cufft_LIBRARY})
-    #TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PUBLIC -Wno-error)
-#    TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-#            -gencode arch=compute_70,code=sm_70 -forward-unknown-to-host-compiler -lineinfo -liomp5 -fopenmp -Xcompiler=--std=c++17 -Xcompiler=-fopenmp -Xcompiler=-liomp5 -Xcompiler=-mtune=native -Xcompiler=-march=native >)
+    SET_PROPERTY(DIRECTORY PROPERTY TEST_MODULES "${PROJECT_NAME}")
+
+    SET(GTEST_ROOT "/usr")
+
+    FIND_PACKAGE(GTest REQUIRED)
+    FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED)
+    INCLUDE_DIRECTORIES(${GTEST_ROOT}/include)
+
+    LINK_DIRECTORIES(${GTEST_ROOT}/lib)
+
+    FILE(GLOB TEST_SOURCE_FILES "test/*.cpp")
+    ADD_EXECUTABLE(${PROJECT_NAME}-test ${TEST_SOURCE_FILES})
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES})
 endif()
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC ARMA_ALLOW_FAKE_GCC)
+
+ADD_DEFINITIONS(-DARMA_ALLOW_FAKE_GCC)
+
+ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES})

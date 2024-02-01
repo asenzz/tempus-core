@@ -176,7 +176,7 @@ SVRParameters &OnlineSVR::get_svr_parameters()
     return svr_parameters;
 }
 
-void OnlineSVR::set_svr_parameters(const SVRParameters &svr_parameters_)
+void OnlineSVR::set_param_set(const SVRParameters &svr_parameters_)
 {
     svr_parameters = svr_parameters_;
 }

@@ -16,13 +16,13 @@ namespace svr { namespace datamodel {
     class DecrementTask;
     class AutotuneTask;
     class DataSet;
+    using InputQueue_ptr = std::shared_ptr<InputQueue>;
+    using PredictionTask_ptr = std::shared_ptr<PredictionTask>;
+    using ScalingFactorsTask_ptr = std::shared_ptr<ScalingFactorsTask>;
+    using DecrementTask_ptr = std::shared_ptr<DecrementTask>;
+    using AutotuneTask_ptr = std::shared_ptr<AutotuneTask>;
+    using DataSet_ptr = std::shared_ptr<DataSet>;
 } }
-using InputQueue_ptr = std::shared_ptr<svr::datamodel::InputQueue >;
-using PredictionTask_ptr = std::shared_ptr<svr::datamodel::PredictionTask >;
-using ScalingFactorsTask_ptr = std::shared_ptr<svr::datamodel::ScalingFactorsTask >;
-using DecrementTask_ptr = std::shared_ptr<svr::datamodel::DecrementTask >;
-using AutotuneTask_ptr = std::shared_ptr<svr::datamodel::AutotuneTask >;
-using DataSet_ptr = std::shared_ptr<svr::datamodel::DataSet >;
 
 class CLI
 {
@@ -41,7 +41,7 @@ public:
 
 private:
     bool show_help();
-    bool set_dataset_params(const po::variables_map &vm, Dataset_ptr &p_dataset);
+    bool set_dataset_params(const po::variables_map &vm, datamodel::Dataset_ptr &p_dataset);
     bool set_prediction_params(const po::variables_map &vm_, const PredictionTask_ptr &p_prediction_task);
     bool set_scaling_factors_params(const po::variables_map &vm_, const ScalingFactorsTask_ptr &p_scaling_factors_task);
     bool set_autotune_params(const po::variables_map &vm, const AutotuneTask_ptr &p_autotune_task);
@@ -63,7 +63,7 @@ private:
     po::options_description decrement_desc   = po::options_description("Decrement options");
 
     po::variables_map vm_;
-    Dataset_ptr p_dataset_ = nullptr;
+    datamodel::Dataset_ptr p_dataset_ = nullptr;
     PredictionTask_ptr p_prediction_task_ = nullptr;
     ScalingFactorsTask_ptr p_scaling_factors_task_ = nullptr;
     AutotuneTask_ptr p_autotune_task_ = nullptr;
@@ -77,7 +77,7 @@ private:
             bool is_parameters_set,
             const std::vector<std::string> &aux_table_names,
             const size_t max_transform_level,
-            Dataset_ptr &p_dataset,
+            datamodel::Dataset_ptr &p_dataset,
             const std::vector<std::vector<size_t>> &svr_kernel_types_range);
 
     void process_autotune_task();

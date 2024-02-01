@@ -1,22 +1,17 @@
 #pragma once
 
-#include <common/types.hpp>
-#include <util/string_utils.hpp>
+#include "common/types.hpp"
 #include "DBTable.hpp"
 #include "DataRow.hpp"
 #include "StoreBufferPushMerge.hpp"
+#include "DeconQueue.hpp"
 
 namespace svr {
-    namespace business {
-        class DeconQueueService;
-    }
-}
 
-namespace svr {
+namespace business { class DeconQueueService; }
+
 namespace datamodel {
 
-class DeconQueue;
-using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
 
 class DeconQueue: public Queue
 {
@@ -32,9 +27,9 @@ public:
             const data_row_container &data = data_row_container());
     virtual ~DeconQueue(){};
 
-    DeconQueue_ptr clone_empty() const;
+    std::shared_ptr<DeconQueue> clone_empty() const;
 
-    DeconQueue_ptr clone(const size_t start_ix = std::numeric_limits<size_t>::min(), const size_t end_ix = std::numeric_limits<size_t>::max()) const;
+    std::shared_ptr<DeconQueue> clone(const size_t start_ix = std::numeric_limits<size_t>::min(), const size_t end_ix = std::numeric_limits<size_t>::max()) const;
 
     virtual void update_data(const DataRow::container &new_data, const bool overwrite = true) override;
 
@@ -76,14 +71,6 @@ public:
 
     static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
 
-    // TODO Check why parent get_data is not visible
-    inline const DataRow::container &get_data() const override
-    { return Queue::get_data(); }
-
-    inline DataRow::container &get_data() override
-    { return Queue::get_data(); }
-
-    virtual DataRow::container get_data(const bpt::time_period &range, const size_t lag_count = 0) const;
     std::vector<double> get_actual_values(const data_row_container::const_iterator &target_iter) const;
     void erase_until(const data_row_container::iterator &target_iter);
     void erase_until(const boost::posix_time::ptime &target_time);
@@ -99,11 +86,20 @@ private:
     void reinit_table_name();
 };
 
+template<typename T> std::basic_ostream<T> &
+operator<<(std::basic_ostream<T> &os, const DeconQueue &e)
+{
+    os << e.to_string();
+    return os;
+}
+
+using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
+
 }
 }
 
 template<>
-inline void store_buffer_push_merge<svr::datamodel::DeconQueue_ptr>(svr::datamodel::DeconQueue_ptr &dest, svr::datamodel::DeconQueue_ptr const &src)
+inline void store_buffer_push_merge<svr::datamodel::DeconQueue_ptr>(svr::datamodel::DeconQueue_ptr &dest, const svr::datamodel::DeconQueue_ptr &src)
 {
     for(auto const &row: src->get_data()) dest->get_data().emplace_back(row);
     dest->set_table_name(src->get_table_name());

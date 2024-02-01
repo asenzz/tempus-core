@@ -33,12 +33,12 @@ int AutotuneTaskService::remove(const AutotuneTask_ptr &autotuneTask)
     return autotuneTaskDao.remove(autotuneTask);
 }
 
-AutotuneTask_ptr AutotuneTaskService::get_by_id(bigint id)
+AutotuneTask_ptr AutotuneTaskService::get_by_id(const bigint id)
 {
     return autotuneTaskDao.get_by_id(id);
 }
 
-std::vector<AutotuneTask_ptr> AutotuneTaskService::find_all_by_dataset_id(bigint dataset_id)
+std::vector<AutotuneTask_ptr> AutotuneTaskService::find_all_by_dataset_id(const bigint dataset_id)
 {
     return autotuneTaskDao.find_all_by_dataset_id(dataset_id);
 }

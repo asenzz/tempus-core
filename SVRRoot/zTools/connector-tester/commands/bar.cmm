@@ -40,21 +40,21 @@ struct Bar : Command
 
         User_ptr user = aci.user_service.get_user_by_user_name(user_name);
 
-        Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
+        svr::datamodel::Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
         if(!dataset)
             throw std::runtime_error("Bar: cannot find the user's dataset.");
 
-        MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
+        svr::datamodel::MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
         if(!request)
             throw std::runtime_error("Bar: cannot find the user's request. Make sure MT4 is started and requests for values.");
 
         boost::posix_time::time_duration const resolution {boost::posix_time::seconds(request->resolution)};
 
-        InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
+        svr::datamodel::InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
         if(!queue)
             throw std::runtime_error("Bar: cannot find the input queue.");
 
-        DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
+        svr::datamodel::DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
         if(!nr)
             throw std::runtime_error("Bar: Input queue is empty");
 
@@ -66,7 +66,7 @@ struct Bar : Command
 
         boost::posix_time::ptime endt = nr->get_value_time();
 
-        MultivalResponse_ptr resp = MultivalResponse_ptr (new svr::datamodel::MultivalResponse (0, request->get_id(), endt + resolution, "", 0.0 ) );
+        svr::datamodel::MultivalResponse_ptr resp = svr::datamodel::MultivalResponse_ptr (new svr::datamodel::MultivalResponse (0, request->get_id(), endt + resolution, "", 0.0 ) );
 
         for(size_t i = 0; i < n; ++i)
         {

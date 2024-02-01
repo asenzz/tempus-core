@@ -60,9 +60,9 @@ class StatementPreparerDBTemplate
     }
 
     template<typename InputIterator>
-    inline std::vector<std::string> escape(InputIterator begin, InputIterator end)
+    inline std::deque<std::string> escape(InputIterator begin, InputIterator end)
     {
-        std::vector<std::string> r;
+        std::deque<std::string> r;
         for (; begin != end; ++begin) {
             std::string tmp = escape(*begin);
             size_t pos = tmp.find_first_of("'");
@@ -82,7 +82,22 @@ class StatementPreparerDBTemplate
     {
         std::stringstream ss;
         ss.precision(std::numeric_limits<double>::max_digits10);
-        std::vector<std::string> vals = escape(begin(v), end(v));
+        std::deque<std::string> vals = escape(begin(v), end(v));
+        ss << "'{";
+        if (!vals.empty()) ss << vals[0];
+        for (size_t col_num = 1; col_num < vals.size(); col_num++)
+            ss << ", " << vals[col_num];
+        ss << "}'";
+
+        return ss.str();
+    }
+
+    template<typename T>
+    inline std::string escape(const std::deque<T> &v)
+    {
+        std::stringstream ss;
+        ss.precision(std::numeric_limits<double>::max_digits10);
+        std::deque<std::string> vals = escape(v.begin(), v.end());
         ss << "'{";
         if (!vals.empty()) ss << vals[0];
         for (size_t col_num = 1; col_num < vals.size(); col_num++)
@@ -97,7 +112,7 @@ class StatementPreparerDBTemplate
     {
         std::stringstream ss;
         ss.precision(std::numeric_limits<double>::max_digits10);
-        std::vector<std::string> vals = escape(begin(v), end(v));
+        std::deque<std::string> vals = escape(v.begin(), v.end());
         ss << "'{";
         if (vals.size() > 0)
             ss << vals[0];

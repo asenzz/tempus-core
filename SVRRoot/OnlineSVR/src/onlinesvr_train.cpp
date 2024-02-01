@@ -1,166 +1,337 @@
 #include "onlinesvr.hpp"
 
 #include "common/parallelism.hpp"
+#include "model/Model.hpp"
 
-using namespace svr::common;
 
 namespace svr {
 
-using namespace arma;
-
-size_t OnlineMIMOSVR::learn(const arma::mat &new_x_train, const arma::mat &new_y_train, const bool temp_learn, const bool dont_update_r_matrix, const size_t forget_idx, const bpt::ptime &label_time)
-{
-#ifdef NO_ONLINE_LEARN
-    return new_x_train.n_rows;
+#ifdef PSEUDO_ONLINE
+constexpr bool __always_retrain = true;
+#else
+constexpr bool __always_retrain = false;
 #endif
 
+void
+OnlineMIMOSVR::batch_train(
+        const matrix_ptr &p_xtrain,
+        const matrix_ptr &p_ytrain,
+        const matrices_ptr &kernel_matrices,
+        const bool pseudo_online)
+{
+    LOG4_DEBUG(
+            "Training on X " << common::present(*p_xtrain) << ", Y " << common::present(*p_ytrain) << ", pre-calculated kernel matrices " << (kernel_matrices ? kernel_matrices->size() : 0) <<
+                             ", pseudo online " << pseudo_online << ", parameters " << get_params());
+    const std::scoped_lock lk(learn_mx);
+
+    reset_model(pseudo_online);
+    const auto &params = get_params();
+    if (params.get_svr_kernel_param() == 0) {
+        if (kernel_matrices) {
+            LOG4_ERROR("Kernel matrices provided will be cleared because SVR kernel parameters are not initialized!");
+            kernel_matrices->clear();
+        }
+//        PROFILE_EXEC_TIME(tune_kernel_params(p_param_set, *p_xtrain, *p_ytrain), "Tune kernel params for model " << p_param_set->get_decon_level());
+    }
+    if (p_xtrain->n_rows > params.get_svr_decremental_distance())
+        p_xtrain->shed_rows(0, p_xtrain->n_rows - params.get_svr_decremental_distance() - 1);
+    if (p_ytrain->n_rows > params.get_svr_decremental_distance())
+        p_ytrain->shed_rows(0, p_ytrain->n_rows - params.get_svr_decremental_distance() - 1);
+
+    if (!pseudo_online) {
+        p_features = p_xtrain;
+        p_labels = p_ytrain;
+        if (p_xtrain->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty() || !p_xtrain->n_cols || !p_ytrain->n_cols)
+            LOG4_THROW("Invalid data dimensions X train " << arma::size(*p_xtrain) << ", Y train " << arma::size(*p_ytrain) << ", level " << params.get_decon_level());
+    }
+
+    datamodel::SVRParameters_ptr p;
+    if ((p = is_manifold())) {
+        init_manifold(p);
+        samples_trained = p_xtrain->n_rows;
+        return;
+    }
+
+    if (ixs.empty()) ixs = get_indexes();
+    if (kernel_matrices && kernel_matrices->size() == ixs.size()) {
+        p_kernel_matrices = kernel_matrices;
+        LOG4_DEBUG("Using " << ixs.size() << " pre-calculated matrices.");
+    } else if (kernel_matrices && !kernel_matrices->empty()) {
+        LOG4_ERROR("External kernel matrices do not match needed chunks count!");
+    } else {
+        LOG4_DEBUG("Initializing kernel matrices from scratch.");
+    }
+
+    for (auto &component: main_components) {
+        if (component->chunk_weights.size() != ixs.size()) component->chunk_weights.resize(ixs.size());
+        if (component->chunks_weight.size() != ixs.size()) component->chunks_weight.resize(ixs.size());
+        if (component->mae_chunk_values.size() != ixs.size()) component->mae_chunk_values.resize(ixs.size(), 0.);
+    }
+
+    if (p_kernel_matrices->size() != ixs.size()) p_kernel_matrices->resize(ixs.size());
+    const arma::mat eye_K = arma::eye(p_xtrain->n_rows, p_xtrain->n_rows);
+#pragma omp parallel for
+    for (size_t i = 0; i < get_num_chunks(); ++i)
+        do_over_train_zero_epsilon(*p_features, *p_labels, eye_K, i);
+    update_total_weights();
+    samples_trained = p_features->n_rows;
+
+#ifdef PSEUDO_ONLINE // Clear kernel matrices once weight is calculated
+    p_kernel_matrices = std::make_shared<std::deque<arma::mat>>(ixs.size());
+#endif
+}
+
+size_t OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const bool temp_learn, const std::deque<size_t> forget_ixs, const bpt::ptime &label_time)
+{
     const std::scoped_lock learn_lock(learn_mx);
 
-    if (new_x_train.empty() or new_y_train.empty()) {
-        LOG4_WARN("Features are empty " << new_x_train.empty() << " or labels are empty " << new_y_train.empty());
+    if (new_x.empty() or new_y.empty()) {
+        LOG4_WARN("Features are empty " << new_x.empty() << " or labels are empty " << new_y.empty());
         return 0;
     }
-    const auto samples_to_train = new_x_train.n_rows;
-    if (samples_to_train > 1) LOG4_THROW("Code not ready for more than one new sample!");
 
-    if (p_svr_parameters->get_kernel_type() == datamodel::kernel_type::DEEP_PATH || p_svr_parameters->get_kernel_type() == datamodel::kernel_type::DEEP_PATH2) {
+    if (new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols)
+        LOG4_THROW("New data dimensions " << arma::size(new_y) << ", " << arma::size(new_x) << " do not match model data dimensions " <<
+                    arma::size(*p_labels) << ", " << arma::size(*p_features));
+    if (get_params().is_manifold()) {
         if (!p_manifold) LOG4_THROW("Manifold not initialized.");
-        arma::mat new_x_train_manifold(new_x_train.n_rows * p_features->n_rows, 1), new_y_train_manifold(new_y_train.n_rows * p_labels->n_rows, 1);
-        // Prepare online manifolds.
-        THROW_EX_FS(std::logic_error, "Not implemented!");
-        for (size_t i = 0; i < new_x_train.n_rows * p_features->n_rows; ++i)
-            p_manifold->learn(new_x_train_manifold.row(i), new_y_train_manifold.row(i));
+        const auto new_learning_rows = new_x.n_rows * p_features->n_rows;
+        arma::mat new_x_manifold(new_learning_rows, new_x.n_cols + p_features->n_cols);
+        arma::mat new_y_manifold(new_learning_rows, new_y.n_cols);
+#pragma omp parallel for collapse(2)
+        for (size_t i = 0; i < p_features->n_rows; ++i)
+            for (size_t j = 0; j < new_x.n_rows; ++j)
+                MANIFOLD_SET(new_x_manifold.row(i * new_x.n_rows + j),
+                             new_y_manifold.row(i * new_x.n_rows + j),
+                             new_x.row(j), new_y.row(j),
+                             p_features->row(i), p_labels->row(i));
+        p_manifold->learn(new_x_manifold, new_y_manifold);
     }
 
-#ifdef PSEUDO_ONLINE
-    p_features->insert_rows(p_features->n_rows, new_x_train);
-    p_labels->insert_rows(p_labels->n_rows, new_y_train);
-    p_features->shed_rows(0, samples_to_train - 1);
-    p_labels->shed_rows(0, samples_to_train - 1);
-    batch_train(p_features, p_labels, false, {}, true);
-    return samples_trained;
-#endif
+    const auto new_rows = new_x.n_rows;
+    if (!forget_ixs.empty() && new_rows != forget_ixs.size())
+        LOG4_THROW("Forget index size " << forget_ixs.size() << " does not equal train samples count " << new_rows);
 
-    size_t index_min = std::numeric_limits<size_t>::max();
+    if (new_rows > p_features->n_rows / 2 || __always_retrain) {
+        p_features->insert_rows(p_features->n_rows, new_x);
+        p_labels->insert_rows(p_labels->n_rows, new_y);
+        p_features->shed_rows(0, new_rows - 1);
+        p_labels->shed_rows(0, new_rows - 1);
+        batch_train(p_features, p_labels, {}, true);
+        return samples_trained;
+    }
+
+    arma::uvec shed_ixs;
     {
-        arma::mat abs_total_weights = arma::zeros(arma::size(main_components.begin()->second.total_weights));
-        for (auto &kv: main_components) abs_total_weights += arma::abs(kv.second.total_weights);
+        arma::mat abs_total_weights = arma::zeros(arma::size(main_components.front()->total_weights));
+        for (auto &kv: main_components) abs_total_weights += arma::abs(kv->total_weights);
         const auto active_ixs = get_active_ixs();
-        if (forget_idx == std::numeric_limits<size_t>::max()) {
-            if (temp_idx != std::numeric_limits<size_t>::max()) {
-                LOG4_DEBUG("Forgetting temporary row at " << temp_idx);
-                index_min = temp_idx;
-                temp_idx = std::numeric_limits<size_t>::max();
+        if (forget_ixs.empty()) {
+            if (!tmp_ixs.empty()) {
+                const auto temp_ct = std::min<size_t>(tmp_ixs.size(), new_rows) - 1;
+                for (size_t i = 0; i < temp_ct; ++i)
+                    shed_ixs.insert_rows(shed_ixs.empty() ? 0 : shed_ixs.n_rows, tmp_ixs^i);
+                tmp_ixs.unsafe_erase(std::next(tmp_ixs.begin(), std::min(tmp_ixs.size() - 1, temp_ct)), tmp_ixs.end());
+                LOG4_DEBUG("Forgetting temporary row at " << shed_ixs);
             }
-#ifdef UPDATE_FEATURES // Enable to search for duplicate feature vector
+#ifdef UPDATE_FEATURES // Enable to forget most similar features
             for (size_t r = 0; r < p_features->n_rows; ++r) {
-                if (arma::approx_equal(p_features->row(r), new_x_train, "absdiff", TOL_ROWS)) {
-                    index_min = r;
+                if (arma::approx_equal(p_features->row(r), new_x, "absdiff", TOL_ROWS)) {
+                    shed_ixs = r;
                     LOG4_DEBUG("Found similar features row at " << r);
                 }
             }
 #endif
-            if (index_min == std::numeric_limits<size_t>::max()) {
-#ifdef FORGET_MIN_WEIGHT
-                const size_t active_index_min = abs_total_weights.rows(active_ixs).index_min();
-                index_min = active_ixs(active_index_min, 0);
+            while (shed_ixs.n_rows < new_rows) {
+#ifdef FORGET_MIN_WEIGHT // Forgetting min weight works the best
+                const size_t ix_to_shed = abs_total_weights.rows(active_ixs).index_min();
+                shed_ixs.insert_rows(shed_ixs.empty() ? 0 : shed_ixs.n_rows - 1, active_ixs(ix_to_shed, 0));
 #else // Forget oldest active index
-                index_min = active_ixs.min();
+                shed_ixs = active_ixs.min();
 #endif
-                LOG4_DEBUG("Forgetting least significant row at " << index_min);
+                LOG4_DEBUG("Forgetting least significant row at " << ix_to_shed);
             }
         } else {
-            arma::uvec contained_ixs = arma::find(abs_total_weights.rows(active_ixs) == forget_idx);
-            if (contained_ixs.empty()) {
-                LOG4_WARN("Suggested forget index " << forget_idx << " not found in active indexes, aborting online train.");
-                return 0;
-            } else {
-                LOG4_DEBUG("Using suggested index " << forget_idx);
-                index_min = forget_idx;
+            for (const auto f: forget_ixs) {
+                arma::uvec contained_ixs = arma::find(abs_total_weights.rows(active_ixs) == f);
+                if (contained_ixs.empty()) {
+                    LOG4_WARN("Suggested forget index " << f << " not found in active indexes, aborting online train.");
+                    return 0;
+                } else {
+                    LOG4_DEBUG("Using suggested index " << f);
+                    shed_ixs.insert_rows(shed_ixs.n_rows, f);
+                }
             }
         }
     }
-    p_features->shed_row(index_min);
-    p_labels->shed_row(index_min);
-    arma::uvec affected_indexes;
-    std::vector<size_t> affected_chunks;
-    std::mutex mx;
-    std::vector<arma::mat> shedded_rows(ixs.size(), arma::mat(main_components.size(), main_components.begin()->second.chunk_weights.front().n_cols));
-    __omp_tpfor (size_t, chunk_ix, 0, ixs.size(),
-                 auto &chunk_indexes = ixs[chunk_ix];
-        const arma::umat find_res = arma::find(chunk_indexes == index_min);
-        if (not find_res.is_empty()) {
-            const auto chunk_min_ix = *find_res.begin();
-            chunk_indexes.shed_row(chunk_min_ix);
-            chunk_indexes.rows(arma::find(chunk_indexes >= index_min)) -= 1;
 
-            for (size_t i = 0; main_components.size(); ++i) {
-                shedded_rows[chunk_ix].row(i) = main_components[i].chunk_weights[chunk_ix].row(chunk_min_ix);
-                main_components[i].chunk_weights[chunk_ix].shed_row(chunk_min_ix);
+    // Do the shedding
+    p_features->shed_rows(shed_ixs);
+    p_labels->shed_rows(shed_ixs);
+    tbb::concurrent_map<size_t /* chunk */, size_t /* affected rows */> affected_chunks;
+    tbb::concurrent_map<std::pair<size_t /* chunk */, size_t /* component */>, tbb::concurrent_map<size_t /* shedix */, arma::rowvec /* weights */>> chunk_shedded_weights;
+#pragma omp parallel for
+    for (size_t chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
+        auto &chunk_ixs = ixs[chunk_ix];
+        arma::uvec find_res = arma::sort(arma::unique(common::find(chunk_ixs, shed_ixs)));
+        if (find_res.empty()) {
+            LOG4_DEBUG("Shed index " << shed_ixs << " not found in chunk " << chunk_ix);
+            size_t ct = 0;
+            for (auto shed_ix: shed_ixs) {
+                shed_ix -= ct++;
+                chunk_ixs.rows(arma::find(chunk_ixs >= shed_ix)) -= 1;
+            }
+            continue;
+        }
+
+        size_t ct = 0;
+        for (auto &shed_ix: find_res) {
+            shed_ix -= ct++;
+
+            chunk_ixs.shed_row(shed_ix);
+            chunk_ixs.rows(arma::find(chunk_ixs >= shed_ix)) -= 1;
+#pragma omp parallel for
+            for (size_t com = 0; com < main_components.size(); ++com) {
+                chunk_shedded_weights[{chunk_ix, com}][shed_ix] = main_components[com]->chunk_weights[chunk_ix].row(shed_ix);
+                main_components[com]->chunk_weights[chunk_ix].shed_row(shed_ix);
             }
 
-            if (p_kernel_matrices->at(chunk_ix).n_rows > chunk_min_ix and p_kernel_matrices->at(chunk_ix).n_cols > chunk_min_ix) {
-                p_kernel_matrices->at(chunk_ix).shed_row(chunk_min_ix);
-                p_kernel_matrices->at(chunk_ix).shed_col(chunk_min_ix);
+            if (p_kernel_matrices->at(chunk_ix).n_rows > shed_ix and p_kernel_matrices->at(chunk_ix).n_cols > shed_ix) {
+                p_kernel_matrices->at(chunk_ix).shed_row(shed_ix);
+                p_kernel_matrices->at(chunk_ix).shed_col(shed_ix);
             } else
-                LOG4_ERROR("Failed removing kernel distances for index " << chunk_min_ix << " from kernel matrix for chunk " << chunk_ix << " of size " << arma::size(p_kernel_matrices->at(chunk_ix)));
-
-            std::scoped_lock l(mx);
-            affected_indexes.insert_rows(affected_indexes.n_rows, chunk_indexes);
-            affected_chunks.push_back(chunk_ix);
-            LOG4_DEBUG("index_min " << index_min << " found as chunk_min_ix " << chunk_min_ix << " in ixs[" << chunk_ix << "] " << arma::size(ixs[chunk_ix]));
-        } else {
-            LOG4_DEBUG("Min index " << index_min << " not found in chunk " << chunk_ix);
-            chunk_indexes.rows(arma::find(chunk_indexes > index_min)) -= 1;
+                LOG4_ERROR("Failed removing kernel distances for index " << shed_ix << " from kernel matrix for chunk " << chunk_ix << " of size "
+                                                                         << arma::size(p_kernel_matrices->at(chunk_ix)));
         }
-    )
-    affected_indexes = arma::unique(affected_indexes);
-    LOG4_DEBUG("Affected chunks " << affected_chunks.size() << " affected indexes " << arma::size(affected_indexes));
-    arma::mat new_kernel_values;
-    PROFILE_EXEC_TIME(new_kernel_values = init_predict_kernel_matrix(*p_svr_parameters, p_features->rows(affected_indexes), new_x_train, p_manifold, label_time), "init_predict_kernel_matrix");
-    __omp_tpfor (size_t, chunk_ct, 0, affected_chunks.size(),
-        const auto chunk_ix = affected_chunks[chunk_ct];
-        p_kernel_matrices->at(chunk_ix).resize(p_kernel_matrices->at(chunk_ix).n_rows + 1, p_kernel_matrices->at(chunk_ix).n_cols + 1);
-        for (size_t ix_ct = 0; ix_ct < ixs[chunk_ix].size(); ++ix_ct) {
-            const auto ix = ixs[chunk_ix](ix_ct, 0);
-            const arma::umat f = arma::find(affected_indexes == ix);
-            if (f.is_empty()) {
-                LOG4_ERROR("Index " << ix << " from chunk " << chunk_ix << " not found in new indexes.");
-            } else {
-                const auto new_val = new_kernel_values(0, f(0, 0)); // TODO Replace the zero with index of multiple new features vectors
-                p_kernel_matrices->at(chunk_ix).at(ix_ct, p_kernel_matrices->at(chunk_ix).n_cols - 1) = new_val;
-                p_kernel_matrices->at(chunk_ix).at(p_kernel_matrices->at(chunk_ix).n_rows - 1, ix_ct) = new_val;
-            }
+
+        affected_chunks.emplace(chunk_ix, find_res.n_rows);
+    }
+
+    // Append new distances
+    LOG4_DEBUG("Affected chunks " << affected_chunks.size());
+#pragma omp parallel for
+    for (size_t i = 0; i < affected_chunks.size(); ++i) {
+        const auto chunk_ix = affected_chunks % i;
+        const auto chunk_new_rows = affected_chunks ^ i;
+        arma::mat &K_chunk = p_kernel_matrices->at(chunk_ix);
+        arma::mat newnew_K, newold_K,
+            chunk_x(new_x.rows(new_x.n_rows - chunk_new_rows, new_x.n_rows - 1)),
+            chunk_y(new_y.rows(new_y.n_rows - chunk_new_rows, new_y.n_rows - 1));
+#pragma omp parallel
+        {
+            PROFILE_EXEC_TIME(newnew_K = init_kernel_matrix(get_params(chunk_ix), new_x, new_y),
+                              "Init kernel matrix for chunk " << chunk_ix);
+            PROFILE_EXEC_TIME(newold_K = init_predict_kernel_matrix(
+                    get_params(chunk_ix), p_features->rows(ixs[chunk_ix]), new_x, label_time),
+                              "Init predict kernel matrix for chunk " << chunk_ix);
+#pragma omp single
+            K_chunk.resize(K_chunk.n_rows + chunk_new_rows, K_chunk.n_cols + chunk_new_rows);
+#pragma omp barrier
+            K_chunk.submat(0, K_chunk.n_cols - chunk_new_rows,
+                           K_chunk.n_rows - chunk_new_rows - 1, K_chunk.n_cols - 1) = newold_K.t();
+            K_chunk.submat(K_chunk.n_rows - chunk_new_rows, 0,
+                           K_chunk.n_rows - 1, K_chunk.n_cols - chunk_new_rows - 1) = newold_K;
+            K_chunk.submat(K_chunk.n_rows - chunk_new_rows, K_chunk.n_cols - chunk_new_rows,
+                           K_chunk.n_rows - 1, K_chunk.n_cols - 1) = newnew_K;
         }
-        p_kernel_matrices->at(chunk_ix).at(p_kernel_matrices->at(chunk_ix).n_rows - 1, p_kernel_matrices->at(chunk_ix).n_cols - 1) = 1;
-        ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, arma::uvec(1, arma::fill::value(p_features->n_rows)));
-        //LOG4_DEBUG("ixs[" << chunk_ix << "] " << arma::size(ixs[chunk_ix]));
-        for (size_t i = 0; i < main_components.size(); ++i)
-            main_components[i].chunk_weights[chunk_ix].insert_rows(
-                    main_components[i].chunk_weights[chunk_ix].n_rows,
-                    shedded_rows[chunk_ix].row(i));
-    )
-    p_features->insert_rows(p_features->n_rows, new_x_train);
-    p_labels->insert_rows(p_labels->n_rows, new_y_train);
-    temp_idx = temp_learn ? p_labels->n_rows - 1 : std::numeric_limits<size_t>::max();
 
-    __omp_pfor_i(0, affected_chunks.size(),
-                 const auto chunk_ix = affected_chunks[i];
-        const auto labels_chunk = p_labels->rows(ixs[chunk_ix]);
+        ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, arma::linspace<arma::uvec>(ixs[chunk_ix].n_rows, ixs[chunk_ix].n_rows + chunk_new_rows - 1));
+#ifdef KEEP_PREV_WEIGHTS
+#pragma omp parallel for
+        for (size_t com = 0; com < main_components.size(); ++com)
+            for (const auto &w: chunk_shedded_weights[{chunk_ix, com}])
+                main_components[com].chunk_weights[chunk_ix].insert_rows(main_components[i].chunk_weights[chunk_ix].n_rows, w.second);
+#else
+#pragma omp parallel for
+        for (size_t com = 0; com < main_components.size(); ++com) {
+            auto &w = main_components[com]->chunk_weights[chunk_ix];
+            const double mean_weight = arma::mean(arma::vectorise(w));
+            w.insert_rows(w.n_rows, arma::mat(chunk_new_rows, w.n_cols, arma::fill::value(mean_weight)));
+        }
+#endif
+    }
+    if (temp_learn)
+        for (size_t row_i = p_labels->n_rows; row_i < p_labels->n_rows + new_rows; ++row_i)
+            tmp_ixs.emplace(row_i);
+    p_features->insert_rows(p_features->n_rows, new_x);
+    p_labels->insert_rows(p_labels->n_rows, new_y);
 
-        static size_t auto_gu_ct = 1;
-        if (!std::isnormal(auto_gu[chunk_ix]) || !(auto_gu_ct % AUTO_GU_CT))
-            PROFILE_EXEC_TIME(go_for_variable_gu(p_kernel_matrices->at(chunk_ix), labels_chunk, auto_gu[chunk_ix]), "go for variable gu on level " << p_svr_parameters->get_decon_level());
-        ++auto_gu_ct;
-
+    const arma::mat k_eye = arma::eye(arma::size(p_kernel_matrices->front()));
+#pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < affected_chunks.size(); ++i)
         for (size_t j = 0; j < main_components.size(); ++j) {
-            //main_components[j].chunk_weights[chunk_ix].fill(1.);
-            calc_weights(chunk_ix, labels_chunk, 1. / (2. * auto_gu[chunk_ix]), main_components[j], IRWLS_ITER_ONLINE);
+            const auto chunk_ix = affected_chunks % i;
+            auto &com = main_components[j];
+            calc_weights(chunk_ix, p_labels->rows(ixs[chunk_ix]), k_eye / (2. * get_params_ptr(chunk_ix)->get_svr_C()), *com, IRWLS_ITER_ONLINE);
         }
-    )
     update_total_weights();
-    samples_trained += samples_to_train;
-    return samples_to_train;
+    samples_trained += new_rows;
+    return new_rows;
+}
+
+
+void OnlineMIMOSVR::do_over_train_zero_epsilon(const arma::mat &xx_train, const arma::mat &yy_train, const arma::mat &k_eye, const size_t chunk_idx)
+{
+    const auto params = get_params(chunk_idx);
+    const arma::mat x_train = xx_train.rows(ixs[chunk_idx]);
+    const arma::mat y_train = yy_train.rows(ixs[chunk_idx]);
+    if (p_kernel_matrices->at(chunk_idx).empty()) {
+        PROFILE_EXEC_TIME(p_kernel_matrices->at(chunk_idx) = init_kernel_matrix(params, x_train, y_train), "Init kernel matrix for chunk " << chunk_idx);
+    } else
+        LOG4_DEBUG("Using pre-calculated kernel matrix for " << chunk_idx);
+
+    const arma::mat k_eye_epsco = k_eye / (2. * params.get_svr_C());
+    for (auto &component: main_components) {
+        // The regression parameters
+        component->chunk_weights[chunk_idx] = arma::ones(y_train.n_rows, y_train.n_cols);
+        // Prediction error
+        calc_weights(chunk_idx, y_train, k_eye_epsco, *component, IRWLS_ITER);
+    }
+}
+
+
+void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const arma::mat &y_train, const arma::mat &k_eye_epsco, OnlineMIMOSVR::MimoBase &component, const size_t iters)
+{
+#ifndef MEASURE_INIT_WEIGHTS
+    component.mae_chunk_values[chunk_ix] = ixs.size() < 2 ? 1. :
+                                           common::meanabs<double>(y_train + component.epsilon - p_kernel_matrices->at(chunk_ix) * component.chunk_weights[chunk_ix]);
+    LOG4_DEBUG("Initial MAE " << component.mae_chunk_values[chunk_ix] << " for chunk " << chunk_ix);
+#endif
+
+    solve_dispatch(k_eye_epsco, p_kernel_matrices->at(chunk_ix), y_train, component.chunk_weights[chunk_ix], iters, false /* DPOSV always fails! // p_kernel_matrices->at(chunk_ix).is_symmetric() && p_kernel_matrices->at(chunk_ix).min() >= 0 */);
+
+    component.mae_chunk_values[chunk_ix] = ixs.size() < 2 ? 1. :
+                                           common::meanabs<double>(y_train + component.epsilon - p_kernel_matrices->at(chunk_ix) * component.chunk_weights[chunk_ix]);
+    LOG4_DEBUG("Final MAE " << component.mae_chunk_values[chunk_ix] << " for chunk " << chunk_ix);
+}
+
+void OnlineMIMOSVR::update_total_weights()
+{
+#pragma omp parallel for
+    for (auto &comp: main_components) {
+        comp->total_weights = comp->chunk_weights.front();
+        arma::mat divisors = arma::ones(arma::size(*p_labels));
+        for (size_t i = 1; i < ixs.size(); ++i) {
+            divisors.rows(ixs[i]) += 1;
+            comp->total_weights.rows(ixs[i]) += comp->chunk_weights[i];
+        }
+        comp->total_weights /= divisors;
+        LOG4_TRACE("Weights for level " << get_params().get_decon_level() << " " << comp->total_weights);
+    }
+
+    tbb::concurrent_map<size_t /* comp */, double> component_avg_mae;
+#pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < ixs.size(); ++i)
+        for (size_t c = 0; c < main_components.size(); ++c)
+            component_avg_mae[i] += main_components[c]->mae_chunk_values[i];
+#pragma omp parallel for
+    for (size_t c = 0; c < main_components.size(); ++c)
+        component_avg_mae[c] /= double(ixs.size());
+
+#pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < ixs.size(); ++i)
+        for (size_t c = 0; c < main_components.size(); ++c)
+            main_components[c]->chunks_weight[i] = component_avg_mae[c] / main_components[c]->mae_chunk_values[i];
 }
 
 } // svr

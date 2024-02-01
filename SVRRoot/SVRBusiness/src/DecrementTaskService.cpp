@@ -31,7 +31,7 @@ int DecrementTaskService::remove(const DecrementTask_ptr& decrementTask)
     return decrementTaskDao.remove(decrementTask);
 }
 
-DecrementTask_ptr DecrementTaskService::get_by_id(bigint id)
+DecrementTask_ptr DecrementTaskService::get_by_id(const bigint id)
 {
     return decrementTaskDao.get_by_id(id);
 }

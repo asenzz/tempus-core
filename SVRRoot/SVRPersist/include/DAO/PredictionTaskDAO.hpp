@@ -16,10 +16,10 @@ public:
     explicit PredictionTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
 
     virtual bigint get_next_id() = 0;
-    virtual bool exists(bigint id) = 0;
+    virtual bool exists(const bigint id) = 0;
     virtual int save(const PredictionTask_ptr& predictionTask) = 0;
     virtual int remove(const PredictionTask_ptr& predictionTask) = 0;
-    virtual PredictionTask_ptr get_by_id(bigint id) = 0;
+    virtual PredictionTask_ptr get_by_id(const bigint id) = 0;
 
 };
 

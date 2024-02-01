@@ -16,7 +16,7 @@ bigint PgScalingFactorsTaskDAO::get_next_id()
     return data_source.query_for_type<bigint>(AbstractDAO::get_sql("get_next_id"));
 }
 
-bool PgScalingFactorsTaskDAO::exists(bigint id)
+bool PgScalingFactorsTaskDAO::exists(const bigint id)
 {
     return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"),
                                            id) == 1;
@@ -49,7 +49,7 @@ int PgScalingFactorsTaskDAO::remove(const ScalingFactorsTask_ptr &scalingFactors
     return data_source.update(AbstractDAO::get_sql("remove"), scalingFactorsTask->get_id());
 }
 
-    ScalingFactorsTask_ptr PgScalingFactorsTaskDAO::get_by_id(bigint id)
+    ScalingFactorsTask_ptr PgScalingFactorsTaskDAO::get_by_id(const bigint id)
 {
     ScalingFactorsTaskRowMapper rowMapper;
     return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), id);

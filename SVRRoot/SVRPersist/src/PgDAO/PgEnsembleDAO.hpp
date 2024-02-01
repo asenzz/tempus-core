@@ -12,18 +12,18 @@ public:
 
     bigint get_next_id();
 
-    Ensemble_ptr get_by_id(bigint id);
+    datamodel::Ensemble_ptr get_by_id(const bigint id);
 
-    bool exists(bigint ensemble_id);
-    bool exists(const Ensemble_ptr &ensemble);
+    bool exists(const bigint ensemble_id);
+    bool exists(const datamodel::Ensemble_ptr &ensemble);
 
-    Ensemble_ptr get_by_dataset_and_decon_queue(const Dataset_ptr &dataset, const DeconQueue_ptr& decon_queue);
+    datamodel::Ensemble_ptr get_by_dataset_and_decon_queue(const datamodel::Dataset_ptr &dataset, const datamodel::DeconQueue_ptr& decon_queue);
 
-    std::vector<Ensemble_ptr> find_all_ensembles_by_dataset_id(bigint dataset_id);
+    std::deque<datamodel::Ensemble_ptr> find_all_ensembles_by_dataset_id(const bigint dataset_id);
 
-    int save(const Ensemble_ptr &Ensemble);
+    int save(const datamodel::Ensemble_ptr &Ensemble);
 
-    int remove(const Ensemble_ptr &Ensemble);
+    int remove(const datamodel::Ensemble_ptr &Ensemble);
 };
 
 } }

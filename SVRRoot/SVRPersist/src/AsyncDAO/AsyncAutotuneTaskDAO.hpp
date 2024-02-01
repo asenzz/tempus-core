@@ -13,12 +13,12 @@ public:
 
     bigint get_next_id();
 
-    bool exists(bigint id);
+    bool exists(const bigint id);
 
     int save(const AutotuneTask_ptr& autotuneTask);
     int remove(const AutotuneTask_ptr& autotuneTask);
 
-    AutotuneTask_ptr get_by_id(bigint id);
+    AutotuneTask_ptr get_by_id(const bigint id);
     std::vector<AutotuneTask_ptr> find_all_by_dataset_id(const bigint dataset_id);
 private:
     struct AsyncImpl;

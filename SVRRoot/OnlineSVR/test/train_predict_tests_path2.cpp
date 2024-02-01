@@ -50,7 +50,7 @@ run_file(
     const svr::matrix_ptr p_features = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << svr::C_logged_level << "_" << 0 << ".out");
     const svr::matrix_ptr p_labels = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << svr::C_logged_level << "_" << 0 << ".out");
     auto best_parameters = std::make_shared<SVRParameters>(
-            0, 0, "test path 2", "test path 2", 0, 0, 0, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
+            0, 0, "test path 2", "test path 2", 0, 0, 0, svr::mimo_type_e::single, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
             DEFAULT_LAG);
     {
 #ifdef DO_TEST_PSO
@@ -74,7 +74,7 @@ run_file(
         /* cilk_ */ for (size_t slide_ix = 0; slide_ix < PROPS.get_slide_count(); ++slide_ix) {
             const auto slide_start_pos = kernel_svr_parameters.get_svr_decremental_distance() + slide_ix * PROPS.get_future_predict_count() / PROPS.get_slide_count();
             const auto slide_features = p_features_data->rows(slide_start_pos - kernel_svr_parameters.get_svr_decremental_distance(), slide_start_pos - 1);
-            PROFILE_EXEC_TIME(kernel_matrices[slide_ix] = svr::OnlineMIMOSVR::produce_kernel_matrices(kernel_svr_parameters, slide_features), "Produce kernel matrices");
+            // PROFILE_EXEC_TIME(kernel_matrices[slide_ix] = svr::OnlineMIMOSVR::produce_kernel_matrices(kernel_svr_parameters, slide_features), "Produce kernel matrices");
         }
         /* cilk_ */ for (size_t cost_exp = MIN_COST_EXP; cost_exp < MAX_COST_EXP; ++cost_exp) {
             const double cost = std::pow(10, 4 * cost_exp);
@@ -96,7 +96,7 @@ run_file(
         }
     }
 #endif
-    svr::business::ModelService::final_cycle(best_parameters, best_parameters->get_svr_decremental_distance(), p_labels, p_features);
+ //   svr::business::ModelService::final_cycle(best_parameters, best_parameters->get_svr_decremental_distance(), p_labels, p_features);
 
     return {};
 }
@@ -116,6 +116,6 @@ TEST(path_tune_train_predict2, basic_integration)
         predicted_mx[level_ix] = run_file(ff, printout_mutex, running_ct);
     }
 #else
-    run_file("../SVRRoot/SVRBusiness-tests/test/test_data/input_queue_eurusd_4h_avg.csv", printout_mutex, running_ct);
+    // run_file("../SVRRoot/SVRBusiness-tests/test/test_data/input_queue_eurusd_4h_avg.csv", printout_mutex, running_ct);
 #endif
 }

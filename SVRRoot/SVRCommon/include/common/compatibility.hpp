@@ -1,17 +1,15 @@
 #pragma once
 
-#include <cmath>
-#include <limits>
 #include <memory>
 #include <sstream>
 #include <vector>
 #include <map>
 #include <set>
-#include <thread>
-#include <type_traits>
-
 #include <armadillo>
 #include <viennacl/matrix.hpp>
+#include <execution>
+#include <oneapi/tbb/concurrent_map.h>
+#include <oneapi/tbb/concurrent_set.h>
 
 #include "types.hpp"
 #include "defines.h"
@@ -36,25 +34,196 @@ string to_string(const T& obj){
 } // namespace std
 
 namespace std {
-    std::string to_string(const long double v);
-    std::string to_string(const double v);
-    std::string to_string(const float v);
+std::string to_string(const long double v);
+
+std::string to_string(const double v);
+
+std::string to_string(const float v);
 }
 
 namespace svr {
 
-typedef std::shared_ptr<std::vector<arma::mat>> matrices_ptr;
+template<typename T> T operator^(const std::set<T> &s, const size_t i)
+{
+    return *std::next(s.begin(), i);
+}
+
+template<typename T, typename C> T operator^(const std::set<T, C> &s, const size_t i)
+{
+    return *std::next(s.begin(), i);
+}
+
+template<typename T> T operator^(const tbb::concurrent_set <T> &s, const size_t i)
+{
+    return *std::next(s.begin(), i);
+}
+
+template<typename T, typename C> T operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
+{
+    return *std::next(s.begin(), i);
+}
+
+template<typename K, typename V> K operator%(const std::map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->first;
+}
+
+template<typename K, typename V> V operator^(const std::map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> V &operator^(std::map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> K operator%(const tbb::concurrent_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->first;
+}
+
+template<typename K, typename V> V operator^(const tbb::concurrent_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> K operator%(tbb::concurrent_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->first;
+}
+
+template<typename K, typename V> V &operator^(tbb::concurrent_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> K last(const tbb::concurrent_map<K, V> &s)
+{
+    return std::prev(s.end())->first;
+}
+
+template<typename K, typename V> V back(const tbb::concurrent_map<K, V> &s)
+{
+    return std::prev(s.end())->second;
+}
+
+template<typename K, typename V> K first(const tbb::concurrent_map<K, V> &s)
+{
+    return s.begin()->first;
+}
+
+template<typename K, typename V> V front(const tbb::concurrent_map<K, V> &s)
+{
+    return s.begin()->second;
+}
+
+template<typename V> V front(const tbb::concurrent_set<V> &s)
+{
+    return *s.begin();
+}
+
+template<typename V> V back(const tbb::concurrent_set<V> &s)
+{
+    return *s.end();
+}
+
+template<typename V, typename L> V front(const std::set<V, L> &s)
+{
+    return *s.begin();
+}
+
+template<typename V, typename L> V back(const std::set<V, L> &s)
+{
+    return *s.end();
+}
+
+typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
 typedef std::shared_ptr<arma::mat> matrix_ptr;
+
+
+template<typename T> auto
+operator ==(const std::deque<std::shared_ptr<T>> &lhs, const std::deque<std::shared_ptr<T>> &rhs)
+{
+    if (lhs.size() != rhs.size()) return false;
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (bool(lhs.at(i)) == bool(rhs.at(i))
+            && *lhs.at(i) == *rhs.at(i)) continue;
+        return false;
+    }
+    return true;
+}
+
+template<typename T> auto
+operator ==(const std::deque<T> &lhs, const std::deque<T> &rhs)
+{
+    if (lhs.size() != rhs.size()) return false;
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if(lhs.at(i) == rhs.at(i)) continue;
+        return false;
+    }
+    return true;
+}
 
 namespace common {
 
 void print_stacktrace();
 
+template<typename C, typename T = typename C::value_type> auto
+empty(const C &container)
+{
+    bool res = true;
+    for (T v : container) res &= v.empty();
+    return res;
+}
+
+template<typename C, typename T = typename C::value_type> auto
+max_size(const C &container)
+{
+    size_t max = 0;
+    for (const auto &item: container)
+        if (item.size() > max)
+            max = item.size();
+    return max;
+}
+
+template<typename T>
+arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
+{
+    arma::uvec r;
+#pragma omp parallel for ordered schedule(static, 1)
+    for (const auto e: m2) {
+        const arma::uvec r_e = arma::find(m1 == e);
+#pragma omp ordered
+        r.insert_rows(r.n_rows, r_e);
+    }
+    return r;
+}
+
+template<typename T>
+arma::uvec lower_bound(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
+{
+    arma::uvec r;
+#pragma omp parallel for ordered schedule(static, 1)
+    for (const auto e: m2) {
+        const arma::uvec r_e = arma::find(m1 >= e);
+#pragma omp ordered
+        r.insert_rows(r.n_rows, r_e);
+    }
+    return r;
+}
+
+typedef struct drand48_data t_drand48_data;
+typedef t_drand48_data *t_drand48_data_ptr;
+
+t_drand48_data seedme(const size_t thread_id);
+double drander(t_drand48_data_ptr buffer);
+bool file_exists(const std::string &filename);
+
 #define ELEMCOUNT(array) (sizeof(array)/sizeof(array[0]))
 
-
 /* Return codes */
-typedef size_t uint_rc_t;
+typedef size_t svrerr_t;
 #define SVR_RC_GENERAL_ERROR (std::numeric_limits<size_t>::max())
 
 
@@ -81,6 +250,19 @@ clone_shared_ptr_elements(const std::deque<std::shared_ptr<T>> &arg)
 {
     std::deque<std::shared_ptr<T>> res;
     for (const std::shared_ptr<T> &p_elem: arg) res.push_back(std::make_shared<T>(*p_elem));
+    return res;
+}
+
+template<typename T, typename L>
+tbb::concurrent_set <std::shared_ptr<T>, L> inline
+clone_shared_ptr_elements(const tbb::concurrent_set <std::shared_ptr<T>, L> &arg)
+{
+    tbb::concurrent_set<std::shared_ptr<T>, L> res;
+#pragma omp parallel
+#pragma omp single nowait
+    for (const std::shared_ptr<T> &p_elem: arg)
+#pragma omp task
+        res.insert(std::make_shared<T>(*p_elem));
     return res;
 }
 
@@ -154,30 +336,41 @@ tovec(const arma::Mat<T> &input)
 
 viennacl::vector<double> tovcl(const arma::colvec &in);
 
-template<typename T> viennacl::matrix<T>
+template<typename T> viennacl::matrix <T>
 tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
 {
     cl_int rc;
-    auto clbuf = (T *)clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
-    if (rc != CL_SUCCESS) throw std::runtime_error("Failed creating OpenCL buffer of size " + std::to_string(in.n_elem * sizeof(T)) + " with error " + std::to_string(rc));
+    auto clbuf = (T *) clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
+    if (rc != CL_SUCCESS)
+        throw std::runtime_error("Failed creating OpenCL buffer of size " + std::to_string(in.n_elem * sizeof(T)) + " with error " + std::to_string(rc));
     viennacl::matrix<T> r(clbuf, viennacl::OPENCL_MEMORY, in.n_cols, in.n_rows);
     viennacl::backend::memory_write(r.handle(), 0, in.n_elem * sizeof(T), in.memptr(), false);
     return viennacl::trans(r);
-};
+}
 
-template<typename T> viennacl::matrix<T>
+
+template<typename T> viennacl::matrix <T>
 tovcl(const arma::Mat<T> &in)
 {
-    cl_int rc;
     auto hostbuf = (T *) malloc(in.n_elem * sizeof(T));
     viennacl::matrix<T> r(hostbuf, viennacl::MAIN_MEMORY, in.n_cols, in.n_rows);
     memcpy(r.handle().ram_handle().get(), in.mem, in.n_elem * sizeof(T));
     return viennacl::trans(r);
-};
+}
+
+
+template<typename T> arma::Col<T>
+toarmacol(const tbb::concurrent_vector <T> &v)
+{
+    arma::Col<T> r;
+    r.set_size(v.size());
+    std::copy(std::execution::par_unseq, v.begin(), v.end(), r.begin());
+    return r;
+}
 
 
 template<typename T> arma::Mat<T>
-toarma(const viennacl::matrix<T> &in)
+toarma(const viennacl::matrix <T> &in)
 {
     arma::Mat<T> r(in.internal_size1(), in.internal_size2());
 
@@ -205,6 +398,63 @@ typename Container::iterator remove_constness(Container &c, ConstIterator it)
 {
     return c.erase(it, it);
 }
+
+template<class T>
+class wrap_vector : public std::vector<T>
+{
+public:
+    wrap_vector()
+    {
+        this->_M_impl._M_start = this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = NULL;
+    }
+
+    wrap_vector(const wrap_vector &o)
+    {
+        if (this == &o) return;
+        this->_M_impl._M_start = o._M_impl._M_start;
+        this->_M_impl._M_finish = o._M_impl._M_finish;
+        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
+    }
+
+    wrap_vector(wrap_vector &&o) noexcept
+    {
+        if (this == &o) return;
+        this->_M_impl._M_start = o._M_impl._M_start;
+        this->_M_impl._M_finish = o._M_impl._M_finish;
+        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
+        o._M_impl._M_start = o._M_impl._M_finish = o._M_impl._M_end_of_storage = NULL;
+    }
+
+    wrap_vector &operator=(const wrap_vector &o)
+    {
+        if (this == &o) return *this;
+        this->_M_impl._M_start = o._M_impl._M_start;
+        this->_M_impl._M_finish = o._M_impl._M_finish;
+        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
+        return *this;
+    }
+
+    wrap_vector &operator=(wrap_vector &&o) noexcept
+    {
+        if (this == &o) return *this;
+        this->_M_impl._M_start = o._M_impl._M_start;
+        this->_M_impl._M_finish = o._M_impl._M_finish;
+        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
+        o._M_impl._M_start = o._M_impl._M_finish = o._M_impl._M_end_of_storage = NULL;
+        return *this;
+    }
+
+    wrap_vector(T *sourceArray, const uint size)
+    {
+        this->_M_impl._M_start = sourceArray;
+        this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = sourceArray + size;
+    }
+
+    ~wrap_vector()
+    {
+        this->_M_impl._M_start = this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = NULL;
+    }
+};
 
 #if 0 // ArrayFire related routines, deprecated
 af::array armat_to_af_2d(const arma::mat &input)

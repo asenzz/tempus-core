@@ -154,6 +154,9 @@ void DatasetWithForm::load_form_data ()
                           : static_cast<svr::datamodel::Priority> (form.priority.selected ()));
 
     object->set_transformation_levels (form.transformation_levels.value ());
+    object->set_gradients (form.gradients.value ());
+    object->set_chunk_size (form.chunk_size.value ());
+    object->set_multiout (form.chunk_size.value ());
 }
 
 bool DatasetForm::validate_lookback_time ()

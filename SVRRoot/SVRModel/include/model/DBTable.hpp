@@ -57,7 +57,7 @@ public:
         if (distance_lag < (decltype(distance_lag)) row_count)
             THROW_EX_FS(std::runtime_error, "Missing data, distance from begin is " << distance_lag);
         std::advance(start_iter, -row_count);
-        for (;start_iter != end_iter; ++start_iter) new_data.push_back(*start_iter);
+        for (;start_iter != end_iter; ++start_iter) new_data.emplace_back(*start_iter);
         LOG4_END();
         return new_data;
     }
@@ -72,7 +72,7 @@ public:
         if (distance_lag < (decltype(distance_lag)) tail_length)
             THROW_EX_FS(std::runtime_error, "Missing data, distance from begin is " << distance_lag);
         std::advance(start_iter, -tail_length);
-        for (;start_iter != end_iter; ++start_iter) new_data.push_back(*start_iter);
+        for (;start_iter != end_iter; ++start_iter) new_data.emplace_back(*start_iter);
         LOG4_END();
         return new_data;
     }
@@ -90,18 +90,18 @@ public:
             THROW_EX_F(std::runtime_error, "Could not find " << range.begin() << " in data from " << data_.begin()->get()->get_value_time() << " until " << data_.rbegin()->get()->get_value_time());
         const auto end_iter = upper_bound(data_, range.end());
         for (;start_iter != end_iter; ++start_iter)
-            new_data.push_back(*start_iter);
+            new_data.emplace_back(*start_iter);
         LOG4_DEBUG("For range " << range << " found data from " << new_data.begin()->get()->get_value_time() << " until " << new_data.rbegin()->get()->get_value_time());
         return new_data;
     }
 
-    std::vector<double>
+    std::deque<double>
     get_column_values(
             const size_t column_index,
             const boost::posix_time::ptime start_time = boost::posix_time::min_date_time,
             const boost::posix_time::ptime end_time = boost::posix_time::max_date_time) const
     {
-        std::vector<double> output_values;
+        std::deque<double> output_values;
         if (data_.empty() or data_.begin()->get()->get_values().size() <= column_index)
             THROW_EX_FS(std::invalid_argument, "No data for column index " << column_index);
 
@@ -110,12 +110,12 @@ public:
         const auto end_row_iter = upper_bound(data_, end_time);
         for (; row_iter != end_row_iter; ++row_iter) {
             const auto value = row_iter->get()->get_value(column_index);
-            output_values.push_back(value);
+            output_values.emplace_back(value);
         }
         return output_values;
     }
 
-    std::vector<double> get_column_values(
+    std::deque<double> get_column_values(
             const size_t &column_index,
             const size_t start_pos = 0,
             const size_t count = std::numeric_limits<size_t>::max()) const
@@ -126,7 +126,7 @@ public:
         auto start_iter = std::next(data_.begin(), start_pos);
         const size_t dist_start_end = std::distance(start_iter, data_.end());
         const size_t count_limited = count < dist_start_end ? count : dist_start_end;
-        std::vector<double> output_values(count_limited);
+        std::deque<double> output_values(count_limited);
         __par_iter(start_iter, count_limited,
             output_values[_IX] = _ITER->get()->get_value(column_index));
         return output_values;
@@ -134,7 +134,7 @@ public:
 
     bool get_column_values(
             const size_t column_index,
-            std::vector<double> &output_values,
+            std::deque<double> &output_values,
             const bpt::time_period &range,
             const bpt::time_duration &resolution)
     {
@@ -183,10 +183,10 @@ public:
         trim(time_range.begin(), time_range.end());
     }
 
-    inline std::vector<double> get_tick_volume() const
+    inline std::deque<double> get_tick_volume() const
     {
-        std::vector<double> result;
-        for (const auto &row: data_) result.push_back(row.get()->get_tick_volume());
+        std::deque<double> result;
+        for (const auto &row: data_) result.emplace_back(row.get()->get_tick_volume());
         return result;
     }
 

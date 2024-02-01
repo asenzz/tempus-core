@@ -58,42 +58,29 @@ G_kernel_from_distances_symm(double *__restrict K, const double *__restrict dist
     const auto col_ix = g_thr_ix / m;
     if (g_thr_ix >= mm || row_ix <= col_ix) return;
     K[m * row_ix + col_ix] = K[g_thr_ix] = 1. - dist[g_thr_ix] / divisor;
-/*
-    if (g_thr_ix >= mm) return;
-    const auto grid_size = k_block_size * gridDim.x;
-    printf("cu_recombine_parameters: Begin %u, %u, %u.\n", thr_ix, g_thr_ix, grid_size);
-    for (auto i = g_thr_ix; i < mm; i += grid_size)
-        if ((i < mm) && ((i % m) > (i / m)))
-            K[m * (i % m) + i / m] = K[i] = 1. - dist[i] / divisor;
-*/
 }
 
 
 template<unsigned k_block_size> __global__ void
-G_kernel_from_distances(double *__restrict K, const double *__restrict Z, const size_t mm, const double divisor)
+G_kernel_from_distances(double *__restrict K, const double *__restrict Z, const size_t mn, const double divisor)
 {
     const auto g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
-    if (g_thr_ix >= mm) return;
+    if (g_thr_ix >= mn) return;
     K[g_thr_ix] = 1. - Z[g_thr_ix] / divisor;
-    /*
-    const auto grid_size = k_block_size * gridDim.x;
-    for (auto i = g_thr_ix; i < mm; i += grid_size)
-        K[i] = 1. - Z[i] / divisor;
-    */
 }
 
 
-void kernel_from_distances(double *K, const double *Z, const size_t m, const double gamma)
+void kernel_from_distances(double *K, const double *Z, const size_t m, const size_t n, const double gamma)
 {
     double *d_K, *d_Z;
-    const size_t mm = m * m;
-    const size_t mat_size = mm * sizeof(double);
+    const size_t mn = m * n;
+    const size_t mat_size = mn * sizeof(double);
     common::gpu_context const ctx;
     cu_errchk(cudaSetDevice(ctx.phy_id()));
     cu_errchk(cudaMalloc(&d_K, mat_size));
     cu_errchk(cudaMalloc(&d_Z, mat_size));
     cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
-    G_kernel_from_distances<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, 2. * gamma * gamma);
+    G_kernel_from_distances<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mn)>>>(d_K, d_Z, mn, 2. * gamma * gamma);
     cu_errchk(cudaMemcpy(K, d_K, mat_size, cudaMemcpyDeviceToHost));
     cu_errchk(cudaFree(d_K));
     cu_errchk(cudaFree(d_Z));
@@ -157,25 +144,19 @@ std::tuple<cusolverDnHandle_t, double *, double *, double *, int *, int *>
 init_cusolver(const size_t gpu_phy_id, const size_t m, const size_t n)
 {
     cusolverDnHandle_t cusolverH;
-    cusolverDnCreate(&cusolverH);
     cublasHandle_t cublasH;
-    cublas_safe_call(cublasCreate(&cublasH));
-
     int lwork;
-    double *d_Ainput;
-    double *d_B;
-    int *d_Ipiv;
-    int *d_devInfo;
-    double *d_work;
+    double *d_Ainput, *d_B, *d_work;
+    int *d_Ipiv, *d_devInfo;
+
+    cusolver_safe_call(cusolverDnCreate(&cusolverH));
+    cublas_safe_call(cublasCreate(&cublasH));
     cu_errchk(cudaMalloc((void **) &d_Ainput, m * m * sizeof(double)));
     cublas_safe_call(cusolverDnDgetrf_bufferSize(cusolverH, m, m, d_Ainput, m /* lda */, &lwork));
     cu_errchk(cudaMalloc((void **) &d_work, sizeof(double) * lwork));
     cu_errchk(cudaMalloc((void **) &d_B, m * n * sizeof(double)));
     cu_errchk(cudaMalloc((void **) &d_Ipiv, m * sizeof(int)));
     cu_errchk(cudaMalloc((void **) &d_devInfo, sizeof(int)));
-    if (!cusolverH || !cublasH || !d_Ainput || !d_B || !d_Ipiv || !d_devInfo || !d_work)
-        LOG4_THROW("Failed allocating one of the following: cusolverH " << cusolverH << ", cublasH " << cublasH << ", d_Ainput " << d_Ainput << ", d_B " <<
-                                                                        d_B << ", d_work " << d_work << ", d_Ipiv " << d_Ipiv << ", d_devInfo " << d_devInfo);
 
     return {cusolverH, d_Ainput, d_B, d_work, d_Ipiv, d_devInfo};
 }

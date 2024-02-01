@@ -2,6 +2,8 @@
 #include <model/User.hpp>
 #include <model/InputQueue.hpp>
 
+using namespace svr;
+
 TEST_F(DaoTestFixture, IQSavePerfTests)
 {
     using namespace std::chrono;
@@ -21,8 +23,8 @@ TEST_F(DaoTestFixture, IQSavePerfTests)
 
     for(size_t j = 0UL; j < m; ++j)
     {
-        InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
-            "SomeInputQueue", "SomeInputQueue", user1->get_name(), "SomeInputQueue", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "l_ft"} );
+        datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+            "SomeInputQueue", "SomeInputQueue", user1->get_name(), "SomeInputQueue", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "l_ft"} );
 
         bpt::ptime nw = bpt::second_clock::local_time();
 
@@ -32,7 +34,7 @@ TEST_F(DaoTestFixture, IQSavePerfTests)
         {
             tm = nw + bpt::minutes(i);
 
-            DataRow_ptr row = DataRow_ptr(new svr::datamodel::DataRow(tm));
+            svr::datamodel::DataRow_ptr row = svr::datamodel::DataRow_ptr(new svr::datamodel::DataRow(tm));
             row->set_values({0, 1, 2});
 
             iq->get_data().push_back(row);

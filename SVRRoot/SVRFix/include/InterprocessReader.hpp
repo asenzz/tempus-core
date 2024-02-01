@@ -18,8 +18,8 @@ public:
     bid_ask_spread_container read_new(bpt::ptime const & last_time);
 
 private:
-    class Impl;
-    Impl & pImpl;
+    struct Impl;
+    Impl &pImpl;
 };
 
 

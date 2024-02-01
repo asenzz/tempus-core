@@ -15,7 +15,7 @@ bigint PgAutotuneTaskDAO::get_next_id()
     return data_source.query_for_type<bigint>(AbstractDAO::get_sql("get_next_id"));
 }
 
-bool PgAutotuneTaskDAO::exists(bigint id)
+bool PgAutotuneTaskDAO::exists(const bigint id)
 {
     return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"),
                                            id) == 1;
@@ -81,7 +81,7 @@ int PgAutotuneTaskDAO::remove(const AutotuneTask_ptr &autotuneTask)
     return data_source.update(AbstractDAO::get_sql("remove"), autotuneTask->get_id());
 }
 
-AutotuneTask_ptr PgAutotuneTaskDAO::get_by_id(bigint id)
+AutotuneTask_ptr PgAutotuneTaskDAO::get_by_id(const bigint id)
 {
     AutotuneTaskRowMapper rowMapper;
     return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), id);

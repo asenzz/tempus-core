@@ -25,7 +25,7 @@ public:
 
     int save(PredictionTask_ptr& predictionTask);
 
-    PredictionTask_ptr get_by_id(bigint id);
+    PredictionTask_ptr get_by_id(const bigint id);
 };
 
 } /* namespace business */

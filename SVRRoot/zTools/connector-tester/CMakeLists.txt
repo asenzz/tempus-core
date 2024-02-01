@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(connector-tester)
     
 link_directories(${GTEST_ROOT}/lib)

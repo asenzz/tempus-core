@@ -8,44 +8,32 @@
 #define DURMS(T1, T2) size_t(std::abs(bpt::time_duration(T1 - T2).total_milliseconds()))
 
 
-static const auto comp_lb = [](const DataRow_ptr &el, const bpt::ptime &tt) -> bool {
+namespace svr {
+
+static const auto comp_lb = [](const datamodel::DataRow_ptr &el, const bpt::ptime &tt) -> bool {
     return el->get_value_time() < tt;
 };
 
 
-svr::datamodel::DataRow::container::const_iterator
-lower_bound(const svr::datamodel::DataRow::container &c, const bpt::ptime &t)
+datamodel::DataRow::container::const_iterator
+lower_bound(const datamodel::DataRow::container &c, const bpt::ptime &t)
 {
     return std::lower_bound(c.begin(), c.end(), t, comp_lb);
 }
 
 
-svr::datamodel::DataRow::container::iterator
-lower_bound(svr::datamodel::DataRow::container &c, const bpt::ptime &t)
+datamodel::DataRow::container::iterator
+lower_bound(datamodel::DataRow::container &c, const bpt::ptime &t)
 {
     return std::lower_bound(c.begin(), c.end(), t, comp_lb);
 }
 
 
-static const auto comp_ub = [](const bpt::ptime &tt, const DataRow_ptr &el){
+static const auto comp_ub = [](const bpt::ptime &tt, const datamodel::DataRow_ptr &el) {
     return tt < el->get_value_time();
 };
 
-svr::datamodel::DataRow::container::const_iterator
-upper_bound(const svr::datamodel::DataRow::container &c, const bpt::ptime &t)
-{
-    return std::upper_bound(c.begin(), c.end(), t, comp_ub);
-}
-
-
-svr::datamodel::DataRow::container::iterator
-upper_bound(svr::datamodel::DataRow::container &c, const bpt::ptime &t)
-{
-    return std::upper_bound(c.begin(), c.end(), t, comp_ub);
-}
-
-
-svr::datamodel::DataRow::container::iterator find(svr::datamodel::DataRow::container &data, const bpt::ptime &value_time)
+datamodel::DataRow::container::iterator find(datamodel::DataRow::container &data, const bpt::ptime &value_time)
 {
     auto res = lower_bound(data, value_time);
     if (res == data.end()) return res;
@@ -54,7 +42,7 @@ svr::datamodel::DataRow::container::iterator find(svr::datamodel::DataRow::conta
 }
 
 
-svr::datamodel::DataRow::container::const_iterator find(const svr::datamodel::DataRow::container &data, const bpt::ptime &value_time)
+datamodel::DataRow::container::const_iterator find(const datamodel::DataRow::container &data, const bpt::ptime &value_time)
 {
     auto res = lower_bound(data, value_time);
     if (res == data.end()) return res;
@@ -63,9 +51,9 @@ svr::datamodel::DataRow::container::const_iterator find(const svr::datamodel::Da
 }
 
 
-svr::datamodel::DataRow::container::iterator
+datamodel::DataRow::container::iterator
 find_nearest(
-        svr::datamodel::DataRow::container &data,
+        datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time)
 {
     auto iter = lower_bound(data, time);
@@ -75,9 +63,9 @@ find_nearest(
 }
 
 
-svr::datamodel::DataRow::container::const_iterator
+datamodel::DataRow::container::const_iterator
 find_nearest(
-        const svr::datamodel::DataRow::container &data,
+        const datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time)
 {
     auto iter = lower_bound(data, time);
@@ -86,9 +74,9 @@ find_nearest(
     return iter;
 }
 
-svr::datamodel::DataRow::container::const_iterator
+datamodel::DataRow::container::const_iterator
 find_nearest(
-        const svr::datamodel::DataRow::container &data,
+        const datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time,
         bool &check)
 {
@@ -104,119 +92,141 @@ find_nearest(
 }
 
 
-svr::datamodel::DataRow::container::iterator
+datamodel::DataRow::container::iterator
 find_nearest(
-        svr::datamodel::DataRow::container &data,
+        datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time,
         const boost::posix_time::time_duration &max_gap,
         const size_t lag_count)
 {
     auto iter = find_nearest(data, time);
     if (DURMS(iter->get()->get_value_time(), time) > size_t(max_gap.total_milliseconds()))
-        THROW_EX_FS(svr::common::insufficient_data,
-                  "Difference between " << time << " and " << iter->get()->get_value_time() << " is greater than max gap time " << max_gap <<
-                  ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+        THROW_EX_FS(common::insufficient_data, "Difference between " << time << " and " << iter->get()->get_value_time()
+                                                                     << " is greater than max gap time "
+                                                                     << max_gap <<
+                                                                     ", data available is from "
+                                                                     << data.begin()->get()->get_value_time()
+                                                                     << " until "
+                                                                     << data.rbegin()->get()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
     auto dist = std::distance(data.begin(), iter);
     if (dist < decltype(dist)(lag_count))
-        THROW_EX_FS(svr::common::insufficient_data,
-                  "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                  ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
-    return iter;
-}
-
-
-svr::datamodel::DataRow::container::const_iterator
-find_nearest(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count)
-{
-    auto iter = find_nearest(data, time);
-    if (iter->get()->get_value_time() - time > max_gap)
-        THROW_EX_FS(svr::common::insufficient_data,
-                  "Difference between " << time << " and " << iter->get()->get_value_time() << " is greater than max gap time " << max_gap <<
-                  ", data available is from " << data.front()->get_value_time() << " until " << data.back()->get_value_time());
-    if (lag_count == std::numeric_limits<size_t>::max()) return iter;
-    auto dist = std::distance(data.begin(), iter);
-    if (dist < decltype(dist)(lag_count))
-        THROW_EX_FS(svr::common::insufficient_data,
-                        "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                        ", data available is from " << data.front()->get_value_time() << " until " << data.back()->get_value_time());
-    return iter;
-}
-
-
-svr::datamodel::DataRow::container::const_iterator
-find_nearest_after(
-        const svr::datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count)
-{
-    auto iter = lower_bound(data, time);
-    if (iter->get()->get_value_time() - time > max_gap)
-        THROW_EX_FS(svr::common::insufficient_data,
-                    "Difference between " << time << " and " << iter->get()->get_value_time() << " is greater than max gap time " << max_gap <<
-                                          ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
-    if (lag_count == std::numeric_limits<size_t>::max()) return iter;
-    auto dist = std::distance(data.begin(), iter);
-    if (dist < decltype(dist)(lag_count))
-        THROW_EX_FS(svr::common::insufficient_data,
+        THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                                               ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+                                               ", data available is from " << data.begin()->get()->get_value_time() << " until "
+                                               << data.rbegin()->get()->get_value_time());
     return iter;
 }
 
 
-svr::datamodel::DataRow::container::const_iterator
+datamodel::DataRow::container::const_iterator
+find_nearest(
+        const datamodel::DataRow::container &data,
+        const boost::posix_time::ptime &time,
+        const boost::posix_time::time_duration &max_gap,
+        const size_t lag_count)
+{
+    auto iter = find_nearest(data, time);
+    if (iter->get()->get_value_time() - time > max_gap)
+        THROW_EX_FS(common::insufficient_data,
+                    "Difference between " << time << " and " << iter->get()->get_value_time()
+                                          << " is greater than max gap time " << max_gap <<
+                                          ", data available is from " << data.front()->get_value_time() << " until "
+                                          << data.back()->get_value_time());
+    if (lag_count == std::numeric_limits<size_t>::max()) return iter;
+    auto dist = std::distance(data.begin(), iter);
+    if (dist < decltype(dist)(lag_count))
+        THROW_EX_FS(common::insufficient_data,
+                    "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
+                                               ", data available is from " << data.front()->get_value_time() << " until "
+                                               << data.back()->get_value_time());
+    return iter;
+}
+
+
+datamodel::DataRow::container::const_iterator
+find_nearest_after(
+        const datamodel::DataRow::container &data,
+        const boost::posix_time::ptime &time,
+        const boost::posix_time::time_duration &max_gap,
+        const size_t lag_count)
+{
+    auto iter = lower_bound(data, time);
+    if (iter->get()->get_value_time() - time > max_gap)
+        THROW_EX_FS(common::insufficient_data,
+                    "Difference between " << time << " and " << iter->get()->get_value_time()
+                                          << " is greater than max gap time " << max_gap <<
+                                          ", data available is from " << data.begin()->get()->get_value_time()
+                                          << " until " << data.rbegin()->get()->get_value_time());
+    if (lag_count == std::numeric_limits<size_t>::max()) return iter;
+    auto dist = std::distance(data.begin(), iter);
+    if (dist < decltype(dist)(lag_count))
+        THROW_EX_FS(common::insufficient_data,
+                    "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
+                                               ", data available is from " << data.begin()->get()->get_value_time() << " until "
+                                               << data.rbegin()->get()->get_value_time());
+    return iter;
+}
+
+
+datamodel::DataRow::container::const_iterator
 find_nearest_before(
-        const svr::datamodel::DataRow::container &data,
+        const datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time,
         const boost::posix_time::time_duration &max_gap,
         const size_t lag_count)
 {
     auto iter = lower_bound(data, time);
     if (iter == data.begin())
-        THROW_EX_FS(svr::common::insufficient_data,
-                "No value before or at " << time << ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+        THROW_EX_FS(common::insufficient_data,
+                    "No value before or at " << time << ", data available is from " << data.begin()->get()->get_value_time() << " until "
+                                             << data.rbegin()->get()->get_value_time());
 
     --iter;
     if (DURMS(iter->get()->get_value_time(), time) > size_t(max_gap.total_milliseconds()))
-        THROW_EX_FS(svr::common::insufficient_data,
-                "Difference between " << time << " and " << iter->get()->get_value_time() << " is greater than max gap time " << max_gap <<
-                ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+        THROW_EX_FS(common::insufficient_data,
+                    "Difference between " << time << " and "
+                                          << iter->get()->get_value_time()
+                                          << " is greater than max gap time "
+                                          << max_gap <<
+                                          ", data available is from "
+                                          << data.begin()->get()->get_value_time()
+                                          << " until "
+                                          << data.rbegin()->get()->get_value_time());
 
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
 
     off_t dist = std::distance(data.begin(), iter);
     if (dist < off_t(lag_count))
-        THROW_EX_FS(svr::common::insufficient_data,
-                "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+        THROW_EX_FS(common::insufficient_data,
+                    "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
+                                               ", data available is from " << data.begin()->get()->get_value_time() << " until "
+                                               << data.rbegin()->get()->get_value_time());
 
     return iter;
 }
 
 
-svr::datamodel::DataRow::container::iterator
+datamodel::DataRow::container::iterator
 find_nearest_before(
-        svr::datamodel::DataRow::container &data,
+        datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time,
         const size_t lag_count)
 {
     auto iter = lower_bound(data, time);
     if (iter == data.begin())
-        THROW_EX_FS(svr::common::insufficient_data,
-                "No value before or at " << time << ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+        THROW_EX_FS(common::insufficient_data,
+                    "No value before or at " << time << ", data available is from " << data.begin()->get()->get_value_time() << " until "
+                                             << data.rbegin()->get()->get_value_time());
     --iter;
 
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
 
     off_t dist = std::distance(data.begin(), iter);
     if (dist < off_t(lag_count))
-        THROW_EX_FS(svr::common::insufficient_data, "Distance from beginning " << dist << " is less than needed lag count " << lag_count << ", data available is from " << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+        THROW_EX_FS(common::insufficient_data,
+                    "Distance from beginning " << dist << " is less than needed lag count " << lag_count << ", data available is from "
+                                               << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
 
     return iter;
 }
@@ -228,7 +238,7 @@ lower_bound(const data_row_container &data, const data_row_container::const_iter
     return std::lower_bound(hint_start, data.end(), key, comp_lb);
 }
 
-
+// TODO Unify the functions below using templates and macros
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
 {
@@ -236,12 +246,47 @@ lower_bound_back(const data_row_container &data, const data_row_container::const
         LOG4_ERROR("Data is empty!");
         return data.end();
     }
-    return std::lower_bound(data.begin(), hint_end, time_key, comp_lb);
+    data_row_container::const_iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
+    while (row_iter != data.begin() && row_iter->get()->get_value_time() > time_key) --row_iter;
+    if (row_iter->get()->get_value_time() < time_key) {
+        if (row_iter == data.end()) {
+            LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
+        } else {
+            do { ++row_iter; }
+            while (row_iter != data.end() && row_iter->get()->get_value_time() < time_key);
+        }
+    }
+    return row_iter;
 }
 
+data_row_container::iterator
+lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
+{
+    if (data.empty()) {
+        LOG4_ERROR("Data is empty!");
+        return data.end();
+    }
+    data_row_container::iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
+    while (row_iter != data.begin() and row_iter->get()->get_value_time() > time_key) --row_iter;
+    if (row_iter->get()->get_value_time() < time_key) {
+        if (row_iter == data.end()) {
+            LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
+        } else {
+            do { ++row_iter; }
+            while (row_iter != data.end() && row_iter->get()->get_value_time() < time_key);
+        }
+    }
+    return row_iter;
+}
 
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const bpt::ptime &time_key)
+{
+    return lower_bound_back(data, data.end(), time_key);
+}
+
+data_row_container::iterator
+lower_bound_back(data_row_container &data, const bpt::ptime &time_key)
 {
     return lower_bound_back(data, data.end(), time_key);
 }
@@ -254,9 +299,11 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
         LOG4_ERROR("Data is empty!");
         return data.end();
     }
-    data_row_container::const_iterator row_iter = std::prev(hint_end);
+    data_row_container::const_iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
     while (row_iter != data.begin() and row_iter->get()->get_value_time() >= time_key) --row_iter;
-    if (row_iter->get()->get_value_time() > time_key) LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
+    if (row_iter->get()->get_value_time() > time_key)
+        LOG4_ERROR(
+                "Couldn't find equal or before to " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
     return row_iter;
 }
 
@@ -279,15 +326,83 @@ lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
     }
     --found;
     if (found->get()->get_value_time() > time_key)
-        LOG4_ERROR("Couldn't find " << time_key << " lower bound or before, nearest found is " << found->get()->get_value_time());
+        LOG4_ERROR(
+                "Couldn't find " << time_key << " lower bound or before, nearest found is " << found->get()->get_value_time());
     return found;
+}
+
+
+data_row_container::iterator
+upper_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
+{
+    if (data.empty()) {
+        LOG4_ERROR("Data is empty!");
+        return data.end();
+    }
+    data_row_container::iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
+    while (row_iter != data.begin() and row_iter->get()->get_value_time() > time_key) --row_iter;
+    if (row_iter->get()->get_value_time() <= time_key) {
+        if (row_iter == data.end()) {
+            LOG4_ERROR("Couldn't find later then " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
+        } else {
+            do { ++row_iter; }
+            while (row_iter != data.end() && row_iter->get()->get_value_time() <= time_key);
+        }
+    }
+    return row_iter;
+}
+
+data_row_container::const_iterator
+upper_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
+{
+    if (data.empty()) {
+        LOG4_ERROR("Data is empty!");
+        return data.end();
+    }
+    data_row_container::const_iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
+    while (row_iter != data.begin() and row_iter->get()->get_value_time() > time_key) --row_iter;
+    if (row_iter->get()->get_value_time() <= time_key) {
+        if (row_iter == data.end()) {
+            LOG4_ERROR("Couldn't find later then " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
+        } else {
+            do { ++row_iter; }
+            while (row_iter != data.end() && row_iter->get()->get_value_time() <= time_key);
+        }
+    }
+    return row_iter;
+}
+
+data_row_container::iterator
+upper_bound_back(data_row_container &data, const bpt::ptime &time_key)
+{
+    return upper_bound_back(data, data.end(), time_key);
+}
+
+data_row_container::const_iterator
+upper_bound_back(const data_row_container &data, const bpt::ptime &time_key)
+{
+    return upper_bound_back(data, data.end(), time_key);
+}
+
+
+datamodel::DataRow::container::const_iterator
+upper_bound(const datamodel::DataRow::container &c, const bpt::ptime &t)
+{
+    return std::upper_bound(c.begin(), c.end(), t, comp_ub);
+}
+
+
+datamodel::DataRow::container::iterator
+upper_bound(datamodel::DataRow::container &c, const bpt::ptime &t)
+{
+    return std::upper_bound(c.begin(), c.end(), t, comp_ub);
 }
 
 
 bool
 generate_labels(
-        const svr::datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
-        const svr::datamodel::DataRow::container::const_iterator &it_end,
+        const datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
+        const datamodel::DataRow::container::const_iterator &it_end,
         const bpt::ptime &start_time,
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
@@ -296,7 +411,7 @@ generate_labels(
 {
     const size_t outlen = labels_row.size();
     labels_row.fill(0);
-    svr::datamodel::DataRow::container::const_iterator valit = start_iter;
+    datamodel::DataRow::container::const_iterator valit = start_iter;
     const size_t inlen = (end_time - start_time).total_seconds() / hf_resolution.total_seconds();
     arma::rowvec ct_prices(outlen, arma::fill::zeros);
     bpt::ptime time_iter = start_time;
@@ -330,8 +445,8 @@ generate_labels(
 
 double
 calc_twap(
-        const svr::datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
-        const svr::datamodel::DataRow::container::const_iterator &it_end,
+        const datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
+        const datamodel::DataRow::container::const_iterator &it_end,
         const bpt::ptime &start_time,
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
@@ -344,7 +459,7 @@ calc_twap(
 
 
 bpt::ptime // Returns last inserted row value time // TODO Add phases
-svr::datamodel::DataRow::insert_rows(
+datamodel::DataRow::insert_rows(
         data_row_container &rows_container,
         const arma::mat &data,
         const bpt::ptime &start_time,
@@ -352,7 +467,8 @@ svr::datamodel::DataRow::insert_rows(
 {
     LOG4_DEBUG("Inserting data " << arma::size(data) << " starting time " << start_time);
     if (!rows_container.empty() and data.n_cols != rows_container.begin()->get()->get_values().size())
-        LOG4_WARN("data.n_cols " << data.n_cols << " != rows_container.begin()->second->get_values().size() " << rows_container.begin()->get()->get_values().size());
+        LOG4_WARN(
+                "data.n_cols " << data.n_cols << " != rows_container.begin()->second->get_values().size() " << rows_container.begin()->get()->get_values().size());
     auto ins_it = lower_bound(rows_container, start_time);
     if (ins_it != rows_container.end()) rows_container.erase(ins_it, rows_container.end());
 
@@ -385,9 +501,10 @@ svr::datamodel::DataRow::insert_rows(
     return start_time + resolution * (data.n_rows - 1);
 }
 
-svr::datamodel::DataRow::container::const_iterator
+
+[[maybe_unused]] datamodel::DataRow::container::const_iterator static
 find(
-        const svr::datamodel::DataRow::container &data,
+        const datamodel::DataRow::container &data,
         const boost::posix_time::ptime &row_time,
         const boost::posix_time::time_duration &deviation)
 {
@@ -396,4 +513,6 @@ find(
     if (std::prev(it_row)->get()->get_value_time() - row_time > it_row->get()->get_value_time() - row_time) std::advance(it_row, -1);
     if (it_row->get()->get_value_time() - row_time > deviation) return data.end();
     return it_row;
+}
+
 }

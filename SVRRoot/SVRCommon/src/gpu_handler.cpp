@@ -63,7 +63,7 @@ void gpu_handler::gpu_sem_leave()
 }
 
 
-gpu_handler &gpu_handler::get_instance()
+gpu_handler &gpu_handler::get()
 {
     static gpu_handler handler;
     return handler;
@@ -169,16 +169,16 @@ const viennacl::ocl::device &gpu_handler::device(const size_t idx) const
 // GPU Context, set the worker as blocked during its lifetime.
 gpu_context::gpu_context()
 {
-    gpu_handler::get_instance().gpu_sem_enter();
-    context_id_ = gpu_handler::get_instance().get_free_gpu();
+    gpu_handler::get().gpu_sem_enter();
+    context_id_ = gpu_handler::get().get_free_gpu();
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
 
 gpu_context::~gpu_context()
 {
-    gpu_handler::get_instance().return_gpu(context_id_);
-    gpu_handler::get_instance().gpu_sem_leave();
+    gpu_handler::get().return_gpu(context_id_);
+    gpu_handler::get().gpu_sem_leave();
     LOG4_TRACE("Exit ctx " << context_id_);
 }
 

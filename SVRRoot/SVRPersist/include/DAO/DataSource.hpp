@@ -114,7 +114,7 @@ T DataSource::query_for_type(const std::string &sql, Args &&... args)
 }
 
 
-template<typename M, typename T, template<typename, typename> typename Container, class ...Args>  Container<T, std::allocator<T>>
+template<typename M, typename T, template<typename, typename> typename Container, typename ...Args>  Container<T, std::allocator<T>>
 DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::string &sql, Args &&... args)
 {
     using namespace pqxx;
@@ -133,7 +133,8 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
         const size_t cursor_size = result_size / num_cursors;
         LOG4_DEBUG("Getting up to " << result_size << " rows for " << query);
         res.resize(result_size);
-        __tbb_pfor(cur_ix, 0, num_cursors,
+#pragma omp parallel for
+        for (size_t cur_ix = 0; cur_ix < num_cursors; ++cur_ix) {
             const size_t start_ix = cur_ix * cursor_size;
             if (start_ix >= result_size) continue;
             const auto end_ix = cur_ix == num_cursors - 1 ? result_size : start_ix + cursor_size;
@@ -144,15 +145,16 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
                 LOG4_ERROR("Cursor didn't return expected size " << end_ix - start_ix << ", got " << l_result.size() << " instead.");
             else
                 LOG4_DEBUG("Got " << l_result.size() << " rows for cursor " << cur_ix << " range " << start_ix << " - " << end_ix);
-            __tbb_pfor(r, 0, size_t(l_result.size()),
+#pragma omp parallel for
+            for (size_t r = 0; r < size_t(l_result.size()); ++r) {
                 const auto this_res = row_mapper.mapRow(l_result[r]);
                 res[r + start_ix] = this_res;
                 if (!res[r + start_ix] || !this_res)
                     LOG4_ERROR("Result for " << (r + start_ix) << " is empty, row string " << l_result[r][0]);
-            )
+            }
             l_cursor.close();
             l_trx.reset();
-        )
+        }
         cursor.close();
         trx.reset();
         return res;

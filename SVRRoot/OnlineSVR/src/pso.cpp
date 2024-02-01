@@ -560,7 +560,7 @@ pso_solve(
                 // initialize velocity
                 vel[i][d] = (a - b) / 2.;
             }
-            LOG4_DEBUG("Positions from Sobol " << svr::common::deep_to_string<double>(sobol_numbers));
+            LOG4_DEBUG("Positions from Sobol " << svr::common::to_string<double>(sobol_numbers));
         }
     }
     if (step == 0) {

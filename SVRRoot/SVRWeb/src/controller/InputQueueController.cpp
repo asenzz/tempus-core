@@ -37,7 +37,7 @@ void InputQueueController::show(std::string queueName)
     content::InputQueue model;
     model.pageTitle = "InputQueue Details";
 
-    InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(queueName);
+    datamodel::InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(queueName);
 
     if (queue.get() != nullptr && queue->get_owner_user_name() == DEFAULT_WEB_USER /* session()["user"] */ ) {
         model.object = queue;
@@ -131,13 +131,13 @@ InputQueueView::InputQueueView(cppcms::service &srv) : cppcms::rpc::json_rpc_ser
 
 void InputQueueView::showInputQueue(std::string queueTableName)
 {
-    return_result(AppContext::get_instance().input_queue_service.get_queue_data(queueTableName, bpt::min_date_time,
-                                                                                bpt::max_date_time, 0));
+    return_result(AppContext::get_instance().input_queue_service.load(queueTableName, bpt::min_date_time,
+                                                                      bpt::max_date_time, 0));
 }
 
 void InputQueueView::getValueColumnsModel(std::string queueTableName)
 {
-    InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(queueTableName);
+    datamodel::InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(queueTableName);
     if (queue.get() == nullptr) {
         return_error("Queue was not found!");
         return;
@@ -157,7 +157,7 @@ void InputQueueView::getValueColumnsModel(std::string queueTableName)
 
 namespace {
 svr::dao::OptionalTimeRange
-parseTimeRange(session_interface &session, cppcms::json::object obj, string &logicalName, time_duration &resolution, InputQueue_ptr &queue)
+parseTimeRange(session_interface &session, cppcms::json::object obj, string &logicalName, time_duration &resolution, datamodel::InputQueue_ptr &queue)
 {
     logicalName = obj["symbol"].str();
     std::transform(logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
@@ -182,7 +182,7 @@ void InputQueueView::getNextTimeRangeToBeSent(cppcms::json::object obj)
 {
     string logicalName;
     time_duration resolution;
-    InputQueue_ptr queue;
+    datamodel::InputQueue_ptr queue;
 
     session()["user"] = DEFAULT_WEB_USER;
     auto timeRange = parseTimeRange(session(), obj, logicalName, resolution, queue);
@@ -191,7 +191,7 @@ void InputQueueView::getNextTimeRangeToBeSent(cppcms::json::object obj)
         return;
     }
 
-    DataRow_ptr newestRow = AppContext::get_instance().input_queue_service.find_newest_record(queue);
+    datamodel::DataRow_ptr newestRow = AppContext::get_instance().input_queue_service.find_newest_record(queue);
     if (newestRow) timeRange->first = newestRow->get_value_time();
     if (timeRange->first >= timeRange->second) {
         return_error("No data needed for queue " + queue->get_table_name() + " already have up to " + to_simple_string(timeRange->first));
@@ -214,7 +214,7 @@ void InputQueueView::reconcileHistoricalData(cppcms::json::object obj)
 
     string logicalName;
     time_duration resolution;
-    InputQueue_ptr queue;
+    datamodel::InputQueue_ptr queue;
     session()["user"] = DEFAULT_WEB_USER;
     auto timeRange = parseTimeRange(session(), obj, logicalName, resolution, queue);
     if (!timeRange) {
@@ -249,12 +249,12 @@ parsed_header parseMT4DataHeader(const std::string &rawHeader,
     reject_empty(rawHeader, "Header must not be empty!");
     reject_empty(delimiter, "Delimiter must not be empty!");
 
-    vector<string> headers = split(rawHeader, delimiter);
+    auto headers = split(rawHeader, delimiter);
 
     parsed_header headersWithType;
 
     for (string &headerItem : headers) {
-        vector<string> tok = split(headerItem, ":");
+        auto tok = split(headerItem, ":");
         if (tok.size() != 2) {
             throw invalid_argument("Cannot get parameter name and type from " + headerItem);
         }
@@ -269,14 +269,14 @@ struct header_to_column_mapper
 {
     struct builder
     {
-        virtual double build(std::vector<std::string> const &) const = 0;
+        virtual double build(std::deque<std::string> const &) const = 0;
 
         virtual ~builder() = default;
     };
 
     struct defaulter : builder
     {
-        double build(std::vector<std::string> const &) const
+        double build(std::deque<std::string> const &) const
         {
             return std::numeric_limits<double>::quiet_NaN();
         }
@@ -289,7 +289,7 @@ struct header_to_column_mapper
         reader(size_t header_idx) : header_idx(header_idx)
         {}
 
-        double build(std::vector<std::string> const &string_values) const
+        double build(std::deque<std::string> const &string_values) const
         {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
@@ -298,7 +298,7 @@ struct header_to_column_mapper
         }
     };
 
-    std::vector<builder const *> builders;
+    std::deque<builder const *> builders;
 
     header_to_column_mapper(parsed_header const &ph, db_columns const &dbc)
             : builders(dbc.size(), nullptr)
@@ -324,7 +324,7 @@ struct header_to_column_mapper
             delete bldr;
     }
 
-    std::vector<double> map_web_to_db(std::vector<std::string> const &string_values)
+    std::vector<double> map_web_to_db(const std::deque<std::string> &string_values)
     {
         std::vector<double> result;
 
@@ -345,7 +345,7 @@ void InputQueueView::historyData(cppcms::json::object data)
     std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::tolower);
     time_duration resolution = seconds(boost::lexical_cast<long>(data["period"].str()));
     LOG4_DEBUG("Resolution " << resolution);// << " data " << data);
-    InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
+    datamodel::InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
     if (!queue) {
         const std::string err_msg = "Queue for " + session()["user"] + " " + symbol + " " + bpt::to_simple_string(resolution) + " not found!";
         LOG4_ERROR(err_msg);
@@ -384,7 +384,7 @@ void InputQueueView::historyData(cppcms::json::object data)
         LOG4_DEBUG("Loaded history queue " << barFrom << " " << barTo);
         for (size_t barIx = barFrom; barIx < barTo; ++barIx) {
             const string row = data[to_string(barIx)].str();
-            const vector<string> rowFields = split(row, delimiter);
+            const auto rowFields = split(row, delimiter);
 
             if (rowFields.size() != headersWithType.size()) {
                 const std::string errMsg = "Invalid data, the row " + row + " doesn't match the supplied header: " + header;
@@ -393,7 +393,7 @@ void InputQueueView::historyData(cppcms::json::object data)
                 return;
             }
 
-            const DataRow_ptr queueRow = make_shared<DataRow>( // TODO Implement time zone parsing
+            const datamodel::DataRow_ptr queueRow = make_shared<DataRow>( // TODO Implement time zone parsing
                         time_from_string(rowFields[timeIndex]), bpt::second_clock::local_time(),
                         boost::lexical_cast<double>(rowFields[volumeIndex]), mapper.map_web_to_db(rowFields)
                     );
@@ -430,8 +430,8 @@ void InputQueueView::sendTick(cppcms::json::object obj)
         return_error("No Input Queue has been setup for symbol " + logicalName + " and resolution " + to_simple_string(resolution));
         return;
     }
-    InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(session()["user"], logicalName, resolution);
-    const std::vector<std::string> db_columns = AppContext::get_instance().input_queue_service.get_db_table_column_names(queue);
+    datamodel::InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(session()["user"], logicalName, resolution);
+    const auto db_columns = AppContext::get_instance().input_queue_service.get_db_table_column_names(queue);
     std::vector<double> values;
     values.reserve(db_columns.size());
     for (const auto &column: db_columns) {
@@ -447,13 +447,13 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     }
 
     bpt::ptime valueTime = bpt::time_from_string(obj["time"].str());
-    DataRow_ptr row = std::make_shared<DataRow>(valueTime, second_clock::local_time(), tick_volume, values);
+    datamodel::DataRow_ptr row = std::make_shared<DataRow>(valueTime, second_clock::local_time(), tick_volume, values);
 
     LOG4_DEBUG(row->to_string());
 
     json::value response;
     AppContext::get_instance().input_queue_service.add_row(queue, row);
-    if ((AppContext::get_instance().input_queue_service.save_data(queue) > 0)) {
+    if ((AppContext::get_instance().input_queue_service.save(queue) > 0)) {
         response["message"] = "OK";
         response["savedRows"] = queue->get_data().size();
         return_result(response);

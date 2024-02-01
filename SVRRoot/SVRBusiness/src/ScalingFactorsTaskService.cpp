@@ -24,7 +24,7 @@ int ScalingFactorsTaskService::save(ScalingFactorsTask_ptr &scalingFactorsTask)
     return scalingFactorsTaskDao.save(scalingFactorsTask);
 }
 
-ScalingFactorsTask_ptr ScalingFactorsTaskService::get_by_id(bigint id)
+ScalingFactorsTask_ptr ScalingFactorsTaskService::get_by_id(const bigint id)
 {
     return scalingFactorsTaskDao.get_by_id(id);
 }

@@ -110,16 +110,16 @@ void CLI::set_ensemble_svr_parameters(
         bool is_parameters_set,
         const std::vector<std::string> &aux_table_names,
         const size_t max_transform_level,
-        Dataset_ptr &p_dataset,
+        datamodel::Dataset_ptr &p_dataset,
         const std::vector<std::vector<size_t>> &svr_kernel_types_range)
 {
-    std::map<std::pair<std::string, std::string>, std::vector<SVRParameters_ptr>> ensembles_svr_parameters;
+    std::map<std::pair<std::string, std::string>, std::vector<datamodel::SVRParameters_ptr>> ensembles_svr_parameters;
     std::vector<std::string> table_names = aux_table_names;
     table_names.push_back(queue_table_name);
     auto &ap = PROPS;
     for (const std::string &table_name: table_names) {
         for (const std::string &column_name: p_dataset->get_input_queue()->get_value_columns()) {
-            vector<SVRParameters_ptr> vec_svr_parameters;
+            vector<datamodel::SVRParameters_ptr> vec_svr_parameters;
             for (size_t idx_model = 0; idx_model <= max_transform_level; ++idx_model)
                 if (is_parameters_set) {
                     std::string idx_model_str = std::to_string(idx_model);
@@ -168,7 +168,7 @@ void CLI::set_ensemble_svr_parameters(
 }
 
 bool CLI::set_dataset_params(
-        const po::variables_map &vm, Dataset_ptr &p_dataset)
+        const po::variables_map &vm, datamodel::Dataset_ptr &p_dataset)
 {
     bool is_parameters_set;
     size_t max_transform_level;
@@ -183,7 +183,7 @@ bool CLI::set_dataset_params(
     string queue_table_name = vm.count("table-name") ? vm["table-name"].as<string>() : string();
     std::vector<std::string> aux_table_names;
     if (!queue_table_name.empty()) {
-        InputQueue_ptr p_input_queue = AppContext::get_instance().input_queue_service.get_queue_metadata(
+        datamodel::InputQueue_ptr p_input_queue = AppContext::get_instance().input_queue_service.get_queue_metadata(
                 queue_table_name);
         p_dataset->set_input_queue(p_input_queue);
     }
@@ -657,7 +657,7 @@ bool CLI::parse(int argc, char **argv)
 
     if (vm_.count("delete-dataset-id")) {
         bigint id{vm_["delete-dataset-id"].as<bigint>()};
-        Dataset_ptr p_dataset = AppContext::get_instance().dataset_service.get(id);
+        datamodel::Dataset_ptr p_dataset = AppContext::get_instance().dataset_service.get(id);
         AppContext::get_instance().dataset_service.remove(p_dataset);
         return false;
     }
@@ -746,7 +746,7 @@ bool CLI::parse(int argc, char **argv)
         LOG4_INFO("Dataset with id: " << dataset_id << " doesn't exist. Setting defaults.");
         p_dataset_ = std::make_shared<Dataset>(
                 Dataset(0, "Auto created", "svrwave", "q_svrwave_eurusd_60", {}, Priority::Normal, "Auto created", 1, "fk4",
-                        boost::posix_time::time_duration(seconds(1)), std::vector<Ensemble_ptr>(), false));
+                        boost::posix_time::time_duration(seconds(1)), std::vector<datamodel::Ensemble_ptr>(), false));
     }
 
     return set_dataset_params(vm_, p_dataset_);
@@ -827,7 +827,7 @@ void CLI::process_autotune_task()
     auto validation_window = validation_parameters_.validation_range_;
     for (size_t ix_pos = 0; ix_pos < validation_parameters_.validation_slide_count_; ++ix_pos) {
 
-        std::vector<DeconQueue_ptr> predicted_decon_queues;
+        std::vector<datamodel::DeconQueue_ptr> predicted_decon_queues;
         auto column_mse = std::numeric_limits<double>::quiet_NaN();
         LOG4_DEBUG("Training and predicting for final score.");
 
@@ -845,7 +845,7 @@ void CLI::process_autotune_task()
         LOG4_DEBUG("Predicted decons done, extracting reference values.");
         LOG4_DEBUG("Validation windows " << validation_window);
         auto p_validation_input_queue = p_dataset_->get_input_queue()->clone_empty();
-        p_validation_input_queue->set_data(AppContext::get_instance().input_queue_service.get_queue_data(
+        p_validation_input_queue->set_data(AppContext::get_instance().input_queue_service.load(
                 p_dataset_->get_input_queue()->get_table_name(),
                 predicted_decon_queues[0]->get_data().begin()->get()->get_value_time(),
                 predicted_decon_queues[0]->get_data().rbegin()->get()->get_value_time()));
@@ -931,7 +931,7 @@ void CLI::process_prediction_task()
                                      p_prediction_task_->get_end_train_time()),
                     prediction_period);
     auto p_orig_input_queue = p_dataset_->get_input_queue()->clone_empty();
-    p_orig_input_queue->set_data(AppContext::get_instance().input_queue_service.get_queue_data(
+    p_orig_input_queue->set_data(AppContext::get_instance().input_queue_service.load(
             p_dataset_->get_input_queue()->get_table_name(),
             p_prediction_task_->get_start_prediction_time(),
             p_prediction_task_->get_end_prediction_time()));
@@ -988,7 +988,7 @@ void CLI::process_scaling_factors_task()
 
 namespace
 {
-std::vector<double> to_vector(const SVRParameters_ptr &svr_parameters)
+std::vector<double> to_vector(const datamodel::SVRParameters_ptr &svr_parameters)
 {
     std::vector<double> result;
 
@@ -1034,12 +1034,12 @@ void CLI::process_decrement_task()
                                           date_time_string_to_seconds(p_decrement_task_->get_decrement_step())) {
                 vp.training_range_ = bpt::time_period(local_start_train_time, p_decrement_task_->get_end_train_time());
                 /* TODO Implement getting of data from database */
-                DeconQueue_ptr p_decon_queue;
-                std::vector<DeconQueue_ptr> aux_decon_queues;
-                const SVRParameters_ptr p_svr_parameters = p_dataset_->get_ensemble_svr_parameters()[key][level];
+                datamodel::DeconQueue_ptr p_decon_queue;
+                std::vector<datamodel::DeconQueue_ptr> aux_decon_queues;
+                const datamodel::SVRParameters_ptr p_param_set = p_dataset_->get_ensemble_svr_parameters()[key][level];
 
                 const double current_mse = loss(
-                        to_vector(p_svr_parameters),
+                        to_vector(p_param_set),
                         p_dataset_,
                         vp,
                         score_metric_e::RMSE,

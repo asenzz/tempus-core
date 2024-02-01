@@ -30,9 +30,9 @@ int TsIQScalingFactorDAO::remove(const IQScalingFactor_ptr& scalingTask)
 }
 
 
-std::vector<IQScalingFactor_ptr> TsIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
+std::deque<IQScalingFactor_ptr> TsIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
 {
-    return ts_call<std::vector<IQScalingFactor_ptr>>(&IQScalingFactorDAO::find_all_by_dataset_id, dataset_id);
+    return ts_call<std::deque<IQScalingFactor_ptr>>(&IQScalingFactorDAO::find_all_by_dataset_id, dataset_id);
 }
 
 

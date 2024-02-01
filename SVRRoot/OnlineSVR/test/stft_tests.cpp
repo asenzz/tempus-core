@@ -127,7 +127,7 @@ void test_back_transform(std::string && transform)
     for(size_t i = 0; i < reconstructed.size(); ++i)
     {
         double val; f >> val;
-        if(!svr::common::equal_to(reconstructed[i], val))
+        if(!svr::common::equals(reconstructed[i], val))
             std::cout << "Not equal: " << reconstructed[i] << ", " << val << " at: " << i << '\n';
         ASSERT_FP_EQ(reconstructed[i], val) << " at: " << i;
     }

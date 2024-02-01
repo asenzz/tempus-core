@@ -12,7 +12,7 @@ bigint TsAutotuneTaskDAO::get_next_id()
 }
 
 
-bool TsAutotuneTaskDAO::exists(bigint id)
+bool TsAutotuneTaskDAO::exists(const bigint id)
 {
     return ts_call<bool>(&AutotuneTaskDAO::exists, id);
 }
@@ -30,7 +30,7 @@ int TsAutotuneTaskDAO::remove(const AutotuneTask_ptr& autotuneTask)
 }
 
 
-AutotuneTask_ptr TsAutotuneTaskDAO::get_by_id(bigint id)
+AutotuneTask_ptr TsAutotuneTaskDAO::get_by_id(const bigint id)
 {
     return ts_call<AutotuneTask_ptr>(&AutotuneTaskDAO::get_by_id, id);
 }

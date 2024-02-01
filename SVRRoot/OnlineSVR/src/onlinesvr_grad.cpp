@@ -12,13 +12,13 @@ OnlineMIMOSVR::batch_train(
 {
     LOG4_DEBUG(
             "Training on X " << common::present(*p_xtrain) << ", Y " << common::present(*p_ytrain) << ", update R matrix " << update_r_matrix << ", pre-calculated kernel matrices " << (kernel_matrices ? kernel_matrices->size() : 0) <<
-                             ", pseudo online " << pseudo_online << ", parameters " << p_svr_parameters->to_string());
+                             ", pseudo online " << pseudo_online << ", parameters " << p_param_set->to_string());
     const std::scoped_lock learn_lock(learn_mx);
 
 #ifdef MANIFOLD_TEST_DEBUG
-    if (!p_svr_parameters->get_decon_level() || p_svr_parameters->get_decon_level() == 28 || p_svr_parameters->get_decon_level() == 2) {
-        p_xtrain->save(common::formatter() << "/tmp/xtrain_" << p_svr_parameters->get_decon_level() << ".csv", arma::csv_ascii);
-        p_ytrain->save(common::formatter() << "/tmp/ytrain_" << p_svr_parameters->get_decon_level() << ".csv", arma::csv_ascii);
+    if (!p_param_set->get_decon_level() || p_param_set->get_decon_level() == 28 || p_param_set->get_decon_level() == 2) {
+        p_xtrain->save(common::formatter() << "/tmp/xtrain_" << p_param_set->get_decon_level() << ".csv", arma::csv_ascii);
+        p_ytrain->save(common::formatter() << "/tmp/ytrain_" << p_param_set->get_decon_level() << ".csv", arma::csv_ascii);
 #ifdef EXPERIMENTAL_FEATURES
         matplotlibcpp::plot(std::vector<double>{(double *)p_ytrain->memptr(), (double *)p_ytrain->memptr() + p_ytrain->n_elem}, {{"label", "Level 0 labels"}});
         matplotlibcpp::legend();
@@ -41,23 +41,23 @@ OnlineMIMOSVR::batch_train(
 
     reset_model(pseudo_online);
 
-    if (!p_svr_parameters->get_svr_kernel_param()) {
+    if (!p_param_set->get_svr_kernel_param()) {
         if (kernel_matrices) {
             LOG4_ERROR("Kernel matrices provided will be cleared because SVR kernel parameters are not initialized!");
             kernel_matrices->clear();
         }
-//        PROFILE_EXEC_TIME(tune_kernel_params(p_svr_parameters, *p_xtrain, *p_ytrain), "Tune kernel params for model " << p_svr_parameters->get_decon_level());
+//        PROFILE_EXEC_TIME(tune_kernel_params(p_param_set, *p_xtrain, *p_ytrain), "Tune kernel params for model " << p_param_set->get_decon_level());
     }
-    if (p_xtrain->n_rows > p_svr_parameters->get_svr_decremental_distance())
-        p_xtrain->shed_rows(0, p_xtrain->n_rows - p_svr_parameters->get_svr_decremental_distance() - 1);
-    if (p_ytrain->n_rows > p_svr_parameters->get_svr_decremental_distance())
-        p_ytrain->shed_rows(0, p_ytrain->n_rows - p_svr_parameters->get_svr_decremental_distance() - 1);
+    if (p_xtrain->n_rows > p_param_set->get_svr_decremental_distance())
+        p_xtrain->shed_rows(0, p_xtrain->n_rows - p_param_set->get_svr_decremental_distance() - 1);
+    if (p_ytrain->n_rows > p_param_set->get_svr_decremental_distance())
+        p_ytrain->shed_rows(0, p_ytrain->n_rows - p_param_set->get_svr_decremental_distance() - 1);
 
     if (not pseudo_online) {
         p_features = p_xtrain;
         p_labels = p_ytrain;
         if (p_xtrain->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty() || !p_xtrain->n_cols || !p_ytrain->n_cols)
-            LOG4_THROW("Invalid data dimensions X train " << arma::size(*p_xtrain) << ", Y train " << arma::size(*p_ytrain) << ", level " << p_svr_parameters->get_decon_level());
+            LOG4_THROW("Invalid data dimensions X train " << arma::size(*p_xtrain) << ", Y train " << arma::size(*p_ytrain) << ", level " << p_param_set->get_decon_level());
     }
 
     if (!p_manifold) init_manifold(*p_xtrain, *p_ytrain);
@@ -81,13 +81,13 @@ OnlineMIMOSVR::batch_train(
     }
 
     if (p_kernel_matrices->size() != ixs.size()) p_kernel_matrices->resize(ixs.size());
-    if (auto_gu.size() != ixs.size()) auto_gu.resize(ixs.size(), 1. / (2. * p_svr_parameters->get_svr_C()));
+    if (auto_gu.size() != ixs.size()) auto_gu.resize(ixs.size(), 1. / (2. * p_param_set->get_svr_C()));
 
 #pragma omp parallel for num_threads(ixs.size()) schedule(static, 1)
     for (uint32_t i = 0; i < ixs.size(); ++i) {
         do_over_train_zero_epsilon(*p_features, *p_labels, i);
-        if (!p_svr_parameters[i].get_grad_level()) continue;
-        auto p_grad_parameters = std::make_shared<SVRParameters>(p_svr_parameters[i]);
+        if (!p_param_set[i].get_grad_level()) continue;
+        auto p_grad_parameters = std::make_shared<SVRParameters>(p_param_set[i]);
         p_grad_parameters->decrement_gradient()
 
         const arma::uvec other_ixs = get_other_ixs(i);
@@ -109,7 +109,7 @@ OnlineMIMOSVR::batch_train(
 arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::ptime &pred_time)
 {
     if (ixs.size() == 1 && main_components.size() == 1)
-        return init_predict_kernel_matrix(*p_svr_parameters, *p_features, x_predict, p_manifold, pred_time) * main_components.begin()->second.total_weights;
+        return init_predict_kernel_matrix(*p_param_set, *p_features, x_predict, p_manifold, pred_time) * main_components.begin()->second.total_weights;
 
     std::vector<size_t> min_ixs;
     std::vector<size_t> max_ixs;
@@ -127,17 +127,17 @@ arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::pti
         for (size_t i = 0; i < ixs.size(); ++i) {
             if (best_ixs.find(i) == best_ixs.end()) continue;
             arma::mat multiplicated(arma::size(p_labels->rows(ixs[i])));
-            if (p_svr_parameters->is_manifold()) {
-                const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_svr_parameters, x_predict, p_features->rows(ixs[i]), p_manifold, pred_time);
+            if (p_param_set->is_manifold()) {
+                const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_param_set, x_predict, p_features->rows(ixs[i]), p_manifold, pred_time);
                 multiplicated = arma::mean(chunk_kernel_matrix + p_labels->rows(ixs[i]));
             } else {
-                const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_svr_parameters, p_features->rows(ixs[i]), x_predict, p_manifold, pred_time);
+                const arma::mat chunk_kernel_matrix = init_predict_kernel_matrix(*p_param_set, p_features->rows(ixs[i]), x_predict, p_manifold, pred_time);
 #pragma omp parallel for
                 for (size_t col_ix = 0; col_ix < kv.second.chunk_weights[i].n_cols; ++col_ix)
                     multiplicated.col(col_ix) = kv.second.epsilon + chunk_kernel_matrix * kv.second.chunk_weights[i].col(col_ix);
             }
 #pragma omp critical(add_chunk_predicted)
-            chunk_predicted.emplace_back(multiplicated + (grad_svr[i] ? grad_svr[i]->chunk_predict(x_predict, predict_time) : 0);
+            chunk_predicted.emplace_back(multiplicated + (grad_svr[i] ? grad_svr[i]->predict(x_predict, predict_time) : 0);
         }
 
         arma::mat sum_steps = arma::zeros(x_predict.n_rows, chunk_predicted.size());
@@ -148,40 +148,29 @@ arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::pti
             sum_steps.col(i) = arma::colvec(arma::sum(chunk_predicted[i], 1)); // TODO Is this basically transpose?
         )
         std::vector<unsigned> outlier_result = outlier_test(sum_steps, OUTLIER_ALPHA, min_ixs, max_ixs);
-        arma::mat accumulated = accumulate_chunks(outlier_result, min_ixs, max_ixs, chunk_predicted, *p_svr_parameters);
-#ifdef OUTLIER_TEST
-        if (accumulated.max() > SANE_PREDICT or accumulated.min() < -SANE_PREDICT or accumulated.has_nan() or accumulated.has_inf()) {
-            LOG4_ERROR("Accumulated predict abs values are bigger than " << SANE_PREDICT << " max " << accumulated.max() << " min " << accumulated.min());
-/*
-            static size_t call_ct = 0;
-            //svr::common::armd::serialize_mat(svr::common::formatter() << "/mnt/faststore/problematic_xtest_level_" << p_svr_parameters.get_decon_level() << "_" << p_svr_parameters.get_input_queue_column_name() << "_call_" << call_ct << ".txt", x_predict, "Xtest");
-            ++call_ct;
-            //log_model(*this, chunk_kernel_matrixes);
-*/
-            THROW_EX_FS(svr::common::bad_prediction, "Predicted values don't look sane. " << accumulated << " parameters " << p_svr_parameters->to_string());
-        }
-#endif
+        arma::mat accumulated = accumulate_chunks(outlier_result, min_ixs, max_ixs, chunk_predicted, *p_param_set);
+
 //#pragma omp critical(predict_add)
         predicted.emplace_back(accumulated);
     }
     arma::mat pred = (std::accumulate(predicted.begin(), predicted.end(), start_mat) / double(predicted.size())) * labels_scaling_factor;
 #ifdef DEBUG_PREDICTIONS // Debug log to file
-    const auto prev_pred_find = prev_pred.find({p_svr_parameters.get_decon_level(), p_svr_parameters.get_input_queue_column_name()});
+    const auto prev_pred_find = prev_pred.find({p_param_set.get_decon_level(), p_param_set.get_input_queue_column_name()});
     if (prev_pred_find != prev_pred.end()) {
-        LOG4_DEBUG("Level " << p_svr_parameters.get_decon_level() << " column " << p_svr_parameters.get_input_queue_column_name() << " prev_pred_find " << prev_pred_find->second(0, 0) << " pred " << pred(0, 0) << " prev label " << p_labels->at(p_labels->n_rows - 1, 0) << " prev prev label " << p_labels->at(p_labels->n_rows - 2, 0));
+        LOG4_DEBUG("Level " << p_param_set.get_decon_level() << " column " << p_param_set.get_input_queue_column_name() << " prev_pred_find " << prev_pred_find->second(0, 0) << " pred " << pred(0, 0) << " prev label " << p_labels->at(p_labels->n_rows - 1, 0) << " prev prev label " << p_labels->at(p_labels->n_rows - 2, 0));
         const auto diff1 = p_labels->at(p_labels->n_rows - 1, 0) - prev_pred_find->second(0, 0);
         const auto diff2 = p_labels->at(p_labels->n_rows - 1, 0) - p_labels->at(p_labels->n_rows - 2, 0);
-        LOG4_DEBUG("Level " << p_svr_parameters.get_decon_level() << " column " << p_svr_parameters.get_input_queue_column_name() << " prev label - prev_pred_find " << diff1 << " prev label - prev prev label" << diff2 << " prev pred is wronger " << (std::abs(diff1) > std::abs(diff2)));
+        LOG4_DEBUG("Level " << p_param_set.get_decon_level() << " column " << p_param_set.get_input_queue_column_name() << " prev label - prev_pred_find " << diff1 << " prev label - prev prev label" << diff2 << " prev pred is wronger " << (std::abs(diff1) > std::abs(diff2)));
     }
-    prev_pred[{p_svr_parameters.get_decon_level(), p_svr_parameters.get_input_queue_column_name()}] = pred;
-    if (get_svr_parameters().get_decon_level() == C_logged_level) {
+    prev_pred[{p_param_set.get_decon_level(), p_param_set.get_input_queue_column_name()}] = pred;
+    if (get_param_set().get_decon_level() == C_logged_level) {
         static size_t call_ct = 0;
         std::stringstream ss_file_name;
-        ss_file_name << "/mnt/faststore/level_" << p_svr_parameters.get_decon_level() << "_" << p_svr_parameters.get_input_queue_column_name() << "_chunk_predict_output_" << call_ct++ << ".csv";
+        ss_file_name << "/mnt/faststore/level_" << p_param_set.get_decon_level() << "_" << p_param_set.get_input_queue_column_name() << "_chunk_predict_output_" << call_ct++ << ".csv";
         pred.save(ss_file_name.str(), arma::csv_ascii);
     }
 #endif
-    LOG4_TRACE("Level " << p_svr_parameters->get_decon_level() << " predicted " << pred);
+    LOG4_TRACE("Level " << p_param_set->get_decon_level() << " predicted " << pred);
     return pred;
 }
 

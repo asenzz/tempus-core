@@ -31,8 +31,8 @@ double nm_wrapper3(const std::vector<double> &params, const arma::mat &learning_
     SVRParameters model_svr_parameters(
             0, 0, "", "", 0, 0, 0, params[0], 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, static_cast<const kernel_type_e>(7),
             DEFAULT_LAG);
-    PROFILE_EXEC_TIME(cur_variance_diff = svr::OnlineSVR::produce_kernel_matrices_variance(model_svr_parameters, learning_data, reference_data, false),
-                      "produce_kernel_matrices_variance");
+    // PROFILE_EXEC_TIME(cur_variance_diff = svr::OnlineSVR::produce_kernel_matrices_variance(model_svr_parameters, learning_data, reference_data, false),
+//                      "produce_kernel_matrices_variance");
     return cur_variance_diff;
 #endif
 }

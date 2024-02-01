@@ -74,18 +74,6 @@ ifftshift(const arma::cx_mat &input)
     return output;
 }
 
-void mirror_tail(std::vector<double> &input, const size_t last_data_ct)
-{
-    LOG4_WARN("Adding mirrored tail " << input.size() - last_data_ct << " to data input size " << input.size() << ", last data count " << last_data_ct);
-    if (input.size() < last_data_ct) LOG4_THROW("input.size() " << input.size() << " < last_data_ct " << last_data_ct);
-    auto input_data = input.data();
-    const auto input_size = input.size();
-// #pragma omp target data map(tofrom: input_data[0:input_size]) map(to: last_data_ct, input_size)
-// #pragma omp parallel for default(none) shared(input_data, input_size, last_data_ct)
-    for (size_t i = 0; i < input_size - last_data_ct; ++i)
-        input_data[input_size - last_data_ct - 1 - i] = input_data[input_size + ( (i / last_data_ct) % 2 ? -1 - i % last_data_ct : -last_data_ct + i % last_data_ct)];
-}
-
 
 arma::mat fmod(const arma::mat &a, const double n)
 {
@@ -136,7 +124,7 @@ std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, co
         else
             LOG4_TRACE("Skipping level " << std::to_string(level_index) << " adjacent ratio " << ratio << " for level " << level);
     }
-    LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << deep_to_string(level_indexes));
+    LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << to_string(level_indexes));
     return level_indexes;
 }
 
@@ -367,23 +355,9 @@ void serialize_vec(const std::string &filename, const arma::uvec &input, const s
 }
 
 
-void copy_from_arma_to_vcl(const arma::mat &input, viennacl::matrix<double> &output)
-{
-    output.resize(input.n_rows, input.n_cols, false);
-    __tbb_pfor_i(0, input.n_rows,
-                 for (size_t j = 0; j < input.n_cols; ++j) output(i, j) = input(i, j) )
-}
-
-void copy_from_vcl_to_arma(const viennacl::matrix<double> &input, arma::mat &output)
-{
-    output.set_size(input.size1(), input.size2());
-    __omp_tpfor_i(size_t, 0, input.size1(), for (size_t j = 0; j < input.size2(); ++j) output(i, j) = input(i, j) )
-}
-
 arma::uvec set_to_arma_uvec(const std::set<size_t> &input)
 {
-    std::vector<size_t> support_vector_indexes(input.begin(), input.end());
-    return arma::conv_to<arma::uvec>::from(support_vector_indexes);
+    return arma::conv_to<arma::uvec>::from(std::vector<size_t>{input.begin(), input.end()});
 }
 
 arma::uvec complement_vectors(const std::set<size_t> &svi, const arma::uvec &new_ixs)
@@ -508,6 +482,16 @@ double calc_quant_offset_mul(const double main_to_aux_period_ratio, const double
 #endif
 }
 
+double get_quantization_max(const double main_to_aux_period_ratio)
+{
+#ifdef QUANTIZE_FIXED
+    return QUANTIZE_FIXED;
+#elif defined(QUANTIZE_FIXED_MAX) && defined(QUANTIZE_FIXED_MIN)
+    return QUANTIZE_FIXED_MAX;
+#else
+    return (1. + (QUANTIZE_FEAT_MUL * main_to_aux_period_ratio - 1.) * 1.);
+#endif
+}
 
 } //namespace common
 } //namespace svr

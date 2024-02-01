@@ -50,15 +50,15 @@ namespace {
 int main(int argc, char** argv)
 {
 //    mtrace();
-    signal(SIGINT, signal_handler);
-    signal(SIGABRT, signal_handler);
-    signal(SIGTERM, signal_handler);
+    (void) signal(SIGINT, signal_handler);
+    (void) signal(SIGABRT, signal_handler);
+    (void) signal(SIGTERM, signal_handler);
     omp_set_nested(true);
-    omp_set_max_active_levels(std::thread::hardware_concurrency());
+    omp_set_max_active_levels((int) std::thread::hardware_concurrency());
     std::shared_ptr<DaemonFacade> p_daemon_facade;
     int rc = 0;
     try {
-        std::string config_path = parse(argc, argv);
+        const std::string config_path = parse(argc, argv);
         p_daemon_facade = std::make_shared<DaemonFacade>(config_path);
         p_daemon_facade->start_loop();
     } catch (const std::invalid_argument &e) {

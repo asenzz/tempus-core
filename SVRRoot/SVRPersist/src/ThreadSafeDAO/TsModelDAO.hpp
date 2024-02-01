@@ -9,13 +9,13 @@ namespace svr { namespace dao {
 THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsModelDAO, ModelDAO)
 
     virtual bigint get_next_id();
-    virtual bool exists(bigint model_id);
-    virtual int save(const Model_ptr& model);
-    virtual int remove(const Model_ptr& model);
-    virtual int remove_by_ensemble_id(bigint ensemble_id);
-    virtual Model_ptr get_by_id(bigint model_id);
-    virtual Model_ptr get_by_ensemble_id_and_decon_level(bigint ensemble_id, size_t decon_level);
-    virtual std::vector<Model_ptr> get_all_ensemble_models(bigint ensemble_id);
+    virtual bool exists(const bigint model_id);
+    virtual int save(const datamodel::Model_ptr& model);
+    virtual int remove(const datamodel::Model_ptr& model);
+    virtual int remove_by_ensemble_id(const bigint ensemble_id);
+    virtual datamodel::Model_ptr get_by_id(const bigint model_id);
+    virtual datamodel::Model_ptr get_by_ensemble_id_and_decon_level(const bigint ensemble_id, size_t decon_level);
+    virtual std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id);
 };
 
 }

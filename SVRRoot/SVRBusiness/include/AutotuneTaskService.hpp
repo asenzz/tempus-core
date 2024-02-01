@@ -26,10 +26,10 @@ public:
     int save(AutotuneTask_ptr& AutotuneTask);
     int remove(const AutotuneTask_ptr& AutotuneTask);
 
-    AutotuneTask_ptr get_by_id(bigint id);
-    std::vector<AutotuneTask_ptr> find_all_by_dataset_id(bigint dataset_id);
+    AutotuneTask_ptr get_by_id(const bigint id);
+    std::vector<AutotuneTask_ptr> find_all_by_dataset_id(const bigint dataset_id);
 
-//    void set_parameters_to_dataset(AutotuneTask_ptr autotune_task, Dataset_ptr dataset);
+//    void set_parameters_to_dataset(AutotuneTask_ptr autotune_task, datamodel::Dataset_ptr dataset);
 
 };
 

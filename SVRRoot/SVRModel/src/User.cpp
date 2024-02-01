@@ -13,7 +13,7 @@ bool User::operator==(User const &other) const
            && role == other.role;
 }
 
-User::User(bigint user_id,
+User::User(const bigint user_id,
            const std::string &username,
            const std::string &email,
            const std::string &password,

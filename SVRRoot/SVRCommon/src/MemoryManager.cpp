@@ -70,7 +70,7 @@ bool memory_manager::threads_available()
     LOG4_TRACE("Number of cores " << num_of_cores << ", number of threads " << num_of_threads);
     if (num_of_cores < 1 || num_of_threads < 1)
         throw std::runtime_error("Number of cores or number of threads cannot be zero!");
-    return num_of_threads <= (svr::common::gpu_handler::get_instance().get_max_running_gpu_threads_number() +
+    return num_of_threads <= (svr::common::gpu_handler::get().get_max_running_gpu_threads_number() +
                               num_of_cores * THREADS_CORES_MULTIPLIER);
 }
 

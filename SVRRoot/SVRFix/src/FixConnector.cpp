@@ -29,9 +29,9 @@ void FixConnector::run()
 
     while(!done)
     {
-        std::vector<InputQueue_ptr> iqs = APP.input_queue_service.get_all_queues_with_sign(true);
+        std::vector<datamodel::InputQueue_ptr> iqs = APP.input_queue_service.get_all_queues_with_sign(true);
 
-        for(InputQueue_ptr iq : iqs)
+        for(datamodel::InputQueue_ptr iq : iqs)
             subscriptions->create_unless_exists( iq );
 
         for(auto i = 0U; i < 100; ++i)

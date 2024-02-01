@@ -1,4 +1,4 @@
-//!!!!!STILL NOT FUNCTIONAL DON"T USE IT !!!!!\\
+//!!!!!STILL NOT FUNCTIONAL DON"T USE IT !!!!!
 
 #pragma OPENCL EXTENSION cl_khr_fp64: enable
 

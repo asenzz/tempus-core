@@ -5,7 +5,6 @@
 #include <iterator>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <utility>
 #include <algorithm>
 #include <vector>
@@ -14,6 +13,7 @@
 #include "EnsembleService.hpp"
 #include "common/Logging.hpp"
 #include "common/parallelism.hpp"
+#include "common/compatibility.hpp"
 #include "common/defines.h"
 #include "onlinesvr.hpp"
 #include "util/ValidationUtils.hpp"
@@ -37,112 +37,45 @@ namespace svr {
 namespace business {
 
 
-namespace {
-
-
-void
-load_dataset(SVRParametersService &svr_parameters_service, EnsembleService &ensemble_service, Dataset_ptr &p_dataset)
+void DatasetService::load(const datamodel::Dataset_ptr &p_dataset)
 {
     if (!p_dataset) LOG4_THROW("Dataset is missing.");
-    const bigint id = p_dataset->get_id();
+
+    APP.input_queue_service.load(p_dataset->get_input_queue());
+    bpt::time_duration aux_res(boost::date_time::not_a_date_time);
+    for (auto &iq: p_dataset->get_aux_input_queues()) {
+        APP.input_queue_service.load(iq);
+        if (aux_res.is_special()) aux_res = iq->get_resolution();
+        else if (aux_res != iq->get_resolution())
+            LOG4_THROW("Auxilliary input queue resolution " << iq->get_resolution() << " does not equal " << aux_res);
+    }
+
+    const auto id = p_dataset->get_id();
     const size_t levct = p_dataset->get_transformation_levels();
     LOG4_DEBUG("Loading dataset with id " << id << " from database, levels count " << levct);
-    p_dataset->set_ensembles(ensemble_service.get_all_by_dataset_id(id));
-    auto dataset_svr_parameters = svr_parameters_service.get_all_by_dataset_id(id);
-    /* TODO Implement loading/saving of models
-      auto dataset_models = model_service.get_all_by_dataset_id(id);
-      dataset.set_models(dataset_models);
-     */
+    p_dataset->set_ensembles(APP.ensemble_service.get_all_by_dataset_id(id));
 
-    for (const auto &p_ensemble: p_dataset->get_ensembles()) {
-        auto it_ensemble_parameters = dataset_svr_parameters.find(p_ensemble->get_key_pair());
-        while (it_ensemble_parameters == dataset_svr_parameters.end()) {
-            auto res = dataset_svr_parameters.emplace(p_ensemble->get_key_pair(), std::vector<SVRParameters_ptr>(levct));
-            if (!res.second) LOG4_THROW("Creating SVR parameter set for " << p_ensemble->to_string() << " failed.");
-            else it_ensemble_parameters = res.first;
-        }
-        if (it_ensemble_parameters->second.size() != levct) {
-            LOG4_WARN("Corrupt number of parameters " << dataset_svr_parameters.size() << " should be " << levct);
-            if (it_ensemble_parameters->second.size() > levct)
-                it_ensemble_parameters->second.erase(std::prev(it_ensemble_parameters->second.end(), it_ensemble_parameters->second.size() - levct), it_ensemble_parameters->second.end());
-            else if (it_ensemble_parameters->second.size() < levct)
-                it_ensemble_parameters->second.resize(levct);
-        }
 #pragma omp parallel for
-        for (size_t level_ix = 0; level_ix < levct; level_ix += 2) {
-            if (level_ix == levct / 2 || it_ensemble_parameters->second[level_ix]) continue;
-            LOG4_DEBUG("Creating default parameters for " << id << ", " << p_ensemble->get_decon_queue()->get_input_queue_table_name() << ", " << p_ensemble->get_decon_queue()->get_input_queue_column_name() << ", " << level_ix);
-            it_ensemble_parameters->second[level_ix] = std::make_shared<SVRParameters>(
-                0, id, p_ensemble->get_decon_queue()->get_input_queue_table_name(), p_ensemble->get_decon_queue()->get_input_queue_column_name(), level_ix, 0, 0);
-        }
-
-        LOG4_DEBUG("Added parameters " << it_ensemble_parameters->second.size() << " for ensemble " << p_ensemble->get_id());
-    }
-    p_dataset->set_ensemble_svr_parameters(dataset_svr_parameters);
+    for (datamodel::Ensemble_ptr &e: p_dataset->get_ensembles())
+        APP.ensemble_service.load(p_dataset, e, true);
 }
 
-}
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wembedded-directive"
-
-bool DatasetService::check_ensembles_svr_parameters(const Dataset_ptr &p_dataset)
+datamodel::Dataset_ptr DatasetService::get(const bigint dataset_id, const bool doload)
 {
-    std::vector<Ensemble_ptr> &ensembles = p_dataset->get_ensembles();
-    return !(ensembles.size() != 0 && p_dataset->get_ensemble_svr_parameters().size() != ensembles.size());
+    datamodel::Dataset_ptr p_dataset = dataset_dao.get_by_id(dataset_id);
+    if (doload) load(p_dataset);
+    return p_dataset;
 }
 
 
-Dataset_ptr DatasetService::get(const bigint dataset_id, const bool load)
-{
-    Dataset_ptr dataset = dataset_dao.get_by_id(dataset_id);
-    if (load) load_dataset(svr_parameters_service, ensemble_service, dataset);
-    return dataset;
-}
-
-
-std::vector<Dataset_ptr> DatasetService::find_all_user_datasets(std::string username)
+std::deque<datamodel::Dataset_ptr> DatasetService::find_all_user_datasets(std::string username)
 {
     return dataset_dao.find_all_user_datasets(username);
 }
 
 
-namespace {
-
-
-bool
-svr_params_equal(std::vector<SVRParameters_ptr> lhs, std::vector<SVRParameters_ptr> rhs)
-{
-    if (lhs.size() != rhs.size())
-        return false;
-
-    for (auto il = lhs.begin(), ir = rhs.begin(); il != lhs.end(); ++il, ++ir)
-        if ((*il).get() != (*ir).get())
-            return false;
-
-    return true;
-}
-
-
-bool
-svr_params_equal(svr::datamodel::ensemble_svr_parameters_t const &lhs, svr::datamodel::ensemble_svr_parameters_t const &rhs)
-{
-    if (lhs.size() != rhs.size()) return false;
-
-    using svrp = svr::datamodel::ensemble_svr_parameters_t;
-    for (svrp::const_iterator i1 = lhs.begin(), i2 = rhs.begin(); i1 != lhs.end(); ++i1, ++i2) {
-        if (i1->first != i2->first)
-            return false;
-        if (!svr_params_equal(i1->second, i2->second))
-            return false;
-    }
-
-    return true;
-}
-
-}
-
-bool DatasetService::save(Dataset_ptr &p_dataset)
+bool DatasetService::save(datamodel::Dataset_ptr &p_dataset)
 {
     if (!p_dataset) {
         LOG4_ERROR("Dataset is null! Aborting.");
@@ -151,24 +84,17 @@ bool DatasetService::save(Dataset_ptr &p_dataset)
 
     dataset_dao.save(p_dataset);
 
-    auto existing_svr_parameters = svr_parameters_service.get_all_by_dataset_id(p_dataset->get_id())
-    , new_svr_parameters = p_dataset->get_ensemble_svr_parameters();
-
-    if (!svr_params_equal(existing_svr_parameters, new_svr_parameters)) {
-        svr_parameters_service.remove_by_dataset(p_dataset->get_id());
-
-        for (auto &pair_vec_svr_parameters: new_svr_parameters)
-            for (auto &svr_parameters: pair_vec_svr_parameters.second)
-                svr_parameters_service.save(svr_parameters);
-    }
+    auto existing_svr_parameters = svr_parameters_service.get_all_by_dataset_id(p_dataset->get_id());
+    svr_parameters_service.remove_by_dataset(p_dataset->get_id());
+#pragma omp parallel for
+    for (const auto &e: p_dataset->get_ensembles())
+        for (const auto &m: e->get_models())
+            for (const auto &p: m->get_param_set())
+                svr_parameters_service.save(p);
 
     // save ensembles
     if (!p_dataset->get_ensembles().empty()) {
         ensemble_service.remove_by_dataset_id(p_dataset->get_id());
-        // check
-        if (!check_ensembles_svr_parameters(p_dataset)) {
-            LOG4_ERROR("SVRParameters in ensembles and in dataset are not equal");
-        }
         if (!p_dataset->get_ensembles().empty()
             && !ensemble_service.save_ensembles(p_dataset->get_ensembles(), true))
             return false;
@@ -177,7 +103,7 @@ bool DatasetService::save(Dataset_ptr &p_dataset)
 }
 
 
-bool DatasetService::exists(Dataset_ptr const &dataset)
+bool DatasetService::exists(datamodel::Dataset_ptr const &dataset)
 {
     reject_nullptr(dataset);
     return dataset_dao.exists(dataset->get_id());
@@ -190,52 +116,49 @@ bool DatasetService::exists(int dataset_id)
 }
 
 
-int DatasetService::remove(Dataset_ptr const &dataset)
+int DatasetService::remove(datamodel::Dataset_ptr const &dataset)
 {
     reject_nullptr(dataset);
     svr_parameters_service.remove_by_dataset(dataset->get_id());
-    for (Ensemble_ptr ensemble: dataset->get_ensembles()) {
-        ensemble_service.remove(ensemble);
-    }
+#pragma omp parallel for
+    for (auto e: dataset->get_ensembles())
+        ensemble_service.remove(e);
     return dataset_dao.remove(dataset);
 }
 
-int DatasetService::remove(const SVRParameters_ptr &svr_parameter)
+int DatasetService::remove(const datamodel::SVRParameters_ptr &svr_parameter)
 {
     return svr_parameters_service.remove(svr_parameter);
 }
 
 
-bool DatasetService::link_user_to_dataset(User_ptr const &user, Dataset_ptr const &dataset)
+bool DatasetService::link_user_to_dataset(User_ptr const &user, datamodel::Dataset_ptr const &dataset)
 {
     return dataset_dao.link_user_to_dataset(user->get_user_name(), dataset);
 }
 
 
-bool DatasetService::unlink_user_from_dataset(User_ptr const &user, Dataset_ptr const &dataset)
+bool DatasetService::unlink_user_from_dataset(User_ptr const &user, datamodel::Dataset_ptr const &dataset)
 {
     return dataset_dao.unlink_user_from_dataset(user->get_user_name(), dataset);
 }
 
-DatasetService::DatasetUsers::DatasetUsers(Dataset_ptr const &dataset, std::vector<User_ptr> &&users)
-        : dataset(dataset), users(std::forward<std::vector<User_ptr>>(users))
+DatasetService::DatasetUsers::DatasetUsers(datamodel::Dataset_ptr const &dataset, std::deque<User_ptr> &&users)
+        : dataset(dataset), users(std::forward<std::deque<User_ptr>>(users))
 {}
 
 namespace {
-bool is_dataset_element_of(const Dataset_ptr &p_dataset, const svr::dao::DatasetDAO::UserDatasetPairs &active_datasets)
+bool is_dataset_element_of(const datamodel::Dataset_ptr &p_dataset, const svr::dao::DatasetDAO::UserDatasetPairs &active_datasets)
 {
-    /* TODO Implement 'is functionally equivalent' Dataset class operator
-     * in order to avoid removing of dataset when only runtime modifiable parts have changed
-     */
     for (auto &dataset_users: active_datasets)
-        if (*p_dataset == *dataset_users.second)
+        if (p_dataset->get_id() == dataset_users.second->get_id())
             return true;
     LOG4_DEBUG("Dataset " << p_dataset->get_id() << " is not element of active datasets.");
     return false;
 }
 }
 
-// TODO Review and optimize
+
 void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs)
 {
     svr::dao::DatasetDAO::UserDatasetPairs active_datasets = dataset_dao.get_active_datasets();
@@ -263,7 +186,7 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
         auto iter = std::find_if(processed_user_dataset_pairs.begin(), processed_user_dataset_pairs.end(),
                                  compare_by_dataset_id);
         if (iter == processed_user_dataset_pairs.end()) {
-            load_dataset(svr_parameters_service, ensemble_service, dataset_pair.second);
+            load(dataset_pair.second);
             processed_user_dataset_pairs.emplace_back(
                     UserDatasetPairs::value_type(
                             dataset_pair.second,
@@ -302,136 +225,97 @@ bool DatasetService::exists(const std::string &user_name, const std::string &dat
 }
 
 
-Dataset_ptr DatasetService::get_user_dataset(const std::string &user_name, const std::string &dataset_name)
+datamodel::Dataset_ptr DatasetService::get_user_dataset(const std::string &user_name, const std::string &dataset_name)
 {
-    Dataset_ptr p_dataset = dataset_dao.get_by_name(user_name, dataset_name);
-    if (p_dataset != nullptr) {
+    datamodel::Dataset_ptr p_dataset = dataset_dao.get_by_name(user_name, dataset_name);
+    if (p_dataset) {
         p_dataset->set_input_queue(AppContext::get_instance().input_queue_service.get_queue_metadata(
                 p_dataset->get_input_queue()->get_table_name()));
-        load_dataset(svr_parameters_service, ensemble_service, p_dataset);
+        load(p_dataset);
     }
     return p_dataset;
 }
 
 
-bool DatasetService::prepare_dataset(Dataset_ptr &p_dataset)
-{
-    LOG4_DEBUG("Processing dataset " << p_dataset->get_id() << " number of ensembles " << p_dataset->get_ensembles().size());
-    if (p_dataset->get_ensembles().empty()) LOG4_THROW("No ensembles for dataset " << p_dataset->get_id());
-
-    svr::business::InputQueueService::prepare_queues(p_dataset);
-
-    return true;
-}
-
-
 bool
-DatasetService::prepare_models(Ensemble_ptr &p_ensemble, std::vector<SVRParameters_ptr> &ensemble_params, const size_t levct)
-{
-    if (p_ensemble->get_models().size() == levct) {
-        LOG4_DEBUG("Models already initialized.");
-        return true;
-    }
-    LOG4_DEBUG("Ensemble " << p_ensemble->get_decon_queue()->get_table_name() << " models are empty. Initializing " << levct << " models with default values.");
-    if (ensemble_params.size() != levct) {
-        LOG4_ERROR("Params size " << ensemble_params.size() << " does not match " << levct);
-        return false;
-    }
-
-    std::vector<Model_ptr> models(levct);
-    __tbb_spfor(levix, 0, levct, 2,
-        if (levix == levct / 2) continue;
-        if (!ensemble_params[levix]) ensemble_params[levix] = std::make_shared<SVRParameters>(
-                0, p_ensemble->get_dataset_id(),
-                p_ensemble->get_decon_queue()->get_input_queue_table_name(),
-                p_ensemble->get_decon_queue()->get_input_queue_column_name(),
-                levix, 0, 0);
-        models[levix] = std::make_shared<Model>(
-             0, p_ensemble->get_id(), levix,
-             get_adjacent_indexes(
-                     levix,
-                     ensemble_params[levix]->get_svr_adjacent_levels_ratio(),
-                     levct),
-             nullptr, bpt::min_date_time, bpt::min_date_time)
-    )
-    p_ensemble->set_models(models);
-    return true;
-}
-
-
-// TODO Optimize
-bool
-DatasetService::prepare_data(
-        Dataset_ptr &p_dataset,
-        Ensemble_ptr &p_ensemble,
-        std::vector<SVRParameters_ptr> &ensemble_params,
-        std::vector<std::vector<matrix_ptr>> &features,
-        std::vector<std::vector<matrix_ptr>> &labels,
-        std::vector<std::vector<bpt::ptime>> &last_row_time,
-        const size_t levct,
-        const size_t ensix)
+DatasetService::prepare_training_data(
+        datamodel::Dataset_ptr &p_dataset,
+        datamodel::Ensemble_ptr &p_ensemble,
+        tbb::concurrent_map<size_t, matrix_ptr> &features,
+        tbb::concurrent_map<size_t, matrix_ptr> &labels,
+        tbb::concurrent_map<size_t, bpt::ptime> &last_row_time)
 {
     LOG4_BEGIN();
 
-    if (p_ensemble->get_aux_decon_queues().size() > 1) LOG4_ERROR("More than one aux decon queue is not supported!");
-    const auto p_decon = p_ensemble->get_decon_queue();
-    const auto p_aux_decon = p_ensemble->get_aux_decon_queue(0);
-#ifdef CACHED_FEATURE_ITER
-    APP.model_service.aux_decon_hint = p_aux_decon->get_data().begin(); // TODO Test! // lower_bound(p_aux_decon->get_data(), p_decon->get_data()[std::max<size_t>(0, p_decon->get_data().size() - p_dataset->get_max_lag_count() - p_dataset->get_max_decrement() - EMO_TUNE_VALIDATION_WINDOW - MANIFOLD_TEST_VALIDATION_WINDOW - DATA_LUFTA)]->get_value_time());
-#endif
-    const auto resolution_factor = double(p_dataset->get_input_queue()->get_resolution().total_microseconds()) / double(p_dataset->get_aux_input_queue(0)->get_resolution().total_microseconds());
-    std::vector<bpt::ptime> label_times;
-    predictions_t tune_predictions(levct);
-    std::vector<std::vector<matrix_ptr>> last_knowns(p_dataset->get_ensembles().size(), std::vector<matrix_ptr>(levct));
+    const auto levct = p_dataset->get_transformation_levels();
     const size_t half_levct = levct / 2;
-    std::vector<double> scale_label(levct), dc_offset(levct);
-#pragma omp parallel for num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number()) schedule(static, 1)
+    const auto p_label_decon = p_ensemble->get_decon_queue();
+    const auto p_label_aux_decon = DeconQueueService::find_decon_queue(
+            p_ensemble->get_aux_decon_queues(), p_ensemble->get_aux_decon_queue()->get_input_queue_table_name(), p_label_decon->get_input_queue_column_name());
+    const auto aux_feats_data = [&p_ensemble](){
+        std::deque<datarow_range> r;
+        for (const auto &dq: p_ensemble->get_aux_decon_queues()) r.emplace_back(dq->get_data());
+        return r;
+    }();
+    const datarow_range aux_label_data(p_label_aux_decon->get_data());
+
+    const auto resolution_factor = double(p_dataset->get_input_queue()->get_resolution().total_microseconds()) / double(p_dataset->get_aux_input_queue()->get_resolution().total_microseconds());
+    std::deque<bpt::ptime> label_times;
+    predictions_t tune_predictions;
+    tbb::concurrent_map<size_t, matrix_ptr> last_knowns;
+    tbb::concurrent_map<size_t, double> scale_label, dc_offset;
+#pragma omp parallel for num_threads(common::gpu_handler::get().get_max_running_gpu_threads_number()) schedule(static, 1)
     for (size_t levix = 0; levix < levct; levix += 2) {
         if (levix == half_levct) continue;
         const auto p_model = p_ensemble->get_model(levix);
-        auto p_params = ensemble_params[levix];
-        features[ensix][levix] = std::make_shared<arma::mat>();
-        labels[ensix][levix] = std::make_shared<arma::mat>();
-        last_knowns[ensix][levix] = std::make_shared<arma::mat>();
+        auto p_head_params = p_model->get_params_ptr();
+        features[levix] = std::make_shared<arma::mat>();
+        labels[levix] = std::make_shared<arma::mat>();
+        last_knowns[levix] = std::make_shared<arma::mat>();
         APP.model_service.get_training_data(
-                *features[ensix][levix], *labels[ensix][levix], *last_knowns[ensix][levix], label_times,
-                {svr::business::EnsembleService::get_start(
-                        p_decon->get_data(),
-                        p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE,
+                *features[levix], *labels[levix], *last_knowns[levix], label_times,
+                {svr::business::EnsembleService::get_start( // Main labels
+                        p_label_decon->get_data(),
+                        p_head_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE,
                         0,
                         p_model->get_last_modeled_value_time(),
                         p_dataset->get_input_queue()->get_resolution()),
-                 p_decon->get_data().end(),
-                 p_decon->get_data()},
-                p_aux_decon->get_data(),
-                p_params->get_lag_count(),
+                 p_label_decon->get_data().end(),
+                 p_label_decon->get_data()},
+                aux_label_data,
+                aux_feats_data,
+                p_head_params->get_lag_count(),
                 p_model->get_learning_levels(),
                 p_dataset->get_max_lookback_time_gap(),
                 levix,
                 resolution_factor,
                 p_model->get_last_modeled_value_time(),
                 p_dataset->get_input_queue()->get_resolution());
-        last_row_time[ensix][levix] = p_decon->get_data().back()->get_value_time();
-        APP.dq_scaling_factor_service.scale(p_dataset, p_aux_decon, p_params, p_model->get_learning_levels(), *features[ensix][levix], *labels[ensix][levix],
-                                            *last_knowns[ensix][levix]);
-        if (!p_params->get_svr_kernel_param()) PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
-                tune_predictions[p_params->get_decon_level()], p_params, *features[ensix][levix], *labels[ensix][levix],
-                *last_knowns[ensix][levix]), "Tune kernel params for model " << p_params->get_decon_level());
-        scale_label[levix] = p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), levix);
-        dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), DC_DQ_SCALING_FACTOR);
+
+        last_row_time[levix] = p_label_decon->get_data().back()->get_value_time();
+        APP.dq_scaling_factor_service.scale(p_dataset, p_ensemble->get_aux_decon_queues(), p_head_params, *features[levix], *labels[levix], *last_knowns[levix]);
+        if (!std::isnormal(p_head_params->get_svr_kernel_param()))
+            PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
+                tune_predictions[p_head_params->get_decon_level()], p_model->get_param_set(), *features[levix], *labels[levix], *last_knowns[levix], p_dataset->get_chunk_size()),
+                              "Tune kernel params for model " << p_head_params->get_decon_level());
+        scale_label[levix] = p_dataset->get_dq_scaling_factor_labels(p_label_aux_decon->get_input_queue_table_name(), p_label_aux_decon->get_input_queue_column_name(), levix);
+        dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_label_aux_decon->get_input_queue_table_name(), p_label_aux_decon->get_input_queue_column_name(), DC_INDEX);
     }
 
-    PROFILE_EXEC_TIME(recombine_params(tune_predictions, ensemble_params, half_levct, scale_label, dc_offset), "Recombine parameters for " << half_levct - 1 << " models.");
+#pragma omp parallel for
+    for (size_t chunk_ix = 0; chunk_ix < tune_predictions.begin()->second.size(); ++chunk_ix)
+        PROFILE_EXEC_TIME(recombine_params(tune_predictions, p_ensemble, levct, scale_label, dc_offset, chunk_ix),
+                          "Recombine parameters for " << half_levct - 1 << " models, chunk " << chunk_ix);
 
 #ifdef TRIM_DATA // TODO Buggy check why needed data is cleared!
-    const auto leftover_len = p_dataset->get_max_lag_count() + p_dataset->get_residuals_count() + 1;
+    const auto leftover_len = p_dataset->get_max_lag_count() + p_dataset->get_residuals_length() + 1;
     const auto leftover_len_aux = leftover_len * resolution_factor;
     if (p_dataset->get_input_queue()->get_data().size() > leftover_len)
         p_dataset->get_input_queue()->get_data().erase(p_dataset->get_input_queue()->get_data().begin(), p_dataset->get_input_queue()->get_data().end() - leftover_len);
-    if (p_decon->get_data().size() > leftover_len)
-        p_decon->get_data().erase(p_decon->get_data().begin(), p_decon->get_data().end() - leftover_len);
+    if (p_label_decon->get_data().size() > leftover_len)
+        p_label_decon->get_data().erase(p_label_decon->get_data().begin(), p_label_decon->get_data().end() - leftover_len);
     p_dataset->get_input_queue()->get_data().shrink_to_fit();
-    p_decon->get_data().shrink_to_fit();
+    p_label_decon->get_data().shrink_to_fit();
 #pragma omp parallel for
     for (auto p_aux_input: p_dataset->get_aux_input_queues()) {
         if (p_aux_input->get_data().size() > leftover_len_aux) {
@@ -458,107 +342,109 @@ DatasetService::prepare_data(
 }
 
 
-void DatasetService::join_features(std::vector<std::vector<matrix_ptr>> &features, const size_t levct, const size_t ens_ct)
+void DatasetService::join_features(tbb::concurrent_map<size_t, tbb::concurrent_map<size_t, matrix_ptr>> &features, const size_t levct, const size_t ensct)
 {
 #pragma omp parallel for
     for (size_t levix = 0; levix < levct; levix += 2) {
         if (levix == levct / 2) continue;
-        for (size_t ensix = 1; ensix < ens_ct; ++ensix) { // Not parallelizable // Features past ensix 0 become invalid
+        for (size_t ensix = 1; ensix < ensct; ++ensix) { // Not parallelizable // Features past ensix 0 become invalid
             features[0][levix]->insert_cols(features[0][levix]->n_cols, *features[ensix][levix]);
             features[ensix][levix]->clear();
         }
     }
 }
 
-void DatasetService::process_dataset(Dataset_ptr &p_dataset)
+size_t DatasetService::to_levix(const size_t modix)
 {
-    if (not prepare_dataset(p_dataset)) return;
+    return (modix >= 16 ? (modix + 1) : modix) * 2;
+}
+
+void DatasetService::process_dataset(datamodel::Dataset_ptr &p_dataset)
+{
+    InputQueueService::prepare_queues(p_dataset);
 
     const auto levct = p_dataset->get_transformation_levels();
 #ifdef NO_ONLINE_LEARN
-    if (p_dataset->get_ensemble(0)->get_models().size() == levct) {
-        for (auto &p_model: p_dataset->get_ensemble(0)->get_models()) {
-            if (!p_model) continue;
-            const auto new_last_modeled_time = p_dataset->get_ensemble()->get_decon_queue()->get_data().back()->get_value_time();
-            if (p_model->get_last_modeled_value_time() >= new_last_modeled_time) continue;
-            p_model->set_last_modeled_value_time(new_last_modeled_time);
-            p_model->set_last_modified(bpt::second_clock::local_time());
+    if (p_dataset->get_initialized()) {
+#pragma omp parallel for
+        for (auto &e: p_dataset->get_ensembles()) {
+#pragma omp parallel for
+            for (auto &m: e->get_models()) {
+                if (!m) continue;
+                const auto new_last_modeled_time = e->get_decon_queue()->get_data().back()->get_value_time();
+                if (m->get_last_modeled_value_time() >= new_last_modeled_time) continue;
+                m->set_last_modeled_value_time(new_last_modeled_time);
+                m->set_last_modified(bpt::second_clock::local_time());
+            }
         }
         return;
     }
 #endif
 
-    const auto ens_ct = p_dataset->get_ensembles().size();
-    std::vector<std::vector<bpt::ptime>> last_row_time(ens_ct);
-    std::vector<std::vector<matrix_ptr>> features(ens_ct), labels(ens_ct);
-    __omp_pfor_i(0, ens_ct, features[i].resize(levct); labels[i].resize(levct); last_row_time[i].resize(levct))
+    const auto ensct = p_dataset->get_ensembles().size();
+    tbb::concurrent_map<size_t, tbb::concurrent_map<size_t, bpt::ptime>> last_row_time;
+    tbb::concurrent_map<size_t, tbb::concurrent_map<size_t, matrix_ptr>> features, labels;
 
     bool train_ret = true;
-    std::mutex mx;
-    __omp_pfor(ensix, 0, ens_ct,
+#pragma omp parallel for
+    for (size_t ensix = 0; ensix < ensct; ++ensix) {
         auto p_ensemble = p_dataset->get_ensemble(ensix);
-        std::vector<SVRParameters_ptr> ensemble_params = p_dataset->get_ensemble_svr_parameters()[p_ensemble->get_key_pair()];
-        bool train_ret_ens = true;
-        PROFILE_EXEC_TIME(train_ret_ens &= prepare_models(p_ensemble, ensemble_params, levct), "Prepare models");
 #ifdef MANIFOLD_TEST
-        PROFILE_EXEC_TIME(process_dataset_test_tune(p_dataset, p_ensemble, ensemble_params, features, labels, last_row_time, levct, ensix), "Prepare data test and tune");
+        PROFILE_EXEC_TIME(process_dataset_test_tune(p_dataset, p_ensemble), "Prepare data test and tune");
 #else
-        PROFILE_EXEC_TIME(train_ret_ens &= prepare_data(p_dataset, p_ensemble, ensemble_params, features, labels, last_row_time, levct, ensix), "Prepare data");
+        bool ret;
+        PROFILE_EXEC_TIME(ret = prepare_training_data(p_dataset, p_ensemble, features[ensix], labels[ensix], last_row_time[ensix]), "Prepare data ensemble " << ensix);
+#pragma omp critical
+        train_ret &= ret;
 #endif
-        std::scoped_lock l(mx);
-        train_ret &= train_ret_ens;
-    )
+    }
 #ifdef MANIFOLD_TEST
     exit(0);
 #endif
-    if (not train_ret) {
+    if (!train_ret) {
         LOG4_ERROR("Aborting training.");
         return;
     }
 
-    join_features(features, ens_ct, levct);
-    
-    __tbb_spfor(levix, 0, levct, 2,
-        if (levix == levct / 2) continue;
-        __pxt_pfor(ensix, 0, ens_ct,
-            const auto p_ensemble = p_dataset->get_ensemble(ensix);
-            auto ensemble_params = p_dataset->get_ensemble_svr_parameters()[p_ensemble->get_key_pair()];
-            ModelService::train(ensemble_params[levix], p_ensemble->get_model(levix), features[0][levix], labels[ensix][levix], last_row_time[ensix][levix]);
-        )
-    )
+    join_features(features, ensct, levct); // labels differ but aux decon queues and features are shared among ensembles
+
+#pragma omp parallel for collapse(2)
+    for (size_t levix = 0; levix < levct; levix += 2)
+        for (size_t ensix = 0; ensix < ensct; ++ensix)
+            if (levix != levct / 2)
+                ModelService::train(p_dataset->get_ensemble(ensix)->get_model(levix), features[0][levix], labels[ensix][levix], last_row_time[ensix][levix]);
+
+    p_dataset->set_initialized();
 
     LOG4_END();
 }
 
 // Return value contains the needed data without the decomposition tail length
 boost::posix_time::time_period
-DatasetService::get_training_range(const Dataset_ptr &p_dataset)
+DatasetService::get_training_range(const datamodel::Dataset_ptr &p_dataset)
 {
     LOG4_BEGIN();
 
     if (!p_dataset->get_input_queue()) LOG4_THROW("Input queue not initialized!");
     const auto max_decrement_distance = p_dataset->get_max_decrement();
     const auto newest_row = APP.input_queue_service.find_newest_record(p_dataset->get_input_queue());
-    if (not newest_row) LOG4_THROW("Could not find newest record for input queue " << p_dataset->get_input_queue()->get_table_name());
+    if (!newest_row) LOG4_THROW("Could not find newest record for input queue " << p_dataset->get_input_queue()->get_table_name());
     const auto input_queue_newest_value_time = newest_row->get_value_time();
     boost::posix_time::ptime oldest_start_train_time = boost::posix_time::min_date_time;
     std::set<boost::posix_time::ptime> ensemble_train_start_times;
-    std::mutex mx;
     /* Determine start and end training time range for every ensemble based on every model parameters. */
-    __omp_pfor_i(0, p_dataset->get_ensembles().size(),
-         const auto p_ensemble = p_dataset->get_ensemble(i);
-         boost::posix_time::ptime start_train_time;
-         if (p_ensemble->get_models().empty() or p_ensemble->get_model(0)->get_last_modeled_value_time() == bpt::min_date_time) {
-             start_train_time = APP.input_queue_service.get_nth_last_row(p_dataset->get_input_queue(), max_decrement_distance + MANIFOLD_TEST_VALIDATION_WINDOW)->get_value_time();
-         } else {
-             start_train_time = p_ensemble->get_model(0)->get_last_modeled_value_time();
-             if (start_train_time == input_queue_newest_value_time)
-                 LOG4_DEBUG("No new data in input queue to process for ensemble " << p_ensemble->get_id());
-         }
-         std::scoped_lock l(mx);
-         ensemble_train_start_times.insert(start_train_time);
-    )
-    if (not ensemble_train_start_times.empty()) oldest_start_train_time = *ensemble_train_start_times.begin();
+#pragma omp parallel for
+    for (const auto &e: p_dataset->get_ensembles()) {
+        const boost::posix_time::ptime start_at = e->get_models().empty() || e->get_model()->get_last_modeled_value_time() == bpt::min_date_time ?
+                                                  APP.input_queue_service.load_nth_last_row(p_dataset->get_input_queue(),
+                                                                                            max_decrement_distance + MANIFOLD_TEST_VALIDATION_WINDOW)->get_value_time() :
+                                                  e->get_model()->get_last_modeled_value_time();
+        if (start_at == input_queue_newest_value_time)
+            LOG4_DEBUG("No new data in input queue to process for ensemble " << e->get_id());
+#pragma omp critical
+        ensemble_train_start_times.insert(start_at);
+    }
+    if (!ensemble_train_start_times.empty()) oldest_start_train_time = *ensemble_train_start_times.begin();
     if (oldest_start_train_time == bpt::min_date_time)
         LOG4_THROW("Some models were not initialized with train, aborting!");
     if (oldest_start_train_time > input_queue_newest_value_time)
@@ -567,7 +453,206 @@ DatasetService::get_training_range(const Dataset_ptr &p_dataset)
     return {oldest_start_train_time, input_queue_newest_value_time - oldest_start_train_time};
 }
 
-#pragma GCC diagnostic pop
+
+struct save_response
+{
+    const std::string &value_column;
+    const datamodel::MultivalRequest_ptr &p_request;
+
+    save_response(const std::string &value_column_, const datamodel::MultivalRequest_ptr &p_request_) : value_column(value_column_), p_request(p_request_)
+    {}
+
+    void operator()(const std::shared_ptr<svr::datamodel::DataRow> &p_result_row)
+    {
+        if (p_result_row->get_value_time() < p_request->value_time_start or p_result_row->get_value_time() > p_request->value_time_end) {
+            LOG4_DEBUG("Skipping save p_response " << p_result_row->to_string());
+            return;
+        }
+
+        auto resp_val = p_result_row->get_value(0);
+        const auto resp_time = p_result_row->get_value_time();
+#ifndef OFFSET_PRED_MUL
+        // Small hack for improving performance consequent p_predictions
+        {
+            const auto input_colix = InputQueueService::get_value_column_index(p_input_queue, value_column);
+            static std::atomic<data_row_container::iterator> aux_hint{p_aux_input_queue->get_data().begin()};
+            const auto last_minute_pc = std::prev(
+                    lower_bound(p_aux_input_queue->get_data(), aux_hint.load(), resp_time))->second->get_value(input_colix);
+            const auto last_hour_pc = std::prev(
+                    p_input_queue->get_data().lower_bound(resp_time))->second->get_value(input_colix);
+
+            if (last_minute_pc < last_hour_pc != resp_val > last_hour_pc) resp_val = last_minute_pc;
+            aux_hint.store(last_minute_pc);
+        }
+#endif
+        datamodel::MultivalResponse_ptr p_response = std::make_shared<MultivalResponse>(0, p_request->get_id(), resp_time, value_column, resp_val);
+        LOG4_TRACE("Saving " << p_response->to_string());
+        AppContext::get_instance().request_service.save(p_response); // Requests get marked processed here
+    }
+};
+
+// By specification, a multival request's time period to predict is
+// [start_predict_time, end_predict_time) i.e. right-hand exclusive.
+void DatasetService::process_mimo_multival_requests(const User_ptr &p_user, datamodel::Dataset_ptr &p_dataset)
+{
+    LOG4_DEBUG("Processing " << *p_user << " requests for dataset " << *p_dataset);
+    datamodel::InputQueue_ptr p_dataset_input_queue = p_dataset->get_input_queue();
+    const auto main_resolution = p_dataset_input_queue->get_resolution();
+    const auto main_to_aux_period_ratio = main_resolution / p_dataset->get_aux_input_queue()->get_resolution();
+    auto active_requests = AppContext::get_instance().request_service.get_active_multival_requests(*p_user, *p_dataset);
+    if (active_requests.empty()) LOG4_DEBUG("No active requests!");
+#pragma omp parallel for
+    for (const auto &p_active_request: active_requests) {
+        if (!p_active_request->sanity_check()) {
+            LOG4_ERROR("Request " << *p_active_request << " incorrect!");
+            continue;
+        }
+
+        LOG4_DEBUG("Processing request " << *p_active_request);
+
+        const auto start_predict_time = p_active_request->value_time_start;
+        const auto end_predict_time = p_active_request->value_time_end;
+        const auto predict_start_times_grid = [&](){
+            std::set<bpt::ptime> r;
+            if (start_predict_time == end_predict_time)
+                r.insert(start_predict_time);
+            else
+                for (auto t = start_predict_time; t < end_predict_time; t += main_resolution)
+                    r.insert(t);
+            return r;
+        }();
+        std::atomic_bool request_answered {true};
+        const auto request_columns = from_sql_array(p_active_request->value_columns);
+        tbb::concurrent_map<std::string, datamodel::DeconQueue_ptr> request_decons;
+
+        if (predict_start_times_grid.empty()) {
+            LOG4_ERROR("Times grid empty.");
+            continue;
+        }
+
+        const auto levct = p_dataset->get_transformation_levels();
+        tbb::concurrent_map<std::tuple<
+                bpt::ptime /* prediction start time */,
+                size_t /* ensemble index */,
+                size_t /* level index */>,
+                arma::rowvec /* features vector */>
+                pred_features;
+        // Prepare per ensemble features
+#pragma omp parallel for collapse(2)
+        for (size_t predix = 0; predix < predict_start_times_grid.size(); ++predix) {
+            for (size_t ensix = 0; ensix < request_columns.size(); ++ensix) {
+                const auto pred_time = predict_start_times_grid ^ predix;
+                const auto p_ensemble = p_dataset->get_ensemble(request_columns[ensix]);
+                if (!p_ensemble) {
+                    LOG4_ERROR("Ensemble for request column " << request_columns[ensix] << " not found.");
+                    request_answered.store(false, std::memory_order_relaxed);
+                    continue;
+                }
+#pragma omp parallel for
+                for (size_t modix = 0; modix < levct; modix += 2) {
+                    if (modix == levct / 2) continue;
+                    APP.model_service.get_features_row(
+                            pred_time,
+                            p_ensemble->get_aux_decon_queues(),
+                            p_ensemble->get_model(modix)->get_learning_levels(),
+                            modix,
+                            p_dataset->get_max_lookback_time_gap(),
+                            main_to_aux_period_ratio,
+                            p_ensemble->get_model(modix)->get_params().get_lag_count(),
+                            p_dataset_input_queue->get_resolution(),
+                            pred_features[{pred_time, ensix, modix}]);
+                    if (!pred_features[{pred_time, ensix, modix}].empty()) {
+                        request_answered.store(false, std::memory_order_relaxed);
+                        continue;
+                    }
+                    APP.dq_scaling_factor_service.scale(
+                            p_dataset,
+                            p_ensemble->get_aux_decon_queues(),
+                            p_ensemble->get_model(modix)->get_params_ptr(),
+                            pred_features[{pred_time, ensix, modix}]);
+                }
+            }
+        }
+        if (!request_answered.load(std::memory_order_relaxed)) {
+            LOG4_ERROR("Skipping request " << p_active_request->get_id());
+            continue;
+        }
+
+        // Join rows of prediction features for all dataset ensembles, for other (correlated) input queue column predictions
+#pragma omp parallel for collapse(2)
+        for (size_t predix = 0; predix < predict_start_times_grid.size(); ++predix) {
+            for (size_t modix = 0; modix < levct; modix += 2) {
+                if (modix == levct / 2) continue;
+                const auto pred_time = predict_start_times_grid ^ predix;
+                for (size_t ensix = 1; ensix < p_dataset->get_ensembles().size(); ++ensix) { // Features past ensix 0 become invalid // Non-parallelizabille
+                    pred_features[{pred_time, 0, modix}].insert_cols(pred_features[{pred_time, 0, modix}].n_cols, pred_features[{pred_time, ensix, modix}]);
+                    pred_features[{pred_time, ensix, modix}].clear();
+                }
+            }
+        }
+
+        // Do actual predictions
+#pragma omp parallel for
+        for (const auto &request_column: request_columns) {
+#pragma omp parallel for
+            for (size_t predix = 0; predix < predict_start_times_grid.size(); ++predix) {
+                const auto pred_time = predict_start_times_grid ^ predix;
+                const auto p_ensemble = p_dataset->get_ensemble(request_column);
+
+                if (!p_ensemble) {
+                    LOG4_ERROR("Ensemble for request column " << request_column << " not found.");
+                    request_answered.store(false, std::memory_order_relaxed);
+                    continue;
+                }
+
+                auto p_aux_decon = p_ensemble->get_aux_decon_queue(request_column);
+                if (!p_aux_decon) {
+                    LOG4_ERROR("Decon queue for column " << request_column << " not found.");
+                    request_answered.store(false, std::memory_order_relaxed);
+                    continue;
+                }
+                p_aux_decon = p_aux_decon->clone_empty();
+                request_decons[request_column] = p_aux_decon;
+                arma::mat predictions(PROPS.get_multistep_len(), levct, arma::fill::zeros);
+#pragma omp parallel for
+                for (size_t levix = 0; levix < levct; levix += 2) {
+                    if (levix == levct / 2) continue;
+                    const auto aux_dq_scaling_factors = APP.dq_scaling_factor_service.slice(
+                            p_dataset->get_dq_scaling_factors(), p_dataset->get_id(), p_aux_decon->get_input_queue_table_name(),
+                            p_aux_decon->get_input_queue_column_name(), p_ensemble->get_model(levix)->get_learning_levels());
+                    auto level_preds = p_ensemble->get_model(levix)->get_gradient(0)->predict(pred_features[{pred_time, 0, levix}], pred_time);
+                    level_preds = arma::mean(level_preds, 1);
+                    predictions.col(levix) = DQScalingFactorService::unscale(level_preds, levix, aux_dq_scaling_factors);
+                }
+
+#pragma omp critical
+                datamodel::DataRow::insert_rows(p_aux_decon->get_data(), predictions, pred_time, main_resolution);
+            }
+
+            const auto reconstructed_data = APP.decon_queue_service.reconstruct(
+                    datamodel::datarow_range(request_decons[request_column]->get_data()),
+                    recon_type_e::ADDITIVE, // TODO Add conversion of decon string to recon type, as M to N mapping
+                    p_dataset->get_transformation_levels());
+
+            if (reconstructed_data.empty()) {
+                LOG4_ERROR("Empty reconstructed data.");
+                request_answered.store(false, std::memory_order_relaxed);
+                continue;
+            }
+            LOG4_DEBUG("Saving reconstructed p_predictions from " << reconstructed_data.begin()->get()->get_value_time() << " until "
+                                                                  << reconstructed_data.rbegin()->get()->get_value_time());
+            std::for_each(std::execution::par_unseq,
+                          find(reconstructed_data, start_predict_time),
+                          reconstructed_data.end(),
+                          save_response(request_column, p_active_request));
+        }
+
+        if (request_answered)
+            APP.request_service.force_finalize(p_active_request);
+        else
+            LOG4_WARN("Failed finalizing request id " << p_active_request->get_id());
+    }
+}
 
 
 } //business

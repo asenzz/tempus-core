@@ -22,27 +22,27 @@ int IQScalingFactorService::remove(const IQScalingFactor_ptr& p_iq_scaling_facto
     return iq_scaling_factor_dao_.remove(p_iq_scaling_factor);
 }
 
-std::vector<IQScalingFactor_ptr> IQScalingFactorService::find_all_by_dataset_id(const bigint dataset_id)
+std::deque<IQScalingFactor_ptr> IQScalingFactorService::find_all_by_dataset_id(const bigint dataset_id)
 {
     return iq_scaling_factor_dao_.find_all_by_dataset_id(dataset_id);
 }
 
-std::vector<IQScalingFactor_ptr> IQScalingFactorService::calculate(const InputQueue_ptr &p_input_queue, const size_t dataset_id, const double alpha)
+std::deque<IQScalingFactor_ptr> IQScalingFactorService::calculate(const datamodel::InputQueue_ptr &p_input_queue, const size_t dataset_id, const double alpha)
 {
     if(p_input_queue->get_data().empty() == true)
     {
         LOG4_ERROR("InputQueue is empty");
-        return std::vector<IQScalingFactor_ptr>();
+        return std::deque<IQScalingFactor_ptr>();
     }
 
-    std::vector<double> iq_tick_volume;
+    std::deque<double> iq_tick_volume;
     for(auto& row : p_input_queue->get_data())
         iq_tick_volume.push_back(row->get_tick_volume());
 
     std::sort(iq_tick_volume.begin(), iq_tick_volume.end());
     const size_t pos = std::round(iq_tick_volume.size() * (1.0 - alpha));
 
-    std::vector<IQScalingFactor_ptr> result;
+    std::deque<IQScalingFactor_ptr> result;
 
     result.push_back(std::make_shared<svr::datamodel::IQScalingFactor>(
                          0, dataset_id, p_input_queue->get_table_name(), iq_tick_volume[pos]));
@@ -50,7 +50,7 @@ std::vector<IQScalingFactor_ptr> IQScalingFactorService::calculate(const InputQu
     return result;
 }
 
-void IQScalingFactorService::scale(const Dataset_ptr& p_dataset, const bool unscale)
+void IQScalingFactorService::scale(const datamodel::Dataset_ptr& p_dataset, const bool unscale)
 {
     if(p_dataset->get_input_queue()->get_data().empty())
     {

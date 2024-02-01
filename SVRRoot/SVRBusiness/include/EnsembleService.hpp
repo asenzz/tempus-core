@@ -19,14 +19,10 @@ namespace svr { namespace datamodel {
     class Dataset;
     class DeconQueue;
     class SVRParameters;
+    using Ensemble_ptr = std::shared_ptr<Ensemble>;
+    using Dataset_ptr = std::shared_ptr<Dataset>;
+    using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
 } }
-
-using Model_ptr = std::shared_ptr<svr::datamodel::Model>;
-using Ensemble_ptr = std::shared_ptr<svr::datamodel::Ensemble>;
-using Dataset_ptr = std::shared_ptr<svr::datamodel::Dataset>;
-using DeconQueue_ptr = std::shared_ptr<svr::datamodel::DeconQueue>;
-using SVRParameters_ptr = std::shared_ptr<svr::datamodel::SVRParameters>;
-
 
 #define DEFAULT_MAX_GAP (24) /* hours */
 
@@ -42,18 +38,6 @@ class EnsembleService {
     svr::business::ModelService &model_service_;
     svr::business::DeconQueueService &decon_queue_service_;
 
-    /**
-     * @brief load decon_queue and aux_decon_queues by table names
-     * @param ensemble shared pointer
-     */
-    void load_svr_params_and_models(Ensemble_ptr p_ensemble);
-    void prepare_data_and_train_model(
-            Model_ptr &p_model,
-            const DeconQueue_ptr &p_main_delta_decon_queue,
-            const std::vector<DeconQueue_ptr> &p_aux_delta_decon_queues,
-            const SVRParameters_ptr &p_svr_parameters,
-            const bpt::time_duration &max_gap);
-
 public:
     EnsembleService(svr::dao::EnsembleDAO & ensemble_dao,
             svr::business::ModelService & model_service,
@@ -66,17 +50,18 @@ public:
 
     bigint get_next_id();
 
-    Ensemble_ptr get(bigint ensemble_id);
-    Ensemble_ptr get(const Dataset_ptr &p_dataset, const DeconQueue_ptr &p_decon_queue);
+    datamodel::Ensemble_ptr get(const bigint ensemble_id);
+    datamodel::Ensemble_ptr get(const datamodel::Dataset_ptr &p_dataset, const datamodel::DeconQueue_ptr &p_decon_queue);
 
-    std::vector<Ensemble_ptr> get_all_by_dataset_id(const bigint dataset_id);
+    std::deque<datamodel::Ensemble_ptr> get_all_by_dataset_id(const bigint dataset_id);
 
-    int save(const Ensemble_ptr &p_ensemble);
-    bool save_ensembles(const std::vector<Ensemble_ptr> &ensembles, bool save_decon_queues = false);
-    bool exists(const Ensemble_ptr &ensemble);
-    bool exists(bigint ensemble_id);
-    int remove_by_dataset_id(bigint dataset_id);
-    int remove(const Ensemble_ptr & p_ensemble);
+    void load(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble_ptr& p_ensemble, const bool load_decon_data = false);
+    int save(const datamodel::Ensemble_ptr &p_ensemble);
+    bool save_ensembles(const std::deque<datamodel::Ensemble_ptr> &ensembles, bool save_decon_queues = false);
+    bool exists(const datamodel::Ensemble_ptr &ensemble);
+    bool exists(const bigint ensemble_id);
+    size_t remove_by_dataset_id(const bigint dataset_id);
+    int remove(const datamodel::Ensemble_ptr & p_ensemble);
 
     static data_row_container::iterator
     get_start(
@@ -86,43 +71,29 @@ public:
             const boost::posix_time::ptime &model_last_time,
             const boost::posix_time::time_duration &resolution);
 
-    void init_ensembles(Dataset_ptr &p_dataset);
+    void init_ensembles(datamodel::Dataset_ptr &p_dataset);
 
  	//create ensembles with decons and svrParameters from dataset
-    std::vector<Ensemble_ptr> init_ensembles_from_dataset(const Dataset_ptr &p_dataset);
+    std::deque<datamodel::Ensemble_ptr> init_ensembles_from_dataset(const datamodel::Dataset_ptr &p_dataset);
 
-    std::vector<Ensemble_ptr> init_ensembles_from_dataset(const Dataset_ptr &p_dataset,
-                                                              const std::vector<DeconQueue_ptr> &decon_queues);
+    std::deque<datamodel::Ensemble_ptr> init_ensembles_from_dataset(const datamodel::Dataset_ptr &p_dataset,
+                                                              const std::deque<datamodel::DeconQueue_ptr> &decon_queues);
 
-    void train(
-            Dataset_ptr &p_dataset,
-            Ensemble_ptr &p_ensemble,
-            const std::vector<SVRParameters_ptr> &model_parameters,
-            const bpt::time_duration &max_gap,
-            const size_t model_numb = std::numeric_limits<size_t>::max());
-
-    static void
-    predict(Ensemble_ptr &p_ensemble,
-            const boost::posix_time::time_period &range,
-            const boost::posix_time::time_duration &resolution,
-            const bpt::time_duration &max_gap = bpt::hours(DEFAULT_MAX_GAP));
+    void train(datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble);
 
     static void predict(
-            const Ensemble_ptr &p_ensemble,
+            const datamodel::Ensemble_ptr &p_ensemble,
             const boost::posix_time::time_period &range,
             const boost::posix_time::time_duration &resolution,
             const bpt::time_duration &max_gap,
             svr::datamodel::DataRow::container &decon_data,
-            std::vector<data_row_container_ptr> &aux_decon_data);
-
-    static void
-    init_decon_data(std::vector<Ensemble_ptr> &ensembles, const std::vector<DeconQueue_ptr> &decon_queues);
+            std::deque<data_row_container_ptr> &aux_decon_data);
 
     static bool
-    is_ensemble_input_queue(const Ensemble_ptr &p_ensemble, const InputQueue_ptr &p_input_queue);
+    is_ensemble_input_queue(const datamodel::Ensemble_ptr &p_ensemble, const datamodel::InputQueue_ptr &p_input_queue);
 
     static void
-    update_ensemble_decon_queues(const std::vector<Ensemble_ptr> &ensembles, const std::vector<DeconQueue_ptr> &new_decon_queues);
+    update_ensemble_decon_queues(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<datamodel::DeconQueue_ptr> &new_decon_queues);
 };
 } /* namespace business */
 } /* namespace svr */

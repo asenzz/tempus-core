@@ -7,8 +7,8 @@
 
 // #define CUDA_OEMD_MULTIGPU // TODO Buggy, test!
 // #define CUDA_OUTPUT_FIR
-
 #include <vector>
+#include "model/DataRow.hpp"
 
 // Algo old FIROEMD or new FFTOEMD
 #define USE_OLD
@@ -32,15 +32,10 @@ namespace cuoemd {
 
 void
 transform(
-        const std::vector<double> &input,
-        std::vector<std::vector<double>> &decon,
-#ifdef CUDA_OEMD_MULTIGPU
-        const std::vector<std::shared_ptr<common::gpu_context>> &gpu_ids,
-#else
-        const int gpu_id,
-#endif
-        const std::vector<size_t> &siftings,
-        const std::vector<std::vector<double>> &mask,
+        datamodel::datarow_range &inout,
+        const std::vector<double> &tail,
+        const std::deque<size_t> &siftings,
+        const std::deque<std::vector<double>> &mask,
         const double stretch_coef,
         const size_t levels);
 

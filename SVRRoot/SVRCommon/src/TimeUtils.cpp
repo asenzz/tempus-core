@@ -6,7 +6,7 @@ namespace svr {
 double
 operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs)
 {
-    return double(lhs.total_nanoseconds()) / double(rhs.total_nanoseconds());
+    return double(lhs.ticks()) / double(rhs.ticks());
 }
 
 /*
@@ -62,17 +62,13 @@ bpt::seconds date_time_string_to_seconds(const std::string &date_time)
 
     return bpt::seconds(time_period); /* TODO in future move code to milliseconds once FIX is here */
 }
-#pragma GCC diagnostic pop
 
 bpt::time_period adjust_time_period_to_frame_size(const bpt::time_period & time_range,
                                                   const bpt::time_duration & resolution,
                                                   const size_t frame_size)
 {
-    return bpt::time_period(
-                time_range.begin(),
-                time_range.end() +
-                bpt::minutes(frame_size -
-                             time_range.length().total_seconds() / resolution.total_seconds() % frame_size));
+    return {time_range.begin(), time_range.end() + bpt::minutes(frame_size -
+                             time_range.length().total_seconds() / resolution.total_seconds() % frame_size)};
 }
 
 } // namespace common

@@ -14,7 +14,7 @@ bigint PgDecrementTaskDAO::get_next_id()
     return data_source.query_for_type<bigint>(AbstractDAO::get_sql("get_next_id"));
 }
 
-bool PgDecrementTaskDAO::exists(bigint id)
+bool PgDecrementTaskDAO::exists(const bigint id)
 {
     return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"), id) == 1;
 }
@@ -72,7 +72,7 @@ int PgDecrementTaskDAO::remove(const DecrementTask_ptr& decrementTask)
     return data_source.update(AbstractDAO::get_sql("remove"), decrementTask->get_id());
 }
 
-DecrementTask_ptr PgDecrementTaskDAO::get_by_id(bigint id)
+DecrementTask_ptr PgDecrementTaskDAO::get_by_id(const bigint id)
 {
     DecrementTaskRowMapper rowMaper;
     return data_source.query_for_object(&rowMaper, AbstractDAO::get_sql("get_by_id"), id);

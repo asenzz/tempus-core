@@ -7,10 +7,12 @@
 #include <algorithm>
 #include <common/rtp_thread_pool.hpp>
 #include <bitset>
+#include <atomic>
 
 #include "appcontext.hpp"
 #include "common/constants.hpp"
 #include "common/defines.h"
+#include "common/compatibility.hpp"
 #include "onlinesvr.hpp"
 #include "util/ValidationUtils.hpp"
 #include "spectral_transform.hpp"
@@ -35,14 +37,15 @@ namespace business {
 void
 DatasetService::recombine_params(
         predictions_t &tune_predictions,
-        std::vector<SVRParameters_ptr> &ensemble_params,
-        const size_t half_levct,
-        const std::vector<double> &scale_label,
-        const std::vector<double> &dc_offset)
+        datamodel::Ensemble_ptr &p_ensemble,
+        const size_t levct,
+        const tbb::concurrent_map<size_t, double> &scale_label,
+        const tbb::concurrent_map<size_t, double> &dc_offset,
+        const size_t chunk_ix)
 {
     if (tune_predictions.empty()) return;
     bool empty_preds = true;
-    for (const auto &tp: tune_predictions) empty_preds &= tp.empty();
+    for (const auto &tp: tune_predictions) empty_preds &= tp.second.empty();
     if (empty_preds) return;
 
 #ifdef SEPARATE_PREDICTIONS_BY_COST
@@ -56,14 +59,12 @@ DatasetService::recombine_params(
     }
 #endif
 
-    std::vector<SVRParameters_ptr> this_ensemble_params(ensemble_params.size());
-    double best_score = recombine_params(tune_predictions, this_ensemble_params, half_levct, scale_label, dc_offset, 0);
-    ensemble_params = this_ensemble_params;
+    double best_score = recombine_params(tune_predictions, p_ensemble, levct, scale_label, dc_offset, 0, chunk_ix);
     LOG4_DEBUG("Found best score " << best_score << " for epsco 0.");
 #ifdef SEPARATE_PREDICTIONS_BY_COST
     for (const auto epsco: rough_epscos_grid) {
         const uint64_t epsco_key = 1e6 * epsco;
-        const auto score = recombine_params(tune_predictions, this_ensemble_params, half_levct, scale_label, dc_offset, epsco_key);
+        const auto score = recombine_params(tune_predictions, this_ensemble_params, half_levct, scale_label, dc_offset, epsco_key, chunk_ix);
         if (score <= best_score) {
             best_score = score;
             ensemble_params = this_ensemble_params;
@@ -76,53 +77,52 @@ DatasetService::recombine_params(
 double
 DatasetService::recombine_params(
         predictions_t &tune_predictions,
-        std::vector<SVRParameters_ptr> &ensemble_params,
-        const size_t half_levct,
-        const std::vector<double> &scale_label,
-        const std::vector<double> &dc_offset,
-        const uint64_t epsco_key)
+        datamodel::Ensemble_ptr &p_ensemble,
+        const size_t levct,
+        const tbb::concurrent_map<size_t, double> &scale_label,
+        const tbb::concurrent_map<size_t, double> &dc_offset,
+        const uint64_t epsco_key,
+        const size_t chunk_ix)
 {
-    bool empty_preds = true;
-    for (const auto &tp: tune_predictions)
-        if (tp.find(epsco_key) != tp.end())
-            empty_preds &= tp.at(epsco_key).empty();
-    if (empty_preds)
+    if (std::any_of(std::execution::par_unseq, tune_predictions.begin(), tune_predictions.end(), [&](auto &tp) {
+        return !tp.second[chunk_ix].contains(epsco_key) || tp.second[chunk_ix][epsco_key].empty();
+    }))
         return std::numeric_limits<double>::quiet_NaN();
 
-#if 1
 #ifdef EVENING_FACTOR
 #pragma omp parallel for
     for (size_t levix = 0; levix < half_levct * 2; levix += 2) {
-        if (levix == half_levct || tune_predictions[levix].find(epsco_key) == tune_predictions[levix].end()) {
+        if (levix == half_levct || !tune_predictions[levix][chunk_ix].contains(epsco_key)) {
             LOG4_DEBUG("Level " << levix << " epsco key " << epsco_key << " not found or ignored.");
             continue;
         }
-        for (auto &tp: tune_predictions[levix][epsco_key]) {
+        for (auto &tp: tune_predictions[levix][chunk_ix][epsco_key]) {
+#pragma omp parallel for
             for (size_t j = 0; j < EMO_MAX_J; ++j) {
-                tp->p_predictions->at(j) *= (scale_label[levix] + EVENING_FACTOR) / (EVENING_FACTOR + 1.);
-                tp->p_labels->at(j) *= (scale_label[levix] + EVENING_FACTOR) / (EVENING_FACTOR + 1.);
-                tp->p_last_knowns->at(j) *= (scale_label[levix] + EVENING_FACTOR) / (EVENING_FACTOR + 1.);
+                tp->p_predictions->at(j) *= (scale_label.at(levix) + EVENING_FACTOR) / (EVENING_FACTOR + 1.);
+                tp->p_labels->at(j) *= (scale_label.at(levix) + EVENING_FACTOR) / (EVENING_FACTOR + 1.);
+                tp->p_last_knowns->at(j) *= (scale_label.at(levix) + EVENING_FACTOR) / (EVENING_FACTOR + 1.);
                 if (!levix) {
-                    tp->p_predictions->at(j) += dc_offset[levix] / (EVENING_FACTOR + 1.);
-                    tp->p_labels->at(j) += dc_offset[levix] / (EVENING_FACTOR + 1.);
-                    tp->p_last_knowns->at(j) += dc_offset[levix] / (EVENING_FACTOR + 1.);
+                    tp->p_predictions->at(j) += dc_offset.at(levix) / (EVENING_FACTOR + 1.);
+                    tp->p_labels->at(j) += dc_offset.at(levix) / (EVENING_FACTOR + 1.);
+                    tp->p_last_knowns->at(j) += dc_offset.at(levix) / (EVENING_FACTOR + 1.);
                 }
             }
         }
     }
 #endif
-#endif
-
-    const auto max_num_combos = std::pow<double>(double(C_tune_keep_preds), double(half_levct - 1));
+    const size_t half_levct = levct / 2;
+    const uint32_t colct = half_levct - 1;
+    const auto max_num_combos = std::pow<double>(double(C_tune_keep_preds), double(colct));
     const uint64_t num_combos = std::min<double>(C_num_combos, max_num_combos);
     const double filter_combos = double(max_num_combos) / double(num_combos);
-    const uint32_t colct = half_levct - 1;
     std::vector<t_param_preds_cu> params_preds(colct * C_tune_keep_preds);
 #pragma omp parallel for collapse(2)
     for (uint32_t colix = 0; colix < colct; ++colix) {
         for (uint32_t rowix = 0; rowix < C_tune_keep_preds; ++rowix) {
             params_preds[rowix * colct + colix].params_ix = rowix;
-            const auto &tp = std::next(tune_predictions[(colix >= 16 ? (colix + 1) : colix) * 2][epsco_key].begin(), rowix)->get();
+            const auto levix = to_levix(colix);
+            const auto &tp = tune_predictions[levix][chunk_ix][epsco_key] ^ rowix;
             for (uint32_t j = 0; j < EMO_MAX_J; ++j) {
                 for (uint32_t el = 0; el < EMO_TUNE_VALIDATION_WINDOW; ++el) {
                     params_preds[rowix * colct + colix].predictions[j][el] = arma::mean(tp->p_predictions->at(j).row(el));
@@ -134,7 +134,7 @@ DatasetService::recombine_params(
         }
     }
 
-    const uint32_t rows_gpu = common::gpu_handler::get_instance().get_max_gpu_data_chunk_size() / 2 / colct / (2 * CUDA_BLOCK_SIZE) * (2 * CUDA_BLOCK_SIZE);
+    const uint32_t rows_gpu = common::gpu_handler::get().get_max_gpu_data_chunk_size() / 2 / colct / (2 * CUDA_BLOCK_SIZE) * (2 * CUDA_BLOCK_SIZE);
     auto best_score = std::numeric_limits<double>::max();
     std::vector<uint8_t> best_params_ixs(colct, uint8_t(0));
 #ifdef EVENING_FACTOR
@@ -145,28 +145,22 @@ DatasetService::recombine_params(
 #endif
 
     // const auto start_time = std::chrono::steady_clock::now();
-#pragma omp parallel for num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number())
+#pragma omp parallel for num_threads(common::gpu_handler::get().get_max_running_gpu_threads_number())
     for (uint64_t start_row_ix = 0; start_row_ix < num_combos; start_row_ix += rows_gpu) {
         // if (best_score != std::numeric_limits<double>::max()) continue;
         // if (std::chrono::steady_clock::now() - start_time > std::chrono::minutes(45)) continue;
         const uint64_t end_row_ix = std::min<uint64_t>(start_row_ix + rows_gpu, num_combos);
         const uint64_t chunk_rows_ct = end_row_ix - start_row_ix;
-#if 0
-        std::vector<uint8_t> combos(chunk_rows_ct * colct);
-#pragma omp parallel for simd collapse(2) schedule(static, 0x10000) num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number() > std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1 + std::max<uint32_t>(1, std::thread::hardware_concurrency() - common::gpu_handler::get_instance().get_max_running_gpu_threads_number()) / common::gpu_handler::get_instance().get_max_running_gpu_threads_number())
-        for (uint32_t colix = 0; colix < colct; ++colix)
-            for (uint64_t row_ix = start_row_ix; row_ix < end_row_ix; ++row_ix)
-                combos[(row_ix - start_row_ix) * colct + colix] = std::fmod(std::round(double(row_ix) / (std::pow<double>(C_tune_keep_preds, colct - colix) / filter_combos)), double(C_tune_keep_preds));
-#endif
-        const arma::colvec colixs = arma::linspace<arma::colvec>(start_row_ix, end_row_ix, chunk_rows_ct);
+        const arma::colvec colixs = arma::linspace<arma::colvec>(double(start_row_ix), double(end_row_ix), chunk_rows_ct);
         arma::uchar_mat combos(chunk_rows_ct, colct);
 #pragma omp parallel for
         for (uint32_t colix = 0; colix < colct; ++colix)
-            combos.col(colix) = arma::conv_to<arma::uchar_colvec>::from(common::mod<arma::colvec>(colixs / std::pow<double>(C_tune_keep_preds, colct - colix) / filter_combos, double(C_tune_keep_preds)));
+            combos.col(colix) = arma::conv_to<arma::uchar_colvec>::from(common::mod<arma::colvec>(
+                    colixs / std::pow<double>(C_tune_keep_preds, colct - colix) / filter_combos, double(C_tune_keep_preds)));
 
         double chunk_best_score;
         std::vector<uint8_t> chunk_best_params_ixs(colct, 0);
-        PROFILE_EXEC_TIME(recombine_parameters(chunk_rows_ct, colct, combos.memptr(), params_preds.data(), &chunk_best_score, chunk_best_params_ixs.data()),
+        PROFILE_EXEC_TIME(recombine_parameters(chunk_rows_ct, colct, combos.mem, params_preds.data(), &chunk_best_score, chunk_best_params_ixs.data()),
                       "Recombine chunk " << chunk_rows_ct << "x" << half_levct - 1 << ", added set of size " << unsigned(C_tune_keep_preds)
                          << ", filter out " << filter_combos - 1 << " combinations, start row " << start_row_ix << ", end row " << end_row_ix << ", score " << chunk_best_score << ", epsco " << double(epsco_key) / 1e6);
         decltype(combos){}.swap(combos);
@@ -176,7 +170,7 @@ DatasetService::recombine_params(
                 best_score = chunk_best_score;
                 best_params_ixs = chunk_best_params_ixs;
                 LOG4_DEBUG("Found best score " << best_score << ", " << 100. * best_score / EMO_MAX_J / EMO_TUNE_VALIDATION_WINDOW << " pct direction error, indexes "
-                            << deep_to_string(chunk_best_params_ixs) << ", epsco " << double(epsco_key) / 1e6);
+                                               << to_string(chunk_best_params_ixs) << ", epsco " << double(epsco_key) / 1e6);
             }
         }
     }
@@ -185,111 +179,103 @@ DatasetService::recombine_params(
     for (uint32_t colix = 0; colix < colct; ++colix) {
         const uint32_t levix = (colix >= 16 ? (colix + 1) : colix) * 2;
 #ifndef EVENING_FACTOR
-        ensemble_params[levix] = tune_predictions[levix].begin()->get()->p_params;
+        p_ensemble->get_model(levix)->set_params(tune_predictions[levix][chunk_ix][epsco_key].begin()->get()->p_params);
 #else
-        if (tune_predictions[levix].empty()) continue;
-        ensemble_params[levix] = std::next(tune_predictions[levix][epsco_key].begin(), best_params_ixs[colix])->get()->p_params;
+        if (tune_predictions[levix][chunk_ix].empty()) continue;
+        p_ensemble->get_model(levix)->set_params((tune_predictions[levix][chunk_ix][epsco_key] ^ best_params_ixs[colix])->p_params);
 #endif
-    }
-    if (epsco_key) {
-#pragma omp parallel for
-        for (auto &tune_prediction: tune_predictions) {
-            if (tune_prediction.empty()) continue;
-            for (auto &tune_params: tune_prediction[epsco_key])
-                tune_params->clear();
-        }
     }
     return best_score;
 }
 
 
-void DatasetService::process_dataset_test_tune(
-        Dataset_ptr &p_dataset,
-        Ensemble_ptr &p_ensemble,
-        std::vector<SVRParameters_ptr> &ensemble_params,
-        std::vector<std::vector<matrix_ptr>> &features,
-        std::vector<std::vector<matrix_ptr>> &labels,
-        std::vector<std::vector<bpt::ptime>> &last_row_time,
-        const size_t levct,
-        const size_t ensix)
+void
+DatasetService::process_dataset_test_tune(
+        datamodel::Dataset_ptr &p_dataset,
+        datamodel::Ensemble_ptr &p_ensemble)
 {
-    LOG4_DEBUG("Offline test offset " << MANIFOLD_TEST_VALIDATION_WINDOW << ", " << p_ensemble->to_string());
+    LOG4_DEBUG("Offline test offset " << MANIFOLD_TEST_VALIDATION_WINDOW << ", " << *p_ensemble);
 
-    if (p_ensemble->get_aux_decon_queues().size() > 1) LOG4_ERROR("More than one aux decon queue is not supported!");
-    const std::string save_column_name = p_ensemble->get_decon_queue()->get_input_queue_column_name();
-    const auto p_decon = p_ensemble->get_decon_queue();
-    const auto p_aux_decon = p_ensemble->get_aux_decon_queue(0);
-#ifdef CACHED_FEATURE_ITER
-    APP.model_service.aux_decon_hint = p_aux_decon->get_data().begin(); // lower_bound(p_aux_decon->get_data(), p_decon->get_data()[std::max<size_t>(0, p_decon->get_data().size() - p_dataset->get_max_lag_count() - p_dataset->get_max_decrement() - EMO_TUNE_VALIDATION_WINDOW - MANIFOLD_TEST_VALIDATION_WINDOW - DATA_LUFTA)]->get_value_time());
-#endif
-    const auto resolution_factor = double(p_dataset->get_input_queue()->get_resolution().total_microseconds()) / double(p_dataset->get_aux_input_queue(0)->get_resolution().total_microseconds());
-    std::vector<bpt::ptime> label_times;
+    const auto levct = p_dataset->get_transformation_levels();
+    const auto p_label_decon = p_ensemble->get_decon_queue();
+    const auto p_label_aux_decon = DeconQueueService::find_decon_queue(
+            p_ensemble->get_aux_decon_queues(), p_ensemble->get_aux_decon_queue()->get_input_queue_table_name(), p_label_decon->get_input_queue_column_name());
+    const datarow_range aux_labels_range(p_label_aux_decon->get_data());
+    const auto aux_feats_range = [&p_ensemble](){
+        std::deque<datarow_range> r;
+        for (const auto &dq: p_ensemble->get_aux_decon_queues()) r.emplace_back(dq->get_data());
+        return r;
+    }();
+    const auto resolution_factor = double(p_dataset->get_input_queue()->get_resolution().ticks()) / double(p_dataset->get_aux_input_queue()->get_resolution().ticks());
+    std::deque<bpt::ptime> label_times;
     const size_t half_levct = levct / 2;
-    std::vector<arma::mat> level_features(half_levct), level_labels(half_levct), level_last_knowns(half_levct);
-    std::vector<double> predicted_values, actual_values, last_knowns;
-    predictions_t tune_predictions(levct);
-    std::vector<double> level_lin_pred_values, level_predicted_values, level_actual_values, scale_label(levct, 1.), dc_offset(levct, 0.);
-#pragma omp parallel for num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number()) schedule(static, 1)
+
+    predictions_t tune_predictions;
+    tbb::concurrent_map<size_t, arma::mat> level_features, level_labels, level_last_knowns;
+    std::deque<double> predicted_values, actual_values, last_knowns;
+    tbb::concurrent_map<size_t, double> scale_label, dc_offset;
+#pragma omp parallel for num_threads(common::gpu_handler::get().get_max_running_gpu_threads_number()) schedule(static, 1)
     for (size_t levix = 0; levix < levct; levix += 2) {
         if (levix == half_levct) continue;
-        const auto half_levix = levix / 2;
         const auto p_model = p_ensemble->get_model(levix);
-        auto p_params = ensemble_params[levix];
+        const auto p_head_params = p_model->get_params_ptr();
+
         APP.model_service.get_training_data(
-                level_features[half_levix],
-                level_labels[half_levix],
-                level_last_knowns[half_levix],
+                level_features[levix],
+                level_labels[levix],
+                level_last_knowns[levix],
                 label_times,
                 {svr::business::EnsembleService::get_start(
-                        p_decon->get_data(),
-                        p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE + MANIFOLD_TEST_VALIDATION_WINDOW,
+                        p_label_decon->get_data(),
+                        p_head_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE + MANIFOLD_TEST_VALIDATION_WINDOW,
                         0,
                         p_model->get_last_modeled_value_time(),
                         p_dataset->get_input_queue()->get_resolution()),
-                 p_decon->get_data().end() - MODEL_TRAIN_OFFSET,
-                 p_decon->get_data()},
-                p_aux_decon->get_data(),
-                p_params->get_lag_count(),
+                 p_label_decon->get_data().end(),
+                 p_label_decon->get_data()},
+                aux_labels_range,
+                aux_feats_range,
+                p_head_params->get_lag_count(),
                 p_model->get_learning_levels(),
                 p_dataset->get_max_lookback_time_gap(),
                 levix,
                 resolution_factor,
                 p_model->get_last_modeled_value_time(),
                 p_dataset->get_input_queue()->get_resolution());
-        APP.dq_scaling_factor_service.scale(p_dataset, p_aux_decon, p_params, p_model->get_learning_levels(), level_features[half_levix], level_labels[half_levix],
-                                            level_last_knowns[half_levix]);
-        const size_t full_validation_sz = p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE;
-        if (!p_params->get_svr_kernel_param()) PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
-                tune_predictions[levix], p_params, level_features[half_levix].rows(0, full_validation_sz - 1), level_labels[half_levix].rows(0, full_validation_sz - 1),
-                level_last_knowns[half_levix].rows(0, full_validation_sz - 1)), "Tune kernel params for model " << p_params->get_decon_level());
-        scale_label[levix] = p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(), levix);
-        dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_aux_decon->get_input_queue_table_name(), p_aux_decon->get_input_queue_column_name(),
-                                                                               DC_DQ_SCALING_FACTOR);
+        APP.dq_scaling_factor_service.scale(
+                p_dataset, p_ensemble->get_aux_decon_queues(), p_head_params, level_features[levix], level_labels[levix], level_last_knowns[levix]);
+        const size_t full_validation_sz = p_head_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE;
+        if (!p_head_params->get_svr_kernel_param()) PROFILE_EXEC_TIME(OnlineMIMOSVR::tune_kernel_params(
+                tune_predictions[levix], p_model->get_param_set(), level_features[levix].rows(0, full_validation_sz - 1),
+                level_labels[levix].rows(0, full_validation_sz - 1),
+                level_last_knowns[levix].rows(0, full_validation_sz - 1), p_dataset->get_chunk_size()), "Tune kernel params for model " << p_head_params->get_decon_level());
+        scale_label[levix] = p_dataset->get_dq_scaling_factor_labels(p_label_aux_decon->get_input_queue_table_name(), p_label_aux_decon->get_input_queue_column_name(), levix);
+        dc_offset[levix] = levix ? 0 : p_dataset->get_dq_scaling_factor_labels(p_label_aux_decon->get_input_queue_table_name(), p_label_aux_decon->get_input_queue_column_name(), DC_INDEX);
     }
 
-    PROFILE_EXEC_TIME(recombine_params(tune_predictions, ensemble_params, half_levct, scale_label, dc_offset), "Recombine parameters");
+#pragma omp parallel for
+    for (size_t chunk_ix = 0; chunk_ix < tune_predictions.begin()->second.size(); ++chunk_ix)
+        PROFILE_EXEC_TIME(recombine_params(tune_predictions, p_ensemble, levct, scale_label, dc_offset, chunk_ix),
+                          "Recombine parameters for " << half_levct - 1 << " models, chunk " << chunk_ix);
 
-#pragma omp parallel for num_threads(common::gpu_handler::get_instance().get_max_running_gpu_threads_number()) schedule(static, 1)
+#pragma omp parallel for num_threads(common::gpu_handler::get().get_max_running_gpu_threads_number()) schedule(static, 1)
     for (size_t levix = 0; levix < levct; levix += 2) {
         if (levix == half_levct) continue;
-        const auto half_levix = levix / 2;
         const auto p_model = p_ensemble->get_model(levix);
-        const auto p_params = ensemble_params[levix];
-        const size_t full_validation_sz = p_params->get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE;
-        svr::OnlineMIMOSVR svr_model(
-                p_params,
-                std::make_shared<arma::mat>(level_features[half_levix].rows(0, full_validation_sz - 1)),
-                std::make_shared<arma::mat>(level_labels[half_levix].rows(0, full_validation_sz - 1)),
-                false, svr::matrices_ptr{}, false, svr::MimoType::single, level_labels[half_levix].n_cols);
-        APP.svr_parameters_service.remove(p_params);
-        APP.svr_parameters_service.save(p_params);
+        const size_t full_validation_sz = p_model->get_params().get_svr_decremental_distance() + EMO_TUNE_TEST_SIZE;
+        APP.model_service.train(
+                p_model,
+                std::make_shared<arma::mat>(level_features[levix].rows(0, full_validation_sz - 1)),
+                std::make_shared<arma::mat>(level_labels[levix].rows(0, full_validation_sz - 1)));
 
-        while (label_times.size() != level_labels[half_levix].n_rows) usleep(10);
-        double level_mae, level_mape, level_lin_mape;
-        std::vector<double> level_lin_pred_values, level_predicted_values, level_actual_values;
-        std::tie(level_mae, level_mape, level_predicted_values, level_actual_values, level_lin_mape, level_lin_pred_values) =
-                OnlineMIMOSVR::future_validate(full_validation_sz, svr_model, level_features[half_levix], level_labels[half_levix], level_last_knowns[half_levix],
-                                               label_times, false, scale_label[levix], dc_offset[levix]);
+        for (const auto &p: p_model->get_param_set()) {
+            APP.svr_parameters_service.remove(p);
+            APP.svr_parameters_service.save(p);
+        }
+
+        const auto [level_mae, level_mape, level_predicted_values, level_actual_values, level_lin_mape, level_lin_pred_values] =
+                OnlineMIMOSVR::future_validate(full_validation_sz, *p_model->get_gradients().front(), level_features[levix], level_labels[levix],
+                                               level_last_knowns[levix], label_times, false, scale_label[levix], dc_offset[levix]);
 
 #pragma omp critical
         {
@@ -342,8 +328,7 @@ void DatasetService::process_dataset_test_tune(
                             ", current alpha " << cur_alpha_pct << " pct."
                             ", cumulative alpha " << cml_alpha_pct << " pct.");
         if (i < common::C_forecast_focus)
-            APP.request_service.save(
-                    std::make_shared<MultivalResponse>(0, 0, i_valtime, save_column_name, predicted_values[i]));
+            APP.request_service.save(std::make_shared<MultivalResponse>(0, 0, i_valtime, p_label_decon->get_input_queue_column_name(), predicted_values[i]));
         const auto actual_price = lower_bound(p_dataset->get_input_queue()->get_data(), i_valtime)->get();
         if (actual_price->get_value(0) != actual_values[i])
             LOG4_WARN("Difference at " << i_valtime << " between actual price " << actual_price->get_value(0) << " and recon price " << actual_values[i] << ", is " << actual_price->get_value(0) - actual_values[i]);

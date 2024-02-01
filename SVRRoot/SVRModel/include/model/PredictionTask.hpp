@@ -20,7 +20,7 @@ public:
 
     PredictionTask() : Entity() {}
 
-    PredictionTask(bigint id, bigint dataset_id,
+    PredictionTask(const bigint id, const bigint dataset_id,
                    const bpt::ptime &start_train_time, const bpt::ptime &end_train_time,
                    const bpt::ptime &start_prediction_time, const bpt::ptime &end_prediction_time,
                    int status = 0, double mse = -1.0)

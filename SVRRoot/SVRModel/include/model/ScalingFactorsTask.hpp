@@ -17,7 +17,7 @@ public:
 
     ScalingFactorsTask() : Entity() {}
 
-    ScalingFactorsTask(bigint id, bigint dataset_id,
+    ScalingFactorsTask(const bigint id, const bigint dataset_id,
                    bool force_recalculate_scaling_factors = false,
                    int status = 0, double mse = -1.0)
             : Entity(id),

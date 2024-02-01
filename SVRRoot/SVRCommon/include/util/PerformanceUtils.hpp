@@ -3,15 +3,25 @@
 
 #include <memory>
 #include <vector>
+#include <deque>
 
 #define ATOMIC_FLAG_UNLOCK(atomic_flag) (atomic_flag).clear(std::memory_order_release)
-
 #define ATOMIC_FLAG_LOCK(atomic_flag) while ((atomic_flag).test_and_set(std::memory_order_acquire))
 
 template <typename T> std::vector<T>
 get_all_except(const std::vector<T> &all_elements, const T &excepted_element)
 {
     std::vector<T> result;
+    for (const auto &el: all_elements)
+        if (el != excepted_element)
+            result.push_back(el);
+    return result;
+}
+
+template <typename T> std::deque<T>
+get_all_except(const std::deque<T> &all_elements, const T &excepted_element)
+{
+    std::deque<T> result;
     for (const auto &el: all_elements)
         if (el != excepted_element)
             result.push_back(el);

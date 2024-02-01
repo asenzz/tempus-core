@@ -43,7 +43,7 @@ bigint AsyncPredictionTaskDAO::get_next_id()
     return pImpl.pgDao.get_next_id();
 }
 
-bool AsyncPredictionTaskDAO::exists(bigint id)
+bool AsyncPredictionTaskDAO::exists(const bigint id)
 {
    AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
     value->set_id(id);
@@ -66,7 +66,7 @@ int AsyncPredictionTaskDAO::remove(const PredictionTask_ptr &predictionTask)
     return pImpl.remove(predictionTask);
 }
 
-PredictionTask_ptr AsyncPredictionTaskDAO::get_by_id(bigint id)
+PredictionTask_ptr AsyncPredictionTaskDAO::get_by_id(const bigint id)
 {
     AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
     value->set_id(id);

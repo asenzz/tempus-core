@@ -12,7 +12,7 @@ bigint TsPredictionTaskDAO::get_next_id()
 }
 
 
-bool TsPredictionTaskDAO::exists(bigint id)
+bool TsPredictionTaskDAO::exists(const bigint id)
 {
     return ts_call<bool>(&PredictionTaskDAO::exists, id);
 }
@@ -30,7 +30,7 @@ int TsPredictionTaskDAO::remove(const PredictionTask_ptr& predictionTask)
 }
 
 
-PredictionTask_ptr TsPredictionTaskDAO::get_by_id(bigint id)
+PredictionTask_ptr TsPredictionTaskDAO::get_by_id(const bigint id)
 {
     return ts_call<PredictionTask_ptr>(&PredictionTaskDAO::get_by_id, id);
 }

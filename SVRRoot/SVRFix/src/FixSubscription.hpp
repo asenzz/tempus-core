@@ -11,8 +11,10 @@
 
 #include "Scheduler.hpp"
 
-namespace svr { namespace datamodel { class InputQueue; } }
-using InputQueue_ptr = std::shared_ptr<svr::datamodel::InputQueue>;
+namespace svr { namespace datamodel {
+class InputQueue;
+using InputQueue_ptr = std::shared_ptr<InputQueue>;
+} }
 
 namespace svr {
 namespace fix {
@@ -24,10 +26,10 @@ public:
     fix_subscription_container(fix_subscription_container const & other)=delete;
     ~fix_subscription_container();
 
-    void create_unless_exists(InputQueue_ptr input_queue);
+    void create_unless_exists(datamodel::InputQueue_ptr input_queue);
     void add_value(std::string const & symbol, bid_ask_spread const & spread);
 private:
-    class Impl;
+    struct Impl;
     Impl & pImpl;
 };
 

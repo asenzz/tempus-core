@@ -8,7 +8,7 @@ namespace dao {
 
 class EnsembleRowMapper : public IRowMapper<svr::datamodel::Ensemble> {
 public:
-    Ensemble_ptr mapRow(const pqxx_tuple &rowSet) const override {
+    datamodel::Ensemble_ptr mapRow(const pqxx_tuple &rowSet) const override {
         return std::make_shared<svr::datamodel::Ensemble>(
                 rowSet["id"].as<bigint>(),
                 rowSet["dataset_id"].as<bigint>(),

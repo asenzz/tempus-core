@@ -105,7 +105,7 @@ TEST(path_train_predict, basic_integration)
     svr::IKernel<double>::IKernelInit();
 
     OnlineMIMOSVR_ptr model, model2;
-    SVRParameters_ptr p_svr_parameters = std::make_shared<SVRParameters>(0, 0, "test", "test", 0, 0, 0, 1e5, 0, 0, 0, CHUNK_SIZE, 1, kernel_type_e::PATH, 1);
+    auto p_svr_parameters = std::make_shared<SVRParameters>(0, 0, "test", "test", 0, 0, 0, svr::mimo_type_e::single, 1e5, 0, 0, 0, CHUNK_DECREMENT, 1, kernel_type_e::PATH, 1);
     rapidcsv::Document doc(
             "/var/tmp/devicetracker_export_2023_04_27-08_54_03.csv", // "/var/tmp/processed_csv_devicetracker.csv",
             rapidcsv::LabelParams(),
@@ -174,28 +174,30 @@ TEST(path_train_predict, basic_integration)
     if (p_labels->n_rows != p_features->n_rows)
         LOG4_THROW("Sizes not appropriate, labels " << arma::size(*p_labels) << ", features " << arma::size(*p_features));
     const size_t half_train_len = (p_features->n_rows - VALIDATION_LENGTH) / 2;
+    t_param_set_ptr param_set = std::make_shared<t_param_set>();
+    param_set->emplace(p_svr_parameters);
     PROFILE_EXEC_TIME(model = std::make_shared<svr::OnlineMIMOSVR>(
-            p_svr_parameters,
-            std::make_shared<arma::mat>(p_features->rows(0, half_train_len - 1)),
-            std::make_shared<arma::mat>(p_labels->rows(0, half_train_len - 1))),
+                      param_set,
+                        std::make_shared<arma::mat>(p_features->rows(0, half_train_len - 1)),
+                        std::make_shared<arma::mat>(p_labels->rows(0, half_train_len - 1))),
                       "Model cold start, training and tuning on real labels");
     arma::mat predictions;
-    PROFILE_EXEC_TIME(predictions = model->chunk_predict(p_features->rows(half_train_len, p_features->n_rows - VALIDATION_LENGTH - 1), bpt::special_values::not_special),
+    PROFILE_EXEC_TIME(predictions = model->predict(p_features->rows(half_train_len, p_features->n_rows - VALIDATION_LENGTH - 1), bpt::special_values::not_special),
                       "Model predict");
 
     arma::mat residuals = p_labels->rows(half_train_len, p_features->n_rows - VALIDATION_LENGTH - 1) - predictions;
     const double res_scale_factor = arma::median(arma::abs(arma::vectorise(residuals))) / common::C_input_obseg_labels;
     residuals /= res_scale_factor;
     PROFILE_EXEC_TIME(model2 = std::make_shared<svr::OnlineMIMOSVR>(
-            p_svr_parameters,
+            param_set,
             std::make_shared<arma::mat>(p_features->rows(half_train_len, p_features->n_rows - VALIDATION_LENGTH - 1)),
             std::make_shared<arma::mat>(residuals)),
                       "Model cold start, training and tuning on residuals");
     arma::mat residual_predictions, final_predictions;
-    PROFILE_EXEC_TIME(residual_predictions = model2->chunk_predict(p_features->rows(p_features->n_rows - VALIDATION_LENGTH - 1, p_features->n_rows - 1), bpt::special_values::not_special),
+    PROFILE_EXEC_TIME(residual_predictions = model2->predict(p_features->rows(p_features->n_rows - VALIDATION_LENGTH - 1, p_features->n_rows - 1), bpt::special_values::not_special),
                       "Model predict residuals");
     residual_predictions *= res_scale_factor;
-    PROFILE_EXEC_TIME(final_predictions = model->chunk_predict(p_features->rows(p_features->n_rows - VALIDATION_LENGTH - 1, p_features->n_rows - 1), bpt::special_values::not_special),
+    PROFILE_EXEC_TIME(final_predictions = model->predict(p_features->rows(p_features->n_rows - VALIDATION_LENGTH - 1, p_features->n_rows - 1), bpt::special_values::not_special),
                       "Model predict final");
 
     final_predictions += residual_predictions;

@@ -5,6 +5,9 @@
 #include <model/Dataset.hpp>
 #include <model/IQScalingFactor.hpp>
 
+using namespace svr;
+
+
 TEST_F(DaoTestFixture, IQScalingFactorWorkflow)
 {
     User_ptr user1 = std::make_shared<svr::datamodel::User>(
@@ -12,11 +15,11 @@ TEST_F(DaoTestFixture, IQScalingFactorWorkflow)
 
     aci.user_service.save(user1);
 
-    InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
-            "SlowInputQueue", "SlowInputQueue_logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "left", "right"} );
+    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+            "SlowInputQueue", "SlowInputQueue_logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "JamesMayTestDataset", user1->get_user_name(), iq, std::vector<InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "JamesMayTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);

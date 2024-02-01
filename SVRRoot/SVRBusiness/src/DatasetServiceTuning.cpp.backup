@@ -31,7 +31,7 @@ namespace business {
 #include <memory_resource>
 
 // TODO port to CUDA kernel
-void DatasetService::recombine_params(predictions_t &tune_predictions, std::vector<SVRParameters_ptr> &ensemble_params, const size_t half_levct)
+void DatasetService::recombine_params(predictions_t &tune_predictions, std::vector<datamodel::SVRParameters_ptr> &ensemble_params, const size_t half_levct)
 {
     if (tune_predictions.empty()) return;
     bool empty_preds = true; 
@@ -133,9 +133,9 @@ void DatasetService::recombine_params(predictions_t &tune_predictions, std::vect
 
 
 void DatasetService::process_dataset_test_tune(
-        Dataset_ptr &p_dataset,
-        Ensemble_ptr &p_ensemble,
-        std::vector<SVRParameters_ptr> &ensemble_params,
+        datamodel::Dataset_ptr &p_dataset,
+        datamodel::Ensemble_ptr &p_ensemble,
+        std::vector<datamodel::SVRParameters_ptr> &ensemble_params,
         std::vector<std::vector<matrix_ptr>> &features,
         std::vector<std::vector<matrix_ptr>> &labels,
         std::vector<std::vector<bpt::ptime>> &last_row_time,
@@ -181,7 +181,7 @@ void DatasetService::process_dataset_test_tune(
                                 0,
                                 p_model->get_last_modeled_value_time(),
                                 p_dataset->get_input_queue()->get_resolution()),
-                                p_decon->get_data().end() - MODEL_TRAIN_OFFSET,
+                                p_decon->get_data().end(),
                                 p_decon->get_data() },
                         p_aux_decon->get_data(),
                         p_params->get_lag_count(),

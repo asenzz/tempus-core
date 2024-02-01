@@ -1,30 +1,106 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 IF(USE_CUDA)
     PROJECT(SVR LANGUAGES CXX CUDA)
-    INCLUDE(FindCUDA)
 ELSE()
     PROJECT(SVR CXX)
 ENDIF()
 
-SET(OpenMP_iomp_LIBRARY "/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/libiomp5.a")
-SET(CMAKE_CXX_STANDARD 17)
+SET(POSITION_INDEPENDENT_CODE OFF)
+SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "CMAKE_BUILD_TYPE")
+SET(CMAKE_CXX_STANDARD "17" CACHE STRING "CMAKE_CXX_STANDARD")
+SET(CMAKE_CUDA_HOST_COMPILER "/usr/bin/g++" CACHE STRING "CMAKE_CUDA_HOST_COMPILER")
+
+SET(CMAKE_PEDANTIC_FLAGS -Werror -pedantic -Werror -Wall -Wno-deprecated) # -fsanitize=address -lduma  -fstack-protector-strong -ldmallocthcxx -fno-sanitize-recover=all  -fsanitize=leak -fstack-protector-strong -fno-omit-frame-pointer -ldmallocthcxx" )
+IF(WIN32 OR CYGWIN)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_OS_CYGWIN=1")
+ENDIF()
+
+IF (CMAKE_BUILD_TYPE MATCHES "Rel")
+    SET(CXX_OPTIMIZATION_FLAGS -mtune=native -march=native -m64 -mstackrealign -mmovbe -mavx2 -mavx -malign-double -msse -msse2 -mfpmath=sse -O3) # Find a way to disable -fPIC switch, which is on by default
+    SET(CXX_OPTIMIZATION_FLAGS_ICX -fp-model=precise)
+    SET(CXX_OPTIMIZATION_FLAGS_GCC "")
+    SET(LINKER_OPTIMIZATION_FLAGS -flto=full -fwhole-program) # ICX linking optimization options: -Wl,--copy-dt-needed-entries -fvisibility=hidden "-Dexternally_visible=visibility(default)"
+ENDIF()
+
+ADD_DEFINITIONS(-DSVR_ENABLE_DEBUGGING -DBOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS=1) # Compatibility
+
+OPTION(USE_FAST_MATH "Use fast math" OFF)
+IF(USE_FAST_MATH)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS ${CXX_OPTIMIZATION_FLAGS} -ffast-math)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_GCC)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_ICX -fp-model=fast1 -fp-speculation=safe)
+    SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --use_fast_math" CACHE STRING "")
+ENDIF()
+
+SET(COMPILER_EXTENSIONS -std=c++17 -DBOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS=1 -ggdb -Wall -DCL_TARGET_OPENCL_VERSION=220)
+SET(COMPILER_EXTENSIONS_CC -std=c17) # Deprecated -fcilkplus -lcilkrts
+SET(COMPILER_EXTENSIONS_ICX -qopenmp-simd -fiopenmp -fopenmp=libiomp5 -fopenmp-targets=spir64_gen)
+SET(COMPILER_EXTENSIONS_GCC -fopenmp)
+
+FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_GCC)
+   ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:${OPT}>")
+ENDFOREACH()
+
+
+# ADD_COMPILE_OPTIONS(${CXX_OPTIMIZATION_FLAGS} ${CXX_OPTIMIZATION_FLAGS_ICX} ${COMPILER_EXTENSIONS} ${COMPILER_EXTENSIONS_ICX} ${COMPILER_EXTENSIONS_CC})
+ADD_LINK_OPTIONS("-Wl,--copy-dt-needed-entries" ${LINKER_OPTIMIZATION_FLAGS} ${CXX_OPTIMIZATION_FLAGS} ${COMPILER_EXTENSIONS} ${COMPILER_EXTENSIONS_GCC})
 
 OPTION(USE_CUDA "Compile for CUDA system." ON)
 if (USE_CUDA)
-    FIND_PACKAGE(CUDA)
     ADD_DEFINITIONS(-DUSE_CUDA)
-    # ADD_DEFINITIONS(-DVIENNACL_WITH_CUDA)
+    # ADD_DEFINITIONS(-DVIENNACL_WITH_CUDA) # ViennaCL is DEPRECATED and to be removed
     SET(CUDA_ARCH_LIST Auto CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
                                         compute capability versions (6.1, 7.0, etc) to generate code for. \
                                         Set to Auto for automatic detection (default)."
-        )
-    CUDA_SELECT_NVCC_ARCH_FLAGS(CUDA_ARCH_FLAGS ${CUDA_ARCH_LIST})
-    SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread --extended-lambda --default-stream per-thread --std=c++17 -gencode arch=compute_70,code=sm_70 -forward-unknown-to-host-compiler -lineinfo -liomp5 -fopenmp -Xcompiler '-std=c++17' -Xcompiler '-fopenmp' -Xcompiler '-liomp5' -Xcompiler '-mtune=native' -Xcompiler '-march=native' -Xcompiler '-O3' -Xcompiler '-mavx2' -Xcompiler '-mavx' -Xcompiler '-fPIC'")
-    #LIST(APPEND CMAKE_CUDA_FLAGS " --default-stream per-thread -gencode arch=compute_70,code=sm_70 ")
-    CUDA_SELECT_NVCC_ARCH_FLAGS(CUDA_ARCH_FLAGS ${CUDA_ARCH_LIST})
-    SET(CMAKE_CUDA_ARCHITECTURES 70)
-    INCLUDE_DIRECTORIES(include ${CUDA_INCLUDE_DIRS} ${CUDA_TOOLKIT_ROOT_DIR}/samples/common)
-endif()
+    )
+    SET(CMAKE_CUDA_ARCHITECTURES "70" CACHE STRING "")
+    SET(CUDA_ARCH_LIST "7.0" CACHE STRING "")
+    INCLUDE_DIRECTORIES(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+
+    SET(CMAKE_CUDA_COMPILER "nvcc" CACHE STRING "CMAKE_CUDA_COMPILER")
+    SET(CUDA_HOST_COMPILER "g++" CACHE STRING "CUDA_HOST_COMPILER")
+    SET(COMPILER_EXTENSIONS_CUDA -DCUDACC -fopenmp --extended-lambda --default-stream per-thread --std=c++17 -forward-unknown-to-host-compiler -lineinfo)
+    FOREACH(OPT IN LISTS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_GCC)
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${OPT}>")
+    ENDFOREACH()
+    FOREACH(OPT IN LISTS COMPILER_EXTENSIONS_CUDA)
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:${OPT}>")
+    ENDFOREACH()
+    IF (NOT CUDA_SDK_ROOT_DIR MATCHES "/")
+        SET(CUDA_SDK_ROOT_DIR "${CUDA_TOOLKIT_ROOT_DIR}" CACHE STRING "CUDA_SDK_ROOT_DIR" FORCE)
+    ENDIF()
+ENDIF()
+
+OPTION(ENABLE_OPENCL "Use the Vienna OpenCL backend for BLAS" ON)
+IF(ENABLE_OPENCL)
+    ADD_DEFINITIONS(-DVIENNACL_WITH_OPENCL)
+    FIND_PACKAGE(OpenCL REQUIRED)
+ENDIF(ENABLE_OPENCL)
+
+INCLUDE_DIRECTORIES("/opt/intel/oneapi/tbb/latest/include" "/usr/local/magma/include")
+LINK_DIRECTORIES("/usr/local/magma/lib")
+
+SET(MKL_INTERFACE_FULL "intel_lp64" CACHE STRING "" FORCE)
+SET(MKL_LINK "static" CACHE STRING "" FORCE)
+SET(OpenMP_iomp_LIBRARY "/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/libiomp5.a" CACHE STRING "OpenMP_iomp_LIBRARY")
+
+
+OPTION(EXPERIMENTAL_FEATURES "Enable experimental features" OFF)
+IF(EXPERIMENTAL_FEATURES)
+    ADD_DEFINITIONS(-DEXPERIMENTAL_FEATURES)
+    SET(MATLAB_INCLUDE_DIR "/mnt/slowstore/usr/local/MATLAB/R2021b/extern/include/")
+    SET(MATLAB_LINK_DIR "/mnt/slowstore/usr/local/MATLAB/R2021b/extern/bin/glnxa64/")
+    EXECUTE_PROCESS(COMMAND python3-config --ldflags --cflags OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE PY_CLDFLAGS)
+    STRING(REGEX REPLACE "[\n ]" "" PY_CLDFLAGS "${PY_CLDFLAGS}")
+    # SET(PY_CLDFLAGS "-fPIC ${PY_CLDFLAGS}")
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PY_CLDFLAGS}")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PY_CLDFLAGS}")
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${PY_CLDFLAGS}")
+    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${PY_CLDFLAGS}")
+    SET(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} ${PY_CLDFLAGS}")
+ENDIF(EXPERIMENTAL_FEATURES)
+
+
 
 if(NOT WITH_TESTS)
     SET(WITH_TESTS ".*")
@@ -40,12 +116,16 @@ if($ENV{HOSTNAME} MATCHES "sl[0-9]+$")
     LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/host_config/sl/cmake/")
 endif()
 
+# SET(NVCC_PREPEND_FLAGS "-allow-unsupported-compiler -ccbin /usr/bin/c++") # Unsafe avoid!
 FIND_PACKAGE(TBB REQUIRED)
 FIND_PACKAGE(OpenMP REQUIRED)
 FIND_PACKAGE(PQXX)
 FIND_PACKAGE(PQ)
 FIND_PACKAGE(Armadillo)
 FIND_PACKAGE(MKL)
+
+SET(ENABLE_OMP_OFFLOAD ON CACHE BOOL "ENABLE_OMP_OFFLOAD" FORCE)
+
 INCLUDE_DIRECTORIES(BEFORE SYSTEM ${TBB_INCLUDE_DIRS} "/opt/intel/oneapi/tbb/latest/include/")
 
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
@@ -72,47 +152,7 @@ endif()
 if(WITH_TOOLS)
     LIST(APPEND MODULES zTools)
 endif()
-
 SET(LIBS_BUILD_TYPE SHARED)
-SET(MKL_USE_interface "lp64")
-
-OPTION(MKL_USE_parallel ON)
-IF(CMAKE_BUILD_TYPE MATCHES Rel)
-    SET (CXX_OPTIMIZATION_FLAGS "-flto -mtune=native -march=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -O3")
-    SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_OPTIMIZATION_FLAGS}")
-    SET (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CXX_OPTIMIZATION_FLAGS}")
-    SET (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CXX_OPTIMIZATION_FLAGS}")
-    SET (CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ")
-ENDIF(CMAKE_BUILD_TYPE MATCHES Rel)
-
-SET(COMPILER_EXTENSIONS "-DBOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS=1 -mavx2 -mavx -ggdb -Wall -larmadillo -fopenmp -liomp5 -DCL_TARGET_OPENCL_VERSION=220") # -fcilkplus -lcilkrts
-
-option(USE_FAST_MATH "Use fast math" OFF)
-IF(USE_FAST_MATH)
-    SET(COMPILER_EXTENSIONS "${COMPILER_EXTENSIONS} -ffast-math")
-    SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --use_fast_math")
-ENDIF()
-
-option(EXPERIMENTAL_FEATURES "Enable experimental features" OFF)
-IF(EXPERIMENTAL_FEATURES)
-    execute_process(COMMAND python3-config --ldflags --cflags OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE PY_CLDFLAGS)
-    string(REGEX REPLACE "[\n ]" "" PY_CLDFLAGS "${PY_CLDFLAGS}")
-    set(PY_CLDFLAGS "-fPIC ${PY_CLDFLAGS}")
-    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PY_CLDFLAGS}")
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PY_CLDFLAGS}")
-    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${PY_CLDFLAGS}")
-    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${PY_CLDFLAGS}")
-    SET(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} ${PY_CLDFLAGS}")
-ENDIF(EXPERIMENTAL_FEATURES)
-
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMPILER_EXTENSIONS}")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMPILER_EXTENSIONS}")
-SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler='${COMPILER_EXTENSIONS}' -DCUDACC")
-SET(MKL_INTERFACE_FULL "intel_lp64") # Never set to intel_ilp64, Armadillo crashes bug with matrix indices
-SET(CMAKE_PEDANTIC_FLAGS "-pedantic -Werror") #   -fsanitize=address -lduma  -fstack-protector-strong -ldmallocthcxx -fno-sanitize-recover=all  -fsanitize=leak -fstack-protector-strong -fno-omit-frame-pointer -ldmallocthcxx" )
-IF(WIN32 OR CYGWIN)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_OS_CYGWIN=1")
-ENDIF()
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules (JEMALLOC jemalloc)
@@ -142,27 +182,13 @@ SET(Boost_MIN_VERSION 1.48)
 SET(DEPLIBS_DIR /libs)
 SET(PQXX_LIBRARIES -lpqxx -lpq -lcuda)
 
-add_definitions(-DENABLE_DEBUGGING -DBOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS=1)
-
-option(ENABLE_OPENCL "Use the Vienna OpenCL backend for BLAS" ON)
-IF(ENABLE_OPENCL)
-    add_definitions(-DVIENNACL_WITH_OPENCL)
-    FIND_PACKAGE(OpenCL REQUIRED)
-ENDIF(ENABLE_OPENCL)
-
-IF(EXPERIMENTAL_FEATURES)
-    add_definitions(-DEXPERIMENTAL_FEATURES)
-    SET(MATLAB_INCLUDE_DIR "/mnt/slowstore/usr/local/MATLAB/R2021b/extern/include/")
-    SET(MATLAB_LINK_DIR "/mnt/slowstore/usr/local/MATLAB/R2021b/extern/bin/glnxa64/")
-ENDIF(EXPERIMENTAL_FEATURES)
-
 FOREACH(module ${MODULES})
     INCLUDE_DIRECTORIES(${SVRROOT_DIR}/${module}/include)
     ADD_SUBDIRECTORY(${SVRROOT_DIR}/${module})
-    set(DIR_TEST_MODULES)
-    get_property(DIR_TEST_MODULES DIRECTORY ${CMAKE_SOURCE_DIR}/${SVRROOT_DIR}/${module} PROPERTY TEST_MODULES)
+    SET(DIR_TEST_MODULES)
+    GET_PROPERTY(DIR_TEST_MODULES DIRECTORY ${CMAKE_SOURCE_DIR}/${SVRROOT_DIR}/${module} PROPERTY TEST_MODULES)
     if(DIR_TEST_MODULES)
-        set(TEST_MODULES ${TEST_MODULES} ${DIR_TEST_MODULES})
+        SET(TEST_MODULES ${TEST_MODULES} ${DIR_TEST_MODULES})
     endif()
 ENDFOREACH(module)
 
@@ -175,20 +201,20 @@ endif()
 
 
 if(WITH_TESTS)
-    enable_testing()
-    message("********************************************************************************")
-    message("*  Registering the following tests:")
-    FOREACH(module ${TEST_MODULES})
-        if("${module}" MATCHES "${WITH_TESTS}")
-            message("* ~~ ${module}")
-            add_test(NAME ${module} COMMAND ${module})
+    ENABLE_TESTING()
+    MESSAGE("********************************************************************************")
+    MESSAGE("*  Registering the following tests:")
+    FOREACH(MODULE ${TEST_MODULES})
+        if("${MODULE}" MATCHES "${WITH_TESTS}")
+            MESSAGE("* ~~ ${MODULE}")
+            ADD_TEST(NAME ${MODULE} COMMAND ${MODULE})
 
-            if("${module}" MATCHES "SVRBusiness-tests")
-                add_test(NAME ${module}-async COMMAND "${module}" "-d async" )
-                message("* ~~ ${module}-async")                        
+            if("${MODULE}" MATCHES "SVRBusiness-tests")
+                ADD_TEST(NAME ${MODULE}-async COMMAND "${MODULE}" "-d async" )
+                MESSAGE("* ~~ ${MODULE}-async")
             endif()
         endif()
     ENDFOREACH()
-    message("*  Use make test to run the tests")
-    message("********************************************************************************")
+    MESSAGE("*  Use make test to run the tests")
+    MESSAGE("********************************************************************************")
 endif()

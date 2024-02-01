@@ -19,7 +19,7 @@ bigint PgRequestDAO::get_next_result_id()
     return data_source.query_for_type<bigint>(get_sql("get_next_result_id"));
 }
 
-int PgRequestDAO::save(const MultivalRequest_ptr &request) {
+int PgRequestDAO::save(const datamodel::MultivalRequest_ptr &request) {
 
     if(request->get_id() > 0){
         return data_source.update(get_sql("multival_update"),
@@ -46,7 +46,7 @@ int PgRequestDAO::save(const MultivalRequest_ptr &request) {
     );
 }
 
-MultivalRequest_ptr PgRequestDAO::get_multival_request(const std::string &user_name, bigint dataset_id, const bpt::ptime &value_time_start, const bpt::ptime &value_time_end)
+datamodel::MultivalRequest_ptr PgRequestDAO::get_multival_request(const std::string &user_name, const bigint dataset_id, const bpt::ptime &value_time_start, const bpt::ptime &value_time_end)
 {
     MultivalRequestRowMapper rowMapper;
     return data_source.query_for_object(&rowMapper, get_sql("get_user_multival_request"),
@@ -57,7 +57,7 @@ MultivalRequest_ptr PgRequestDAO::get_multival_request(const std::string &user_n
     );
 }
 
-MultivalRequest_ptr PgRequestDAO::get_multival_request(const std::string &user_name, bigint dataset_id,
+datamodel::MultivalRequest_ptr PgRequestDAO::get_multival_request(const std::string &user_name, const bigint dataset_id,
         const bpt::ptime &value_time_start, const bpt::ptime &value_time_end, size_t resolution, std::string const & value_columns)
 {
     MultivalRequestRowMapper rowMapper;
@@ -71,7 +71,7 @@ MultivalRequest_ptr PgRequestDAO::get_multival_request(const std::string &user_n
     );
 }
 
-MultivalRequest_ptr PgRequestDAO::get_latest_multival_request(const std::string &user_name, bigint dataset_id)
+datamodel::MultivalRequest_ptr PgRequestDAO::get_latest_multival_request(const std::string &user_name, const bigint dataset_id)
 {
     MultivalRequestRowMapper rowMapper;
     return data_source.query_for_object(&rowMapper, get_sql("get_latest_multival_request"),
@@ -79,18 +79,18 @@ MultivalRequest_ptr PgRequestDAO::get_latest_multival_request(const std::string 
                                         dataset_id);
 }
 
-std::vector<MultivalRequest_ptr> PgRequestDAO::get_active_multival_requests(const std::string &user_name, bigint dataset_id, std::string const &inputQueueName)
+std::deque<datamodel::MultivalRequest_ptr> PgRequestDAO::get_active_multival_requests(const std::string &user_name, const bigint dataset_id)
 {
     MultivalRequestRowMapper rowMapper;
 
-    return data_source.query_for_array(rowMapper, get_sql("get_active_multival_requests"), user_name, dataset_id);
+    return data_source.query_for_deque(rowMapper, get_sql("get_active_multival_requests"), user_name, dataset_id);
 }
 
-std::vector<MultivalResponse_ptr> PgRequestDAO::get_multival_results(
-        const std::string &user_name, bigint dataset_id, const bpt::ptime &value_time_start, const bpt::ptime &value_time_end, const size_t resolution)
+std::deque<datamodel::MultivalResponse_ptr> PgRequestDAO::get_multival_results(
+        const std::string &user_name, const bigint dataset_id, const bpt::ptime &value_time_start, const bpt::ptime &value_time_end, const size_t resolution)
 {
     MultivalResponseRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, get_sql("get_multival_results"),
+    return data_source.query_for_deque(rowMapper, get_sql("get_multival_results"),
                                         //user_name,
                                         //dataset_id,
                                         value_time_start,
@@ -99,22 +99,17 @@ std::vector<MultivalResponse_ptr> PgRequestDAO::get_multival_results(
     );
 }
 
-std::vector<MultivalResponse_ptr> PgRequestDAO::get_multival_results_column(
+std::deque<datamodel::MultivalResponse_ptr> PgRequestDAO::get_multival_results_column(
         const std::string &user_name, const std::string &column_name,
         bigint dataset_id, const bpt::ptime &value_time_start, const bpt::ptime &value_time_end, const size_t resolution)
 {
     MultivalResponseRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, get_sql("get_multival_results_column"),
-                                       user_name,
-                                       column_name,
-                                       dataset_id,
-                                       value_time_start,
-                                       value_time_end,
-                                       resolution
-    );
+    return data_source.query_for_deque(
+            rowMapper, get_sql("get_multival_results_column"), user_name, column_name, dataset_id, value_time_start,
+            value_time_end, resolution);
 }
 
-int PgRequestDAO::save(const MultivalResponse_ptr &response) {
+int PgRequestDAO::save(const datamodel::MultivalResponse_ptr &response) {
 
     int result = 0;
     if(response->get_id())
@@ -139,7 +134,7 @@ int PgRequestDAO::save(const MultivalResponse_ptr &response) {
     return result;
 }
 
-int PgRequestDAO::force_finalize(const MultivalRequest_ptr &request)
+int PgRequestDAO::force_finalize(const datamodel::MultivalRequest_ptr &request)
 {
     data_source.update(get_sql("force_finalize_request"), request->get_id());
     return 0;

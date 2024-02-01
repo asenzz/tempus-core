@@ -16,7 +16,7 @@ namespace dao {
 class InputQueueRowRowMapper: public IRowMapper<svr::datamodel::DataRow> {
 public:
 
-    DataRow_ptr mapRow(const pqxx_tuple& rowSet) const override {
+    datamodel::DataRow_ptr mapRow(const pqxx_tuple& rowSet) const override {
 
 		std::vector<double> values;
 		for(auto values_iter = rowSet.begin() + 4; values_iter != rowSet.end(); values_iter++){

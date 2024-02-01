@@ -22,7 +22,7 @@ public:
     virtual bool exists(const bigint id) = 0;
     virtual int save(const IQScalingFactor_ptr& iQscalingFactor) = 0;
     virtual int remove(const IQScalingFactor_ptr& iQscalingFactor) = 0;
-    virtual std::vector<IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id) = 0;
+    virtual std::deque<IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id) = 0;
 };
 
 }

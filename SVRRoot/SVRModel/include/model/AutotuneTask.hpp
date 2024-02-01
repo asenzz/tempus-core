@@ -38,7 +38,7 @@ public:
     AutotuneTask() : Entity(), vp_slide_period_sec(bpt::seconds(0))
     {}
 
-    AutotuneTask(bigint id, bigint dataset_id, bigint result_dataset_id,
+    AutotuneTask(const bigint id, const bigint dataset_id, const bigint result_dataset_id,
                  const bpt::ptime &creation_time, const bpt::ptime &done_time,
                  const std::map<std::string, std::string> &parameters,
                  const bpt::ptime &start_train_time, const bpt::ptime &end_train_time,
@@ -71,7 +71,7 @@ public:
               mse(mse)
     {}
 
-    AutotuneTask(bigint id, bigint dataset_id, bigint result_dataset_id,
+    AutotuneTask(const bigint id, const bigint dataset_id, const bigint result_dataset_id,
                  const bpt::ptime &creation_time, const bpt::ptime &done_time,
                  const std::string &parameters,
                  const bpt::ptime &start_train_time, const bpt::ptime &end_train_time,
@@ -125,7 +125,7 @@ public:
         return dataset_id;
     }
 
-    void set_dataset_id(bigint value)
+    void set_dataset_id(const bigint value)
     {
         dataset_id = value;
     }
@@ -135,7 +135,7 @@ public:
         return result_dataset_id;
     }
 
-    void set_result_dataset_id(bigint value)
+    void set_result_dataset_id(const bigint value)
     {
         result_dataset_id = value;
     }

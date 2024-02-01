@@ -1,7 +1,11 @@
 #pragma once
 
-#include "model/Entity.hpp"
 #include <set>
+#include <execution>
+#include <algorithm>
+#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include "model/Entity.hpp"
+#include "util/string_utils.hpp"
 
 
 namespace svr { namespace datamodel { class DQScalingFactor; }}
@@ -10,6 +14,9 @@ using DQScalingFactor_ptr = std::shared_ptr<svr::datamodel::DQScalingFactor>;
 
 namespace svr {
 namespace datamodel {
+
+struct DQScalingFactorsLess;
+typedef tbb::concurrent_set<DQScalingFactor_ptr, DQScalingFactorsLess> dq_scaling_factor_container_t;
 
 class DQScalingFactor: public Entity
 {
@@ -35,16 +42,8 @@ public:
             scaling_factor_labels(scale_labels)
     {}
 
-    bool operator==(const DQScalingFactor& other) const
-    {
-        return other.get_id() == get_id() &&
-                other.get_dataset_id() == get_dataset_id() &&
-                other.get_input_queue_table_name() == get_input_queue_table_name() &&
-                other.get_input_queue_column_name() == get_input_queue_column_name() &&
-                other.get_decon_level() == get_decon_level() &&
-                other.get_features_factor() == get_features_factor() &&
-                other.get_labels_factor() == get_labels_factor() ;
-    }
+    bool operator==(const DQScalingFactor& other) const;
+    bool operator<(const DQScalingFactor &o) const;
 
     bigint get_dataset_id() const
     {
@@ -106,51 +105,35 @@ public:
         scaling_factor_labels = label_factor;
     }
 
-    std::string to_string() const override
-    {
-        std::stringstream str;
-        str << std::setprecision(std::numeric_limits<double>::max_digits10) << "Decon queue scaling factor ID " << id << ", " <<
-            "dataset ID " << dataset_id_ << ", " <<
-            "input queue table name " << input_queue_table_name_ << ", " <<
-            "input queue column name " << input_queue_column_name_ << ", " <<
-            "level " << decon_level_ << ", " <<
-            "labels factor " << scaling_factor_labels << ", " <<
-            "features factor " << scaling_factor_features;
-        return str.str();
-    }
+    std::string to_string() const override;
 
+    bool in(const dq_scaling_factor_container_t &c);
+
+    void add(dq_scaling_factor_container_t &sf, const bool overwrite = false);
+    static void add(dq_scaling_factor_container_t &sf, const dq_scaling_factor_container_t &new_sf, const bool overwrite = false);
 };
 
-static inline std::stringstream &operator<< (std::stringstream &str, DQScalingFactor &dqsf)
+template<typename T> inline std::basic_ostream<T> &
+operator<< (std::basic_ostream<T> &s, const DQScalingFactor &d)
 {
-    str << dqsf.to_string();
-    return str;
+    return s << d.to_string();
 }
 
-struct DQScalingFactorsLess : public std::binary_function<DQScalingFactor_ptr, DQScalingFactor_ptr, bool>
+
+struct DQScalingFactorsLess
 {
     bool operator()(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs) const
-    {
-        if( lhs->get_dataset_id() < rhs->get_dataset_id() )
-            return true;
-        if( lhs->get_dataset_id() > rhs->get_dataset_id() )
-            return false;
-
-        if( lhs->get_input_queue_table_name() < rhs->get_input_queue_table_name() )
-            return true;
-        if( lhs->get_input_queue_table_name() > rhs->get_input_queue_table_name() )
-            return false;
-
-        if( lhs->get_input_queue_column_name() < rhs->get_input_queue_column_name() )
-            return true;
-        if( lhs->get_input_queue_column_name() > rhs->get_input_queue_column_name() )
-            return false;
-
-        return lhs->get_decon_level() < rhs->get_decon_level();
-    }
+    { return *lhs < *rhs; }
 };
 
-typedef std::set<DQScalingFactor_ptr, DQScalingFactorsLess> dq_scaling_factor_container_t;
+bool operator<(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs);
+
+template<typename T> inline std::basic_ostream<T> &
+operator<<(std::basic_ostream<T> &s, const dq_scaling_factor_container_t &c)
+{
+    return s << common::to_string(c);
+}
+
 
 } // namespace datamodel
 } // namespace svr

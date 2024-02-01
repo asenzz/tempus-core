@@ -110,7 +110,7 @@ public:
     future(future_base_ptr fut_impl);
     future() : future(nullptr) {};
 
-    using typename detail::future_helper<future_result>::get;
+    using detail::future_helper<future_result>::get;
 
 private:
     void wait();

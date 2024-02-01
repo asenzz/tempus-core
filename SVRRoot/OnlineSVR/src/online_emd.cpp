@@ -1,3 +1,9 @@
+#include <fftw3.h>
+#include <algorithm>
+#include <iostream>
+#include <cmath>
+#include <appcontext.hpp>
+
 #include "online_emd.hpp"
 #include "util/string_utils.hpp"
 #include "util/math_utils.hpp"
@@ -5,60 +11,97 @@
 #include "oemd_coefficients_search.hpp"
 #include "online_emd_impl.cuh"
 
-#include <fftw3.h>
-#include <algorithm>
-#include <iostream>
-#include <sstream>
-#include <cmath>
-#include <appcontext.hpp>
-
 
 namespace svr {
 
-static const size_t fir_search_start_size = 500;
-static const size_t fir_search_end_size = 20000; // 18k is the maximum for 16GB video card that won't make OSQP crash
-static const size_t fir_search_window_start = 0; // 10000000; // Tail size, set to 0 if tail is presented trimmed
-static const size_t fir_search_window_end = fir_search_window_start + fir_search_end_size * 20;
+t_coefs_cache online_emd::oemd_coefs_cache;
 
 
-void online_emd::find_fir_coefficients(const std::vector<double> &input)
+void online_emd::transform(
+        datamodel::DeconQueue_ptr &p_decon_queue, const size_t test_offset, const size_t custom_residuals_ct, const bpt::ptime &oemd_start_time)
 {
-    LOG4_BEGIN();
-    if (input.size() < fir_search_window_end)
-        LOG4_ERROR("Input size " << input.size() << " smaller than needed window end " << fir_search_window_end);
+    const size_t residuals_ct = custom_residuals_ct == std::numeric_limits<size_t>::max() ? get_residuals_length(p_decon_queue->get_table_name()) : custom_residuals_ct;
+    data_row_container::iterator start_decon_iter;
+    if (oemd_start_time == bpt::min_date_time)
+        start_decon_iter = p_decon_queue->get_data().begin();
+    else {
+        start_decon_iter = lower_bound_back(p_decon_queue->get_data(), oemd_start_time);
+        if (start_decon_iter == p_decon_queue->get_data().end()) {
+            LOG4_ERROR("OEMD start time " << oemd_start_time << " not found in decon " << *p_decon_queue << ", OEMD starting from beginning.");
+            start_decon_iter = p_decon_queue->get_data().begin();
+        } else if (start_decon_iter->get()->get_value_time() != oemd_start_time) {
+            LOG4_WARN("OEMD start time " << oemd_start_time << " and decon iter time " << start_decon_iter->get()->get_value_time() << " do not match, clean decon queue and deconstruct from beginning!");
+            if (start_decon_iter != p_decon_queue->get_data().begin()) --start_decon_iter;
+        }
+    }
 
-    const size_t fir_search_input_window_start = std::max<size_t>(0, input.size() - fir_search_window_end);
-    PROFILE_EXEC_TIME(
-            oemd_search::oemd_coefs_search(
-                    input, fir_search_start_size, fir_search_end_size, fir_search_input_window_start, input.size(), levels, p_oemd_coef->masks, p_oemd_coef->siftings),
-                      "OEMD FIR coefficients search");
-    fir_coefs_initialized = true;
-    LOG4_END();
+    std::vector<double> tail;
+    datamodel::datarow_range in_range(start_decon_iter, p_decon_queue->get_data().end(), p_decon_queue->get_data());
+    if (in_range.distance() < ssize_t(residuals_ct)) mirror_tail(in_range, residuals_ct, tail);
+
+#ifdef MANIFOLD_TEST
+    datamodel::datarow_range in_range_test(start_decon_iter, p_decon_queue->get_data().end() - test_offset, p_decon_queue->get_data());
+    if (in_range_test.distance() < ssize_t(residuals_ct))
+        mirror_tail(in_range_test, residuals_ct, tail);
+    const auto p_coefs = get_coefs(in_range_test, tail, p_decon_queue->get_table_name());
+#else
+    const auto p_coefs = get_coefs(in_range, tail, p_decon_queue->get_table_name());
+#endif
+
+    PROFILE_EXEC_TIME(svr::cuoemd::transform(
+            in_range,
+            tail,
+            p_coefs->siftings,
+            p_coefs->masks,
+            stretch_coef,
+            levels), "OEMD transform of " << in_range.distance() + tail.size() << " values.");
 }
 
 
-online_emd::online_emd(const size_t _levels, const double _stretch_coef, const bool force_find_fir_coefs)
+t_oemd_coefficients_ptr online_emd::get_coefs(
+        const datamodel::datarow_range &input,
+        const std::vector<double> &tail,
+        const std::string &queue_name) const
+{
+    const auto in_tail_size = input.distance() + tail.size();
+    const auto coefs_key = std::pair{levels, queue_name};
+    const auto it_coefs = oemd_coefs_cache.find(coefs_key);
+    if (it_coefs != oemd_coefs_cache.end()) return it_coefs->second;
+
+    const auto fir_search_input_window_start = std::max<size_t>(0, in_tail_size - oemd_search::fir_search_window_end);
+
+    auto coefs = oemd_coefficients::load(levels, queue_name);
+    if (coefs && !coefs->siftings.empty()
+        && *std::min_element(coefs->siftings.begin(), coefs->siftings.end())
+        && !coefs->masks.empty()
+        && !common::empty(coefs->masks))
+        goto __bail;
+
+    if (in_tail_size < oemd_search::fir_search_window_end)
+        LOG4_WARN("Input size " << input.distance() << " smaller than recommended " << oemd_search::fir_search_window_end);
+
+    if (!coefs) coefs = std::make_shared<oemd_coefficients>();
+    oemd_search::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
+
+    PROFILE_EXEC_TIME(
+            oemd_search::oemd_coefficients_search::get().optimize_levels(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, in_tail_size, queue_name),
+            "OEMD FIR coefficients search");
+
+__bail:
+    if (!coefs) LOG4_THROW("Could not prepare coefficients for " << levels << ", " << queue_name);
+
+    const auto [it_loaded_coefs, rc] = oemd_coefs_cache.emplace(coefs_key, coefs);
+    if (rc) return it_loaded_coefs->second;
+    else {
+        LOG4_ERROR("Error storing coefficients for " << levels << ", " << queue_name);
+        return coefs;
+    }
+}
+
+
+online_emd::online_emd(const size_t _levels, const double _stretch_coef)
         : spectral_transform(std::string("oemd"), _levels), levels(_levels), stretch_coef(_stretch_coef)
 {
-    if (p_oemd_coef) {
-        LOG4_TRACE("Filter coefficients already initialized.");
-        return;
-    }
-    auto it_coefs = oemd_available_levels.find(_levels);
-    if (it_coefs == oemd_available_levels.end()) {
-        LOG4_DEBUG("Coefs for " << levels << " not found.");
-        p_oemd_coef = std::make_shared<oemd_coefficients>(levels, std::vector<size_t>(levels - 1, DEFAULT_SIFTINGS), std::vector<std::vector<double>>(levels - 1));
-        fir_coefs_initialized = false;
-    } else {
-        LOG4_DEBUG("Initializing OEMD coefficients from loaded.");
-        p_oemd_coef = std::make_shared<oemd_coefficients>(it_coefs->second);
-        if (force_find_fir_coefs) {
-            fir_coefs_initialized = false;
-        } else {
-            fir_coefs_initialized = !p_oemd_coef->siftings.empty() && *std::min_element(p_oemd_coef->siftings.begin(), p_oemd_coef->siftings.end()) && !p_oemd_coef->masks.empty();
-            for (const auto &m: p_oemd_coef->masks) fir_coefs_initialized &= !m.empty();
-        }
-    }
 }
 
 
@@ -96,168 +139,25 @@ oemd_mean_compute(
     fflush(stderr);
 #endif
 }
-
 #endif
-
-
-#if 0
-static int
-oemd_fast_mean_compute(const std::vector<double> &x, const double *masks, int mask_size, std::vector<double> &rx)
-{
-    int len = x.size();
-    fftw_plan forward_plan;
-    fftw_plan backward_plan;
-    fftw_complex *output = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (len / 2 + 1));
-    fftw_complex *mult = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (len / 2 + 1));
-    forward_plan = fftw_plan_dft_r2c_1d(len, &rx[0], output, FFTW_ESTIMATE);
-    backward_plan = fftw_plan_dft_c2r_1d(len, output, &rx[0], FFTW_ESTIMATE);
-    for (int i = 0; i < len; i++) {
-        rx[i] = i < mask_size ? masks[mask_size - 1 - i] : 0.;
-    }
-    fftw_execute(forward_plan);
-    for (int i = 0; i < len / 2 + 1; i++) {
-        mult[i][0] = output[i][0];
-        mult[i][1] = output[i][1];
-    }
-    for (int i = 0; i < len; i++) {
-        rx[i] = x[i];
-    }
-    fftw_execute(forward_plan);
-    for (int i = 0; i < len / 2 + 1; i++) {
-        double o_real = output[i][0] * mult[i][0] - output[i][1] * mult[i][1];
-        double o_imag = output[i][0] * mult[i][1] + output[i][1] * mult[i][0];
-        output[i][0] = o_real;
-        output[i][1] = o_imag;
-    }
-    fftw_execute(backward_plan);
-    for (int i = 0; i < mask_size - 1; i++) {
-        rx[i] = 0.;
-        double sum = 0.;
-        for (int j = 0; j <= i; j++) {
-            rx[i] += masks[mask_size - 1 - i + j] * x[j];
-            sum += masks[mask_size - 1 - i + j];
-        }
-        rx[i] = rx[i] / sum;
-    }
-    for (int i = mask_size - 1; i < len; i++) {
-        rx[i] = rx[i] / len;
-    }
-    fftw_free(output);
-    fftw_free(mult);
-    fftw_destroy_plan(forward_plan);
-    fftw_destroy_plan(backward_plan);
-    return 0;
-}
-
-oemd_fptr online_emd::select_method(size_t level, size_t input_length) const
-{
-    return &oemd_mean_compute;
-    /*
-    if (level < 2) {
-        return &oemd_mean_compute;
-    } else {
-        if (input_length < p_oemd_coef->masks[level].size()){
-            return &oemd_mean_compute;
-        }else{
-            return &oemd_fast_mean_compute;
-        }
-    }
-	*/
-}
-#endif
-
-
-void
-online_emd::transform(
-        const std::vector<double> &input,
-        std::vector<std::vector<double>> &decon,
-        const size_t padding = 0)
-{
-    if (!fir_coefs_initialized) LOG4_THROW("FIR coefs not initialized!");
-    if (input.size() < get_residuals_length())
-        LOG4_ERROR("Input size " << input.size() << " too short, needed " << get_residuals_length());
-    else
-        LOG4_DEBUG("Input size " << input.size());
-#ifdef OEMD_CUDA
-#ifdef CUDA_OEMD_MULTIGPU
-    std::vector<std::shared_ptr<common::gpu_context>> gpu_ctxs;
-    while (common::gpu_handler::get_instance().get_free_gpus())
-        gpu_ctxs.emplace_back(std::make_shared<common::gpu_context>());
-#else
-    common::gpu_context ctx;
-#endif
-
-    svr::cuoemd::transform(
-            input, decon,
-#ifdef CUDA_OEMD_MULTIGPU
-            gpu_ctxs,
-#else
-            ctx.phy_id(),
-#endif
-            p_oemd_coef->siftings,
-            p_oemd_coef->masks,
-            stretch_coef,
-            levels);
-#else // Use CPU, slow!
-    init_oemd();
-
-    size_t input_length = input.size();
-    LOG4_TRACE("Size of input is " << input_length);
-    std::vector<double> remainder = input;
-    std::vector<double> rx = remainder;
-    std::vector<double> rx2(input_length, 0.);
-    if (decon.size() != input_length) decon.resize(input_length);
-    for (size_t l = 0; l < levels - 1; l++) {
-        //oemd_fptr mean_compute = select_method(l, input_length);
-        for (size_t j = 0; j < p_oemd_coef->siftings[l]; ++j) {
-            oemd_mean_compute(rx, p_oemd_coef->masks[l], rx2);
-            for (size_t t = 0; t < input_length; ++t) {
-                rx[t] -= rx2[t];
-            }
-        }
-        __omp_tpfor(size_t, t, 0, input_length,
-            if (decon[t].size() != levels) decon[t].resize(levels, 0.);
-            //result[k][l+1] = rx[k];
-            decon[t][levels - l - 1] = rx[t];
-            remainder[t] -= rx[t];
-            rx[t] = remainder[t];
-        )
-    }
-    for (size_t t = 0; t < input_length; ++t) {
-        decon[t][0] = rx[t];
-    }
-
-#if 0 // Debugging
-    {
-        std::stringstream ss;
-        for (size_t i = 0; i < decon.size(); ++i) {
-            for (size_t j = 0; j < decon[i].size(); ++j)
-                ss << ", " << decon[i][j];
-            ss << std::endl;
-        }
-        LOG4_FILE("oemd_decon.txt", ss.str().c_str());
-        exit(0);
-    }
-#endif
-#endif
-}
 
 
 void online_emd::inverse_transform(
         const std::vector<double> &decon,
         std::vector<double> &recon,
-        const size_t padding = 0) const
+        const size_t padding) const
 {
     const size_t input_size = decon.size() / levels;
     recon = std::vector<double>(input_size, 0.);
 
     //by rows  --> decon_column_values[row_index + level_ix * frame_size]
-    __omp_pfor_i(0, input_size,
+#pragma omp parallel for
+    for (size_t i = 0; i < input_size; ++i) {
         double recon_i = 0;
         for (size_t j = 0; j < levels; ++j)
             recon_i += decon[i + j * input_size];
         recon[i] = recon_i;
-    )
+    }
 }
 
 
@@ -269,25 +169,22 @@ size_t online_emd::get_residuals_length(const oemd_coefficients &coefs, const do
     return common::max_size(coefs.masks) * stretch_coef * common::max(coefs.siftings) * 7; /* time invariance 1: * oemd_level_coefs->second.siftings.back() * 7 */ //
 }
 
-
-size_t online_emd::get_residuals_length(const size_t levels)
+size_t online_emd::get_residuals_length(const double _stretch_coef, const size_t siftings)
 {
-    LOG4_WARN("Getting default masks residuals length!");
-    const auto oemd_level_coefs = oemd_available_levels.find(levels);
-    if (levels < 2 or oemd_level_coefs == oemd_available_levels.end())
-        LOG4_THROW("Unsupported number of levels " << levels << " requested for OEMD.");
-    return get_residuals_length(oemd_level_coefs->second, OEMD_STRETCH_COEF);
+    return oemd_search::fir_search_end_size * _stretch_coef * siftings * 7;
 }
 
 
-size_t online_emd::get_residuals_length()
+size_t online_emd::get_residuals_length(const std::string &queue_name)
 {
-#ifdef OEMD_CUDA
-    return get_residuals_length(*p_oemd_coef, stretch_coef);
-#else
-    if (!p_oemd_coef) init_oemd();
-    return p_oemd_coef->masks.back().size();
-#endif
+    LOG4_WARN("Getting default masks residuals length!");
+    const auto oemd_coefs = oemd_coefs_cache.find({levels, queue_name});
+    if (levels < 1)
+        LOG4_THROW("Unsupported number of levels " << levels << ", " << queue_name << " requested for OEMD.");
+    if (levels == 1) return 0;
+    if (oemd_coefs == oemd_coefs_cache.end())
+        return get_residuals_length(stretch_coef);
+    return get_residuals_length(*oemd_coefs->second, stretch_coef);
 }
 
 

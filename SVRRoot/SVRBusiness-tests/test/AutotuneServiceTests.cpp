@@ -6,6 +6,8 @@
 #include <model/Dataset.hpp>
 #include <model/AutotuneTask.hpp>
 
+using namespace svr;
+
 using svr::datamodel::AutotuneTask;
 
 TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
@@ -15,11 +17,11 @@ TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
 
     aci.user_service.save(user1);
 
-    InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
-            "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::vector<std::string>{"up", "down", "left", "right"} );
+    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+            "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::vector<InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 

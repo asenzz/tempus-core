@@ -16,7 +16,7 @@ public:
 
 	${NAME}Service(const ${NAME}DAO_ptr& ${NAME}Dao):${NAME}Dao(${NAME}Dao){}
 
-	${NAME}_ptr     get_${NAME}_by_id(bigint id);
+	${NAME}_ptr     get_${NAME}_by_id(const bigint id);
 	int             save(const ${NAME}_ptr&);
 	bool            exists(const ${NAME}_ptr&);
 	int             remove(const ${NAME}_ptr&);

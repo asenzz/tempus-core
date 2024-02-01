@@ -25,7 +25,7 @@ public:
 
     int save(ScalingFactorsTask_ptr& scalingFactorsTask);
 
-    ScalingFactorsTask_ptr get_by_id(bigint id);
+    ScalingFactorsTask_ptr get_by_id(const bigint id);
 };
 
 } /* namespace business */

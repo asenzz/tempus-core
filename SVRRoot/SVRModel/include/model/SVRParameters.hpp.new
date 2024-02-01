@@ -149,7 +149,6 @@ private:
     u_int64_t svr_decremental_distance;
     double svr_adjacent_levels_ratio;
     size_t lag_count;
-    std::vector<size_t> sub_vector_indices;
     size_t chunks_ct;
     size_t labels_ct;
     bool skip = false;
@@ -457,12 +456,6 @@ public:
         return ss.str();
     }
 
-    std::vector<double> to_vector() const
-    {
-        LOG4_THROW("Not implemented!");
-        return std::vector<double>();
-    }
-
     const std::vector<size_t> &get_sub_vector_indices() const
     {
         return sub_vector_indices;
@@ -470,7 +463,6 @@ public:
 
     void set_sub_vector_indices(const std::vector<size_t> &new_sub_vector_indices)
     {
-        sub_vector_indices = new_sub_vector_indices;
     }
 };
 
@@ -512,10 +504,11 @@ struct Bounds
     }
 };
 
+using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
+
 } // datamodel namespace
 } // svr namespace
 
-using SVRParameters_ptr = std::shared_ptr<svr::datamodel::SVRParameters>;
 
 namespace svr {
 namespace datamodel {
@@ -523,7 +516,7 @@ namespace datamodel {
 using ensemble_svr_parameters_t = std::map<
 /* input queue table name */ std::pair<std::string,
 /* input queue column name */ std::string>,
-/* svr parameters */ std::vector<SVRParameters_ptr> >;
+/* svr parameters */ std::vector<datamodel::SVRParameters_ptr> >;
 
 }
 }

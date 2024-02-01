@@ -1,6 +1,5 @@
 #include <appcontext.hpp>
 #include <model/Request.hpp>
-#include <model/User.hpp>
 #include <util/string_utils.hpp>
 
 struct Mirror : Command
@@ -35,23 +34,23 @@ struct Mirror : Command
 
         User_ptr user = aci.user_service.get_user_by_user_name(user_name);
 
-        Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
+        svr::datamodel::Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
         if(!dataset)
             throw std::runtime_error("Mirror: cannot find the user's dataset.");
 
-        MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
+        svr::datamodel::MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
         if(!request)
             throw std::runtime_error("Mirror: cannot find the user's request. Make sure MT4 is started and requests for values.");
 
         boost::posix_time::time_duration const resolution {boost::posix_time::seconds(request->resolution)};
 
-        InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
+        svr::datamodel::InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
         if(!queue)
             throw std::runtime_error("Mirror: cannot find the input queue.");
 
         size_t n ((request->value_time_end - request->value_time_start).total_seconds() / request->resolution);
 
-        DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
+        svr::datamodel::DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
         if(!nr)
             throw std::runtime_error("Mirror: Input queue is empty");
 
@@ -60,7 +59,7 @@ struct Mirror : Command
 
         using DataRows = svr::datamodel::DataRow::container;
 
-        DataRows data = aci.input_queue_service.get_queue_data(queue->get_table_name(), strt, endt);
+        DataRows data = aci.input_queue_service.load(queue->get_table_name(), strt, endt);
 
         if(data.front()->get_values().size() != queue->get_value_columns().size() )
             throw std::runtime_error("Mirror: input queue column number does not correspond to that in the metadata.");
@@ -73,7 +72,7 @@ struct Mirror : Command
 
         n = 1;
 
-        MultivalResponse_ptr resp = MultivalResponse_ptr (new svr::datamodel::MultivalResponse (0, request->get_id(), strt, "", 0.0 ) );
+        svr::datamodel::MultivalResponse_ptr resp = svr::datamodel::MultivalResponse_ptr (new svr::datamodel::MultivalResponse (0, request->get_id(), strt, "", 0.0 ) );
         for(DataRows::reverse_iterator idata = data.rbegin(); idata != data.rend(); ++idata)
         {
             resp->value_time = endt + resolution * n++ ;

@@ -16,7 +16,7 @@ bigint PgPredictionTaskDAO::get_next_id()
     return data_source.query_for_type<bigint>(AbstractDAO::get_sql("get_next_id"));
 }
 
-bool PgPredictionTaskDAO::exists(bigint id)
+bool PgPredictionTaskDAO::exists(const bigint id)
 {
     return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"),
                                            id) == 1;
@@ -57,7 +57,7 @@ int PgPredictionTaskDAO::remove(const PredictionTask_ptr &predictionTask)
     return data_source.update(AbstractDAO::get_sql("remove"), predictionTask->get_id());
 }
 
-PredictionTask_ptr PgPredictionTaskDAO::get_by_id(bigint id)
+PredictionTask_ptr PgPredictionTaskDAO::get_by_id(const bigint id)
 {
     PredictionTaskRowMapper rowMapper;
     return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), id);

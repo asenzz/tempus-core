@@ -43,7 +43,7 @@ bigint AsyncScalingFactorsTaskDAO::get_next_id()
     return pImpl.pgDao.get_next_id();
 }
 
-bool AsyncScalingFactorsTaskDAO::exists(bigint id)
+bool AsyncScalingFactorsTaskDAO::exists(const bigint id)
 {
    AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
     value->set_id(id);
@@ -66,7 +66,7 @@ int AsyncScalingFactorsTaskDAO::remove(const ScalingFactorsTask_ptr &scalingFact
     return pImpl.remove(scalingFactorsTask);
 }
 
-    ScalingFactorsTask_ptr AsyncScalingFactorsTaskDAO::get_by_id(bigint id)
+    ScalingFactorsTask_ptr AsyncScalingFactorsTaskDAO::get_by_id(const bigint id)
 {
     AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
     value->set_id(id);

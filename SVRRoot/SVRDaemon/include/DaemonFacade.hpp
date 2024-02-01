@@ -14,7 +14,6 @@ private:
     void uninitialize();
     bool continue_loop();
     static void do_fork();
-    void process_mimo_multival_requests(const User_ptr &p_user, Dataset_ptr &p_dataset);
 
 public:
     DaemonFacade(const std::string &app_properties_path);

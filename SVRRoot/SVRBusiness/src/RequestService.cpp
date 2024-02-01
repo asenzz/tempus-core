@@ -15,49 +15,50 @@ RequestService::RequestService(svr::dao::RequestDAO &request_dao)
 :requestDao(request_dao)
 {}
 
-int RequestService::save(const MultivalRequest_ptr &request) {
+int RequestService::save(const datamodel::MultivalRequest_ptr &request) {
     return requestDao.save(request);
 }
 
-MultivalRequest_ptr RequestService::get_multival_request(const std::string& user_name, const bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end)
+datamodel::MultivalRequest_ptr RequestService::get_multival_request(const std::string& user_name, const bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end)
 {
     return requestDao.get_multival_request(user_name, dataset_id, value_time_start, value_time_end);
 }
 
-MultivalRequest_ptr RequestService::get_multival_request(const std::string& user_name,
+datamodel::MultivalRequest_ptr RequestService::get_multival_request(const std::string& user_name,
         bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end, const size_t resolution, std::string const & value_columns)
 {
     return requestDao.get_multival_request(user_name, dataset_id, value_time_start, value_time_end, resolution, value_columns);
 }
 
-MultivalRequest_ptr RequestService::get_latest_multival_request(svr::datamodel::User const & user, svr::datamodel::Dataset const & dataset)
+datamodel::MultivalRequest_ptr RequestService::get_latest_multival_request(svr::datamodel::User const & user, svr::datamodel::Dataset const & dataset)
 {
     return requestDao.get_latest_multival_request(user.get_user_name(), dataset.get_id());
 }
 
-std::vector<MultivalRequest_ptr> RequestService::get_active_multival_requests(svr::datamodel::User const & user, svr::datamodel::Dataset const & dataset, svr::datamodel::InputQueue const & input_queue)
+std::deque<datamodel::MultivalRequest_ptr> RequestService::get_active_multival_requests(
+        svr::datamodel::User const &user, svr::datamodel::Dataset const &dataset)
 {
-    return requestDao.get_active_multival_requests(user.get_user_name(), dataset.get_id(), input_queue.get_table_name());
+    return requestDao.get_active_multival_requests(user.get_user_name(), dataset.get_id());
 }
 
-std::vector<MultivalResponse_ptr> RequestService::get_multival_results(const std::string& user_name, const bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end, const size_t resolution)
+std::deque<datamodel::MultivalResponse_ptr> RequestService::get_multival_results(const std::string& user_name, const bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end, const size_t resolution)
 {
     return requestDao.get_multival_results(user_name, dataset_id, value_time_start, value_time_end, resolution);
 }
 
-std::vector<MultivalResponse_ptr> RequestService::get_multival_results(const std::string& user_name, const std::string &column_name, const bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end, const size_t resolution)
+std::deque<datamodel::MultivalResponse_ptr> RequestService::get_multival_results(const std::string& user_name, const std::string &column_name, const bigint dataset_id, const bpt::ptime& value_time_start, const bpt::ptime& value_time_end, const size_t resolution)
 {
     return requestDao.get_multival_results_column(user_name, column_name, dataset_id, value_time_start, value_time_end, resolution);
 }
 
-int RequestService::force_finalize(const MultivalRequest_ptr &request)
+int RequestService::force_finalize(const datamodel::MultivalRequest_ptr &request)
 {
     LOG4_DEBUG("Forced finalize of request with id " << request->get_id());
 
     return requestDao.force_finalize(request);
 }
 
-int RequestService::save(const MultivalResponse_ptr &response)
+int RequestService::save(const datamodel::MultivalResponse_ptr &response)
 {
     return requestDao.save(response);
 }

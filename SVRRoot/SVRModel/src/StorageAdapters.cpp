@@ -20,7 +20,7 @@ bigint ensemble_storage_adapter::get_next_id()
 }
 
 
-std::shared_ptr<Ensemble> ensemble_storage_adapter::load(bigint id)
+std::shared_ptr<Ensemble> ensemble_storage_adapter::load(const bigint id)
 {
     return APP.ensemble_service.get(id);
 }

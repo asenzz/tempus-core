@@ -23,13 +23,13 @@ DeconQueue::DeconQueue(
 }
 
 
-DeconQueue_ptr DeconQueue::clone_empty() const
+datamodel::DeconQueue_ptr DeconQueue::clone_empty() const
 {
     return std::make_shared<DeconQueue>(
             table_name_, input_queue_table_name_, input_queue_column_name_, dataset_id_, decon_level_number_);
 }
 
-DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t end_ix) const
+datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t end_ix) const
 {
     auto p_new_decon_queue = clone_empty();
     if (!data_.empty()) p_new_decon_queue->data_.insert(
@@ -53,35 +53,6 @@ void DeconQueue::erase_until(const bpt::ptime &target_time)
 std::vector<double> DeconQueue::get_actual_values(const data_row_container::const_iterator &target_iter) const
 {
     return business::DeconQueueService::get_actual_values(data_, target_iter);
-}
-
-DataRow::container DeconQueue::get_data(const bpt::time_period &range, const size_t lag_count) const
-{
-    if (data_.empty()) {
-        LOG4_DEBUG("Empty data!");
-        return {};
-    }
-
-    LOG4_DEBUG("Looking for range " << range << " in data from " << data_.begin()->get()->get_value_time() << " until " << data_.rbegin()->get()->get_value_time());
-    DataRow::container out_data = data_;
-
-#ifdef ALL_LEVELS_DELTA
-    if (not out_data.begin()->second->is_anchor()) THROW_EX_F(std::logic_error, "Anchor at start of data is missing!");
-#endif
-    auto start_iter = lower_bound(out_data, range.begin());
-    if (start_iter == out_data.end() or std::distance(out_data.begin(), start_iter) < (ssize_t) lag_count)
-        THROW_EX_F(std::logic_error, "Could not find " << range.begin() << " in data from " << out_data.begin()->get()->get_value_time() << " until " << out_data.rbegin()->get()->get_value_time());
-    std::advance(start_iter, -lag_count);
-    const auto end_iter = upper_bound(out_data, range.end()); //find_nearest(new_data, range.end());
-    auto new_anchor_row = std::make_shared<DataRow>(*start_iter->get());
-    new_anchor_row->set_values(business::DeconQueueService::get_actual_values(out_data, start_iter));
-    new_anchor_row->set_anchor(true);
-    *start_iter = new_anchor_row;
-    out_data.erase(out_data.begin(), start_iter);
-    if (end_iter != out_data.end()) out_data.erase(end_iter, out_data.end());
-    LOG4_DEBUG("For range " << range << " found data from " << out_data.begin()->get()->get_value_time() << " until " << out_data.rbegin()->get()->get_value_time());
-
-    return out_data;
 }
 
 
@@ -109,7 +80,7 @@ void DeconQueue::update_data(const DataRow::container &new_data, const bool over
     if (new_data.front()->get_value_time() <= data_.front()->get_value_time() && new_data.back()->get_value_time() >= data_.back()->get_value_time()) {
         data_ = new_data;
     } else if (new_data.front()->get_value_time() < data_.front()->get_value_time()) {
-        const auto data_iter_end = upper_bound(data_, new_data.back()->get_value_time());
+        const auto data_iter_end = upper_bound_back(data_, new_data.back()->get_value_time());
         if (data_iter_end != data_.end()) data_.erase(data_.begin(), data_iter_end);
         data_.insert(data_.begin(), new_data.begin(), new_data.end());
     } else if (new_data.front()->get_value_time() >= data_.front()->get_value_time()) {

@@ -22,10 +22,10 @@ namespace fix {
 class input_queue_writer : public mm_file_writer
 {
 public:
-    input_queue_writer(InputQueue_ptr input_queue, std::string const & mm_file_name, size_t no_of_elements);
+    input_queue_writer(datamodel::InputQueue_ptr input_queue, std::string const & mm_file_name, size_t no_of_elements);
 private:
     void do_write(bid_ask_spread const & spread);
-    InputQueue_ptr input_queue;
+    datamodel::InputQueue_ptr input_queue;
 };
 
 
@@ -38,7 +38,7 @@ private:
 class fix_data_drain
 {
 public:
-    fix_data_drain(InputQueue_ptr input_queue, std::string const & mmf_name, bpt::time_duration const & period);
+    fix_data_drain(datamodel::InputQueue_ptr input_queue, std::string const & mmf_name, bpt::time_duration const & period);
     fix_data_drain(const fix_data_drain& orig) = delete;
 
     void start();
@@ -59,8 +59,7 @@ private:
 /*                                                                            */
 /******************************************************************************/
 
-struct fix_subscription_container::Impl
-{
+struct fix_subscription_container::Impl {
     typedef std::map<bpt::time_duration, fix_data_drain *> duration_to_drain_mapping;
     typedef std::map<std::string, duration_to_drain_mapping> my_cont_t;
 
@@ -83,7 +82,7 @@ struct fix_subscription_container::Impl
             }
     }
 
-    void create_unless_exists(InputQueue_ptr input_queue)
+    void create_unless_exists(datamodel::InputQueue_ptr input_queue)
     {
         std::string symbol = input_queue->get_logical_name();
         std::transform(symbol.begin(), symbol.end(),symbol.begin(), ::toupper);
@@ -170,7 +169,7 @@ fix_subscription_container::~fix_subscription_container()
 }
 
 
-void fix_subscription_container::create_unless_exists(InputQueue_ptr input_queue)
+void fix_subscription_container::create_unless_exists(datamodel::InputQueue_ptr input_queue)
 {
     pImpl.create_unless_exists(input_queue);
 }
@@ -188,7 +187,7 @@ void fix_subscription_container::add_value(std::string const & symbol, bid_ask_s
 /******************************************************************************/
 
 
-input_queue_writer::input_queue_writer(InputQueue_ptr input_queue, std::string const & mm_file_name, size_t no_of_elements)
+input_queue_writer::input_queue_writer(datamodel::InputQueue_ptr input_queue, std::string const & mm_file_name, size_t no_of_elements)
 : mm_file_writer(mm_file_name, no_of_elements)
 , input_queue(input_queue)
 {
@@ -203,14 +202,14 @@ void input_queue_writer::do_write(bid_ask_spread const & spread)
     mm_file_writer::do_write(spread);
     input_queue->get_data().clear();
 
-    DataRow_ptr row = DataRow_ptr(new svr::datamodel::DataRow(spread.time, spread.time, 0, {spread.ask_px, double(spread.ask_qty), spread.bid_px, double(spread.bid_qty)}));
+    datamodel::DataRow_ptr row = datamodel::DataRow_ptr(new svr::datamodel::DataRow(spread.time, spread.time, 0, {spread.ask_px, double(spread.ask_qty), spread.bid_px, double(spread.bid_qty)}));
 
     input_queue->get_data().push_back(row);
     APP.input_queue_service.save(input_queue);
 }
 
 
-fix_data_drain::fix_data_drain(InputQueue_ptr input_queue, std::string const & mmf_name, bpt::time_duration const & period)
+fix_data_drain::fix_data_drain(datamodel::InputQueue_ptr input_queue, std::string const & mmf_name, bpt::time_duration const & period)
 : period(period)
 , mean_calc( period )
 , writer( input_queue, mmf_name, 1000 )

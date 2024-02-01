@@ -9,7 +9,7 @@ namespace dao {
 
 class DataRowRowMapper : public IRowMapper<svr::datamodel::DataRow> {
 public:
-    DataRow_ptr mapRow(const pqxx_tuple &rowSet) const override
+    datamodel::DataRow_ptr mapRow(const pqxx_tuple &rowSet) const override
     {
         if (rowSet.size() < 3) {
             LOG4_ERROR("Illegal number of columns " << rowSet.size());

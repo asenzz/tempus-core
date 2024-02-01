@@ -72,7 +72,7 @@ public:
     std::string value_column;
     double value;
 
-    MultivalResponse(bigint response_id, bigint request_id, bpt::ptime value_time, std::string value_column, double value)
+    MultivalResponse(const bigint response_id, const bigint request_id, bpt::ptime value_time, std::string value_column, double value)
             : Entity(response_id), request_id(request_id), value_time(std::move(value_time)), value_column(std::move(value_column)), value(value) {}
     MultivalResponse(): Entity() { value = std::numeric_limits<double>::quiet_NaN(); }
 
@@ -111,10 +111,10 @@ public:
     }
 };
 
+using MultivalRequest_ptr = std::shared_ptr<MultivalRequest>;
+using MultivalResponse_ptr = std::shared_ptr<MultivalResponse>;
+using ValueRequest_ptr = std::shared_ptr<ValueRequest>;
+
 } // namespace datamodel
 } // namespace svr
-
-using MultivalRequest_ptr = std::shared_ptr<svr::datamodel::MultivalRequest>;
-using MultivalResponse_ptr = std::shared_ptr<svr::datamodel::MultivalResponse>;
-using ValueRequest_ptr = std::shared_ptr<svr::datamodel::ValueRequest>;
 

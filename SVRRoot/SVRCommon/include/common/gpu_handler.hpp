@@ -25,7 +25,7 @@
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
 
-#define CTX_PER_GPU       4 // Number of contexts per GPU at once, be careful with kernel VRAM usage!
+#define CTX_PER_GPU       2 // Number of contexts per GPU at once, be careful with kernel VRAM usage!
 
 #define SVRWAVE_GPU_SEM         "svrwave_gpu_sem"
 
@@ -34,7 +34,7 @@ namespace common {
 
 class gpu_context;
 
-class gpu_handler {
+class gpu_handler : boost::noncopyable {
     friend gpu_context;
     size_t get_free_gpu();
     void return_gpu(const size_t gpu_index);
@@ -51,12 +51,11 @@ public:
     const viennacl::ocl::device & device(const size_t idx) const;
 #endif //VIENNACL_WITH_OPENCL
 
-    static gpu_handler& get_instance();
+    static gpu_handler& get();
 
-private:
-    // TODO: consider inherit boost::noncopyable
     gpu_handler();
     ~gpu_handler();
+private:
     gpu_handler(const gpu_handler&) = delete;
     gpu_handler& operator=(const gpu_handler&) = delete;
 
@@ -85,7 +84,7 @@ public:
     virtual ~gpu_context();
 
     size_t id() const { return context_id_; }
-    size_t phy_id() const { return context_id_ % (gpu_handler::get_instance().get_max_running_gpu_threads_number() / CTX_PER_GPU); }
+    size_t phy_id() const { return context_id_ % (gpu_handler::get().get_max_running_gpu_threads_number() / CTX_PER_GPU); }
     viennacl::ocl::context &ctx() const { return viennacl::ocl::get_context(context_id_);  }
 protected:
     size_t context_id_;

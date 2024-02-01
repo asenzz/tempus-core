@@ -20,30 +20,30 @@ namespace bpt = boost::posix_time;
 enum LOG_LEVEL_T{TRACE=1, DEBUG=2, INFO=3, WARN=4, ERR=5, FATAL=6};
 extern int SVR_LOG_LEVEL;
 
-#define FLUSH_OUTS  fflush(stdout); fflush(stderr);
+#ifdef SVR_ENABLE_DEBUGGING
 
-#ifdef ENABLE_DEBUGGING
-
-#define DO_WRAP(cmd) do{ cmd; FLUSH_OUTS; } while(0)
+#define FLUSH_OUTS  (void) ::fflush(stdout); (void) ::fflush(stderr);
+// #define FLUSH_OUTS
+#define CMD_WRAP(cmd) do { cmd; FLUSH_OUTS; } while (0)
 
 #define EXCEPTION_FORMAT FILE_NAME << ":" << __LINE__ << " [" << __FUNCTION__ << "] "
-#define PRINT_STACK std::cout << boost::stacktrace::stacktrace() << std::endl
+#define PRINT_STACK std::cout << boost::stacktrace::stacktrace() << '\n'
 
-#define THROW_EX_F(ex, msg) DO_WRAP(::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
-#define THROW_EX_FS(ex, msg) DO_WRAP(PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
+#define THROW_EX_F(ex, msg) CMD_WRAP(::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
+#define THROW_EX_FS(ex, msg) CMD_WRAP(PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
 
 #define BOOST_CODE_LOCATION OUTPUT_FORMAT % FILE_NAME % __LINE__ % __FUNCTION__
 
-#define LOG4_BEGIN() DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE)    BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % "Begin.";)
-#define LOG4_END() DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE)      BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % "End.";)
-#define LOG4_TRACE(msg) DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE) BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % msg;)
-#define LOG4_DEBUG(msg) DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::DEBUG) BOOST_LOG_TRIVIAL(debug)    << BOOST_CODE_LOCATION % msg;)
-#define LOG4_INFO(msg)  DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::INFO)  BOOST_LOG_TRIVIAL(info)     << BOOST_CODE_LOCATION % msg;)
-#define LOG4_WARN(msg)  DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::WARN)  BOOST_LOG_TRIVIAL(warning)  << BOOST_CODE_LOCATION % msg;)
-#define LOG4_ERROR(msg) DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg;)
-#define LOG4_FATAL(msg) DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::FATAL) BOOST_LOG_TRIVIAL(fatal)    << BOOST_CODE_LOCATION % msg;)
+#define LOG4_BEGIN() CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE)    BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % "Begin.";)
+#define LOG4_END() CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE)      BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % "End.";)
+#define LOG4_TRACE(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE) BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % msg;)
+#define LOG4_DEBUG(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::DEBUG) BOOST_LOG_TRIVIAL(debug)    << BOOST_CODE_LOCATION % msg;)
+#define LOG4_INFO(msg)  CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::INFO)  BOOST_LOG_TRIVIAL(info)     << BOOST_CODE_LOCATION % msg;)
+#define LOG4_WARN(msg)  CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::WARN)  BOOST_LOG_TRIVIAL(warning)  << BOOST_CODE_LOCATION % msg;)
+#define LOG4_ERROR(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg;)
+#define LOG4_FATAL(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::FATAL) BOOST_LOG_TRIVIAL(fatal)    << BOOST_CODE_LOCATION % msg;)
 
-#define LOG4_THROW(msg) DO_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg; THROW_EX_FS(::std::runtime_error, msg);)
+#define LOG4_THROW(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg; THROW_EX_FS(::std::runtime_error, msg);)
 //#define LOG4_ASSERT(cond, failmsg) { if (!(cond)) LOG4_THROW((failmsg)); } // TODO Fix!
 #define LOG4_FILE(logfile, msg) { std::ofstream of( ::svr::common::formatter() << logfile, std::ofstream::out | std::ofstream::app); of.precision(std::numeric_limits<double>::max_digits10); of << msg << std::endl; }
 
@@ -57,12 +57,15 @@ extern int SVR_LOG_LEVEL;
 #define LOG4_WARN(msg) {}
 #define LOG4_ERROR(msg) {}
 #define LOG4_FATAL(msg) {}
+#define LOG4_THROW(msg) {}
+#define LOG4_FILE(logfile, msg) {}
 
 #endif
 
 #define PROFILE_EXEC_TIME(X, M_NAME)    \
 {                                       \
     const bpt::ptime __start_time = bpt::microsec_clock::local_time();  \
-    X;                                                                  \
-    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - __start_time) << " process memory RSS " << svr::common::memory_manager::get_process_resident_set() << " MB"); \
+    (X);                                                                \
+    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - __start_time) << \
+    " process memory RSS " << svr::common::memory_manager::get_process_resident_set() << " MB"); \
 }

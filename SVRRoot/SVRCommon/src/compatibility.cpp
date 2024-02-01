@@ -34,6 +34,30 @@ namespace std {
 namespace svr {
 namespace common {
 
+// TODO Do a GPU handler and ctx from a queue
+bool file_exists(const std::string &filename)
+{
+    return std::ifstream(filename).good();
+}
+
+
+double drander(t_drand48_data_ptr buffer)
+{
+    double result;
+    drand48_r(buffer, &result);
+    return result;
+}
+
+t_drand48_data seedme(const size_t thread_id)
+{
+    unsigned short int seed16v[3];
+    seed16v[0] = thread_id;
+    seed16v[1] = 91789217 * thread_id + 9821279871;
+    seed16v[2] = 128719761 * thread_id + 19827619263;
+    t_drand48_data buffer;
+    seed48_r(seed16v, &buffer);
+    return buffer;
+}
 
 viennacl::vector<double> tovcl(const arma::colvec &in)
 {

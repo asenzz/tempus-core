@@ -12,8 +12,8 @@ InputQueue::InputQueue(
         const bpt::time_duration& resolution,
         const bpt::time_duration& legal_time_deviation,
         const std::string &time_zone,
-        const std::vector<std::string> value_columns,
-        bool uses_fix_connection,
+        const std::deque<std::string> &value_columns,
+        const bool uses_fix_connection,
         const data_row_container &rows)
     :
     Queue( make_queue_table_name( owner_user_name, logical_name, resolution ), rows),
@@ -37,7 +37,7 @@ InputQueue InputQueue::get_copy_metadata() const
 }
 
 
-InputQueue_ptr InputQueue::clone_empty() const
+datamodel::InputQueue_ptr InputQueue::clone_empty() const
 {
     return std::make_shared<InputQueue>(
                 get_table_name(), logical_name_, owner_user_name_, description_, resolution_,

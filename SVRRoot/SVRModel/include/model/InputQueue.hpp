@@ -10,17 +10,18 @@
 #define DEFAULT_INPUT_QUEUE_RESOLUTION (60) /* seconds */
 
 
-namespace svr { namespace datamodel { class InputQueue; }}
-namespace svr { namespace business { class InputQueueService; }}
-
-using InputQueue_ptr = std::shared_ptr<svr::datamodel::InputQueue>;
+namespace svr {
+namespace datamodel { class InputQueue; }
+namespace business { class InputQueueService; }
+}
 
 
 namespace svr {
 namespace datamodel {
 
+using InputQueue_ptr = std::shared_ptr<InputQueue>;
 
-class InputQueue : public Queue
+class InputQueue final : public Queue
 {
     friend svr::business::InputQueueService;
 private:
@@ -32,7 +33,7 @@ private:
     bpt::time_duration legal_time_deviation_;
 
     std::string time_zone_;
-    std::vector<std::string> value_columns_;
+    std::deque<std::string> value_columns_;
 
     void reinit_table_name();
 
@@ -40,7 +41,7 @@ private:
 
 public:
 
-    InputQueue(
+    explicit InputQueue(
             const std::string& table_name = std::string(),
             const std::string& logical_name = std::string(),
             const std::string& owner_user_name = std::string(),
@@ -48,8 +49,8 @@ public:
             const bpt::time_duration& resolution = bpt::seconds(DEFAULT_INPUT_QUEUE_RESOLUTION),
             const bpt::time_duration& legal_time_deviation = bpt::seconds(0),
             const std::string &time_zone = "UTC",
-            const std::vector<std::string> value_columns = std::vector<std::string>(),
-            bool uses_fix_connection = false,
+            const std::deque<std::string> &value_columns = std::deque<std::string>(),
+            const bool uses_fix_connection = false,
             const data_row_container &rows = data_row_container());
 
     inline const std::string& get_description() const { return description_; }
@@ -70,21 +71,21 @@ public:
     inline const std::string& get_time_zone() const {return time_zone_;}
     inline void set_time_zone(const std::string &time_zone) {time_zone_ = time_zone;}
 
-    inline const std::vector<std::string>& get_value_columns() const {return value_columns_;}
-    inline void set_value_columns(const std::vector<std::string>& value_columns){ value_columns_ = value_columns; }
+    inline const std::deque<std::string>& get_value_columns() const {return value_columns_;}
+    inline void set_value_columns(const std::deque<std::string>& value_columns){ value_columns_ = value_columns; }
 
     inline const bool is_tick_queue() const { return resolution_ < bpt::seconds(1); }
 
     /* TODO Implement
-    inline const std::vector<std::string> &get_feature_columns() const;
-    inline void set_feature_columns(const std::vector<std::string> &feature_columns) { feature_columns_ = feature_columns; }
+    inline const std::deque<std::string> &get_feature_columns() const;
+    inline void set_feature_columns(const std::deque<std::string> &feature_columns) { feature_columns_ = feature_columns; }
     */
 
     inline bpt::time_duration const & get_missing_hours_retention() const { static auto const weeks2 = bpt::hours(24 * 14); return weeks2; }
 
 	// end getters and setters
     InputQueue get_copy_metadata() const;
-    InputQueue_ptr clone_empty() const;
+    datamodel::InputQueue_ptr clone_empty() const;
 
     size_t get_value_column_index(const std::string &column_name) const
     {
@@ -94,7 +95,7 @@ public:
         return std::distance(value_columns_.begin(), pos);
     }
 
-    std::vector<double> get_column_values(
+    std::deque<double> get_column_values(
             const std::string &column_name,
             const size_t start_pos = 0,
             const size_t count = std::numeric_limits<size_t>::max()) const
@@ -110,12 +111,24 @@ public:
     void set_uses_fix_connection(bool value);
 };
 
+template<typename T> std::basic_ostream<T> &
+operator<<(std::basic_ostream<T> &s, const InputQueue &iq)
+{
+    return s << iq.to_string();
+}
+
+template<typename T> std::basic_ostream<T> &
+operator<<(const InputQueue &iq, std::basic_ostream<T> &s)
+{
+    return s << iq.to_string();
+}
+
 } /* namespace model */
 } /* namespace svr */
 
 
 template<>
-inline void store_buffer_push_merge<InputQueue_ptr>(InputQueue_ptr & dest, InputQueue_ptr const & src)
+inline void store_buffer_push_merge<svr::datamodel::InputQueue_ptr>(svr::datamodel::InputQueue_ptr &dest, svr::datamodel::InputQueue_ptr const & src)
 {
     dest->get_data().insert(dest->get_data().end(), src->get_data().begin(), src->get_data().end());
     dest->set_value_columns(src->get_value_columns());
