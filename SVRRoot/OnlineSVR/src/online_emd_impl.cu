@@ -364,13 +364,10 @@ void transform_fir(
 {
     const size_t in_colix = inout.begin()->get()->get_values().size() / 2;
     const auto in_tail_size = inout.distance() + tail.size();
-    const auto max_gpus = common::gpu_handler::get().get_max_running_gpu_threads_number();
+    const auto max_gpus = common::gpu_handler::get().get_max_running_gpu_threads_number() / CTX_PER_GPU;
     std::deque<size_t> gpuids(max_gpus);
-#pragma omp parallel for
-    for (size_t d = 0; d < max_gpus; ++d) {
-        common::gpu_context ctx;
-        gpuids[d] = ctx.phy_id();
-    }
+    for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
+
     std::vector<double> h_rx(in_tail_size);
 #pragma omp parallel for
     for (size_t t = 0; t < in_tail_size; ++t)
@@ -407,18 +404,23 @@ void transform_fir(
             }
         }
 
+        std::vector<double> h_tmp(in_tail_size);
 #pragma omp parallel for
         for (size_t d = 0; d < max_gpus; ++d) {
             cu_errchk(cudaSetDevice(gpuids[d]));
-            std::vector<double> h_tmp(job_len[d]);
-            cu_errchk(cudaMemcpy(h_tmp.data(), d_rx_ptr[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost));
+            cu_errchk(cudaMemcpy(h_tmp.data() + start_ix[d], d_rx_ptr[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost));
 #pragma omp parallel for schedule(static, 1 + job_len[d] / std::thread::hardware_concurrency())
             for (size_t i = start_ix[d]; i < start_ix[d] + job_len[d]; ++i)
-                if (i >= tail.size()) inout[i - tail.size()]->set_value(actual_l, h_tmp[i - start_ix[d]]);
+                if (i >= tail.size()) inout[i - tail.size()]->set_value(actual_l, h_tmp[i]);
 
             vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_remainder_ptr[d], d_rx_ptr[d], in_tail_size, start_ix[d]);
             cu_errchk(cudaMemcpy(d_rx_ptr[d] + start_ix[d], d_remainder_ptr[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
             cu_errchk(cudaFree(d_mask_ptr[d]));
+        }
+#pragma omp parallel for
+        for (size_t d = 0; d < max_gpus; ++d) {
+            cu_errchk(cudaSetDevice(gpuids[d]));
+            cu_errchk(cudaMemcpy(d_rx_ptr[d], h_tmp.data(), in_tail_size * sizeof(double), cudaMemcpyKind::cudaMemcpyHostToDevice));
         }
     }
 #pragma omp parallel for

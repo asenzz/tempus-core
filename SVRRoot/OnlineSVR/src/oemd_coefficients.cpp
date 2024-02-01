@@ -16,10 +16,8 @@ namespace svr {
 
 std::string mask_file_name(const size_t ctr, const size_t level, const size_t level_count, const std::string &queue_name)
 {
-    std::string lqueue_name;
-    std::transform(queue_name.begin(), queue_name.end(), lqueue_name.begin(), [](const unsigned char c){ return std::tolower(c); } );
     std::stringstream s;
-    s << "mask_" << ctr << "_level_" << level << "_of_" << level_count << "_" << lqueue_name << ".csv";
+    s << "mask_" << ctr << "_level_" << level << "_of_" << level_count << "_" << queue_name << ".csv";
     return s.str();
 }
 

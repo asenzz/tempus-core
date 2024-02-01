@@ -16,15 +16,15 @@
 namespace svr {
 namespace oemd_search {
 
-constexpr unsigned FIREFLY_PARTICLES = 400;
-constexpr unsigned FIREFLY_ITERATIONS = 70;
+constexpr unsigned FIREFLY_PARTICLES = 500;
+constexpr unsigned FIREFLY_ITERATIONS = 50;
 
 constexpr double C_lambda1 = .30;
 constexpr double C_lambda2 = .33;
 constexpr double C_smooth_factor = 1000.;
 constexpr double C_b_factor = 1000;
 constexpr size_t C_mask_expander = 2;
-constexpr size_t C_parallelism = 64;
+constexpr size_t C_parallelism = 200;
 constexpr size_t C_NUM_TRIES = 100000;
 constexpr size_t C_filter_count = 100;
 constexpr size_t fir_search_start_size = 500;
@@ -58,10 +58,6 @@ class oemd_coefficients_search
             const cufftDoubleComplex *d_expanded_mask_fft,
             const double *d_global_sift_matrix_ptr,
             const size_t gpu_id);
-
-    static double do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const size_t siftings);
-
-    static int do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft);
 
     void smoothen_mask(std::vector<double> &mask, common::t_drand48_data_ptr buffer);
 
@@ -102,7 +98,7 @@ class oemd_coefficients_search
             const std::vector<cufftDoubleComplex> &values_fft, const size_t val_start,
             const cufftHandle plan_expanded_forward, const cufftHandle plan_expanded_backward,
             const cufftHandle plan_mask_forward, const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
-            const std::vector<double> &global_sift_matrix, const size_t current_level, const size_t gpu_id);
+            const size_t current_level, const size_t gpu_id);
 
     double
     find_good_mask_ffly(
@@ -110,9 +106,13 @@ class oemd_coefficients_search
             const std::vector<double> &h_workspace, const std::vector<cufftDoubleComplex> &h_workspace_fft, std::vector<double> &h_mask,
             std::deque<cufftHandle> &plan_full_forward, std::deque<cufftHandle> &plan_full_backward, std::deque<cufftHandle> &plan_mask_forward,
             std::deque<cufftHandle> &plan_sift_forward, std::deque<cufftHandle> &plan_sift_backward,
-            const std::vector<double> &global_sift_matrix, const size_t current_level);
+            const size_t current_level);
 
 public:
+    static double do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const size_t siftings);
+
+    static int do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft);
+
     static void
     gauss_smoothen_mask(
             const size_t mask_size, std::vector<double> &mask, common::t_drand48_data_ptr buffer,

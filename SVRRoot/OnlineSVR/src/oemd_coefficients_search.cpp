@@ -271,13 +271,9 @@ oemd_coefficients_search::oemd_coefficients_search() : sem_fft({})
 {
     srand48(928171);
     sem_init(&sem_fft, 0, C_parallelism);
-    max_gpus = 1; //common::gpu_handler().get().get_max_running_gpu_threads_number() / CTX_PER_GPU;
+    max_gpus = common::gpu_handler().get().get_max_running_gpu_threads_number() / CTX_PER_GPU;
     gpuids.resize(max_gpus);
-#pragma omp parallel for
-    for (size_t d = 0; d < max_gpus; ++d) {
-        //common::gpu_context ctx;
-        gpuids[d] = d;//ctx.phy_id();
-    }
+    for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
 };
 
 }

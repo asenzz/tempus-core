@@ -64,8 +64,8 @@ constexpr unsigned EMO_TUNE_TEST_SIZE = 0;
 #endif
 
 
-#define FFA_ALPHA       .2   // Starting randomness
-#define FFA_BETAMIN     .5   // Attraction
+#define FFA_ALPHA       .5   // Starting randomness
+#define FFA_BETAMIN     .2   // Attraction
 #define FFA_GAMMA       1.   // Visibility
 // #define FFA_HARD_WALL
 #define TUNE_COST_MIN           5e-2

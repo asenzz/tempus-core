@@ -53,7 +53,7 @@ oemd_coefficients_search::save_mask(
         myfile.close();
     } else
         LOG4_ERROR(
-                "Aborting saving! Unable to open file " << std::filesystem::current_path() << "/" << mask_file_name(ctr, level, levels, queue_name) << " for writing.");
+                "Aborting saving! Unable to open file " << C_oemd_fir_coefs_dir << "/" << mask_file_name(ctr, level, levels, queue_name) << " for writing.");
 }
 
 #if 0
@@ -70,6 +70,8 @@ double get_std(double *x, const size_t input_size)
 std::vector<double>
 oemd_coefficients_search::fill_auto_matrix(const size_t M, const size_t siftings, const size_t N, const double *x)
 {
+    return {};
+
     std::vector<double> diff(N - 1);
 #pragma omp parallel for
     for (size_t i = 0; i < N - 1; ++i)
@@ -349,14 +351,14 @@ oemd_coefficients_search::evaluate_mask(
         const std::vector<cufftDoubleComplex> &values_fft, const size_t val_start,
         const cufftHandle plan_expanded_forward, const cufftHandle plan_expanded_backward,
         const cufftHandle plan_mask_forward, const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
-        const std::vector<double> &global_sift_matrix, const size_t current_level, const size_t gpu_id)
+        const size_t current_level, const size_t gpu_id)
 {
     const auto full_input_size = h_workspace.size();
     double result = 0;
     cu_errchk(cudaSetDevice(gpu_id));
     auto dev_values_fft = cuda_malloccopy(values_fft);
     auto d_mask_ptr = cuda_malloccopy(h_mask);
-    auto d_global_sift_matrix = cuda_malloccopy(global_sift_matrix);
+    //auto d_global_sift_matrix = cuda_malloccopy(global_sift_matrix);
     const auto d_workspace = cuda_malloccopy(h_workspace);
     const size_t expanded_size = h_mask.size() * C_mask_expander;
 
@@ -376,6 +378,7 @@ oemd_coefficients_search::evaluate_mask(
         return 0;
     }
 #endif
+    cu_errchk(cudaDeviceSynchronize());
     const auto quality = do_quality(h_mask_fft, siftings);
     result += quality;
 #ifdef FILTEROUT_BAD_MASKS
@@ -387,9 +390,9 @@ oemd_coefficients_search::evaluate_mask(
     }
 #endif
 
-    [[maybe_unused]] const auto [sum_full, sum_imf, sum_rem, sum_corr] =
-            sift_the_mask(h_mask.size(), siftings, d_mask_ptr, plan_sift_forward, plan_sift_backward, d_expanded_mask, d_expanded_mask_fft, d_global_sift_matrix, gpu_id);
-    cu_errchk(cudaFree(d_global_sift_matrix));
+    //[[maybe_unused]] const auto [sum_full, sum_imf, sum_rem, sum_corr] =
+    //        sift_the_mask(h_mask.size(), siftings, d_mask_ptr, plan_sift_forward, plan_sift_backward, d_expanded_mask, d_expanded_mask_fft, d_global_sift_matrix, gpu_id);
+    // cu_errchk(cudaFree(d_global_sift_matrix));
     cu_errchk(cudaFree(d_expanded_mask));
     cu_errchk(cudaFree(d_expanded_mask_fft));
 
@@ -405,7 +408,6 @@ oemd_coefficients_search::evaluate_mask(
     cufft_errchk(cufftExecD2Z(plan_expanded_forward, d_zm_ptr, d_zm_fft_ptr));
     vec_power<<<CUDA_THREADS_BLOCKS(to_fft_size(full_input_size))>>>(d_zm_fft_ptr, d_zm_convert_ptr, full_input_size, siftings);
     cu_errchk(cudaFree(d_zm_fft_ptr));
-    // auto h_zm = cuda_copy(d_zm_convert_ptr, to_fft_size(full_input_size) * sizeof(*d_zm_convert_ptr));
 
     gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(to_fft_size(full_input_size))>>>(full_input_size, dev_values_fft, d_zm_convert_ptr);
     cu_errchk(cudaFree(dev_values_fft));
@@ -424,7 +426,7 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaFree(d_zm_ptr));
     cu_errchk(cudaFree(d_values_copy));
     cu_errchk(cudaFree(d_workspace));
-
+    cu_errchk(cudaDeviceSynchronize());
 
     double sum1 = 0;
     double sum2 = 0;
@@ -436,8 +438,8 @@ oemd_coefficients_search::evaluate_mask(
     size_t cntr = 0;
     double corr = 0;
     size_t corr_count = 0;
-    const size_t full_count = inside_window_len / 2;
-    for (size_t i = full_count; i < inside_window_len; ++i) { // Non-parallelissabile!
+    const size_t half_window_len = inside_window_len / 2;
+    for (size_t i = half_window_len; i < inside_window_len; ++i) { // Non-parallelissabile!
         sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
         sum2 += pow(h_rem_temp[i] - h_rem_temp[i - 1], 2);
         big_sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
@@ -456,8 +458,8 @@ oemd_coefficients_search::evaluate_mask(
     }
     corr = corr_count ? corr / double(corr_count) : corr + fabs(prod) / sqrt(sum1 * sum2);
 
-    if (big_sum2 > big_sum3) result = 1000. + (result + sqrt(big_sum2 / full_count)) * 1000.;
-    if (big_sum1 > big_sum3) result = 10. + (result + sqrt(big_sum1 / full_count)) * 100.;
+    if (big_sum2 > big_sum3) result = 1000. + (result + sqrt(big_sum2 / half_window_len)) * 1000.;
+    if (big_sum1 > big_sum3) result = 10. + (result + sqrt(big_sum1 / half_window_len)) * 100.;
 
     result = result * (1 + corr);
     if (!current_level) {
@@ -466,22 +468,24 @@ oemd_coefficients_search::evaluate_mask(
         if (corr > .20) result = 1. + result * (10. + corr);
     }
 
-    if (big_sum2 >= 0.95 * big_sum3) result = 30 + (result + sqrt(big_sum2 / full_count)) * 10.;
-    if (big_sum2 >= 0.60 * big_sum3) result = result + 5 + (sqrt(big_sum2 / full_count)) * 1.;
-    if (big_sum2 >= 0.80 * big_sum3) result = result + 3 + (sqrt(big_sum2 / full_count)) * 1.;
+    if (big_sum2 >= 0.95 * big_sum3) result = 30 + (result + sqrt(big_sum2 / half_window_len)) * 10.;
+    if (big_sum2 >= 0.60 * big_sum3) result = result + 5 + (sqrt(big_sum2 / half_window_len)) * 1.;
+    if (big_sum2 >= 0.80 * big_sum3) result = result + 3 + (sqrt(big_sum2 / half_window_len)) * 1.;
     if (big_sum1 > big_sum2) result = result + 4 + (big_sum1 / big_sum3);
-    if (big_sum1 > 0.5 * big_sum3) result = 10 + (result + sqrt(big_sum1 / full_count)) * 10.;
+    if (big_sum1 > 0.5 * big_sum3) result = 10 + (result + sqrt(big_sum1 / half_window_len)) * 10.;
     if (big_sum2 >= 0.99 * big_sum3) result += 1. + big_sum2 / big_sum3;
     if (big_sum2 >= 0.98 * big_sum3) result += 1. + big_sum2 / big_sum3;
     if (big_sum2 >= 0.97 * big_sum3) result += 1. + big_sum2 / big_sum3;
     if (big_sum2 >= 0.96 * big_sum3) result += 1. + big_sum2 / big_sum3;
 
     result += sqrt((big_sum1 + big_sum2) / big_sum3);
-    if (result < best_result.load() && quality <= best_quality.load()) {
+#if 0
+    if (result < best_result.load(std::memory_order_relaxed) && quality <= best_quality.load(std::memory_order_relaxed)) {
         LOG4_DEBUG("Found global best score " << result << " and best quality " << quality);
-        best_result.store(result);
-        best_quality.store(quality);
+        best_result.store(result, std::memory_order_relaxed);
+        best_quality.store(quality, std::memory_order_relaxed);
     }
+#endif
     return result;
 }
 
@@ -530,7 +534,7 @@ oemd_coefficients_search::gauss_smoothen_mask(
     cufft_errchk(cufftExecZ2D(plan_mask_backward, thrust::raw_pointer_cast(d_mask_zm_fft.data()), thrust::raw_pointer_cast(d_mask_zm.data())));
     thrust::transform(thrust::device,
                       d_mask_zm.begin(), d_mask_zm.begin() + mask_size, d_mask_zm.begin(),
-                      [mask_size] __device__ (const double &iter) -> double { return (iter > 0 ? iter : 0) / double(mask_size); } );
+    [mask_size] __device__ (const double &iter) -> double { return (iter > 0 ? iter : 0) / double(mask_size); } );
     cuda_copy(mask, thrust::raw_pointer_cast(d_mask_zm.data()), d_mask_zm.size());
 }
 
@@ -602,14 +606,9 @@ oemd_coefficients_search::find_good_mask_ffly(
         const std::vector<double> &h_workspace, const std::vector<cufftDoubleComplex> &h_workspace_fft, std::vector<double> &h_mask,
         std::deque<cufftHandle> &plan_full_forward, std::deque<cufftHandle> &plan_full_backward, std::deque<cufftHandle> &plan_mask_forward,
         std::deque<cufftHandle> &plan_sift_forward, std::deque<cufftHandle> &plan_sift_backward,
-        const std::vector<double> &global_sift_matrix, const size_t current_level)
+        const size_t current_level)
 {
     svr::optimizer::loss_callback_t loss_function = [&](std::vector<double> &x) -> double {
-#ifdef FIX_MASK
-        auto y = x;
-        fix_mask(y);
-#endif
-
         static std::mutex mx_incr;
         static size_t gl_incr;
         std::unique_lock<std::mutex> ul(mx_incr);
@@ -623,13 +622,13 @@ oemd_coefficients_search::find_good_mask_ffly(
         return evaluate_mask(
                 siftings, x, h_workspace, h_workspace_fft, valid_start_index,
                 plan_full_forward[l_incr], plan_full_backward[l_incr], plan_mask_forward[l_incr], plan_sift_forward[l_incr], plan_sift_backward[l_incr],
-                global_sift_matrix, current_level, devix);
+                current_level, devix);
     };
 
     double score;
     std::tie(score, h_mask) = svr::optimizer::firefly(
             h_mask.size(), FIREFLY_PARTICLES, FIREFLY_ITERATIONS, FFA_ALPHA, FFA_BETAMIN, FFA_GAMMA,
-            std::vector(h_mask.size(), 0.), std::vector(h_mask.size(), 1.), std::vector(h_mask.size(), 1.),
+            std::vector(h_mask.size(), 0.), std::vector(h_mask.size(), 1./h_mask.size()), std::vector(h_mask.size(), 1.),
             loss_function).operator std::tuple<double, std::vector<double>>();
     fix_mask(h_mask);
     return score;
@@ -689,8 +688,8 @@ oemd_coefficients_search::optimize_levels(
             cufft_errchk(cufftPlan1d(&plan_sift_forward[j], siftings[i] * masks[i].size(), CUFFT_D2Z, n_batch));
             cufft_errchk(cufftPlan1d(&plan_sift_backward[j], siftings[i] * masks[i].size(), CUFFT_Z2D, n_batch));
         }
-        auto global_sift_matrix = fill_auto_matrix(
-                masks[i].size(), siftings[i], window_len - start_valid_ix, &h_workspace[window_start + start_valid_ix]);
+        //auto global_sift_matrix = fill_auto_matrix(
+        //        masks[i].size(), siftings[i], window_len - start_valid_ix, &h_workspace[window_start + start_valid_ix]);
         std::deque<cufftHandle> plan_mask_forward(C_parallelism);
         std::deque<cufftHandle> plan_mask_backward(C_parallelism);
 #pragma omp parallel for
@@ -705,7 +704,7 @@ oemd_coefficients_search::optimize_levels(
         const double result = find_good_mask_ffly(
                 siftings[i], start_valid_ix, h_workspace, h_values_fft,
                 masks[i], plan_full_forward, plan_full_backward, plan_mask_forward, plan_sift_forward, plan_sift_backward,
-                global_sift_matrix, i);
+                i);
         LOG4_DEBUG("Level " << i << ", queue " << queue_name << ", FFA score " << result);
         save_mask(masks[i], queue_name, i, masks.size() + 1);
         cu_errchk(cudaSetDevice(gpu_id));
@@ -714,15 +713,17 @@ oemd_coefficients_search::optimize_levels(
         transform(d_imf_ptr, masks[i].data(), window_len, masks[i].size(), siftings[i], d_temp_ptr, gpu_id);
         vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_workspace_ptr, d_imf_ptr, window_len);
         start_valid_ix += siftings[i] * (masks[i].size() - 1); // is it -1 really?
-        h_imf[i] = d_imf[i];
 /*
+        h_imf[i] = d_imf[i];
         h_temp = d_workspace;
 #pragma omp parallel for
         for (size_t j = 0; j < window_len; ++j) h_temp[j] += h_imf[i][j];
 */
         h_workspace = cuda_copy(d_workspace_ptr, d_workspace.size());
+#if 0
         best_result.store(std::numeric_limits<double>::max(), std::memory_order_relaxed);
         best_quality.store(1, std::memory_order_relaxed);
+#endif
 #pragma omp parallel for
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);

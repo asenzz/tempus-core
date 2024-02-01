@@ -26,7 +26,6 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 #include <cmath>
 #include <cstring>
 #include <armadillo>
-#include <execution>
 
 #include "firefly.hpp"
 #include "sobolvec.h"
@@ -36,12 +35,11 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 #include "util/math_utils.hpp"
 #include "common/gpu_handler.hpp"
 
+using namespace std;
 
 
 namespace svr {
 namespace optimizer {
-
-bool comp_f_I_Index(const f_I_Index &lhs, const f_I_Index &rhs) { return lhs.I < rhs.I; }
 
 firefly::firefly(
         const size_t D,
@@ -58,12 +56,15 @@ firefly::firefly(
 {
     LOG4_DEBUG(
             "Init, particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma); // <<
-            // ", mins " << common::to_string(lb) << ", maxes " << common::to_string(ub));
-    this->fbest.resize(MaxGeneration, std::numeric_limits<double>::max());
+    // ", mins " << common::deep_to_string(lb) << ", maxes " << common::deep_to_string(ub));
+    this->fbest = std::numeric_limits<double>::max();
     this->levy_random = common::levy(D);
 
-    fireflies.resize(n);
+    Index.resize(n, 0);
+    f.resize(n, 0.);
+    I.resize(n, 0.);
     nbest.resize(D, 0.);
+    allround_best.resize(D, 0.);
     ffa.resize(n);	    // firefly agents
     ffa_tmp.resize(n);  // intermediate population
 
@@ -85,17 +86,17 @@ firefly::firefly(
                 ffa[p][j] = std::pow(sobolnum(j, sobol_ctr + p), pows[j]) * (ub[j] - lb[j]) + lb[j];
             }
         }
-        fireflies[p].I = fireflies[p].f = 1;            // initialize attractiveness
+        I[p] = f[p] = 1;            // initialize attractiveness
         if (D < 5) LOG4_DEBUG("Particle " << p << ", parameters " << common::to_string(ffa[p]));
     }
 
-    PROFILE_EXEC_TIME(ffa_main(), "FFA with particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma << ", final score " << fbest[MaxGeneration - 1]);
+    PROFILE_EXEC_TIME(ffa_main(), "FFA with particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma << ", final score " << fbest);
 }
 
 // optionally recalculate the new alpha value
 double firefly::alpha_new(const double old_alpha, const double NGen)
 {
-    delta = 1. - std::pow(firefly::delta_base, 1. / NGen);            // delta parameter
+    delta = 1. - pow(firefly::delta_base, 1. / NGen);            // delta parameter
     return (1. - delta) * old_alpha;
 }
 
@@ -103,11 +104,8 @@ double firefly::alpha_new(const double old_alpha, const double NGen)
 void firefly::sort_ffa()
 {
     // initialization of indexes
-#pragma omp parallel for
-    for (size_t i = 0; i < n; ++i) fireflies[i].Index = i;
+    for (size_t i = 0; i < n; ++i) Index[i] = i;
 
-    std::sort(std::execution::par, fireflies.begin(), fireflies.end(), comp_f_I_Index);
-#if 0
     // Bubble sort TODO parallelize
     for (size_t i = 0; i < n - 1; ++i) {
         for (size_t j = i + 1; j < n; ++j) {
@@ -123,7 +121,6 @@ void firefly::sort_ffa()
             Index[j] = k;
         }
     }
-#endif
 }
 
 // replace the old population according the new Index values
@@ -133,10 +130,7 @@ void firefly::replace_ffa()
     ffa_tmp = ffa;
 
     // generational selection in sense of EA
-#pragma omp parallel for collapse(2)
-    for (size_t i = 0; i < n; ++i)
-        for (size_t j = 0; j < D; ++j)
-            ffa[i][j] = ffa_tmp[fireflies[i].Index][j];
+    __tbb_pfor_i(0, n, for (size_t j = 0; j < D; ++j) ffa[i][j] = ffa_tmp[Index[i]][j]; )
 }
 
 void firefly::findlimits(const size_t k)
@@ -149,15 +143,12 @@ void firefly::findlimits(const size_t k)
             ffa[k][i] = ub[i];
     )
 #else // Bounce
-
-#pragma omp parallel for
-    for (size_t l = 0; l < D; ++l) {
-        if (ffa[k][l] < lb[l])
-            ffa[k][l] = lb[l] + std::fmod(lb[l] - ffa[k][l], ub[l] - lb[l]);
-        if (ffa[k][l] > ub[l])
-            ffa[k][l] = ub[l] - std::fmod(ffa[k][l] - ub[l], ub[l] - lb[l]);
-    }
-
+    __tbb_pfor(l, 0, D,
+               if (ffa[k][l] < lb[l])
+                   ffa[k][l] = lb[l] + std::fmod(lb[l] - ffa[k][l], ub[l] - lb[l]);
+                       if (ffa[k][l] > ub[l])
+                           ffa[k][l] = ub[l] - std::fmod(ffa[k][l] - ub[l], ub[l] - lb[l]);
+    )
 #endif
 }
 
@@ -167,12 +158,12 @@ void firefly::move_ffa()
     for (size_t i = 0; i < n; ++i) {
         const double scale = abs(ub[i] - lb[i]);
         for (size_t j = 0; j < n; ++j) {
-            if (i == j || fireflies[i].I <= fireflies[j].I) continue;    // brighter and more attractive
+            if (i == j || I[i] <= I[j]) continue;    // brighter and more attractive
             double r = 0;
             for (size_t k = 0; k < D; ++k)
                 r += (ffa[i][k] - ffa[j][k]) * (ffa[i][k] - ffa[j][k]);
             r = sqrt(r);
-            const double beta = (beta0 - betamin) * exp(-gamma * std::pow(r, 2.0)) + betamin;
+            const double beta = (beta0 - betamin) * exp(-gamma * pow(r, 2.0)) + betamin;
             for (size_t k = 0; k < D; ++k) {
                 const double tmpf = alpha * (sobolnum(j, sobol_ctr + i) - .5) * scale;
                 ffa[i][k] = ffa[i][k] * (1. - beta) + ffa_tmp[j][k] * beta + tmpf;
@@ -187,37 +178,32 @@ void firefly::move_ffa()
 void firefly::move_ffa_adaptive(const double rate)
 {
     arma::mat scale(D, 1);
-#pragma omp parallel for
-    for (size_t i = 0; i < D; ++i)
-        scale(i, 0) = abs(ub[i] - lb[i]);
+    __tbb_pfor_i(0, D, scale(i, 0) = abs(ub[i] - lb[i]))
 
     const auto ffa_prev = ffa;
-#pragma omp parallel for
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < n; ++j) {
-            if (i == j || fireflies[i].I <= fireflies[j].I) continue;    // brighter and more attractive
-            double r = 0;
-            for (size_t k = 0; k < D; ++k)
-                r += std::abs<double>(ffa[i][k] - ffa_prev[j][k]);
-            const double beta = (beta0 - betamin) * exp(-gamma * std::pow(r, 2)) + betamin;
-            if (drand48() > rate) {
-                for (size_t k = 0; k < D; ++k)
-                    ffa[i][k] = ffa[i][k] * (1. - beta) + ffa_prev[j][k] * beta + alpha * copysign(1., (drand48() - .5)) * levy_random[k] * scale(k, 0);
-            } else {
-                const double l = -1. + 2. * drand48();
-                for (size_t k = 0; k < D; ++k)
-                    ffa[i][k] = ffa[i][k] + (-ffa[i][k] + ffa_prev[j][k]) * (beta * exp(l * b_1) * cos(2. * M_PI * l));
-            }
-        }
-        findlimits(i);
-    }
+    __tbb_pfor_i(0, n,
+                 for (size_t j = 0; j < n; ++j) {
+                     if (i == j || I[i] <= I[j]) continue;    // brighter and more attractive
+                     double r = 0;
+                     for (size_t k = 0; k < D; ++k)
+                         r += std::abs<double>(ffa[i][k] - ffa_prev[j][k]);
+                     const double beta = (beta0 - betamin) * exp(-gamma * pow(r, 2)) + betamin;
+                     if (drand48() > rate) {
+                         for (size_t k = 0; k < D; ++k)
+                             ffa[i][k] = ffa[i][k] * (1. - beta) + ffa_prev[j][k] * beta + alpha * copysign(1., (drand48() - .5)) * levy_random[k] * scale(k, 0);
+                     } else {
+                         const double l = -1. + 2. * drand48();
+                         for (size_t k = 0; k < D; ++k)
+                             ffa[i][k] = ffa[i][k] + (-ffa[i][k] + ffa_prev[j][k]) * (beta * exp(l * b_1) * cos(2. * M_PI * l));
+                     }
+                 }
+                 findlimits(i);
+    )
 }
 
 void firefly::run_iteration()
 {
-#pragma omp parallel for
-    for (size_t ptcl = 0; ptcl < n; ++ptcl)
-        fireflies[ptcl].I = fireflies[ptcl].f = function(ffa[ptcl]);
+    __tbb_pfor(ptcl, 0, n, I[ptcl] = f[ptcl] = function(ffa[ptcl]))
 }
 
 /* display syntax messages */
@@ -246,31 +232,38 @@ void firefly::ffa_main()
         replace_ffa();
 
         // find the current best
+#pragma omp parallel for
         for (size_t i = 0; i < D; ++i) nbest[i] = ffa[0][i];
-        fbest[t - 1] = fireflies[0].I;
-        if (t > 1 && fbest[t - 1] < fbest[t - 2])
-            LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << fbest[t - 1] << ", previous best score " << fbest[t - 2] << ", improvement " << 100. * (1. - fbest[t - 1] / fbest[t - 2]) << " pct."); // << ", parameters " << common::to_string(nbest));
+        auto this_fbest = I[0];
 
         // move all fireflies to the better locations
+#ifdef ADAPTIVE_FFA
         double rate;
         if (t == 1) {
             rate = .5;
         } else {
             double a, b;
-            if (floor(log10(fabs(fbest[t - 2]))) == floor(log10(fabs(fbest[t - 1])))) {
-                const double theta = floor(log10(fabs(fbest[t - 1] - trunc(fbest[t - 1]))));
-                a = fbest[t - 2] - std::pow(10, theta) * floor(fbest[t - 2] / std::pow(10, theta + 1.));
-                b = fbest[t - 1] - std::pow(10, theta) * floor(fbest[t - 1] / std::pow(10, theta + 1.));
+            if (floor(log10(fabs(fbest))) == floor(log10(fabs(this_fbest)))) {
+                const double theta = floor(log10(fabs(this_fbest - trunc(this_fbest))));
+                a = fbest - pow(10, theta) * floor(fbest / pow(10, theta + 1.));
+                b = this_fbest - pow(10, theta) * floor(this_fbest / pow(10, theta + 1.));
             } else {
-                a = fbest[t - 2];
-                b = fbest[t - 1];
+                a = fbest;
+                b = this_fbest;
             }
             rate = 1. / (1. + exp(-a / b));
+        }
+#endif
+        if (t > 1 && this_fbest < fbest) {
+            LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << this_fbest << ", previous best score " << fbest << ", improvement "
+                                            << 100. * (1. - this_fbest / fbest) << " pct."); // << ", parameters " << common::deep_to_string(nbest));
+            allround_best = nbest;
+            fbest = this_fbest;
         }
 #ifdef ADAPTIVE_FFA
         move_ffa_adaptive(rate);
 #else
-        move_ffa(rate);
+        move_ffa();
 #endif
         ++t;
         if (t > MaxGeneration) break;
