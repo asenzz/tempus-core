@@ -1,11 +1,12 @@
-#include "../include/recombine_parameters.cuh"
 #include <cstdint>
 #include <cuda_runtime_api.h>
 #include "common/cuda_util.cuh"
 #include "common/gpu_handler.hpp"
 #include "cuda_runtime.h"
+#include "recombine_parameters.cuh"
 
-namespace svr::business {
+namespace svr {
+namespace business {
 
 // constexpr unsigned C_emo_part_j = EMO_MAX_J / 2;
 // constexpr unsigned C_emo_rest_j = EMO_MAX_J - C_emo_part_j;
@@ -51,11 +52,9 @@ cu_recombine_parameters(
     const auto g_thr_ix = thr_ix + blockIdx.x * k_block_size;
     if (g_thr_ix >= rowct) return;
     const uint32_t grid_size = k_block_size * gridDim.x;
-    // printf("cu_recombine_parameters: Begin %u, %u, %u.\n", thr_ix, g_thr_ix, grid_size);
     __shared__ double _sh_best_score[k_block_size];
     __shared__ t_params_vec _sh_best_params_ix[k_block_size];
     _sh_best_score[thr_ix] = DBL_MAX;
-//    uint32_t best_rowix = g_thr_ix;
     for (uint32_t rowix = g_thr_ix; rowix < rowct; rowix += grid_size) {
         double score = 0;
         {
@@ -80,7 +79,6 @@ cu_recombine_parameters(
 
                 for (uint16_t el = 0; el < elto; ++el)
                     score += abs(_CUSIGN(_CUSIGN(recon_preds[el] - recon_last_knowns[j_EMO_SLIDE_LEN + el]) - recon_signs[j_EMO_SLIDE_LEN + el]));
-                // score += arma::sum(arma::abs(arma::vectorise(arma::sign(arma::sign(recon_preds - recon_last_knowns) - arma::sign(recon_labels - recon_last_knowns)))));
 #ifdef DEBUG_VALUES
                 if (g_thr_ix == 0 && j == 0) {
                     for (uint16_t el = 0; el < EMO_TUNE_VALIDATION_WINDOW; ++el)
@@ -89,7 +87,6 @@ cu_recombine_parameters(
 #endif
             }
         }
-        // printf("cu_recombine_parameters: Score %f at combination %u.\n", score, rowix);
         if (score < _sh_best_score[thr_ix]) {
             _sh_best_score[thr_ix] = score;
             for (uint16_t colix = 0; colix < colct; ++colix)
@@ -132,8 +129,6 @@ cu_recombine_parameters(
     if (!thr_ix) {
         if (_sh_best_score[0] < *p_best_score) {
             memcpy((void *)&(best_param_ixs[0]), &(_sh_best_params_ix[thr_ix][0]), colct);
-            // for (uint16_t colix = 0; colix < colct; ++colix)
-            //    best_param_ixs[colix] = _sh_best_params_ix[thr_ix][colix];
             *p_best_score = _sh_best_score[thr_ix];
             // printf("cu_recombine_parameters: Final score %f = %f\n", *p_best_score, _sh_best_score[0]);
         }
@@ -200,7 +195,9 @@ recombine_parameters(
     cu_errchk(cudaFree(p_best_score_gpu));
     cu_errchk(cudaFree(recon_last_knowns_gpu));
     cu_errchk(cudaFree(recon_signs_gpu));
+    cu_errchk(cudaDeviceSynchronize());
 }
 
 
+}
 }

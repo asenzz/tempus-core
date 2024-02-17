@@ -1,9 +1,19 @@
+#include "util/math_utils.hpp"
+#include "common/parallelism.hpp"
+#include "onlinesvr.hpp"
+#include <vector>
+#include <armadillo>
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
 #include "util/ValidationUtils.hpp"
 #include "DAO/SVRParametersDAO.hpp"
 #include "model/SVRParameters.hpp"
 #include "DAO/DatasetDAO.hpp"
+
+bool svr::business::SVRParametersService::is_manifold(const datamodel::t_param_set &param_set, datamodel::SVRParameters_ptr &p_out)
+{
+    return std::any_of(std::execution::par_unseq, param_set.begin(), param_set.end(), [](const auto &p) { return p->is_manifold(); });
+}
 
 using namespace svr::common;
 
@@ -80,9 +90,10 @@ std::deque<datamodel::SVRParameters_ptr> SVRParametersService::get_by_dataset_co
 datamodel::t_param_set_ptr
 SVRParametersService::slice(const std::deque<datamodel::SVRParameters_ptr> &params, const size_t chunk_ix, const size_t grad_ix)
 {
-    datamodel::t_param_set_ptr r;
+    auto r = std::make_shared<datamodel::t_param_set>();
     for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix) && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
+        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix)
+            && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
             r->emplace(p);
     return r;
 }
@@ -90,28 +101,32 @@ SVRParametersService::slice(const std::deque<datamodel::SVRParameters_ptr> &para
 datamodel::t_param_set_ptr
 SVRParametersService::slice(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
 {
-    datamodel::t_param_set_ptr r;
+    auto r = std::make_shared<datamodel::t_param_set>();
     for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix) && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
+        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix)
+            && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
             r->emplace(p);
     return r;
 }
 
 datamodel::SVRParameters_ptr SVRParametersService::find(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
 {
-    for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix) && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
-            return p;
-    return nullptr;
+    const auto res = std::find_if(std::execution::par_unseq, params.begin(), params.end(), [chunk_ix, grad_ix](const auto &p) {
+        return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix)
+               && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix);
+    });
+    if (res == params.end()) return nullptr;
+    return *res;
 }
 
-datamodel::SVRParameters_ptr &SVRParametersService::find(datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
+
+datamodel::t_param_set_ptr
+SVRParametersService::get_best_params(const t_gradient_tuned_parameters &tune_results)
 {
-    for (auto &p: params)
-        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix) && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
-            return const_cast<datamodel::SVRParameters_ptr &>(p);
-    static auto nullparams = std::make_shared<datamodel::SVRParameters>();
-    return nullparams;
+    auto r = std::make_shared<datamodel::t_param_set>();
+    for (const auto &tr: tune_results)
+        r->emplace(tr.begin()->get()->p_params);
+    return r;
 }
 
 }

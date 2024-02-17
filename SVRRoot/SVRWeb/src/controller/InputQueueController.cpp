@@ -160,7 +160,7 @@ svr::dao::OptionalTimeRange
 parseTimeRange(session_interface &session, cppcms::json::object obj, string &logicalName, time_duration &resolution, datamodel::InputQueue_ptr &queue)
 {
     logicalName = obj["symbol"].str();
-    std::transform(logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
+    std::transform(std::execution::par_unseq, logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
     resolution = seconds(boost::lexical_cast<long>(obj["period"].str()));
 
     session["user"] = DEFAULT_WEB_USER;
@@ -342,7 +342,7 @@ void InputQueueView::historyData(cppcms::json::object data)
     json::value response;
     string symbol = data["symbol"].str();
     session()["user"] = DEFAULT_WEB_USER;
-    std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::tolower);
+    std::transform(std::execution::par_unseq, symbol.begin(), symbol.end(), symbol.begin(), ::tolower);
     time_duration resolution = seconds(boost::lexical_cast<long>(data["period"].str()));
     LOG4_DEBUG("Resolution " << resolution);// << " data " << data);
     datamodel::InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
@@ -399,7 +399,7 @@ void InputQueueView::historyData(cppcms::json::object data)
                     );
             AppContext::get_instance().input_queue_service.add_row(queue, queueRow);
         }
-        LOG4_DEBUG("Saving " << queue->get_data().size() << " rows");
+        LOG4_DEBUG("Saving " << queue->size() << " rows");
         ssize_t savedRows;
         if ((savedRows = AppContext::get_instance().input_queue_service.save(queue)) > 0) {
             response["message"] = "OK";
@@ -423,7 +423,7 @@ void InputQueueView::sendTick(cppcms::json::object obj)
 {
 
     string logicalName = obj["symbol"].str();
-    std::transform(logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
+    std::transform(std::execution::par_unseq, logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
     time_duration resolution = seconds(boost::lexical_cast<long>(obj["period"].str()));
     session()["user"] = DEFAULT_WEB_USER;
     if (!AppContext::get_instance().input_queue_service.exists(session()["user"], logicalName, resolution)) {
@@ -455,7 +455,7 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     AppContext::get_instance().input_queue_service.add_row(queue, row);
     if ((AppContext::get_instance().input_queue_service.save(queue) > 0)) {
         response["message"] = "OK";
-        response["savedRows"] = queue->get_data().size();
+        response["savedRows"] = queue->size();
         return_result(response);
     } else {
         response["message"] = "Cannot save the data!";

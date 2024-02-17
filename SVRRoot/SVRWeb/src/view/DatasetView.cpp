@@ -165,7 +165,7 @@ bool DatasetForm::validate_lookback_time ()
         bpt::time_duration lookbackTime = bpt::duration_from_string (lookback_time.value ());
 
         if (lookbackTime < bpt::seconds (0)) {
-            throw std::logic_error ("Lookback time must have positive value!");
+            THROW_EX_FS(std::logic_error, "Lookback time must have positive value!");
         }
     } catch (const std::exception &e) {
         lookback_time.error_message (e.what ());

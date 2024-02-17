@@ -1,30 +1,18 @@
 #pragma once
-
-#include "common/types.hpp"
-#include "common/Logging.hpp"
-#include <numeric>
-#include <viennacl/matrix.hpp>
-#include <viennacl/scalar.hpp>
-#include <viennacl/tools/entry_proxy.hpp>
+#ifndef ARMA_ALLOW_FAKE_GCC
+#define ARMA_ALLOW_FAKE_GCC
+#endif
 #include <set>
 #include <armadillo>
 #include <vector>
 #include <any>
 #include <cstdarg>
-
+#include <numeric>
+#include <viennacl/matrix.hpp>
+#include <viennacl/scalar.hpp>
+#include "common/compatibility.hpp"
 
 namespace svr {
-
-#if 0
-template<typename T> constexpr auto pow = [](const T lhs, const long rhs) -> T
-{
-    const bool negexp = rhs < 0;
-    const unsigned long ct = negexp ? -rhs : rhs;
-    T res = 1;
-    for (unsigned long i = 0; i < ct; ++i) res *= res;
-    return negexp ? 1./ res : res;
-};
-#endif
 
 
 template<typename T>
@@ -72,8 +60,7 @@ void cholesky_check(viennacl::matrix<double> &A);
 
 template<typename T> bool sane(const arma::Mat<T> &m)
 {
-    if (m.has_nonfinite() or m.has_nan() or m.empty() or m.has_inf()) return false;
-    else return true;
+    return !m.has_nonfinite() && !m.empty();
 }
 
 template<typename T> bool isnormalz(const T v) { return !v || std::isnormal(v); }
@@ -203,7 +190,7 @@ operator +(const std::vector<T> &lhs, const std::vector<T> &rhs)
 {
     const size_t output_len = std::min<size_t>(lhs.size(), rhs.size());
     std::vector<T> res(output_len);
-#pragma omp parallel for simd
+#pragma omp parallel for simd num_threads(adj_threads(output_len))
     for (size_t i = 0; i < output_len; ++i)
         res[i] = lhs[i] + rhs[i];
     return res;
@@ -288,6 +275,11 @@ join_rows(const size_t arg_ct...)
     return res;
 }
 
+template<typename T> T
+symmetricity(const arma::Mat<T> &m)
+{
+    return arma::sum(arma::abs(arma::vectorise(arma::symmatu(m) - arma::symmatl(m))));
+}
 
 template<typename T> std::string
 present(const arma::Mat<T> &m)
@@ -299,14 +291,21 @@ present(const arma::Mat<T> &m)
     return res.str();
 }
 
-template<typename T> T
+template<typename T> inline T
+mean_asymm(const arma::Mat<T> &m, const size_t last)
+{
+    return .5 * (arma::mean(arma::vectorise(m.submat(m.n_rows - last, m.n_cols - 1, m.n_rows - 2, m.n_cols - 1))) +
+                 arma::mean(arma::vectorise(m.submat(m.n_rows - 1, m.n_cols - last, m.n_rows - 1, m.n_cols - 2))));
+}
+
+template<typename T> inline T
 meanabs(const arma::Mat<T> &m)
 {
     return arma::mean(arma::abs(arma::vectorise(m)));
 }
 
 
-template<typename T> T
+template<typename T> inline T
 medianabs(const arma::Mat<T> &m)
 {
     return arma::median(arma::abs(arma::vectorise(m)));
@@ -317,7 +316,7 @@ template<typename T> T
 meanabs(const std::vector<T> &v)
 {
     double res = 0;
-#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none)
+#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none) num_threads(adj_threads(v.size()))
     for (const auto _v: v) res += std::abs(_v);
     return res / double(v.size());
 }
@@ -326,7 +325,7 @@ template<typename T> T
 meanabs(const std::deque<T> &v)
 {
     double res = 0;
-#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none)
+#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none) num_threads(adj_threads(v.size()))
     for (const auto _v: v) res += std::abs(_v);
     return res / double(v.size());
 }
@@ -472,7 +471,7 @@ std::vector<double> operator^(const std::vector<double>& v, const double a);
 
 std::vector<double> operator^(const double a, const std::vector<double>& v);
 
-double dot_product(double const * a, double const * b, const size_t size);
+double dot_product(double const *a, double const *b, const size_t size);
 
 template<typename T> inline bool equals(const T t1, const T t2, const T epsilon = std::numeric_limits<T>::epsilon())
 {

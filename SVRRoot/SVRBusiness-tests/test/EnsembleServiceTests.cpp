@@ -3,6 +3,7 @@
 #include <DAO/ScopedTransaction.hpp>
 #include <model/User.hpp>
 #include "include/InputQueueRowDataGenerator.hpp"
+#include "InputQueueService.hpp"
 
 using namespace svr;
 using svr::datamodel::Priority;
@@ -38,7 +39,7 @@ protected:
     bpt::time_duration legalTimeDeviation = bpt::seconds(5);
     std::string timezone = "Europe/Zurich";
     std::deque<std::string> valueColumns {"high", "low", "open", "close"};
-    std::string expectedTableName = svr::datamodel::InputQueue::make_queue_table_name(userName, queueName, resolution);
+    std::string expectedTableName = business::InputQueueService::make_queue_table_name(userName, queueName, resolution);
 
     // dataset details
     std::string datasetName = "test dataset";
@@ -78,7 +79,7 @@ protected:
 
     void InitDataset(){
         testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, userName, testQueue, std::deque<datamodel::InputQueue_ptr>{},
-                                                   priority, "description", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
+                                                   priority, "description", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
                                                    max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
     }
@@ -101,7 +102,7 @@ protected:
     }
 
     void InitDeconQueueData(){
-        bpt::ptime startTime = testQueue->get_data().begin()->get()->get_value_time();
+        bpt::ptime startTime = testQueue->begin()->get()->get_value_time();
         bpt::ptime endTime = testQueue->get_data().rbegin()->get()->get_value_time();
 
         ASSERT_FALSE(startTime.is_special());
@@ -130,7 +131,7 @@ protected:
         ASSERT_TRUE(aci.input_queue_service.save(testQueue) > 0);
 
         LOG4_INFO(testQueue->get_table_name() << " is having data: "
-                 << bpt::to_simple_string(testQueue->get_data().begin()->get()->get_value_time()) << " - "
+                 << bpt::to_simple_string(testQueue->begin()->get()->get_value_time()) << " - "
                  << bpt::to_simple_string(testQueue->get_data().rbegin()->get()->get_value_time()));
 
         LOG4_TRACE("Saving test dataset");

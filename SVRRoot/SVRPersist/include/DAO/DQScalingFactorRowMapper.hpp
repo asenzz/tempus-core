@@ -12,16 +12,18 @@ private:
     //empty
 
 public:
-    DQScalingFactor_ptr mapRow(const pqxx_tuple& rowSet) const override
+    datamodel::DQScalingFactor_ptr mapRow(const pqxx_tuple& rowSet) const override
     {
         return std::make_shared<svr::datamodel::DQScalingFactor>(
                     rowSet["id"].as<bigint>(0),
                     rowSet["dataset_id"].as<bigint>(0),
                     rowSet["input_queue_table_name"].as<std::string>(""),
                     rowSet["input_queue_column_name"].as<std::string>(""),
-                    rowSet["wavelet_level"].as<size_t>(0),
-                    rowSet["scaling_factor"].as<double>(1),
-                    rowSet["mean_values"].as<double>(0)
+                    rowSet["level"].as<size_t>(0),
+                    rowSet["scaling_factor_features"].as<double>(1),
+                    rowSet["scaling_factor_features"].as<double>(1),
+                    rowSet["dc_offset_features"].as<double>(0),
+                    rowSet["dc_offset_labels"].as<double>(0)
                 );
     }
 

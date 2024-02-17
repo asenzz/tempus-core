@@ -19,7 +19,7 @@ TEST_F(DaoTestFixture, IQSavePerfTests)
     size_t const m = 200;
     size_t const n = 5001;
 
-    duration<double> all_tests_time;
+    duration<double> all_tests_time{0};
 
     for(size_t j = 0UL; j < m; ++j)
     {
@@ -34,7 +34,7 @@ TEST_F(DaoTestFixture, IQSavePerfTests)
         {
             tm = nw + bpt::minutes(i);
 
-            svr::datamodel::DataRow_ptr row = svr::datamodel::DataRow_ptr(new svr::datamodel::DataRow(tm));
+            svr::datamodel::DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>(tm, bpt::second_clock::local_time(), 1, 1);
             row->set_values({0, 1, 2});
 
             iq->get_data().push_back(row);

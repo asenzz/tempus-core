@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 #include "test_harness.hpp"
-#include "kernel_basic_integration_test.hpp"
+#include "kernel_basic_integration_test_smo.hpp"
 #include <cassert>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"

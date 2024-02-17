@@ -95,7 +95,7 @@ struct traits<datamodel::Dataset_ptr>
         dataset->set_priority(svr::datamodel::get_priority_from_string(v.get<std::string>("priority")));
         dataset->set_description(v.get<std::string>("description"));
         dataset->set_gradients(v.get<size_t>("gradients"));
-        dataset->set_chunk_size(v.get<size_t>("chunk_size"));
+        dataset->set_chunk_size(v.get<size_t>("max_chunk_size"));
         dataset->set_multiout(v.get<size_t>("multiout"));
         dataset->set_transformation_levels(v.get<size_t>("transformation_levels"));
         dataset->set_transformation_name(v.get<std::string>("transformation_name"));
@@ -112,7 +112,7 @@ struct traits<datamodel::Dataset_ptr>
         v.set("priority", svr::datamodel::to_string(in->get_priority()));
         v.set("description", in->get_description());
         v.set("gradients", in->get_transformation_levels());
-        v.set("chunk_size", in->get_transformation_levels());
+        v.set("max_chunk_size", in->get_transformation_levels());
         v.set("multiout", in->get_transformation_levels());
         v.set("transformation_levels", in->get_transformation_levels());
         v.set("transformation_name", in->get_transformation_name());

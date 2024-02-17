@@ -11,7 +11,6 @@
 
 constexpr unsigned DEFAULT_SIFTINGS = 1;
 
-constexpr unsigned MAX_TOKEN_SIZE = 0xFF;
 constexpr unsigned MASK_FILE_MAX_VER = 0x20;
 constexpr double OEMD_STRETCH_COEF = 1; // MAIN_DECON_QUEUE_RES_SECS * OMEGA_DIVISOR // 10 * MAIN_DECON_QUEUE_RES_SECS * OMEGA_DIVISOR // Fat OEMD transformer
 

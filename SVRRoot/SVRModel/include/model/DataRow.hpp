@@ -10,14 +10,14 @@
 #include "model/Request.hpp"
 
 namespace svr {
-namespace datamodel{
+namespace datamodel {
 
 class DataRow;
+
 using DataRow_ptr = std::shared_ptr<DataRow>;
 
 class DataRow
 {
-private:
     bpt::ptime value_time_;
     bpt::ptime update_time_;
     double tick_volume_;
@@ -45,41 +45,52 @@ public:
             const bpt::ptime &start_time,
             const bpt::time_duration &resolution);
 
+    static void
+    insert_rows(
+            container &rows_container,
+            const arma::mat &data,
+            const std::set<bpt::ptime> &times);
 
     static container
-    construct(const std::deque<datamodel::MultivalResponse_ptr> &responses)
-    {
-        container result;
-        for (auto iter_res = responses.begin(); iter_res != responses.end(); ++iter_res) {
-            const auto response = **iter_res;
-            result.push_back(std::make_shared<DataRow>(
-                    response.value_time,
-                    bpt::second_clock::local_time(),
-                    common::C_default_value_tick_volume,
-                    std::vector{response.value}));
-        }
-        return result;
-    }
+    insert_rows(
+            const arma::mat &data,
+            const std::set<bpt::ptime> &times);
 
-    DataRow()
-    {}
+    static container
+    construct(const std::deque<datamodel::MultivalResponse_ptr> &responses);
+
+    DataRow() = default;
+
+    DataRow(const std::string &csv);
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+
     DataRow(
-            const bpt::ptime& value_time,
-            const bpt::ptime& update_time = bpt::second_clock::local_time(),
+            const bpt::ptime &value_time,
+            const bpt::ptime &update_time = bpt::second_clock::local_time(),
             double tick_volume = common::C_default_value_tick_volume,
-            const std::vector<double> &values = {}) :
-        value_time_(value_time),
-        update_time_(update_time),
-        tick_volume_(tick_volume),
-        values_(values)
+            const size_t levels = 1) :
+            value_time_(value_time),
+            update_time_(update_time),
+            tick_volume_(tick_volume),
+            values_(std::vector<double>(levels))
     {}
 
     DataRow(
-            const bpt::ptime& value_time,
-            const bpt::ptime& update_time,
+            const bpt::ptime &value_time,
+            const bpt::ptime &update_time = bpt::second_clock::local_time(),
+            double tick_volume = common::C_default_value_tick_volume,
+            const std::vector<double> &values = {}) :
+            value_time_(value_time),
+            update_time_(update_time),
+            tick_volume_(tick_volume),
+            values_(values)
+    {}
+
+    DataRow(
+            const bpt::ptime &value_time,
+            const bpt::ptime &update_time,
             double tick_volume = common::C_default_value_tick_volume,
             double *values_ptr = nullptr,
             const size_t values_size = 0) :
@@ -91,67 +102,67 @@ public:
 
 #pragma GCC diagnostic pop
 
-    std::vector<double>& get_values() { return values_; }
-    void set_values(const std::vector<double>& values) { values_ = values; }
-    double get_value(const size_t column_index) const { return values_[column_index]; }
-    double &get_value(const size_t column_index) { return values_[column_index]; }
-    double operator() (const size_t column_index) { return values_[column_index]; }
-    void set_value(const size_t column_index, const double value)
-    {
-        if (values_.size() <= column_index) LOG4_THROW("Invalid column index " << column_index << " of " << values_.size() << " columns.");
-        values_[column_index] = value;
-    }
+    std::vector<double> &get_values()
+    { return values_; }
 
-    const bpt::ptime& get_update_time() const {return update_time_;}
-    void set_update_time(const bpt::ptime& update_time) { update_time_ = update_time;}
+    void set_values(const std::vector<double> &values)
+    { values_ = values; }
 
-    const bpt::ptime& get_value_time() const {return value_time_;}
-    void set_value_time(const bpt::ptime& value_time) { value_time_ = value_time;}
+    double get_value(const size_t column_index) const
+    { return values_[column_index]; }
 
-    double get_tick_volume() const { return tick_volume_; }
-    void set_tick_volume(const double weight) { tick_volume_ = weight; }
+    double &get_value(const size_t column_index)
+    { return values_[column_index]; }
 
-    std::string to_string() const
-    {
-        std::stringstream st;
-        st.precision(std::numeric_limits<long double>::max_digits10);
-        st << "Value time " << value_time_ << ", update time " << update_time_ <<
-           ", volume " << tick_volume_ << ", values ";
-        for (size_t i = 0; i < values_.size() - 1; ++i) st << values_[i] << ", ";
-        st << values_.back();
-        return st.str();
-    }
+    double operator()(const size_t column_index) const
+    { return values_[column_index]; }
 
-    std::vector <std::string> to_tuple() const
-    {
-        std::vector<std::string> result;
+    double at(const size_t column_index) const
+    { return values_[column_index]; }
 
-        result.push_back(bpt::to_simple_string(value_time_));
-        result.push_back(bpt::to_simple_string(update_time_));
-        result.push_back(common::to_string_with_precision(tick_volume_));
+    double &operator()(const size_t column_index)
+    { return values_[column_index]; }
 
-        for (const double v: values_) result.push_back(common::to_string_with_precision(v));
+    double &at(const size_t column_index)
+    { return values_[column_index]; }
 
-        return result;
-    }
+    void set_value(const size_t column_index, const double value);
 
-    bool operator == (const DataRow& other) const
-    {
-        return this->value_time_ == other.value_time_
-                && this->tick_volume_ == other.tick_volume_
-                && this->values_.size() == other.values_.size()
-                && std::equal(values_.begin(), values_.end(), other.values_.begin());
-    }
+    size_t size() const { return values_.size(); }
 
-    static bool fast_compare(const DataRow::container &lhs, const DataRow::container &rhs)
-    {
-        return lhs.size() == rhs.size() and
-                lhs.begin()->get()->get_values().size() == rhs.begin()->get()->get_values().size() and
-                lhs.begin()->get()->get_value_time() == rhs.begin()->get()->get_value_time() and
-                lhs.rbegin()->get()->get_value_time() == rhs.rbegin()->get()->get_value_time();
-    }
+    const bpt::ptime &get_update_time() const
+    { return update_time_; }
+
+    void set_update_time(const bpt::ptime &update_time)
+    { update_time_ = update_time; }
+
+    const bpt::ptime &get_value_time() const
+    { return value_time_; }
+
+    void set_value_time(const bpt::ptime &value_time)
+    { value_time_ = value_time; }
+
+    double get_tick_volume() const
+    { return tick_volume_; }
+
+    void set_tick_volume(const double weight)
+    { tick_volume_ = weight; }
+
+    std::string to_string() const;
+
+    std::vector<std::string> to_tuple() const;
+
+    bool operator==(const DataRow &other) const;
+
+    static bool fast_compare(const DataRow::container &lhs, const DataRow::container &rhs);
+
+    static std::shared_ptr<DataRow> load(const std::string &s);
 };
 
+template<typename T> std::basic_ostream<T> &operator <<(std::basic_ostream<T> &o, const DataRow& r)
+{
+    return o << r.to_string();
+}
 
 template<typename C = DataRow::container, typename C_range_iter = typename C::iterator, typename T = typename C::value_type>
 class container_range
@@ -165,120 +176,62 @@ class container_range
     C &container_;
 
 public:
-    explicit container_range(C &container)
-        : begin_(container.begin())
-        , end_(container.end())
-        , container_(container)
-    {
-        reinit();
-    }
+    explicit container_range(C &container);
 
-    container_range(
-            const C_range_iter &start,
-            const C_range_iter &end,
-            C &container
-    )
-            : begin_(start)
-            , end_(end)
-            , container_(container)
-    {
-        reinit();
-    }
+    container_range(const C_range_iter &start, const C_range_iter &end, C &container);
 
-    container_range(
-            C_range_iter start,
-            C &container
-    )
-            : begin_(start)
-            , end_(container.end())
-            , container_(container)
-    {
-        reinit();
-    }
+    container_range(C_range_iter start, C &container);
 
-    container_range(
-            C &container,
-            C_range_iter end
-    )
-            : begin_(container.start())
-            , end_(end)
-            , container_(container)
-    {
-        reinit();
-    }
+    container_range(C &container, C_range_iter end);
 
-    container_range(const container_range &rhs) :
-            begin_(rhs.begin_),
-            end_(rhs.end_),
-            container_(rhs.container_)
-    {
-        reinit();
-    }
+    container_range(const container_range &rhs);
 
-    container_range(container_range &rhs) :
-            begin_(rhs.begin_),
-            end_(rhs.end_),
-            container_(rhs.container_)
-    {
-        reinit();
-    }
+    container_range(container_range &rhs);
 
-    container_range &operator = (const container_range &rhs)
-    {
-        if (this == &rhs) return *this;
-        begin_ = rhs.begin_;
-        end_ = rhs.end_;
-        container_ = rhs.container_;
-        reinit();
-        return *this;
-    }
+    container_range &operator=(const container_range &rhs);
 
-    T &operator[](const size_t index)
-    {
-        return *(begin_ + index);
-    }
+    T &operator[](const size_t index);
 
+    T operator[](const size_t index) const;
 
-    T operator[](const size_t index) const
-    {
-        return *(begin_ + index);
-    }
+    C_range_iter it(const ssize_t index) const;
 
     container_range() = delete;
 
-    ssize_t distance() const { return distance_; } // TODO Rewrite this container or remove it
+    ssize_t distance() const;
 
-    C_range_iter begin() const { return begin_; }
-    C_range_iter end() const { return end_; }
-    C_riter rbegin() const { return C_riter(end_); }
-    C_riter rend() const { return C_riter(begin_); }
+    C_range_iter contbegin() const;
 
-    C &get_container() const { return container_; }
-    // C &get_container() { return container_; }
+    C_range_iter contend() const;
 
-    void set_range(const C_range_iter &start, const C_range_iter &end)
-    {
-        begin_ = start;
-        end_ = end;
-        reinit();
-    }
+    C_range_iter begin() const;
 
-    void set_begin(C_range_iter &begin)
-    {
-        begin_ = begin;
-        reinit();
-    }
+    C_range_iter end() const;
 
-    void set_end(C_range_iter &end)
-    {
-        end_ = end;
-        reinit();
-    }
+    T &front();
 
-    void reinit() // Call whenever changes to the container are made
-    {
-        distance_ = std::distance(begin_, end_);
-    }
+    T front() const;
+
+    T &back();
+
+    T back() const;
+
+    C_riter rbegin() const;
+
+    C_riter rend() const;
+
+    C &get_container() const;
+
+
+    void set_range(const C_range_iter &start, const C_range_iter &end);
+
+    void set_begin(C_range_iter &begin);
+
+    void set_end(C_range_iter &end);
+
+    void reinit();
+
+    size_t levels() const;
 };
 
 typedef container_range<const DataRow::container, DataRow::container::const_iterator> datarow_crange;
@@ -289,6 +242,9 @@ typedef container_range<DataRow::container, DataRow::container::iterator> dataro
 
 using data_row_container = datamodel::DataRow::container;
 using data_row_container_ptr = std::shared_ptr<data_row_container>;
+
+datamodel::DataRow::container
+clone_datarows(datamodel::DataRow::container::const_iterator it, const datamodel::DataRow::container::const_iterator &end);
 
 data_row_container::const_iterator
 lower_bound(const data_row_container &c, const bpt::ptime &t);
@@ -335,7 +291,9 @@ lower_bound_back_before(
         const bpt::ptime &time_key);
 
 data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
+
 data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
+
 data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::iterator find(data_row_container &data, const bpt::ptime &value_time);
@@ -348,13 +306,13 @@ find_nearest_before(
         const data_row_container &data,
         const boost::posix_time::ptime &time,
         const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
+        const size_t lag_count = 0);
 
 data_row_container::iterator
 find_nearest_before(
         data_row_container &data,
         const boost::posix_time::ptime &time,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
+        const size_t lag_count = 0);
 
 data_row_container::iterator
 find_nearest(
@@ -413,3 +371,5 @@ double calc_twap(
         const size_t col_ix);
 
 }
+
+#include "DataRow.tpp"

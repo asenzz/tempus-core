@@ -1,4 +1,5 @@
 #include "PgInputQueueDAO.hpp"
+#include "InputQueueService.hpp"
 
 #include <DAO/InputQueueRowRowMapper.hpp>
 #include <DAO/DataRowRowMapper.hpp>
@@ -128,7 +129,7 @@ size_t PgInputQueueDAO::save(const datamodel::InputQueue_ptr& p_input_queue, con
     else
         ret = save_metadata(p_input_queue);
 
-    if (p_input_queue->get_data().size() > 0) ret = save_data(p_input_queue, start_time);
+    if (p_input_queue->size() > 0) ret = save_data(p_input_queue, start_time);
 
     return ret;
 }
@@ -163,7 +164,7 @@ bool PgInputQueueDAO::exists(
         const std::string &logical_name,
         const bpt::time_duration &resolution)
 {
-    return exists(svr::datamodel::InputQueue::make_queue_table_name(user_name, logical_name, resolution));
+    return exists(business::InputQueueService::make_queue_table_name(user_name, logical_name, resolution));
 }
 
 bool PgInputQueueDAO::exists(const datamodel::InputQueue_ptr &p_input_queue)
@@ -176,7 +177,7 @@ bool PgInputQueueDAO::exists(const datamodel::InputQueue_ptr &p_input_queue)
 
 size_t PgInputQueueDAO::remove(const datamodel::InputQueue_ptr& p_input_queue)
 {
-    std::string table_name = svr::datamodel::InputQueue::make_queue_table_name(
+    std::string table_name = business::InputQueueService::make_queue_table_name(
                 p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
 
     LOG4_DEBUG("Removing InputQueue with table name " << table_name);
@@ -194,7 +195,7 @@ size_t PgInputQueueDAO::remove(const datamodel::InputQueue_ptr& p_input_queue)
 
 size_t PgInputQueueDAO::clear(const datamodel::InputQueue_ptr& p_input_queue)
 {
-    std::string table_name = svr::datamodel::InputQueue::make_queue_table_name(
+    std::string table_name = business::InputQueueService::make_queue_table_name(
             p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
 
     LOG4_DEBUG("Clear InputQueue with table name " << table_name);

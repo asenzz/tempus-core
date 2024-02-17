@@ -206,6 +206,8 @@ public:
         gpu_compute(features, kernel_matrix, ctx);
     }
 
+    using kernel_base<scalar_type>::operator();
+
     void operator()(
             viennacl::ocl::context &ctx,
             const viennacl::matrix<scalar_type> &x,
@@ -337,7 +339,7 @@ public:
     static double path_weights_modif_only_sum(const int M, const int N)
     {
         double w_sum_sym = 0;
-#pragma omp parallel for reduction(+: w_sum_sym) collapse(2) default(shared)
+#pragma omp parallel for reduction(+: w_sum_sym) collapse(2) default(shared) num_threads(adj_threads(M*N))
         for (int i = 0; i < M; ++i)
             for (int j = 0; j < N; ++j)
                 w_sum_sym += 1. / ((1. + abs(i - j)) * (1. + abs(i - j)));
@@ -349,7 +351,7 @@ public:
         //type_float w = zeros(M,N);
         double w_sum = 0;
         //for ii = 1:M
-#pragma omp parallel for reduction(+: w_sum) collapse(2) default(shared)
+#pragma omp parallel for reduction(+: w_sum) collapse(2) default(shared) num_threads(adj_threads(M*N))
         for (int ii = 0; ii < M; ++ii) {
             //for jj=1:N
             for (int jj = 0; jj < N; ++jj) {
@@ -359,7 +361,7 @@ public:
             }
         }
 
-#pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared) num_threads(adj_threads(M*N))
         //w=w/sum(sum(w));
         for (int ii = 0; ii < M; ++ii)
             for (int jj = 0; jj < N; ++jj)

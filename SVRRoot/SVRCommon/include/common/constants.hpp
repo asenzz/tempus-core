@@ -18,35 +18,24 @@ constexpr unsigned MANIFOLD_TEST_VALIDATION_WINDOW = 0;
 #endif
 
 namespace svr {
+
+constexpr unsigned MAX_CSV_TOKEN_SIZE = 0xFF;
+constexpr unsigned C_kernel_default_max_chunk_size = 6000;
+constexpr unsigned C_max_predict_chunk_size = C_kernel_default_max_chunk_size / 10;
+
+#ifndef TUNE_HYBRID_IDEAL
+constexpr unsigned EMO_SLIDE_SKIP = 7;
+constexpr unsigned EMO_MAX_J = 15;
+constexpr unsigned DEFAULT_EMO_SLIDE_LEN = 270; // 65 // TODO test 5 * 16 + 190 / epsco 20
+constexpr unsigned EMO_SLIDE_LEN = DEFAULT_EMO_SLIDE_LEN; // = EMO_TUNE_TEST_SIZE
+constexpr unsigned EMO_TUNE_VALIDATION_WINDOW = EMO_SLIDE_LEN - EMO_SLIDE_SKIP * EMO_MAX_J; // 200 seems to be the best validation window for predicting the next 120 hours, setting the window to 120 gives worse results for predicting the next 120 hours
+constexpr unsigned EMO_TUNE_TEST_SIZE = EMO_SLIDE_SKIP * EMO_MAX_J + EMO_TUNE_VALIDATION_WINDOW; // = EMO_SLIDE_LEN
+#endif
+
 namespace common {
 
-constexpr double C_input_obseg_labels = 1; // 83.3553;
-constexpr double C_input_obseg_features = C_input_obseg_labels; // / 1660.; // Best for direction .12, .07324079159, .05547593844
-
-constexpr double C_singlesolve_delta = 1e-4;
-
-// const std::deque<double> C_tune_crass_epscost {svr::common::C_input_obseg_labels, 1., 1e-1, 2.5e-1, 5e-1, 7.5e-1, 1e-2, 2.5e-2, 5e-2, 7.5e-2, 1e-3, 2.5e-3, 5e-3, 7.5e-3, 1e-4}; // Use for lower obseg eg. 0.5
-// const std::deque<double> C_tune_crass_epscost = {1. / (C_input_obseg_labels * C_input_obseg_labels), 1. / C_input_obseg_labels, 1., C_input_obseg_labels, C_input_obseg_labels * C_input_obseg_labels};
-const std::deque<double> C_tune_crass_epscost = {0.};
-// const std::deque<double> C_tune_crass_epscost {1e-4, 1e-5, 1e-6, 1e-7, 1e-9}; // Higher costs
-// const auto C_tune_crass_epscost = [](){ std::deque<double> r; for (double div = common::C_input_obseg_labels; div >= 1; div /= 2) r.emplace_back(svr::common::C_input_obseg_labels / div); return r; } ();
-/*
-const auto C_tune_crass_epscost = []() {
-    std::deque<double> r = {C_input_obseg_features};
-    for (double x = 1; x <= 1; x += 1) {
-        r.emplace_back(std::pow<double>(C_input_obseg_labels, x));
-        // r.emplace_back(std::pow<double>(C_input_obseg_labels, -x));
-    }
-    return r;
-} ();
-*/
-
-const std::deque<double> C_tune_lambdas_path {1.}; //{0., 1e-3, .2, .5, .75, 1., 1.5, 2., 3., 15., 75.};
-// const std::deque<double> C_tune_lambdas_path {0., 1., 1e1, 1e2};
-// const std::deque<double> C_tune_lambdas_path {1.};
-// const std::deque<double> C_tune_lambdas_path {0., .2, .75, 1., 3., 75.};
-// const double C_tune_lambda_max = *std::max_element(C_tune_lambdas_path.begin(), C_tune_lambdas_path.end()); // Max from above array
-// const double C_tune_lambda_min = *std::min_element(C_tune_lambdas_path.begin(), C_tune_lambdas_path.end()); // Min from above array
+constexpr double C_input_obseg_labels = 1;
+constexpr double C_input_obseg_features = C_input_obseg_labels;
 
 constexpr uint16_t C_forecast_focus = 115;
 
@@ -60,15 +49,8 @@ const std::string C_decon_queue_table_name_prefix {"z"};
 const std::string C_decon_queue_column_level_prefix {"level_"};
 const std::string C_mt4_date_time_format {"%Y.%m.%d %H:%M:%S"};
 
-const size_t __online_iters_limit_mult = atol(DEFAULT_ONLINE_ITERS_LIMIT_MULT);
-const size_t __online_learn_iter_limit = atol(DEFAULT_LEARN_ITER_LIMIT);
-const size_t __max_variations = atol(DEFAULT_MAX_VARIATIONS);
-const double __smo_epsilon_divisor = atof(DEFAULT_SMO_EPSILON_DIVISOR);
-const double __smo_cost_divisor = atof(DEFAULT_SMO_COST_DIVISOR);
+const size_t __online_learn_iter_limit = atol(DEFAULT_ONLINE_ITER_LIMIT);
 const size_t __stabilize_iterations_count = atol(DEFAULT_STABILIZE_ITERATIONS_COUNT);
-const long __default_number_variations = atol(DEFAULT_DEFAULT_NUMBER_VARIATIONS);
-constexpr size_t __max_iter = MAX_ITER_SMO;
-const bool __dont_update_r_matrix = atoi(DEFAULT_DONT_UPDATE_R_MATRIX);
 const size_t __multistep_len = atol(DEFAULT_MULTISTEP_LEN);
 
 

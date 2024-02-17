@@ -25,10 +25,10 @@ class SVRParametersService;
 }
 }
 
-#define TUNE_SVR_PARAM_FILE_NAME(svr_parameters) "/var/tmp/svr_parameters_" << (svr_parameters).get_input_queue_table_name() << "_" << (svr_parameters).get_input_queue_column_name() << "_" << (svr_parameters).get_decon_level() << ".tsv"
-
 namespace svr {
 namespace business {
+
+template<typename T> using t_enscon = tbb::concurrent_map<std::string /* column */, tbb::concurrent_map<size_t /* level */, T>>;
 
 class DatasetService
 {
@@ -60,8 +60,8 @@ public:
     datamodel::Dataset_ptr get_user_dataset(const std::string& user_name, const std::string& dataset_name);
     std::deque<datamodel::Dataset_ptr> find_all_user_datasets(std::string username);
 
-    void load(const datamodel::Dataset_ptr &p_dataset);
-    bool save(datamodel::Dataset_ptr &);
+    void load(datamodel::Dataset_ptr &p_dataset);
+    bool save(datamodel::Dataset_ptr &p_dataset);
 
     bool exists(const datamodel::Dataset_ptr &);
     bool exists(int dataset_id);
@@ -74,41 +74,31 @@ public:
     bool unlink_user_from_dataset(User_ptr const &user, const datamodel::Dataset_ptr &dataset);
     void update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs);
 
-    static size_t to_levix(const size_t modix);
-
-    static void join_features(tbb::concurrent_map<size_t, tbb::concurrent_map<size_t, matrix_ptr>> &features, const size_t mod_ct, const size_t ens_ct);
+    static tbb::concurrent_map<size_t, matrix_ptr> join_features(
+            t_enscon<matrix_ptr> &features,
+            const size_t levct,
+            const std::deque<datamodel::Ensemble_ptr> &ensembles);
 
     static bool prepare_training_data(
             datamodel::Dataset_ptr &p_dataset,
             datamodel::Ensemble_ptr &p_ensemble,
             tbb::concurrent_map<size_t, matrix_ptr> &features,
             tbb::concurrent_map<size_t, matrix_ptr> &labels,
+            tbb::concurrent_map<size_t, matrix_ptr> &last_knowns,
             tbb::concurrent_map<size_t, bpt::ptime> &last_row_time);
 
-    static void process_dataset(datamodel::Dataset_ptr &p_dataset);
+    static auto prepare_request_features(const datamodel::Dataset_ptr &p_dataset, const std::set<bpt::ptime> &predict_times);
+
+    static void process(datamodel::Dataset_ptr &p_dataset);
 
     static void process_dataset_test_tune(datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble);
 
-    static double
-    recombine_params(
-            predictions_t &tune_predictions,
-            datamodel::Ensemble_ptr &p_ensemble,
-            const size_t levct,
-            const tbb::concurrent_map<size_t, double> &scale_label,
-            const tbb::concurrent_map<size_t, double> &dc_offset,
-            const uint64_t epsco_key,
-            const size_t chunk_ix);
-
     static void recombine_params(
-            predictions_t &tune_predictions,
-            datamodel::Ensemble_ptr &p_ensemble,
-            const size_t levct,
-            const tbb::concurrent_map<size_t, double> &scale_label,
-            const tbb::concurrent_map<size_t, double> &dc_offset,
-            const size_t chunk_ix);
+            const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble, t_tuned_parameters &tune_predictions,
+            const size_t chunk_ix, const size_t grad_level);
     static boost::posix_time::time_period get_training_range(const datamodel::Dataset_ptr &p_dataset);
 
-    static void process_mimo_multival_requests(const User_ptr &p_user, datamodel::Dataset_ptr &p_dataset);
+    static void process_requests(const User_ptr &p_user, datamodel::Dataset_ptr &p_dataset);
 };
 
 } /* namespace business */

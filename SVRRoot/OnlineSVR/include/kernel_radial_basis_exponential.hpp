@@ -90,7 +90,7 @@ public:
     void operator()(const arma::mat &x_train, const arma::mat &x_test, arma::mat &kernel_matrix)
     {
         kernel_matrix.resize(x_train.n_rows, x_test.n_rows);
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) num_threads(adj_threads(x_train.n_rows * x_test.n_rows))
         for (size_t i = 0; i < x_train.n_rows; ++i)
             for (size_t j = 0; j < x_test.n_rows; ++j)
                 kernel_matrix(i, j) = this->operator()(x_train.row(i), x_test.row(j));

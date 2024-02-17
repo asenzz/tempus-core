@@ -555,7 +555,7 @@ void fix_mask(const size_t mask_size, double *mask)
 {
     double sum = 0;
     const double padding_value = 1. / double(mask_size);
-#pragma omp parallel for reduction(+:sum) default(shared)
+#pragma omp parallel for reduction(+:sum) default(shared) num_threads(adj_threads(mask_size))
     for (size_t i = 0; i < mask_size; ++i) {
         if (mask[i] < 0) mask[i] = 0;
         if (isnan(mask[i]) || isinf(mask[i])) {
@@ -652,7 +652,7 @@ void find_good_mask_anneal(
         if (i > C_NUM_TRIES / 12) internal_step /= 10.;
         temp = (C_NUM_TRIES - i) / temp_const;
         const size_t k_end = i + C_parallelism > C_NUM_TRIES ? C_NUM_TRIES % C_parallelism : C_parallelism;
-#pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared) num_threads(adj_threads(k_end))
         for (size_t k = 0; k < k_end; ++k) {
             const size_t iter_ct = k + i;
             thrust::device_vector<double> d_p_mask(mask_size);
@@ -807,7 +807,7 @@ create_random_mask(
 //#pragma omp simd
         for (size_t i = 0; i < mask_size; ++i) mask[i] = drander(buffer);
     } else {
-#pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared) num_threads(adj_threads(mask_size))
         for (size_t i = 0; i < mask_size; ++i) {
             if (drander(buffer) > .25) {
                 if (drander(buffer) > .05) {
@@ -926,7 +926,7 @@ optimize_levels(
     std::vector<double *> d_values_ptr(gpu_ctxs.size(), nullptr);
     std::vector<cufftDoubleComplex *> d_values_fft_ptr(gpu_ctxs.size(), nullptr);
     std::vector<double *> d_temp_ptr(gpu_ctxs.size(), nullptr);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(gpu_ctxs.size()))
     for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
         cudaSetDevice(gpu_ctxs[dev_ix]);
         *d_values[dev_ix] = h_values;
@@ -939,7 +939,7 @@ optimize_levels(
     size_t valid_pointer = 0; // first correct values start from this position inside d_values
 
     const int n_batch = 1;
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) num_threads(adj_threads(gpu_ctxs.size()))
     for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
         for (size_t i = 0; i < C_parallelism; ++i) {
             cudaSetDevice(gpu_ctxs[dev_ix]);
@@ -958,7 +958,7 @@ optimize_levels(
             d_global_sift_matrix.emplace_back(std::make_shared<thrust::device_vector<double>>());
         }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(gpu_ctxs.size()))
         for(size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
             cudaSetDevice(gpu_ctxs[dev_ix]);
             for (size_t i = 0; i < C_parallelism; ++i) {
@@ -972,7 +972,7 @@ optimize_levels(
 #ifndef USE_FIREFLY_SEARCH
         std::vector<double> good_mask(masks[mask_ix].size());
         double csum = 0;
-#pragma omp parallel for default(shared) reduction(+:csum)
+#pragma omp parallel for default(shared) reduction(+:csum) num_threads(adj_threads(good_mask.size()))
         for (size_t j = 0; j < good_mask.size(); ++j) {
             good_mask[j] = drand48();
             csum += good_mask[j];
@@ -984,7 +984,7 @@ optimize_levels(
         std::vector<std::vector<cufftHandle>> plan_mask_forward(gpu_ctxs.size(), std::vector<cufftHandle>{C_parallelism});
         auto plan_mask_backward = plan_mask_forward;
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(gpu_ctxs.size()))
         for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
             cudaSetDevice(gpu_ctxs[dev_ix]);
             for (size_t j = 0; j < C_parallelism; ++j) {
@@ -1024,7 +1024,7 @@ optimize_levels(
         best_result.store(std::numeric_limits<double>::max());
         best_quality.store(1);
 
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) num_threads(adj_threads(gpu_ctxs.size()))
         for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
             for (size_t j = 0; j < C_parallelism; ++j) {
                 cudaSetDevice(gpu_ctxs[dev_ix]);
@@ -1035,7 +1035,7 @@ optimize_levels(
         }
     }
 
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) num_threads(adj_threads(gpu_ctxs.size()))
     for (size_t dev_ix = 0; dev_ix < gpu_ctxs.size(); ++dev_ix) {
         for (size_t p = 0; p < C_parallelism; ++p) {
             cudaSetDevice(gpu_ctxs[dev_ix]);

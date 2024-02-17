@@ -49,7 +49,7 @@ double sobolnum(const int Dim, const unsigned long N)
     uint64_t result = 0;
     for (size_t i = 0; i < sobol_max_power; i++) {
         if (P > N) break;
-        if (N & P) result ^= sobol_direction_numbers_cross[i][Dim];
+        if (N & P) result ^= sobol_direction_numbers_cross[i][Dim % sobol_max_dimension];
         P += P;
     }
     return double(result) * inversepow2_52;

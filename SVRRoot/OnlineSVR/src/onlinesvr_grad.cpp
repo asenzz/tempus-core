@@ -100,10 +100,6 @@ OnlineMIMOSVR::batch_train(
     samples_trained = p_features->n_rows;
 
     if (update_r_matrix) PROFILE_EXEC_TIME(init_r_matrix(), "init_r_matrix");
-
-#ifdef PSEUDO_ONLINE // Clear kernel matrices once weight is calculated
-    p_kernel_matrices = std::make_shared<std::vector<arma::mat>>(ixs.size());
-#endif
 }
 
 arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::ptime &pred_time)

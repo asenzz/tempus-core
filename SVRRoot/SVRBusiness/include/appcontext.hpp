@@ -42,8 +42,8 @@ public:
     svr::business::ScalingFactorsTaskService &scaling_factors_task_service;
     svr::business::AutotuneTaskService &autotune_task_service;
     svr::business::DecrementTaskService &decrement_task_service;
-    svr::business::IQScalingFactorService & iq_scaling_factor_service;
-    svr::business::DQScalingFactorService & dq_scaling_factor_service;
+    svr::business::IQScalingFactorService &iq_scaling_factor_service;
+    svr::business::DQScalingFactorService &dq_scaling_factor_service;
 
     void flush_dao_buffers();
 

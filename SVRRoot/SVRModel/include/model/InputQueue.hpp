@@ -71,6 +71,7 @@ public:
     inline const std::string& get_time_zone() const {return time_zone_;}
     inline void set_time_zone(const std::string &time_zone) {time_zone_ = time_zone;}
 
+    inline const std::string get_value_column(const size_t i) const { return value_columns_[i]; }
     inline const std::deque<std::string>& get_value_columns() const {return value_columns_;}
     inline void set_value_columns(const std::deque<std::string>& value_columns){ value_columns_ = value_columns; }
 
@@ -105,8 +106,6 @@ public:
 
     std::string metadata_to_string() const override;
 
-    static std::string make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
-
     bool get_uses_fix_connection() const ;
     void set_uses_fix_connection(bool value);
 };
@@ -130,7 +129,7 @@ operator<<(const InputQueue &iq, std::basic_ostream<T> &s)
 template<>
 inline void store_buffer_push_merge<svr::datamodel::InputQueue_ptr>(svr::datamodel::InputQueue_ptr &dest, svr::datamodel::InputQueue_ptr const & src)
 {
-    dest->get_data().insert(dest->get_data().end(), src->get_data().begin(), src->get_data().end());
+    dest->get_data().insert(dest->end(), src->begin(), src->end());
     dest->set_value_columns(src->get_value_columns());
     dest->set_description(src->get_description());
     dest->set_legal_time_deviation(src->get_legal_time_deviation());

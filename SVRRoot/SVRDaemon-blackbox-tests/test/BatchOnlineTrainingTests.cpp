@@ -51,7 +51,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
     new_iq->set_data(aci.input_queue_service.load(NEW_VALUES_QUEUE));
     datamodel::InputQueue_ptr new_iq_aux = aci.input_queue_service.get_queue_metadata(NEW_VALUES_AUX_QUEUE);
     new_iq_aux->set_data(aci.input_queue_service.load(NEW_VALUES_AUX_QUEUE));
-    // new_iq_aux->get_data().erase(new_iq_aux->get_data().begin(), lower_bound(new_iq_aux->get_data(), new_iq->get_data().begin()->get()->get_value_time()));
+    // new_iq_aux->get_data().erase(new_iq_aux->begin(), lower_bound(new_iq_aux->get_data(), new_iq->begin()->get()->get_value_time()));
     //InputQueue_ptr new_ohlc_iq = aci.input_queue_service.get_queue_metadata(NEW_VALUES_QUEUE_OHLC);
     //new_ohlc_iq->set_data(aci.input_queue_service.load(NEW_VALUES_QUEUE_OHLC));
 
@@ -61,7 +61,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
     di.finish_construction();
     double total_mae = 0, total_mae_ohlc = 0, total_last_known_mae = 0, total_last_known_ohlc = 0;
     size_t ctr = 0, hit_ctr = 0, last_known_hit_ctr = 0;
-    for (auto new_iq_iter = new_iq->get_data().begin(); new_iq_iter != new_iq->get_data().end(); ++new_iq_iter)
+    for (auto new_iq_iter = new_iq->begin(); new_iq_iter != new_iq->end(); ++new_iq_iter)
     {
         const auto t_start = std::chrono::high_resolution_clock::now();
         LOG4_DEBUG("Start iteration, training until " << iq->get_data().rbegin()->get()->get_value_time());

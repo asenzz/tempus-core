@@ -12,13 +12,10 @@ FOREACH(DEP ${DEPENDENCIES})
     INCLUDE_DIRECTORIES(../${DEP}/include)
 ENDFOREACH(DEP)
 
-FILE(GLOB SOURCE_FILES "src/*.c" "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
-IF(USE_CUDA)
-    FILE(GLOB SOURCE_FILES_CUDA "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc" "src/*.cu" "src/*.cuh")
-    LIST(APPEND SOURCE_FILES ${SOURCE_FILES_CUDA})
-ENDIF()
+INCLUDE("../../cmake/SourceList.cmake")
 
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system REQUIRED)
+LINK_LIBRARIES(${DEPENDENCIES} ${JEMALLOC_LIBRARIES} magma armadillo ${OMP_LIBRARY} TBB::tbb strumpack)
 
 IF (EXPERIMENTAL_FEATURES)
     #FIND_PACKAGE(OSQP REQUIRED)
@@ -29,18 +26,13 @@ IF (EXPERIMENTAL_FEATURES)
     FIND_PACKAGE(Python3 REQUIRED)
     INCLUDE_DIRECTORIES("${MATLAB_INCLUDE_DIR}" "${PYINCLUDES}" "/usr/include/python3.6m") # "/usr/local/include/eigen3" "/usr/local/include/google/protobuf"
     #FIND_PACKAGE(Torch REQUIRED)
-ENDIF(EXPERIMENTAL_FEATURES)
-
-LINK_LIBRARIES(${DEPENDENCIES} ${JEMALLOC_LIBRARIES} magma armadillo ${OMP_LIBRARY} TBB::tbb)
-IF(EXPERIMENTAL_FEATURES)
     LINK_LIBRARIES(fftw3 MatlabDataArray MatlabEngine python3.6m) # osqp::osqpstatic clblast tensorflow_all ${TORCH_LIBRARIES}
-    SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRBusiness SVRCommon SVRModel wavelib fftw3 python3.6m) # tensorflow_all ${TORCH_LIBRARIES}
-ELSE()
-    SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRBusiness SVRCommon SVRModel wavelib fftw3)
+    APPEND(TEST_DEPENDENCIES ${PROJECT_NAME} python3.6m) # tensorflow_all ${TORCH_LIBRARIES}
 ENDIF()
 
 IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     MESSAGE("~~ Building ${PROJECT_NAME}-test")
+    SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRBusiness SVRPersist SVRCommon SVRModel wavelib fftw3)
 
     SET_PROPERTY(DIRECTORY PROPERTY TEST_MODULES "${PROJECT_NAME}")
 

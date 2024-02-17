@@ -44,19 +44,6 @@ namespace datamodel {
         DEFAULT_SVRPARAM_KERNEL_TYPE,\
         DEFAULT_SVRPARAM_LAG_COUNT
 
-#define DEFAULT_APP_HYPERPARAMS(AP) \
-        (AP).get_online_iters_limit_mult(),\
-        (AP).get_online_learn_iter_limit(),\
-        (AP).get_max_variations(),\
-        (AP).get_smo_epsilon_divisor(),\
-        (AP).get_smo_cost_divisor(),\
-        (AP).get_stabilize_iterations_count(),\
-        (AP).get_default_number_variations(),\
-        (AP).get_dont_update_r_matrix(),\
-        (AP).get_max_smo_iterations()
-
-#define DEFAULT_ALL_HYPERPARAMS(ap) DEFAULT_SVR_HYPERPARAMS, DEFAULT_APP_HYPERPARAMS(ap)
-
 typedef enum class kernel_type : int
 {
     LINEAR = 0,
@@ -113,6 +100,15 @@ inline kernel_type_e operator++(kernel_type_e &k_type, int)
     return tmp;
 }
 
+class SVRParameters;
+using SVRParameters_ptr = std::shared_ptr<datamodel::SVRParameters>;
+struct less_SVRParameters_ptr
+{
+    bool operator()(const datamodel::SVRParameters_ptr &lhs, const datamodel::SVRParameters_ptr &rhs) const;
+};
+typedef std::set<datamodel::SVRParameters_ptr, less_SVRParameters_ptr> t_param_set;
+typedef std::shared_ptr<t_param_set> t_param_set_ptr; // TODO Convert to a new class
+
 enum class bound_type : int
 {
     min = 0,
@@ -148,25 +144,10 @@ private:
     size_t lag_count;
 
 public:
-    size_t online_iters_limit_mult;
-    size_t online_learn_iter_limit;
-    size_t max_variations;
-    double smo_epsilon_divisor;
-    double smo_cost_divisor;
-    size_t stabilize_iterations_count;
-    ssize_t number_variations;
-    bool dont_update_r_matrix;
-    size_t max_iter;
     bool skip = false;
 
 public:
-    SVRParameters() : SVRParameters(
-            DEFAULT_SVR_HYPERPARAMS,
-            common::__online_iters_limit_mult, common::__online_learn_iter_limit,
-            common::__max_variations, common::__smo_epsilon_divisor, common::__smo_cost_divisor,
-            common::__stabilize_iterations_count, common::__default_number_variations,
-            common::__dont_update_r_matrix, common::__max_iter)
-    {}
+    SVRParameters() : SVRParameters(DEFAULT_SVR_HYPERPARAMS) {}
 
     SVRParameters(
             const bigint id,
@@ -184,18 +165,7 @@ public:
             const u_int64_t svr_decremental_distance = DEFAULT_SVRPARAM_DECREMENT_DISTANCE,
             const double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO,
             const kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE,
-            const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT,
-
-            // Global parameters needed by SVR algorithms
-            const size_t online_iters_limit_mult = common::__online_iters_limit_mult,
-            const size_t online_learn_iter_limit = common::__online_learn_iter_limit,
-            const size_t max_variations = common::__max_variations,
-            const double smo_epsilon_divisor = common::__smo_epsilon_divisor,
-            const double smo_cost_divisor = common::__smo_cost_divisor,
-            const size_t stabilize_iterations_count = common::__stabilize_iterations_count,
-            const ssize_t number_variations = common::__default_number_variations,
-            const bool dont_update_r_matrix = common::__dont_update_r_matrix,
-            const size_t max_iter = common::__max_iter)
+            const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT)
             : Entity(id),
               dataset_id(dataset_id),
               input_queue_table_name(input_queue_table_name),
@@ -211,18 +181,7 @@ public:
               svr_decremental_distance(svr_decremental_distance),
               svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
               kernel_type(kernel_type),
-              lag_count(lag_count),
-
-            // Globals
-              online_iters_limit_mult(online_iters_limit_mult),
-              online_learn_iter_limit(online_learn_iter_limit),
-              max_variations(max_variations),
-              smo_epsilon_divisor(smo_epsilon_divisor),
-              smo_cost_divisor(smo_cost_divisor),
-              stabilize_iterations_count(stabilize_iterations_count),
-              number_variations(number_variations),
-              dont_update_r_matrix(dont_update_r_matrix),
-              max_iter(max_iter)
+              lag_count(lag_count)
     {
         set_kernel_type(kernel_type);
     }
@@ -244,10 +203,7 @@ public:
                     params.get_svr_decremental_distance(),
                     params.get_svr_adjacent_levels_ratio(),
                     params.get_kernel_type(),
-                    params.get_lag_count(),
-                    params.online_iters_limit_mult, params.online_learn_iter_limit, params.max_variations,
-                    params.smo_epsilon_divisor, params.smo_cost_divisor, params.stabilize_iterations_count,
-                    params.number_variations, params.dont_update_r_matrix, params.max_iter)
+                    params.get_lag_count())
     {
         set_kernel_type(kernel_type);
     }
@@ -270,16 +226,6 @@ public:
         svr_adjacent_levels_ratio = v.svr_adjacent_levels_ratio;
         kernel_type = v.kernel_type;
         lag_count = v.lag_count;
-        // Globals
-        online_iters_limit_mult = v.online_iters_limit_mult;
-        online_learn_iter_limit = v.online_learn_iter_limit;
-        max_variations = v.max_variations;
-        smo_epsilon_divisor = v.smo_epsilon_divisor;
-        smo_cost_divisor = v.smo_cost_divisor;
-        stabilize_iterations_count = v.stabilize_iterations_count;
-        number_variations = v.number_variations;
-        dont_update_r_matrix = v.dont_update_r_matrix;
-        max_iter = v.max_iter;
         return *this;
     }
 
@@ -588,19 +534,6 @@ std::basic_ostream<T> &operator<<(std::basic_ostream<T> &os, const SVRParameters
     os << e.to_string();
     return os;
 }
-
-using SVRParameters_ptr = std::shared_ptr<datamodel::SVRParameters>;
-
-struct less_SVRParameters_ptr
-{
-    bool operator()(const datamodel::SVRParameters_ptr &lhs, const datamodel::SVRParameters_ptr &rhs) const
-    {
-        return lhs->operator<(*rhs);
-    }
-};
-
-typedef std::set<datamodel::SVRParameters_ptr, less_SVRParameters_ptr> t_param_set;
-typedef std::shared_ptr<t_param_set> t_param_set_ptr;
 
 }
 }

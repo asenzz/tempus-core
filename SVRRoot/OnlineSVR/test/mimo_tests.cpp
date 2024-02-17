@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include "../include/onlinesvr.hpp"
 #include "test_harness.hpp"
+#include "onlinesvr_persist.tpp"
 
 #define DEFAULT_ITERS (2)
 #define TOLERANCE 0.001
@@ -42,7 +43,7 @@ TEST(mimo_train_predict, batch_train)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = svr::OnlineMIMOSVR::load_online_mimosvr("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
+        mimo_model = std::make_shared<svr::OnlineMIMOSVR>();// svr::OnlineMIMOSVR::load("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
@@ -76,7 +77,7 @@ TEST(mimo_train_predict, chunk_train)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = svr::OnlineMIMOSVR::load_onlinemimosvr_no_weights_no_kernel("../SVRRoot/OnlineSVR/test/test_data/mimo_model_avg_level3.txt");
+        mimo_model = std::make_shared<svr::OnlineMIMOSVR>();
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
@@ -109,7 +110,7 @@ TEST(mimo_train_predict, batch_train_tasks)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = online_svr_tmp.load_online_mimosvr("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
+        mimo_model = online_svr_tmp.load("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
@@ -159,7 +160,7 @@ TEST(mimo_train_predict, batch_train_repeated)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = online_svr_tmp.load_online_mimosvr("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
+        mimo_model = online_svr_tmp.load("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
@@ -209,7 +210,7 @@ TEST(mimo_train_predict, batch_train_gr)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = online_svr_tmp.load_online_mimosvr("../SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt");
+        mimo_model = online_svr_tmp.load("../SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
@@ -444,7 +445,7 @@ TEST(mimo_online_train, batch_train_forget_learn)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = online_svr_tmp.load_online_mimosvr("../SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt");
+        mimo_model = online_svr_tmp.load("../SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
@@ -561,7 +562,7 @@ TEST(mimo_online_train, multiple_forget_learn)
     OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = online_svr_tmp.load_online_mimosvr("../SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt");
+        mimo_model = online_svr_tmp.load("../SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;

@@ -39,7 +39,9 @@ struct fcvmd_frequency_outputs {
 class fast_cvmd final : public spectral_transform
 {
     size_t K; // Number of modes/frequencies. because of DC=1 we use 1 more than the natural number of frequencies (3 in the signal above). Half of VMD levels, quarter of total levels.
-    arma::vec f, row_values, soln;
+    arma::vec f;
+    arma::rowvec A;
+    arma::mat H;
     arma::uvec even_ixs, odd_ixs, K_ixs;
     bpt::ptime timenow;
     size_t levels;
@@ -61,7 +63,7 @@ public:
     void
     transform(
             const data_row_container &input,
-            datamodel::DeconQueue_ptr &p_decon_queue,
+            datamodel::DeconQueue &decon,
             const size_t input_colix = 0,
             const size_t test_offset = 0);
 

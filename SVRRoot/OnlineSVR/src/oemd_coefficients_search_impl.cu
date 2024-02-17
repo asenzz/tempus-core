@@ -27,68 +27,6 @@ namespace oemd_search {
 
 #define CUDA_SET_DEVICE(__i) cu_errchk(cudaSetDevice(gpuids[(__i) % max_gpus]))
 
-size_t to_fft_size(const size_t input_size)
-{
-    return input_size / 2 + 1;
-}
-
-void
-oemd_coefficients_search::save_mask(
-        const std::vector<double> &mask,
-        const std::string &queue_name,
-        const size_t level,
-        const size_t levels)
-{
-    size_t ctr = 0;
-    while (file_exists(svr::common::formatter() << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels, queue_name))) { ++ctr; }
-    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels, queue_name));
-    if (myfile.is_open()) {
-        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels, queue_name));
-        myfile << std::setprecision(std::numeric_limits<double>::max_digits10);
-        for (auto it = mask.cbegin(); it != mask.cend(); ++it)
-            if (it != std::prev(mask.cend()))
-                myfile << *it << ",";
-            else
-                myfile << *it;
-        myfile.close();
-    } else
-        LOG4_ERROR(
-                "Aborting saving! Unable to open file " << C_oemd_fir_coefs_dir << "/" << mask_file_name(ctr, level, levels, queue_name) << " for writing.");
-}
-
-#if 0
-double get_std(double *x, const size_t input_size)
-{
-    double sum = 0.;
-    for (size_t i = 0; i < input_size - 1; ++i) {
-        sum += pow(x[i] - x[i + 1], 2);
-    }
-    return sqrt(sum / (double) input_size);
-}
-#endif
-
-std::vector<double>
-oemd_coefficients_search::fill_auto_matrix(const size_t M, const size_t siftings, const size_t N, const double *x)
-{
-    return {};
-
-    std::vector<double> diff(N - 1);
-#pragma omp parallel for
-    for (size_t i = 0; i < N - 1; ++i)
-        diff[i] = x[i + 1] - x[i];
-
-    const size_t Msift = M * siftings;
-    std::vector<double> global_sift_matrix(Msift);
-#pragma omp parallel for
-    for (size_t i = 0; i < Msift; ++i) {
-        double sum = 0;
-        for (size_t j = N / 2; j < N - 1 - i; ++j)
-            sum += diff[j] * diff[j + i];
-        global_sift_matrix[i] = sum / double(N - 1. - i - N / 2.);
-    }
-    return global_sift_matrix;
-}
-
 
 void
 oemd_coefficients_search::expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask)
@@ -244,7 +182,6 @@ oemd_coefficients_search::transform(
         double *d_values, double *h_mask, const size_t input_size, const size_t mask_size,
         const size_t siftings, double *d_temp, const size_t gpu_id)
 {
-    //probably these sizes are not important
     cudaSetDevice(gpu_id);
     cufftHandle plan_forward;
     cufftHandle plan_backward;
@@ -263,34 +200,21 @@ oemd_coefficients_search::transform(
     fft_release();
 
     cufftDoubleComplex *dev_input_fft = thrust::raw_pointer_cast(d_input_fft.data());
-    //cudaDeviceSynchronize();
     for (size_t i = 0; i < siftings; ++i) {
-//        cudaSetDevice(gpu_id);
         fft_acquire();
         cufft_errchk(cufftExecD2Z(plan_forward, d_values, dev_input_fft));
         fft_release();
         gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(to_fft_size(input_size)) >>>(input_size, dev_expanded_mask_fft, dev_input_fft);
         cu_errchk(cudaPeekAtLastError());
-        //cu_errchk(cudaDeviceSynchronize());
         fft_acquire();
         cufft_errchk(cufftExecZ2D(plan_backward, dev_input_fft, d_temp));
         fft_release();
         vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input_size)>>>(d_values, d_temp, input_size);
         cu_errchk(cudaPeekAtLastError());
-        //cu_errchk(cudaDeviceSynchronize());
     }
 
     cufftDestroy(plan_forward);
     cufftDestroy(plan_backward);
-}
-
-
-int oemd_coefficients_search::do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft)
-{
-    for (auto i: h_mask_fft)
-        if (std::norm<double>({i.x, i.y}) > norm_thresh)
-            return 1;
-    return 0;
 }
 
 
@@ -361,7 +285,6 @@ oemd_coefficients_search::evaluate_mask(
     //auto d_global_sift_matrix = cuda_malloccopy(global_sift_matrix);
     const auto d_workspace = cuda_malloccopy(h_workspace);
     const size_t expanded_size = h_mask.size() * C_mask_expander;
-
 
     double *d_expanded_mask;
     cu_errchk(cudaMalloc(&d_expanded_mask, expanded_size * sizeof(*d_expanded_mask)));
@@ -490,30 +413,6 @@ oemd_coefficients_search::evaluate_mask(
 }
 
 
-void oemd_coefficients_search::fix_mask(std::vector<double> &mask)
-{
-    double sum = 0;
-    const double padding_value = 1. / double(mask.size());
-#pragma omp parallel for reduction(+:sum) default(shared)
-    for (size_t i = 0; i < mask.size(); ++i) {
-        if (mask[i] < 0) mask[i] = 0;
-        if (isnan(mask[i]) || isinf(mask[i])) {
-            LOG4_DEBUG("Very bad masks!");
-            mask[i] = padding_value;
-        }
-        sum += mask[i];
-    }
-    if (sum == 0) {
-        LOG4_ERROR("Bad masks!");
-#pragma omp parallel for schedule(static, 1 + mask.size() / std::thread::hardware_concurrency())
-        for (auto &m: mask) m = padding_value;
-    } else {
-#pragma omp parallel for schedule(static, 1 + mask.size() / std::thread::hardware_concurrency())
-        for (auto &m: mask) m /= sum;
-    }
-}
-
-
 void
 oemd_coefficients_search::gauss_smoothen_mask(
         const size_t mask_size,
@@ -540,32 +439,6 @@ oemd_coefficients_search::gauss_smoothen_mask(
 
 
 void
-oemd_coefficients_search::smoothen_mask(std::vector<double> &mask, common::t_drand48_data_ptr buffer)
-{
-    const size_t window_size = 3 + 2. * (mask.size() * common::drander(buffer) / 10.);
-    const auto mask_size = mask.size();
-
-    std::vector<double> weights(window_size);
-    double wsum = 0;
-#pragma omp simd reduction(+:wsum)
-    for (size_t i = 0; i < window_size; ++i) {
-        weights[i] = exp(-pow((3. * ((double) i - (window_size / 2))) / (double) (window_size / 2), 2) / 2.);
-        wsum += weights[i];
-    }
-
-    std::vector<double> nmask(mask_size);
-#pragma omp simd
-    for (size_t i = 0; i < mask_size; ++i) {
-        double sum = 0;
-        for (size_t j = std::max<size_t>(0, i - window_size / 2); j <= std::min<size_t>(i + window_size / 2, mask_size - 1); ++j)
-            sum += weights[window_size / 2 + i - j] * mask[j];
-        nmask[i] = sum / wsum;
-    }
-    mask = nmask;
-}
-
-
-void
 oemd_coefficients_search::create_random_mask(
         const size_t position, double step, const size_t mask_size, std::vector<double> &mask, const double *start_mask,
         common::t_drand48_data_ptr buffer, cufftHandle plan_mask_forward, cufftHandle plan_mask_backward, const size_t gpu_id)
@@ -575,7 +448,7 @@ oemd_coefficients_search::create_random_mask(
 //#pragma omp simd
         for (size_t i = 0; i < mask_size; ++i) mask[i] = common::drander(buffer);
     } else {
-#pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared) num_threads(adj_threads(mask_size))
         for (size_t i = 0; i < mask_size; ++i) {
             if (common::drander(buffer) > .25) {
                 if (common::drander(buffer) > .05) {
@@ -629,13 +502,12 @@ oemd_coefficients_search::find_good_mask_ffly(
     std::tie(score, h_mask) = svr::optimizer::firefly(
             h_mask.size(), FIREFLY_PARTICLES, FIREFLY_ITERATIONS, FFA_ALPHA, FFA_BETAMIN, FFA_GAMMA,
             std::vector(h_mask.size(), 0.), std::vector(h_mask.size(), 1./h_mask.size()), std::vector(h_mask.size(), 1.),
-            loss_function).operator std::tuple<double, std::vector<double>>();
+            loss_function).operator std::pair<double, std::vector<double>>();
     fix_mask(h_mask);
     return score;
 }
 
 
-// TODO Pass a vector of all available GPU-IDs at the time of call and use them all up
 void
 oemd_coefficients_search::optimize_levels(
         const datamodel::datarow_range &input,
@@ -652,12 +524,12 @@ oemd_coefficients_search::optimize_levels(
     const auto in_colix = input.begin()->get()->get_values().size() / 2;
 
     std::vector<double> h_workspace(window_len);
-#pragma omp simd
+#pragma omp parallel for schedule(static, 1 + window_len / std::thread::hardware_concurrency()) num_threads(adj_threads(window_len))
     for (size_t i = window_start; i < window_end; ++i)
         h_workspace[i - window_start] = i < tail.size() ? tail[i] : input[i - tail.size()]->get_value(in_colix);
 
     cu_errchk(cudaSetDevice(gpu_id));
-// thrust::host_vector<double> h_temp(window_len);
+//   thrust::host_vector<double> h_temp(window_len);
     thrust::device_vector<double> d_workspace(window_len);
     thrust::device_vector<double> d_temp(window_len);
     double *d_temp_ptr = thrust::raw_pointer_cast(d_temp.data());
@@ -673,7 +545,7 @@ oemd_coefficients_search::optimize_levels(
     size_t start_valid_ix = 0; // first correct values start from this position inside d_workspace
 
     constexpr int n_batch = 1;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
     for (size_t i = 0; i < C_parallelism; ++i) {
         CUDA_SET_DEVICE(i);
         cufft_errchk(cufftPlan1d(&plan_full_forward[i], window_len, CUFFT_D2Z, n_batch));
@@ -682,7 +554,7 @@ oemd_coefficients_search::optimize_levels(
     for (size_t i = 0; i < masks.size(); ++i) {
         std::deque<cufftHandle> plan_sift_forward(C_parallelism);
         std::deque<cufftHandle> plan_sift_backward(C_parallelism);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(C_parallelism))
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);
             cufft_errchk(cufftPlan1d(&plan_sift_forward[j], siftings[i] * masks[i].size(), CUFFT_D2Z, n_batch));
@@ -692,7 +564,7 @@ oemd_coefficients_search::optimize_levels(
         //        masks[i].size(), siftings[i], window_len - start_valid_ix, &h_workspace[window_start + start_valid_ix]);
         std::deque<cufftHandle> plan_mask_forward(C_parallelism);
         std::deque<cufftHandle> plan_mask_backward(C_parallelism);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);
             cufft_errchk(cufftPlan1d(&plan_mask_forward[j], C_mask_expander * masks[i].size(), CUFFT_D2Z, n_batch));
@@ -724,7 +596,7 @@ oemd_coefficients_search::optimize_levels(
         best_result.store(std::numeric_limits<double>::max(), std::memory_order_relaxed);
         best_quality.store(1, std::memory_order_relaxed);
 #endif
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);
             cufft_errchk(cufftDestroy(plan_mask_forward[j]));
@@ -733,7 +605,7 @@ oemd_coefficients_search::optimize_levels(
         }
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
     for (size_t i = 0; i < C_parallelism; ++i) {
         CUDA_SET_DEVICE(i);
         cufft_errchk(cufftDestroy(plan_full_forward[i]));

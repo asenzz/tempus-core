@@ -12,19 +12,19 @@ bigint TsDQScalingFactorDAO::get_next_id()
 }
 
 
-bool TsDQScalingFactorDAO::exists(const DQScalingFactor_ptr& dq_scaling_factor)
+bool TsDQScalingFactorDAO::exists(const datamodel::DQScalingFactor_ptr& dq_scaling_factor)
 {
     return ts_call<bool>(&DQScalingFactorDAO::exists, dq_scaling_factor);
 }
 
 
-int TsDQScalingFactorDAO::save(const DQScalingFactor_ptr& scaling_task)
+int TsDQScalingFactorDAO::save(const datamodel::DQScalingFactor_ptr& scaling_task)
 {
     return ts_call<int>(&DQScalingFactorDAO::save, scaling_task);
 }
 
 
-int TsDQScalingFactorDAO::remove(const DQScalingFactor_ptr& scaling_task)
+int TsDQScalingFactorDAO::remove(const datamodel::DQScalingFactor_ptr& scaling_task)
 {
     return ts_call<int>(&DQScalingFactorDAO::remove, scaling_task);
 }

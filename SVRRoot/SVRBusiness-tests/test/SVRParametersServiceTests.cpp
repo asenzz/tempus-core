@@ -2,6 +2,7 @@
 #include "DAO/SVRParametersDAO.hpp"
 #include "DAO/DataSource.hpp"
 #include "DAO/InputQueueDAO.hpp"
+#include "InputQueueService.hpp"
 #include <iostream>
 
 #include <model/User.hpp>
@@ -19,7 +20,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
             ;
     size_t const decon_levels = 4;
     bpt::time_duration iq_resolution = bpt::seconds(60);
-    std::string iq_table_name = svr::datamodel::InputQueue::make_queue_table_name(user_name, iq_logical_name, iq_resolution);
+    std::string iq_table_name = business::InputQueueService::make_queue_table_name(user_name, iq_logical_name, iq_resolution);
 
 
     bigint dataset_id = 0;
@@ -37,7 +38,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
         aci.flush_dao_buffers();
 
         datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(),
-                                                                   iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), decon_levels, "sym7");
+                                                                   iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), decon_levels, "sym7");
 
         // ASSERT_EQ(ds->get_ensemble_svr_parameters().size(), 0UL);
 

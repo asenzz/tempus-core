@@ -64,7 +64,7 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}
-            , svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
+            , svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     ds->set_max_lookback_time_gap(svr::common::date_time_string_to_seconds("38,21:22:23"));
@@ -73,14 +73,14 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
 
     svr::business::DatasetService::UserDatasetPairs dsu;
     aci.dataset_service.update_active_datasets(dsu);
-    ASSERT_EQ(2UL, dsu.size());
+    EXPECT_TRUE(2UL == dsu.size());
 
     datamodel::Dataset_ptr &p_dataset = dsu[0].dataset;
     p_dataset->set_input_queue(
             aci.input_queue_service.get_queue_metadata(
                     p_dataset->get_input_queue()->get_table_name()));
 
-    ASSERT_EQ(p_dataset->get_max_lookback_time_gap(), bpt::hours(38*24 + 21) + bpt::minutes(22) + bpt::seconds(23) );
+    EXPECT_TRUE(p_dataset->get_max_lookback_time_gap() == bpt::hours(38*24 + 21) + bpt::minutes(22) + bpt::seconds(23) );
 
     aci.dataset_service.remove(ds);
     aci.input_queue_service.remove(iq);
@@ -99,7 +99,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
     aci.input_queue_service.save(iq1);
 
     datamodel::Dataset_ptr ds1 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Low", user1Low->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}
-            , svr::datamodel::Priority::Low, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
+            , svr::datamodel::Priority::Low, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds1->set_is_active(true);
 
     aci.dataset_service.save(ds1);
@@ -109,11 +109,11 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
     svr::business::DatasetService::UserDatasetPairs pairs;
     aci.dataset_service.update_active_datasets(pairs);
 
-    ASSERT_EQ(2UL, pairs.size());
+    EXPECT_TRUE(2UL == pairs.size());
     auto iter = pairs.begin();
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "eurusd"); ASSERT_EQ(1UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "svrwave");
+    EXPECT_TRUE(iter->dataset->get_dataset_name() == "eurusd"); EXPECT_TRUE(1UL == iter->users.size()); EXPECT_TRUE(iter->users[0]->get_user_name() == "svrwave");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Low"); ASSERT_EQ(1UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Low");
+    EXPECT_TRUE(iter->dataset->get_dataset_name() == "Dataset2016-07-20-Low"); EXPECT_TRUE(1UL == iter->users.size()); EXPECT_TRUE(iter->users[0]->get_user_name() == "User2016-07-20-Low");
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -129,7 +129,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     datamodel::Dataset_ptr ds2 =
             std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Below", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{},
-                                                      svr::datamodel::Priority::BelowNormal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
+                                                      svr::datamodel::Priority::BelowNormal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds2->set_is_active(true);
 
     aci.dataset_service.save(ds2);
@@ -138,14 +138,14 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     aci.dataset_service.update_active_datasets(pairs);
 
-    ASSERT_EQ(3UL, pairs.size());
+    EXPECT_TRUE(3UL == pairs.size());
 
     iter = pairs.begin();
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Below"); ASSERT_EQ(1UL, iter->users.size());ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal");
+    EXPECT_TRUE(iter->dataset->get_dataset_name() == "Dataset2016-07-20-Below"); EXPECT_TRUE(1UL == iter->users.size());EXPECT_TRUE(iter->users[0]->get_user_name() == "User2016-07-20-Normal");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "eurusd"); ASSERT_EQ(1UL, iter->users.size());ASSERT_EQ(iter->users[0]->get_user_name(), "svrwave");
+    EXPECT_TRUE(iter->dataset->get_dataset_name() == "eurusd"); EXPECT_TRUE(1UL ==  iter->users.size()); EXPECT_TRUE(iter->users[0]->get_user_name() == "svrwave");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Low"); ASSERT_EQ(1UL, iter->users.size());ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Low");
+    EXPECT_TRUE(iter->dataset->get_dataset_name() == "Dataset2016-07-20-Low"); EXPECT_TRUE(1UL == iter->users.size()); EXPECT_TRUE(iter->users[0]->get_user_name() == "User2016-07-20-Low");
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -154,25 +154,32 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     aci.dataset_service.update_active_datasets(pairs);
 
-    ASSERT_EQ(3UL, pairs.size());
+    EXPECT_TRUE(3UL == pairs.size());
 
     iter = pairs.begin();
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Below"); ASSERT_EQ(1UL, iter->users.size());ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Below");
+    ASSERT_EQ(1UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Low"); ASSERT_EQ(2UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal"); ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Low");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Low");
+    ASSERT_EQ(2UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal");
+    ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Low");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "eurusd"); ASSERT_EQ(1UL, iter->users.size());ASSERT_EQ(iter->users[0]->get_user_name(), "svrwave");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "eurusd");
+    ASSERT_EQ(1UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "svrwave");
 
     ////////////////////////////////////////////////////////////////////////////
 
-    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
+    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds3->set_is_active(true);
 
     aci.dataset_service.save(ds3);
 
     aci.dataset_service.update_active_datasets(pairs);
 
-    ASSERT_EQ(4UL, pairs.size());
+    EXPECT_TRUE(4UL == pairs.size());
 
     iter = pairs.begin();
     ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-High-3"); ASSERT_EQ(1UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal");
@@ -190,7 +197,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     aci.dataset_service.update_active_datasets(pairs);
 
-    ASSERT_EQ(4UL, pairs.size());
+    EXPECT_TRUE(4UL == pairs.size());
 
     iter = pairs.begin();
     ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-High-3"); ASSERT_EQ(1UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-Normal");
@@ -214,16 +221,27 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     aci.dataset_service.update_active_datasets(pairs);
 
-    ASSERT_EQ(4UL, pairs.size());
+    EXPECT_TRUE(4UL == pairs.size());
 
     iter = pairs.begin();
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-High-3"); ASSERT_EQ(2UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-High-3"); ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Normal");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-High-3");
+    ASSERT_EQ(2UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-High-3");
+    ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Normal");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Below"); ASSERT_EQ(2UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-High-3"); ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Normal");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Below");
+    ASSERT_EQ(2UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-High-3");
+    ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Normal");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Low"); ASSERT_EQ(2UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-High-3"); ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Low");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "Dataset2016-07-20-Low");
+    ASSERT_EQ(2UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "User2016-07-20-High-3");
+    ASSERT_EQ(iter->users[1]->get_user_name(), "User2016-07-20-Low");
     ++iter;
-    ASSERT_EQ(iter->dataset->get_dataset_name(), "eurusd"); ASSERT_EQ(1UL, iter->users.size()); ASSERT_EQ(iter->users[0]->get_user_name(), "svrwave");
+    ASSERT_EQ(iter->dataset->get_dataset_name(), "eurusd");
+    ASSERT_EQ(1UL, iter->users.size());
+    ASSERT_EQ(iter->users[0]->get_user_name(), "svrwave");
 
     ////////////////////////////////////////////////////////////////////////////
 

@@ -21,7 +21,7 @@ TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
             "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -60,13 +60,13 @@ TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
 
     ASSERT_FALSE(aci.autotune_task_service.exists(test_autotune_task));
 
-    ASSERT_EQ(0UL, aci.autotune_task_service.find_all_by_dataset_id(test_autotune_task->get_dataset_id()).size());
+    EXPECT_TRUE(0UL == aci.autotune_task_service.find_all_by_dataset_id(test_autotune_task->get_dataset_id()).size());
 
-    ASSERT_EQ(nullptr, aci.autotune_task_service.get_by_id(test_autotune_task->get_id()).get());
+    EXPECT_TRUE(nullptr == aci.autotune_task_service.get_by_id(test_autotune_task->get_id()).get());
 
-    ASSERT_EQ(0, aci.autotune_task_service.remove(test_autotune_task));
+    EXPECT_TRUE(0 == aci.autotune_task_service.remove(test_autotune_task));
 
-    ASSERT_EQ(1, aci.autotune_task_service.save(test_autotune_task));
+    EXPECT_TRUE(1 == aci.autotune_task_service.save(test_autotune_task));
 
     ASSERT_NE(bigint(0), test_autotune_task->get_id());
 
@@ -74,22 +74,22 @@ TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
 
     auto userAutotuneTasks = aci.autotune_task_service.find_all_by_dataset_id(ds->get_id());
 
-    ASSERT_EQ(1UL, userAutotuneTasks.size());
+    EXPECT_TRUE(1UL == userAutotuneTasks.size());
 
-    ASSERT_EQ(parameters, userAutotuneTasks.front()->get_parameters());
+    EXPECT_TRUE(parameters == userAutotuneTasks.front()->get_parameters());
 
-    ASSERT_EQ(*test_autotune_task, *userAutotuneTasks.front());
-    ASSERT_EQ(*test_autotune_task, *aci.autotune_task_service.get_by_id(test_autotune_task->get_id()));
+    EXPECT_TRUE(*test_autotune_task == *userAutotuneTasks.front());
+    EXPECT_TRUE(*test_autotune_task == *aci.autotune_task_service.get_by_id(test_autotune_task->get_id()));
 
-    ASSERT_EQ(1, aci.autotune_task_service.remove(test_autotune_task));
+    EXPECT_TRUE(1 == aci.autotune_task_service.remove(test_autotune_task));
 
     ASSERT_FALSE(aci.autotune_task_service.exists(test_autotune_task));
 
-    ASSERT_EQ(0UL, aci.autotune_task_service.find_all_by_dataset_id(test_autotune_task->get_id()).size());
+    EXPECT_TRUE(0UL == aci.autotune_task_service.find_all_by_dataset_id(test_autotune_task->get_id()).size());
 
-    ASSERT_EQ(nullptr, aci.autotune_task_service.get_by_id(test_autotune_task->get_id()).get());
+    EXPECT_TRUE(nullptr == aci.autotune_task_service.get_by_id(test_autotune_task->get_id()).get());
 
-    ASSERT_EQ(0, aci.autotune_task_service.remove(test_autotune_task));
+    EXPECT_TRUE(0 == aci.autotune_task_service.remove(test_autotune_task));
 
     aci.autotune_task_service.remove(test_autotune_task);
     aci.dataset_service.remove(ds);

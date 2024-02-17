@@ -25,16 +25,12 @@ int PgModelDAO::save(const datamodel::Model_ptr &model) {
                 model->get_id(),
                 model->get_ensemble_id(),
                 model->get_decon_level(),
-                model->get_learning_levels(),
-                model->get_gradients(),
                 model->get_last_modified(),
                 model->get_last_modeled_value_time()
         );
     else
         return data_source.update(
                 get_sql("update"),
-                model->get_learning_levels(),
-                model->get_gradients(),
                 model->get_last_modified(),
                 model->get_last_modeled_value_time(),
                 model->get_id()
@@ -65,6 +61,12 @@ std::deque<datamodel::Model_ptr> PgModelDAO::get_all_ensemble_models(const bigin
 {
     ModelRowMapper rowMapper;
     return data_source.query_for_deque(rowMapper, get_sql(/* "get_all_ensemble_models_empty" */ "get_all_ensemble_models"), ensemble_id);
+}
+
+std::deque<OnlineMIMOSVR_ptr> PgModelDAO::get_svr_by_model_id(const bigint model_id)
+{
+    SVRModelRowMapper row_mapper;
+    return data_source.query_for_deque(row_mapper, get_sql("get_svr_by_model_id"), model_id);
 }
 
 } // namespace dao

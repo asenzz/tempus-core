@@ -31,6 +31,8 @@ namespace svr { namespace datamodel {
 namespace svr {
 namespace business {
 
+using t_predict_features = tbb::concurrent_map<size_t /* level */, std::pair<std::set<bpt::ptime /* feature row times */>, arma::mat /* features matrix */>>;
+
 class EnsembleService {
     friend struct pdtm_task;
 
@@ -55,7 +57,7 @@ public:
 
     std::deque<datamodel::Ensemble_ptr> get_all_by_dataset_id(const bigint dataset_id);
 
-    void load(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble_ptr& p_ensemble, const bool load_decon_data = false);
+    void load(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr& p_ensemble, const bool load_decon_data = false);
     int save(const datamodel::Ensemble_ptr &p_ensemble);
     bool save_ensembles(const std::deque<datamodel::Ensemble_ptr> &ensembles, bool save_decon_queues = false);
     bool exists(const datamodel::Ensemble_ptr &ensemble);
@@ -63,31 +65,34 @@ public:
     size_t remove_by_dataset_id(const bigint dataset_id);
     int remove(const datamodel::Ensemble_ptr & p_ensemble);
 
-    static data_row_container::iterator
-    get_start(
-            data_row_container &cont,
-            const size_t decremental_offset,
-            const size_t lag_count,
-            const boost::posix_time::ptime &model_last_time,
-            const boost::posix_time::time_duration &resolution);
+    static datamodel::DataRow::container::iterator
+    get_start(datamodel::DataRow::container &cont, const size_t decremental_offset, const boost::posix_time::ptime &model_last_time,
+              const boost::posix_time::time_duration &resolution);
 
-    void init_ensembles(datamodel::Dataset_ptr &p_dataset);
+    static void init_default_ensembles(datamodel::Dataset_ptr &p_dataset);
 
- 	//create ensembles with decons and svrParameters from dataset
-    std::deque<datamodel::Ensemble_ptr> init_ensembles_from_dataset(const datamodel::Dataset_ptr &p_dataset);
+    static void get_decon_queues_from_input_queue(
+            const datamodel::Dataset_ptr &p_dataset,
+            const datamodel::InputQueue_ptr &p_input_queue,
+            std::deque<datamodel::DeconQueue_ptr> &decon_queues);
 
-    std::deque<datamodel::Ensemble_ptr> init_ensembles_from_dataset(const datamodel::Dataset_ptr &p_dataset,
-                                                              const std::deque<datamodel::DeconQueue_ptr> &decon_queues);
+    static void train(
+            const datamodel::Dataset_ptr &p_dataset,
+            datamodel::Ensemble_ptr &p_ensemble,
+            const tbb::concurrent_map<size_t, matrix_ptr> &dataset_features,
+            const tbb::concurrent_map<size_t, matrix_ptr> &labels,
+            const tbb::concurrent_map<size_t, matrix_ptr> &last_knowns,
+            const tbb::concurrent_map<size_t, bpt::ptime> &last_row_time);
 
-    void train(datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble);
-
-    static void predict(
+    static datamodel::DeconQueue_ptr predict(
+            const datamodel::Dataset_ptr &p_dataset,
             const datamodel::Ensemble_ptr &p_ensemble,
-            const boost::posix_time::time_period &range,
-            const boost::posix_time::time_duration &resolution,
-            const bpt::time_duration &max_gap,
-            svr::datamodel::DataRow::container &decon_data,
-            std::deque<data_row_container_ptr> &aux_decon_data);
+            const t_predict_features &dataset_features);
+
+    static datamodel::DeconQueue_ptr predict_noexcept (
+            const datamodel::Dataset_ptr &p_dataset,
+            const datamodel::Ensemble_ptr &p_ensemble,
+            const t_predict_features &dataset_features) noexcept;
 
     static bool
     is_ensemble_input_queue(const datamodel::Ensemble_ptr &p_ensemble, const datamodel::InputQueue_ptr &p_input_queue);

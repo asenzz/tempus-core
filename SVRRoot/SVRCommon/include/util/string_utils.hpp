@@ -1,5 +1,6 @@
 #pragma once
 
+#include <execution>
 #include <ostream>
 #include <string>
 #include <set>
@@ -96,13 +97,13 @@ static inline std::string &trim(std::string &s)
 
 static inline std::string tolower(std::string str)
 {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+    std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::tolower);
     return str;
 }
 
 static inline std::string toupper(std::string str)
 {
-    std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+    std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::toupper);
     return str;
 }
 
@@ -181,7 +182,7 @@ to_string(const std::set<std::shared_ptr<T>, L> &v)
     auto vit = v.begin();
     for (size_t i = 0; i < v.size() - 1; ++i, ++vit)
         s << **vit << ", ";
-    s << v.rbegin()->get();
+    s << **vit;
     return s.str();
 }
 
@@ -195,7 +196,7 @@ to_string(const std::set<T, L> &v)
     auto vit = v.begin();
     for (size_t i = 0; i < v.size() - 1; ++i, ++vit)
         s << *vit << ", ";
-    s << *v.rbegin();
+    s << *vit;
     return s.str();
 }
 
@@ -208,7 +209,7 @@ to_string(const tbb::concurrent_set<std::shared_ptr<T>, L> &v)
     auto vit = v.begin();
     for (size_t i = 0; i < v.size() - 1; ++i, ++vit)
         s << **vit << ", ";
-    s << std::prev(v.end())->get();
+    s << **vit;
     return s.str();
 }
 
@@ -222,7 +223,7 @@ to_string(const tbb::concurrent_set<T, L> &v)
     auto vit = v.begin();
     for (size_t i = 0; i < v.size() - 1; ++i, ++vit)
         s << *vit << ", ";
-    s << std::prev(v.end())->get();
+    s << *vit;
     return s.str();
 }
 
@@ -235,7 +236,7 @@ to_string(const tbb::concurrent_vector<T> &v)
     auto vit = v.begin();
     for (size_t i = 0; i < v.size() - 1; ++i, ++vit)
         s << *vit << ", ";
-    s << *v.rbegin();
+    s << *vit;
     return s.str();
 }
 

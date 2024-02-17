@@ -31,16 +31,16 @@ public:
     const DataRow::container &get_data() const { return data; }
     DataRow::container &get_data() { return data; }
 
-    void set_data(const DataRow::container &data) {
-        this->data = data;
+    void set_data(const DataRow::container &data_) {
+        this->data = data_;
     }
 
-    size_t get_frame_size() const {
-        return frame_size;
-    }
+    size_t get_frame_size() const { return frame_size; }
 
-    void set_frame_size(size_t frame_size) {
-        this->frame_size = frame_size;
+    size_t size() const { return data.size(); }
+
+    void set_frame_size(size_t frame_size_) {
+        this->frame_size = frame_size_;
     }
 
     size_t get_value_columns_count() const {
@@ -55,16 +55,16 @@ public:
         return first_time;
     }
 
-    void set_first_time(bpt::ptime const &first_time) {
-        this->first_time = first_time;
+    void set_first_time(bpt::ptime const &first_time_) {
+        this->first_time = first_time_;
     }
 
     bpt::time_duration const &get_resolution() const {
         return resolution;
     }
 
-    void set_resolution(bpt::time_duration const &resolution) {
-        this->resolution = resolution;
+    void set_resolution(bpt::time_duration const &resolution_) {
+        this->resolution = resolution_;
     }
 
 
@@ -72,8 +72,8 @@ public:
         return value_columns;
     }
 
-    void set_value_columns(std::vector<std::string> const &value_columns) {
-        this->value_columns = value_columns;
+    void set_value_columns(std::vector<std::string> const &value_columns_) {
+        this->value_columns = value_columns_;
     }
 
     bool is_frame_full() const{

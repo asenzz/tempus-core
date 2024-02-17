@@ -1,4 +1,5 @@
 #include <model/InputQueue.hpp>
+#include "InputQueueService.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -16,7 +17,7 @@ InputQueue::InputQueue(
         const bool uses_fix_connection,
         const data_row_container &rows)
     :
-    Queue( make_queue_table_name( owner_user_name, logical_name, resolution ), rows),
+    Queue(business::InputQueueService::make_queue_table_name(owner_user_name, logical_name, resolution ), rows),
     logical_name_(logical_name),
     owner_user_name_(owner_user_name),
     description_(description),
@@ -68,7 +69,7 @@ void InputQueue::set_resolution(const bpt::time_duration& resolution)
 
 void InputQueue::reinit_table_name()
 {
-    set_table_name(make_queue_table_name(get_owner_user_name(), get_logical_name(), get_resolution()));
+    set_table_name(business::InputQueueService::make_queue_table_name(get_owner_user_name(), get_logical_name(), get_resolution()));
 }
 
 
@@ -87,15 +88,6 @@ std::string InputQueue::metadata_to_string() const {
         ss << ", " << column;
 
     return ss.str();
-}
-
-std::string InputQueue::make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
-{
-    std::string result = svr::common::sanitize_db_table_name(
-            svr::common::C_input_queue_table_name_prefix + "_" + user_name + "_" + logical_name + "_" + std::to_string(resolution.total_seconds()));
-    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-    LOG4_DEBUG("Returning " << result);
-    return result;
 }
 
 bool InputQueue::get_uses_fix_connection() const

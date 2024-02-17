@@ -7,6 +7,11 @@
 namespace svr {
 namespace datamodel {
 
+bool less_SVRParameters_ptr::operator()(const datamodel::SVRParameters_ptr &lhs, const datamodel::SVRParameters_ptr &rhs) const
+{
+    return lhs->operator < (*rhs);
+}
+
 
 }
 }

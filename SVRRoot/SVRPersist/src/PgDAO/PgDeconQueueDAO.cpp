@@ -139,7 +139,7 @@ int PgDeconQueueDAO::remove(datamodel::DeconQueue_ptr const &deconQueue)
 
 long PgDeconQueueDAO::save_data(const datamodel::DeconQueue_ptr& p_decon_queue, const boost::posix_time::ptime &start_time)
 {
-    if (p_decon_queue->get_data().size() < 0) return 0;
+    if (p_decon_queue->size() < 0) return 0;
     if (count(p_decon_queue) > 0) data_source.cleanup_queue_table(p_decon_queue->get_table_name(), p_decon_queue->get_data(), start_time);
     return data_source.batch_update(p_decon_queue->get_table_name(), p_decon_queue->get_data(), start_time);
 }
@@ -220,8 +220,8 @@ size_t PgDeconQueueDAO::get_level_count(const datamodel::DeconQueue_ptr &p_decon
         goto __bail;
     }
 
-    if (!p_decon_queue->get_data().empty() && !p_decon_queue->get_data().front()->get_values().empty())
-        result = p_decon_queue->get_data().front()->get_values().size();
+    if (!p_decon_queue->get_data().empty() && !p_decon_queue->front()->get_values().empty())
+        result = p_decon_queue->front()->get_values().size();
 
     if (result != 0) goto __bail;
 

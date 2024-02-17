@@ -117,14 +117,21 @@ std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, co
         min_index -= max_index - level_count + 1;
         max_index -= max_index - level_count + 1;
     }
+
+#pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / std::thread::hardware_concurrency())
     for (ssize_t level_index = min_index; level_index <= max_index; ++level_index) {
-        if ((level_index >= 0 and level_index < ssize_t(level_count))
-            and (level_index > ssize_t(level_count) / 2 or (level_index < ssize_t(level_count) / 2 and level_index % 2 == 0)))
-            level_indexes.insert(level_index);
+        if (level_index >= 0
+            && level_index < ssize_t(level_count)
+            && (level_count == 1 || level_index != ssize_t(level_count) / 2)
+            && level_index % 2 == 0)
+#pragma omp critical
+            level_indexes.emplace(level_index);
         else
             LOG4_TRACE("Skipping level " << std::to_string(level_index) << " adjacent ratio " << ratio << " for level " << level);
     }
+
     LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << to_string(level_indexes));
+
     return level_indexes;
 }
 
@@ -191,8 +198,9 @@ std::vector<double>
 get_uniform_random_vector(const std::pair<std::vector<double>, std::vector<double> > &boundaries)
 {
     std::vector<double> random_vector{get_uniform_random_vector(boundaries.first.size())};
-#pragma omp parallel for
-    for (size_t i = 0; i < std::min<size_t>(boundaries.first.size(), boundaries.second.size()); ++i)
+    const auto l = std::min<size_t>(boundaries.first.size(), boundaries.second.size());
+#pragma omp parallel for num_threads(adj_threads(l))
+    for (size_t i = 0; i < l; ++i)
         random_vector[i] = random_vector[i] * (boundaries.second[i] - boundaries.first[i]) + boundaries.first[i];
 
     return random_vector;

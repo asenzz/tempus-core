@@ -4,8 +4,8 @@
 
 #define ASSERT_DBL_EQ(x, y) ASSERT_LE(fabs((x) - (y)), std::numeric_limits<double>::epsilon()) << " x: " << x << " y: " << y
 #define ASSERT_SPR_EQ(spr, bp, bq, ap, aq, tm) \
-    ASSERT_DBL_EQ((spr).bid_px, (bp)); ASSERT_EQ((spr).bid_qty, (bq)); \
-    ASSERT_DBL_EQ((spr).ask_px, (ap)); ASSERT_EQ((spr).ask_qty, (aq)); \
+    ASSERT_DBL_EQ((spr).bid_px, (bp)); EXPECT_TRUE((spr).bid_qty == (bq)); \
+    ASSERT_DBL_EQ((spr).ask_px, (ap)); EXPECT_TRUE((spr).ask_qty == (aq)); \
     ASSERT_EQ((spr).time, (tm))
 
 using svr::fix::bid_ask_spread;

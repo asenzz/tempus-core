@@ -25,7 +25,7 @@
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
 
-#define CTX_PER_GPU       2 // Number of contexts per GPU at once, be careful with kernel VRAM usage!
+#define CTX_PER_GPU       4 // Number of contexts per GPU at once, be careful with kernel VRAM usage!
 
 #define SVRWAVE_GPU_SEM         "svrwave_gpu_sem"
 
@@ -41,6 +41,7 @@ class gpu_handler : boost::noncopyable {
 public:
     size_t get_free_gpus() const;
     size_t get_max_running_gpu_threads_number() const;
+    size_t get_gpu_devices_count() const;
     size_t get_max_gpu_kernels() const;
     size_t get_max_gpu_data_chunk_size() const;
     void gpu_sem_enter();

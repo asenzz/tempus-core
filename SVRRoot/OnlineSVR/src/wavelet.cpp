@@ -3069,7 +3069,7 @@ spectral_transform::wavelet::wavelet(std::string name) : name_(name)
 
     constexpr double sqrt2_double = 1.4142135623730951454746218587388284504413604736328125;
 
-    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+    std::transform(std::execution::par_unseq, name.begin(), name.end(), name.begin(), ::tolower);
     name_ = name;
 
     if (name == std::string("haar")) {

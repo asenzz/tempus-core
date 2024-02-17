@@ -15,7 +15,6 @@
 #include <memory>
 #include "model/DataRow.hpp"
 
-
 namespace svr {
 
 static const std::deque<std::string> transformation_names {
@@ -76,10 +75,10 @@ public:
 
         inline size_t rec_len() const { return rec_len_; };
         inline size_t dec_len() const { return dec_len_; };
-        inline const double* const dec_hi_double() const { return dec_hi_double_; };
-        inline const double* const dec_lo_double() const { return dec_lo_double_; };
-        inline const double* const rec_hi_double() const { return rec_hi_double_; };
-        inline const double* const rec_lo_double() const { return rec_lo_double_; };
+        inline double* dec_hi_double() const { return dec_hi_double_; };
+        inline double* dec_lo_double() const { return dec_lo_double_; };
+        inline double* rec_hi_double() const { return rec_hi_double_; };
+        inline double* rec_lo_double() const { return rec_lo_double_; };
         std::string name() const { return name_; };
         size_t order() const { return order_; };
         void print() const;

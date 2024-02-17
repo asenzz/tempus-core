@@ -4,6 +4,7 @@
 #include <model/DBTable.hpp>
 #include <model/InputQueue.hpp>
 #include "AsyncImplBase.hpp"
+#include "InputQueueService.hpp"
 
 using svr::datamodel::InputQueue;
 
@@ -46,7 +47,7 @@ datamodel::InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::stri
                                                       const bpt::time_duration &resolution)
 {
     return get_queue_metadata(
-            svr::datamodel::InputQueue::make_queue_table_name(user_name, logical_name, resolution)
+            business::InputQueueService::make_queue_table_name(user_name, logical_name, resolution)
     );
 }
 
@@ -112,7 +113,7 @@ size_t AsyncInputQueueDAO::save(const datamodel::InputQueue_ptr& inputQueue, con
 
     bool exist = exists(inputQueue);
 
-    if(inputQueue->get_data().size() > 0)
+    if(inputQueue->size() > 0)
     {
             ret = save_data(inputQueue, start_time);
     }
@@ -137,7 +138,7 @@ size_t AsyncInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr& queue)
 size_t AsyncInputQueueDAO::save_data(const datamodel::InputQueue_ptr& queue, const boost::posix_time::ptime &last_time)
 {
     pImpl.cache(queue);
-    return queue->get_data().size();
+    return queue->size();
 }
 
 size_t AsyncInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr& queue)
@@ -160,7 +161,7 @@ bool AsyncInputQueueDAO::exists(const std::string &table_name)
 bool AsyncInputQueueDAO::exists(const std::string &user_name, const std::string &logical_name,
                                 const bpt::time_duration &resolution)
 {
-    return exists(svr::datamodel::InputQueue::make_queue_table_name(user_name, logical_name, resolution));
+    return exists(business::InputQueueService::make_queue_table_name(user_name, logical_name, resolution));
 }
 
 bool AsyncInputQueueDAO::exists(const datamodel::InputQueue_ptr& p_input_queue)

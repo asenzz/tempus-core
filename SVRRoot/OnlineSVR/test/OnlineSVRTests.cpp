@@ -58,10 +58,10 @@ TEST(OnlineSVRTests, STFT_Reconstruction)
                 std::unique_ptr<svr::spectral_transform> transformer(svr::spectral_transform::create(std::string("stft_cpu"),nLevels));
                 std::vector<std::vector<double>> decon;
                 transformer->transform(input, decon, 0);
-                ASSERT_EQ(decon.size(), input.size() - nLevels);
+                EXPECT_TRUE(decon.size() == input.size() - nLevels);
                 for (size_t i = 0; i < decon.size(); ++i)
                 {
-                    ASSERT_EQ(int(decon[i].size()), nLevels + 1);
+                    EXPECT_TRUE(int(decon[i].size()) == nLevels + 1);
                 }
                 std::vector<double> decon_linearized(decon.size() * (nLevels + 1));
                 for (int level = 0; level < nLevels + 1; ++level)
@@ -75,7 +75,7 @@ TEST(OnlineSVRTests, STFT_Reconstruction)
                 std::vector<double> recon;
                 transformer->inverse_transform(decon_linearized, recon, 0);
 
-                ASSERT_EQ(recon.size(), input.size());
+                EXPECT_TRUE(recon.size() == input.size());
                 double max_residual = 0;
                 for (size_t i = 0; i < input.size(); ++i)
                 {

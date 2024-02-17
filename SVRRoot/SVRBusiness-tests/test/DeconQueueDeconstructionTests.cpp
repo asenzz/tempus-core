@@ -75,12 +75,12 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             lookback_rows,
             adjacent_levels,
             max_lookback_time_gap,
-            1,
             model_number,
+            test_iq->get_resolution(),
             bpt::min_date_time,
-            test_iq->get_resolution());
+            test_iq->get_resolution(),
+            1);
 
-#ifdef NEW_SCALING
     const auto params = std::make_shared<svr::datamodel::SVRParameters>(
             0,
             dataset_100->get_id(),
@@ -96,8 +96,6 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             DEFAULT_SVRPARAM_KERNEL_TYPE,
             lookback_rows);
 
-    //APP.dq_scaling_factor_service.scale(dataset_100, params, adjacent_levels, labels, last_knowns);
-#endif
     auto real_training_matrix = std::make_shared<arma::mat>(features);
     auto real_response_matrix = std::make_shared<arma::mat>(labels);
 

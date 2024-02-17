@@ -45,6 +45,7 @@ public:
 
 
 #ifdef VIENNACL_WITH_OPENCL
+    using kernel_base<scalar_type>::operator();
 
     void operator()(
             viennacl::ocl::context &ctx,

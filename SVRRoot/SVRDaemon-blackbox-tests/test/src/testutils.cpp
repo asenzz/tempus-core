@@ -202,7 +202,7 @@ bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & daoType,
         if (pec) return false;
         /*exec("echo 'TUNE_RUN_LIMIT = 1' >> daemon.config", pec);
         if (pec) return false;
-        exec(std::string{svr::common::formatter() << "echo 'FUTURE_PREDICT_COUNT = " << getenv("VALIDATION_WINDOW") << "' >> daemon.config"}.c_str(), pec);
+        exec(std::string{svr::common::formatter() << "echo 'FUTURE_PREDICT_COUNT = " << getenv("TEST_VALIDATION_WINDOW") << "' >> daemon.config"}.c_str(), pec);
         if (pec) return false;
         exec(std::string{svr::common::formatter() << "echo 'SLIDE_COUNT = " << getenv("SLIDE_COUNT") << "' >> daemon.config"}.c_str(), pec);
         if (pec) return false;*/

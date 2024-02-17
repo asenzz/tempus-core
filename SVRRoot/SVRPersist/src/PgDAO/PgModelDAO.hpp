@@ -2,6 +2,7 @@
 #define PGMODELDAO_HPP
 
 #include <DAO/ModelDAO.hpp>
+#include "onlinesvr.hpp"
 
 namespace svr { namespace dao {
 
@@ -25,6 +26,8 @@ public:
     datamodel::Model_ptr get_by_ensemble_id_and_decon_level(const bigint ensemble_id, size_t decon_level);
 
     std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id);
+
+    std::deque<OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id);
 };
 
 }

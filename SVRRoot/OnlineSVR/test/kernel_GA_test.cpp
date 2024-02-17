@@ -4,10 +4,12 @@
  * and open the template in the editor.
  */
 
+#if 0
+
 #include <gtest/gtest.h>
 #include "test_harness.hpp"
 #include "../include/onlinesvr.hpp"
-#include "kernel_basic_integration_test.hpp"
+#include "kernel_basic_integration_test_smo.hpp"
 
 
 #define MODEL_FILE ("../SVRRoot/OnlineSVR/test/test_data/GA_trainpredict-basic_integration-input.txt")
@@ -203,3 +205,4 @@ TEST(gak_train_predict, basic_integration)
 {
     //kernel_basic_integration_test(MODEL_FILE, DUMP_FILE, SAVED_MODEL_FILE);
 }
+#endif

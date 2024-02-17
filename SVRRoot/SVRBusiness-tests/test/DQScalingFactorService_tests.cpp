@@ -20,17 +20,17 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(
-            0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
+            0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);
 
 
-    DQScalingFactor_ptr dqsf = DQScalingFactor_ptr(new svr::datamodel::DQScalingFactor(0, ds->get_id(), iq->get_table_name(), "up", 0, 1.434, 0.0));
+    datamodel::DQScalingFactor_ptr dqsf = datamodel::DQScalingFactor_ptr(new svr::datamodel::DQScalingFactor(0, ds->get_id(), iq->get_table_name(), "up", 0, 1.434, 0.0));
 
-    ASSERT_EQ(1, aci.dq_scaling_factor_service.save(dqsf));
+    EXPECT_TRUE(1 == aci.dq_scaling_factor_service.save(dqsf));
 
-    ASSERT_EQ(1, aci.dq_scaling_factor_service.save(dqsf));
+    EXPECT_TRUE(1 == aci.dq_scaling_factor_service.save(dqsf));
 
     ASSERT_NE(0UL, dqsf->get_id());
 
@@ -38,11 +38,11 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
 
     auto sfs = aci.dq_scaling_factor_service.find_all_by_dataset_id(ds->get_id());
 
-    ASSERT_EQ(1UL, sfs.size());
+    EXPECT_TRUE(1UL == sfs.size());
 
-    ASSERT_EQ(*dqsf, **sfs.begin());
+    EXPECT_TRUE(*dqsf == **sfs.begin());
 
-    ASSERT_EQ(1, aci.dq_scaling_factor_service.remove(dqsf));
+    EXPECT_TRUE(1 == aci.dq_scaling_factor_service.remove(dqsf));
 
     aci.dataset_service.remove(ds);
     aci.input_queue_service.remove(iq);
@@ -65,7 +65,7 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-            svr::datamodel::Priority::Normal, "", 1, CHUNK_DECREMENT, PROPS.get_multistep_len(), 4, "sym7");
+            svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);
@@ -84,9 +84,9 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
     }
 #if 0
     auto sf_cont = aci.dq_scaling_factor_service.calculate(
-            dq->get_data().begin(), dq->get_data().end(), dq->get_input_queue_table_name(), dq->get_input_queue_column_name(), ds->get_id(), ds->get_transformation_levels());
+            dq->begin(), dq->end(), dq->get_input_queue_table_name(), dq->get_input_queue_column_name(), ds->get_id(), ds->get_transformation_levels());
 
-    ASSERT_EQ(sf_cont.size(), 4UL);
+    EXPECT_TRUE(sf_cont.size() == 4UL);
 
     std::vector<double> sf_vec;
     std::vector<double> mean_val_vec;
@@ -115,11 +115,11 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
         ++dq_idx;
     }
 
-    for (DQScalingFactor_ptr const & dq_scaling_factor: sf_cont)
+    for (datamodel::DQScalingFactor_ptr const & dq_scaling_factor: sf_cont)
         aci.dq_scaling_factor_service.save(dq_scaling_factor);
 
     auto sfs_loaded = aci.dq_scaling_factor_service.find_all_by_dataset_id(ds->get_id());
-    for (DQScalingFactor_ptr const & loaded_scaling_factor: sfs_loaded)
+    for (datamodel::DQScalingFactor_ptr const & loaded_scaling_factor: sfs_loaded)
     {
         ASSERT_FP_EQ(loaded_scaling_factor->get_labels_factor(), mean_val_vec[loaded_scaling_factor->get_decon_level()]);
         ASSERT_FP_EQ(loaded_scaling_factor->get_features_factor(), sf_vec[loaded_scaling_factor->get_decon_level()]);

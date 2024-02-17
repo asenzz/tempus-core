@@ -85,7 +85,7 @@ struct fix_subscription_container::Impl {
     void create_unless_exists(datamodel::InputQueue_ptr input_queue)
     {
         std::string symbol = input_queue->get_logical_name();
-        std::transform(symbol.begin(), symbol.end(),symbol.begin(), ::toupper);
+        std::transform(std::execution::par_unseq, symbol.begin(), symbol.end(),symbol.begin(), ::toupper);
 
         auto iter_cont = cont.insert(my_cont_t::value_type(symbol, duration_to_drain_mapping()));
 
@@ -106,7 +106,7 @@ struct fix_subscription_container::Impl {
 
     void add_value(std::string symbol, bid_ask_spread const & spread)
     {
-        std::transform(symbol.begin(), symbol.end(),symbol.begin(), ::toupper);
+        std::transform(std::execution::par_unseq, symbol.begin(), symbol.end(),symbol.begin(), ::toupper);
 
         auto iter_cont = cont.find(symbol);
         if(iter_cont == cont.end())

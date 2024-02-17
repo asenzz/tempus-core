@@ -27,7 +27,7 @@ extern int SVR_LOG_LEVEL;
 #define CMD_WRAP(cmd) do { cmd; FLUSH_OUTS; } while (0)
 
 #define EXCEPTION_FORMAT FILE_NAME << ":" << __LINE__ << " [" << __FUNCTION__ << "] "
-#define PRINT_STACK std::cout << boost::stacktrace::stacktrace() << '\n'
+#define PRINT_STACK std::cout << "Executing thread " << std::this_thread::get_id() << ", Backtrace:\n" << boost::stacktrace::stacktrace() << std::endl
 
 #define THROW_EX_F(ex, msg) CMD_WRAP(::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
 #define THROW_EX_FS(ex, msg) CMD_WRAP(PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)

@@ -4,7 +4,6 @@
 
 namespace svr {
 namespace common {
-using namespace boost::interprocess;
 
 
 gpu_handler::gpu_handler()
@@ -26,8 +25,8 @@ gpu_handler::gpu_handler()
 #endif // VIENNACL_WITH_OPENCL
 
     LOG4_DEBUG("Max running GPU threads " << max_running_gpu_threads_number_);
-    p_gpu_sem_ = std::make_unique<named_semaphore>(
-            open_or_create_t(), SVRWAVE_GPU_SEM, max_running_gpu_threads_number_, permissions(0x1FF));
+    p_gpu_sem_ = std::make_unique<boost::interprocess::named_semaphore>(
+            boost::interprocess::open_or_create_t(), SVRWAVE_GPU_SEM, max_running_gpu_threads_number_, boost::interprocess::permissions(0x1FF));
     // This hack is needed as the semaphore created with sudo privileges, does not have W rights.
     std::shared_ptr<FILE> pipe_gpu(popen("chmod a+rw /dev/shm/sem." SVRWAVE_GPU_SEM, "r"), pclose);
 }
@@ -142,6 +141,12 @@ void gpu_handler::return_gpu(const size_t gpu_index)
 size_t gpu_handler::get_max_running_gpu_threads_number() const
 {
     return max_running_gpu_threads_number_;
+}
+
+
+size_t gpu_handler::get_gpu_devices_count() const
+{
+    return max_running_gpu_threads_number_ / CTX_PER_GPU;
 }
 
 

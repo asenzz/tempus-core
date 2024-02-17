@@ -47,6 +47,8 @@ public:
     void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) { LOG4_THROW("Not implemented!"); }
 
 #ifdef VIENNACL_WITH_OPENCL
+    using kernel_base<scalar_type>::operator();
+
 #ifdef CACHED_GA_KERNEL
 
     #define MAX_KERNEL_CACHE_SIZE 32

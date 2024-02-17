@@ -2,6 +2,9 @@
 // Created by zarko on 7/5/22.
 //
 
+#include <armadillo>
+#include <memory>
+#include <vector>
 #include "common/defines.h"
 #include "fast_cvmd.hpp"
 #include "util/math_utils.hpp"
@@ -10,27 +13,24 @@
 #include "common/parallelism.hpp"
 #include "model/DeconQueue.hpp"
 #include "model/DataRow.hpp"
-#include <armadillo>
-#include <vector>
 
 
 namespace svr {
 
 inline namespace {
 
-void compute_cos_sin(
-        const arma::colvec &omega,
-        arma::vec &phase_cos,
-        arma::vec &phase_sin,
+auto
+compute_cos_sin(
+        const arma::vec &omega,
         const double step = DEFAULT_PHASE_STEP)
 {
-    if (phase_cos.size() != omega.size()) phase_cos.set_size(omega.size());
-    if (phase_sin.size() != omega.size()) phase_sin.set_size(omega.size());
-
-    __omp_pfor_i(0, omega.size(), phase_cos[i] = cos(2 * M_PI * step * omega[i]); phase_sin[i] = sin(2 * M_PI * step * omega[i]))
+    const auto step_omega = 2. * M_PI * step * omega;
+    const arma::vec phase_cos = arma::cos(step_omega);
+    const arma::vec phase_sin = arma::sin(step_omega);
     LOG4_DEBUG("Omega " << omega << ", phase cos " << phase_cos << ", phase sin " << phase_sin << ", step " << step <<
                         ", alpha bins " << ALPHA_BINS << ", tau fidelity " << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", epsilon " << EPS <<
                         ", tolerance " << CVMD_TOL << ", omega divisor " << OMEGA_DIVISOR);
+    return std::tuple{phase_cos, phase_sin};
 }
 
 }
@@ -41,13 +41,15 @@ fast_cvmd::fast_cvmd(const size_t _levels) : spectral_transform(std::string("cvm
     if (levels < 2 or levels % 2) LOG4_THROW("Invalid number of levels " << levels);
 
     K = levels / 2;
-    f = arma::vec(levels, arma::fill::zeros);
-    row_values = arma::vec(levels * 2, arma::fill::zeros);
-    soln = arma::mat(row_values.memptr() + levels, levels, 1, false, true);
     even_ixs = arma::regspace<arma::uvec>(0, 2, levels - 2);
     odd_ixs = arma::regspace<arma::uvec>(1, 2, levels - 1);
-    timenow = boost::posix_time::second_clock::local_time();
     K_ixs = arma::regspace<arma::uvec>(0, K - 1);
+    A = arma::rowvec(levels);
+    A.cols(odd_ixs).zeros();
+    A.cols(even_ixs).ones();
+    f = arma::vec(levels, arma::fill::zeros);
+    H = arma::eye(levels, levels);
+    timenow = boost::posix_time::second_clock::local_time();
 }
 
 
@@ -82,9 +84,8 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
                 1.207729468599034e-06, 2.415458937198068e-06, 1.207729468599034e-05, 3.472222222222222e-05, 6.944444444444444e-05,
                 1.388888888888889e-04, 2.777777777777778e-04, 5.555555555555556e-04, 1.111111111111111e-03, 3.333333333333333e-03,
                 1.666666666666667e-02};
-        arma::vec phase_cos, phase_sin;
-        compute_cos_sin(omega, phase_cos, phase_sin, DEFAULT_PHASE_STEP);
-        vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin, {}});
+        const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
+        vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
         return;
     }
 #endif
@@ -97,13 +98,13 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     //create the mirrored signal
     arma::mat f_init = arma::zeros(1, 2 * T);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(T / 2))
     for (size_t i = 0; i < T / 2; ++i)
         f_init[i] = (input.begin() + T / 2 - 1 - i)->get()->get_value(input_column_index);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(T))
     for (size_t i = 0; i < T; ++i)
         f_init[T / 2 + i] = (input.begin() + i)->get()->get_value(input_column_index);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(T / 2))
     for (size_t i = 0; i < T / 2; ++i)
         f_init[3 * T / 2 + i] = (input.begin() + T - 1 - i)->get()->get_value(input_column_index);
 
@@ -121,28 +122,35 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
 
     // Time Domain 0 to T (of mirrored signal)
     arma::rowvec t(T);
-    __omp_pfor_i(0, T, t[i] = (double(i) + 1.) / double(T))
+#pragma omp parallel for num_threads(adj_threads(T))
+    for (size_t i = 0; i < T; ++i) t[i] = (double(i) + 1.) / double(T);
     // Spectral Domain discretization
     const arma::rowvec freqs = t - .5 - 1. / double(T);
     arma::colvec omega = arma::zeros(K, 1);
     arma::cx_rowvec f_hat_plus = common::fftshift(common::matlab_fft(f_init));
-
-    __omp_pfor_i(0, T / 2, f_hat_plus[i] = 0)
+#pragma omp parallel for num_threads(adj_threads(T / 2))
+    for (size_t i = 0; i < T / 2; ++i) f_hat_plus[i] = 0;
 
     switch (init) {
         case 1:
-            __omp_pfor_i(0, K, omega[i] = .5 / K * i);
+#pragma omp parallel for num_threads(adj_threads(T / 2))
+            for (size_t i = 0; i < K; ++i) omega[i] = .5 / K * i;
             break;
 
         case 2:{
             arma::colvec real_ran(K);
-            __omp_pfor_i(0, K, real_ran[i] = exp(log(fs) + (log(0.5) - log(fs)) * common::randouble()));
+            const auto log_fs = std::log(fs);
+            const auto log_05_fs = std::log(0.5) - log_fs;
+#pragma omp parallel for num_threads(adj_threads(K))
+            for (size_t i = 0; i < K; ++i) real_ran[i] = std::exp(log_fs + log_05_fs * common::randouble());
             real_ran = arma::sort(real_ran);
-            __omp_pfor_i(0, K, omega[i] = real_ran[i]);
+#pragma omp parallel for num_threads(adj_threads(K))
+            for (size_t i = 0; i < K; ++i) omega[i] = real_ran[i];
             break;
         }
         case 0:
-            __omp_pfor_i(0, K, omega[i] = 0); // Was commented out originally!
+#pragma omp parallel for num_threads(adj_threads(K))
+            for (size_t i = 0; i < K; ++i) omega[i] = 0; // Was commented out originally!
             break;
 
         default:
@@ -162,16 +170,20 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     size_t n_iter = 0;
     while (n_iter < N_max && uDiff > tol) {
         //% update first mode accumulator
-        __omp_pfor_i(0, T, sum_uk(0, i) = u_hat_plus_old(i, K - 1) + sum_uk(0, i) - u_hat_plus_old(i, 0));
+#pragma omp parallel for num_threads(adj_threads(T))
+        for (size_t i = 0; i < T; ++i)
+            sum_uk(0, i) = u_hat_plus_old(i, K - 1) + sum_uk(0, i) - u_hat_plus_old(i, 0);
 
         //% update spectrum of first mode through Wiener filter of residuals
-        __omp_pfor_i(0, T, u_hat_plus(i, 0) = (f_hat_plus[i] - sum_uk(0, i) - lambda_hat(0, i) / 2.) / (1. + Alpha(0, 0) * std::pow((freqs(0, i) - omega[0]), 2)) )
+#pragma omp parallel for num_threads(adj_threads(T))
+        for (size_t i = 0; i < T; ++i)
+            u_hat_plus(i, 0) = (f_hat_plus[i] - sum_uk(0, i) - lambda_hat(0, i) / 2.) / (1. + Alpha(0, 0) * std::pow((freqs(0, i) - omega[0]), 2));
 
         if (DC == 0) {
             //when DC==1, the first frequency can not be changed. that is why this cycle only for DC==0.
             double sumup = 0;
             double sumdown = 0;
-#pragma omp parallel for reduction(+:sumup, sumdown)
+#pragma omp parallel for reduction(+:sumup, sumdown) num_threads(adj_threads(T / 2))
             for (size_t i = 0; i < T / 2; ++i) {
                 const auto norm_uhat_plus = std::norm(u_hat_plus(T / 2 + i, 0));
                 sumup += freqs[T / 2 + i] * norm_uhat_plus;
@@ -181,20 +193,18 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         }
 
         // update of any other mode (k from 1 to K-1), after the first
-#pragma omp parallel for ordered schedule(static, 1)
         for (size_t k = 1; k < K; ++k) {
-#pragma omp ordered
-            {
                 // accumulator
-                __omp_pfor_i(0, T, sum_uk(0, i) = u_hat_plus(i, k - 1) + sum_uk(0, i) - u_hat_plus_old(i, k))
-                // mode spectrum
-                __omp_pfor_i(0, T,
-                             u_hat_plus(i, k) = (f_hat_plus[i] - sum_uk(0, i) - lambda_hat(0, i) / 2.) / (1. + Alpha(0, k) * std::pow(freqs(0, i) - omega[k], 2)))
-            }
+#pragma omp parallel for num_threads(adj_threads(T))
+            for (size_t i = 0; i < T; ++i) sum_uk(0, i) = u_hat_plus(i, k - 1) + sum_uk(0, i) - u_hat_plus_old(i, k);
+            // mode spectrum
+#pragma omp parallel for num_threads(adj_threads(T))
+            for (size_t i = 0; i < T; ++i)
+                 u_hat_plus(i, k) = (f_hat_plus[i] - sum_uk(0, i) - lambda_hat(0, i) / 2.) / (1. + Alpha(0, k) * std::pow(freqs(0, i) - omega[k], 2));
             //re-compute center frequencies
             double sumup = 0;
             double sumdown = 0;
-#pragma omp parallel for reduction(+:sumup, sumdown)
+#pragma omp parallel for reduction(+:sumup, sumdown) num_threads(adj_threads(T / 2))
             for (size_t i = 0; i < T / 2; ++i) {
                 const double u_hat_plus_norm = std::norm(u_hat_plus(T / 2 + i, k));
                 sumup += freqs(0, T / 2 + i) * u_hat_plus_norm;
@@ -205,13 +215,15 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         // Dual ascent
         const arma::cx_mat sum_u_hat_plus = arma::sum(u_hat_plus.t());
 
-        __omp_pfor_i(0, T, lambda_hat(0, i) += tau * (sum_u_hat_plus(0, i) - f_hat_plus[i]) )
+#pragma omp parallel for num_threads(adj_threads(T))
+        for (size_t i = 0; i < T; ++i)
+            lambda_hat(0, i) += tau * (sum_u_hat_plus(0, i) - f_hat_plus[i]);
         // loop counter
         ++n_iter;
 
         //compute uDiff
         uDiff = 0;
-#pragma omp parallel for reduction(+:uDiff)
+#pragma omp parallel for reduction(+:uDiff) num_threads(adj_threads(K))
         for (size_t i = 0; i < K; ++i) {
             double s = 0;
             double s_norm_old = 0;
@@ -219,7 +231,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
                 s += std::norm(u_hat_plus(j, i) - u_hat_plus_old(j, i));
                 s_norm_old += std::norm(u_hat_plus_old(j, i));
             }
-            uDiff += (s / s_norm_old);
+            uDiff += s / s_norm_old;
         }
         u_hat_plus_old = u_hat_plus;
     }
@@ -230,29 +242,35 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     // - this not needed, since we do not keep all omega, only the latest!
 
     // Signal reconstruction
-    arma::cx_mat zmat (arma::zeros(T, K), arma::zeros(T, K));
+    arma::cx_mat zmat(arma::zeros(T, K), arma::zeros(T, K));
     u_hat = zmat;
-    __omp_pfor_i(0, T / 2,
-                 for (size_t k = 0; k < K; ++k)
-                     u_hat(T / 2 + i, k) = u_hat_plus(T / 2 + i, k) )
+#pragma omp parallel for num_threads(adj_threads(K * T / 2)) collapse(2)
+    for (size_t i = 0; i < T / 2; ++i)
+        for (size_t k = 0; k < K; ++k)
+            u_hat(T / 2 + i, k) = u_hat_plus(T / 2 + i, k);
     // here it is not clear why, but T/2 is set both above and below. Instead, the 0 is set to conj of T-1
     __omp_pfor_i(0, T / 2, for (size_t k = 0; k < K; ++k) u_hat(T / 2 - i, k) = std::conj(u_hat_plus(T / 2 + i, k)) )
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(K))
     for (size_t k = 0; k < K; ++k) u_hat(0, k) = std::conj(u_hat(T - 1, k));
 
     arma::mat u_big = arma::zeros(K, t.n_elem);
-    __omp_pfor(k, 0, K, u_big.rows(k, k) = arma::trans(arma::real(common::matlab_ifft(common::ifftshift(u_hat.cols(k, k))))); )
+#pragma omp parallel for num_threads(adj_threads(K))
+    for (size_t k = 0; k < K; ++k)
+        u_big.rows(k, k) = arma::trans(arma::real(common::matlab_ifft(common::ifftshift(u_hat.cols(k, k)))));
     u = arma::zeros(K,T/2);
-    __omp_pfor_i(0, T / 2, for (size_t k = 0; k < K; ++k) u(k, i) = u_big(k, T / 4 + i); )
+#pragma omp parallel for num_threads(adj_threads(K * T / 2)) collapse(2)
+    for (size_t i = 0; i < T / 2; ++i)
+        for (size_t k = 0; k < K; ++k)
+            u(k, i) = u_big(k, T / 4 + i);
     //recompute spectrum
     //clear u_hat;
     u_hat = arma::cx_mat(arma::zeros(K, T / 2), arma::zeros(K, T / 2));
-    __omp_pfor(k, 0, K, u_hat.rows(k, k) = common::fftshift(common::matlab_fft(u.rows(k, k))) )
+#pragma omp parallel for num_threads(adj_threads(K))
+    for (size_t k = 0; k < K; ++k) u_hat.rows(k, k) = common::fftshift(common::matlab_fft(u.rows(k, k)));
     omega /= OMEGA_DIVISOR;
     LOG4_DEBUG("Calculated Omega is " << omega);
 
-    arma::vec phase_cos, phase_sin;
-    compute_cos_sin(omega, phase_cos, phase_sin, DEFAULT_PHASE_STEP);
+    const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
     vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
 }
 
@@ -260,109 +278,66 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
 void
 fast_cvmd::transform(
         const data_row_container &input,
-        datamodel::DeconQueue_ptr &p_decon_queue,
+        datamodel::DeconQueue &decon,
         const size_t in_colix,
         const size_t test_offset)
 {
-    if (input.size() == 0) {
+    if (input.empty()) {
         LOG4_ERROR("Input empty!");
         return;
     }
 
     // VMD
-    if (!initialized(p_decon_queue->get_table_name())) {
+    if (!initialized(decon.get_table_name())) {
         auto start_cvmd_init = input.begin() + std::max<ssize_t>(0, input.size() - CVMD_INIT_LEN - test_offset);
-        auto end_cvmd_init = start_cvmd_init + std::min<ssize_t>(std::distance(start_cvmd_init, input.end() - test_offset), CVMD_INIT_LEN);
+        auto end_cvmd_init = input.end() - test_offset;
         if (std::distance(start_cvmd_init, end_cvmd_init) % 2) ++start_cvmd_init; // Ensure even distance
         PROFILE_EXEC_TIME(initialize(
-                datamodel::datarow_crange{start_cvmd_init, end_cvmd_init, input}, in_colix, p_decon_queue->get_table_name()), "CVMD init");
+                datamodel::datarow_crange{start_cvmd_init, end_cvmd_init, input}, in_colix, decon.get_table_name()), "CVMD init");
     }
 
-    const auto found_freqs = vmd_frequencies.find({p_decon_queue->get_table_name(), levels});
+    const auto found_freqs = vmd_frequencies.find({decon.get_table_name(), levels});
     if (vmd_frequencies.empty() or found_freqs == vmd_frequencies.end())
-        LOG4_THROW("VMD frequencies for " << p_decon_queue->get_table_name() << " " << levels << " not found!");
+        LOG4_THROW("VMD frequencies for " << decon.get_table_name() << " " << levels << " not found!");
 
     const auto &phase_cos = found_freqs->second.phase_cos;
     const auto &phase_sin = found_freqs->second.phase_sin;
-    auto &decon = p_decon_queue->get_data();
+    auto &data = decon.get_data();
 
-    if (K != phase_sin.size() || K != phase_cos.size()) LOG4_THROW("Invalid phase cos size " << phase_cos.size() << " or phase sin size " << phase_sin.size());
+    if (K != phase_sin.size() || K != phase_cos.size())
+        LOG4_THROW("Invalid phase cos size " << arma::size(phase_cos) << " or phase sin size " << arma::size(phase_sin) << ", should be " << K);
 
+    arma::vec row_values(levels * 2, arma::fill::zeros);
+    arma::vec soln(row_values.memptr() + levels, levels, false, true);
     data_row_container::const_iterator iterin;
-    if (decon.empty()) {
+    if (data.empty()) {
         iterin = input.begin();
+        soln[0] = iterin->get()->get_value(in_colix);
     } else {
-        iterin = lower_bound_back(input, decon.back()->get_value_time());
-        if (iterin->get()->get_value_time() != decon.back()->get_value_time()) {
-            LOG4_ERROR("Input time " << iterin->get()->get_value_time() << " does not match last decon time " << decon.back()->get_value_time());
+        iterin = lower_bound_back(input, data.back()->get_value_time());
+        if (iterin->get()->get_value_time() != data.back()->get_value_time()) {
+            LOG4_ERROR("Input time " << iterin->get()->get_value_time() << " does not match last decon time " << data.back()->get_value_time());
             --iterin;
         }
+        std::copy(iterin->get()->get_values().begin() + levels, iterin->get()->get_values().end(), soln.begin());
     }
-
-    size_t n = std::distance(iterin, input.end());
-    if (n % 1) {
-        if (iterin != input.begin()) {
-            --iterin;
-            ++n;
-        } else if (iterin != input.end()) {
-            ++iterin;
-            ++n;
-        } else
-            LOG4_THROW("Odd input count " << n << " is not allowed.");
-    }
-
-    arma::mat A = arma::zeros(n, n * 2 * K);
-#pragma omp parallel for collapse(2) schedule(static, 1 + n * K / std::thread::hardware_concurrency())
-    for (size_t i = 0; i < n; ++i)
-        for (size_t j = 0; j < K; ++j)
-            A(i, 2 * j + i * 2 * K) = 1.;
-
-    arma::mat H = arma::zeros(n * 2 * K, n * 2 * K);
-    for (size_t i = 0; i < n; ++i) {
-        if (i == 0) {
-            for (size_t j = 0; j < K; ++j) {
-                H(2 * j, 2 * j) += 1.;
-                H(2 * j + 1, 2 * j + 1) += 1.;
-            }
-        } else {
-#pragma omp parallel for
-            for (size_t j = 0; j < K; j++) {
-                const double CC = phase_cos[j];
-                const double SS = phase_sin[j];
-
-                H(2 * j + (i - 1) * 2 * K, 2 * j + (i - 1) * 2 * K) += 1.;
-                H(2 * j + 1 + (i - 1) * 2 * K, 2 * j + 1 + (i - 1) * 2 * K) += 1.;
-                H(2 * j + i * 2 * K, 2 * j + i * 2 * K) += 1.;
-                H(2 * j + 1 + i * 2 * K, 2 * j + 1 + i * 2 * K) += 1.;
-
-                H(2 * j + (i - 1) * 2 * K, 2 * j + i * 2 * K) += (-CC);
-                H(2 * j + i * 2 * K, 2 * j + (i - 1) * 2 * K) += (-CC);
-
-                H(2 * j + (i - 1) * 2 * K, 2 * j + 1 + i * 2 * K) += (-SS);
-                H(2 * j + 1 + i * 2 * K, 2 * j + (i - 1) * 2 * K) += (-SS);
-
-                H(2 * j + 1 + (i - 1) * 2 * K, 2 * j + 1 + i * 2 * K) += (-CC);
-                H(2 * j + 1 + i * 2 * K, 2 * j + 1 + (i - 1) * 2 * K) += (-CC);
-
-                H(2 * j + 1 + (i - 1) * 2 * K, 2 * j + i * 2 * K) += SS;
-                H(2 * j + i * 2 * K, 2 * j + 1 + (i - 1) * 2 * K) += SS;
-            }
-        }
-    }
-
-#pragma omp parallel
-#pragma omp single nowait
+#pragma omp parallel num_threads(adj_threads(3))
+#pragma omp single
     {
         while (iterin != input.end()) {
+#pragma omp task
             f.rows(even_ixs) = -phase_cos.rows(K_ixs) % soln.rows(even_ixs) + phase_sin.rows(K_ixs) % soln.rows(odd_ixs);
             f.rows(odd_ixs) = -phase_sin.rows(K_ixs) % soln.rows(even_ixs) - phase_cos.rows(K_ixs) % soln.rows(odd_ixs);
 #pragma omp taskwait
             const datamodel::DataRow *p_row = iterin->get();
             soln = arma::solve(H, -A.t() * (-arma::solve(A * arma::solve(H, A.t()), A * arma::solve(H, f) + p_row->get_value(in_colix))) - f);
 #pragma omp task firstprivate(p_row)
-            decon.emplace_back(std::make_shared<datamodel::DataRow>(
-                    p_row->get_value_time(), timenow, p_row->get_tick_volume(), row_values.memptr(), row_values.n_elem));
-            ++iterin;
+            {
+                std::copy(soln.begin(), soln.end(), row_values.begin() + levels);
+                data.emplace_back(
+                        std::make_shared<datamodel::DataRow>(p_row->get_value_time(), timenow, p_row->get_tick_volume(), row_values.memptr(), row_values.n_elem));
+                ++iterin;
+            }
         }
     }
 }
@@ -377,7 +352,7 @@ fast_cvmd::inverse_transform(
     LOG4_WARN("Use reconstruct method in decon queue service for hybrid decons.");
     const size_t input_size = decon.size() / levels;
     if (recon.size() != input_size) recon.resize(input_size, 0);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(input_size))
     for (size_t t = 0; t < input_size; ++t) {
         recon[t] = 0;
         for (size_t l = 0; l < levels; l += 2)

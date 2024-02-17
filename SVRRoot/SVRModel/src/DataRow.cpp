@@ -9,6 +9,122 @@
 
 
 namespace svr {
+namespace datamodel {
+
+DataRow::DataRow(const std::string &csv)
+{
+    const auto p_row = load(csv);
+    if (p_row) *this = *p_row;
+    else
+        LOG4_FATAL("Failed constructing data row from string " << csv);
+}
+
+DataRow::container
+DataRow::construct(const std::deque<datamodel::MultivalResponse_ptr> &responses)
+{
+    container result;
+    for (auto iter_res = responses.begin(); iter_res != responses.end(); ++iter_res) {
+        const auto response = **iter_res;
+        result.push_back(std::make_shared<DataRow>(
+                response.value_time,
+                bpt::second_clock::local_time(),
+                common::C_default_value_tick_volume,
+                std::vector{response.value}));
+    }
+    return result;
+}
+
+void DataRow::set_value(const size_t column_index, const double value)
+{
+    if (values_.size() <= column_index) LOG4_THROW("Invalid column index " << column_index << " of " << values_.size() << " columns.");
+    values_[column_index] = value;
+}
+
+std::string DataRow::to_string() const
+{
+    std::stringstream st;
+    st.precision(std::numeric_limits<long double>::max_digits10);
+    st << "Value time " << value_time_ << ", update time " << update_time_ <<
+       ", volume " << tick_volume_ << ", values ";
+    for (size_t i = 0; i < values_.size() - 1; ++i) st << values_[i] << ", ";
+    st << values_.back();
+    return st.str();
+}
+
+std::vector<std::string> DataRow::to_tuple() const
+{
+    std::vector<std::string> result;
+
+    result.push_back(bpt::to_simple_string(value_time_));
+    result.push_back(bpt::to_simple_string(update_time_));
+    result.push_back(common::to_string_with_precision(tick_volume_));
+
+    for (const double v: values_) result.push_back(common::to_string_with_precision(v));
+
+    return result;
+}
+
+bool DataRow::operator==(const DataRow &other) const
+{
+    return this->value_time_ == other.value_time_
+           && this->tick_volume_ == other.tick_volume_
+           && this->values_.size() == other.values_.size()
+           && std::equal(values_.begin(), values_.end(), other.values_.begin());
+}
+
+bool DataRow::fast_compare(const DataRow::container &lhs, const DataRow::container &rhs)
+{
+    return lhs.size() == rhs.size() and
+           lhs.begin()->get()->get_values().size() == rhs.begin()->get()->get_values().size() and
+           lhs.begin()->get()->get_value_time() == rhs.begin()->get()->get_value_time() and
+           lhs.rbegin()->get()->get_value_time() == rhs.rbegin()->get()->get_value_time();
+}
+
+std::shared_ptr<DataRow> DataRow::load(const std::string &s)
+{
+    std::istringstream is(s);
+    char coef_str[MAX_CSV_TOKEN_SIZE];
+    size_t tix = 0;
+    auto r = std::make_shared<DataRow>();
+    while (is.getline(coef_str, MAX_CSV_TOKEN_SIZE, ',')) {
+        switch (tix) {
+            case 0:
+                r->value_time_ = bpt::time_from_string(coef_str);
+                break;
+            case 1:
+                r->update_time_ = bpt::time_from_string(coef_str);
+                break;
+            case 2: {
+                const auto v = std::strtod(coef_str, nullptr);
+                if (!common::isnormalz(v))
+                    LOG4_ERROR("Reading tick volume " << v << " is not znormal.");
+                r->tick_volume_ = v;
+                break;
+            }
+            default: {
+                const auto v = std::strtod(coef_str, nullptr);
+                if (!common::isnormalz(v))
+                    LOG4_ERROR("Reading price column " << tix - 3 << " " << v << " is not znormal.");
+                r->values_.emplace_back(v);
+                break;
+            }
+        }
+        ++tix;
+    }
+    return r;
+}
+
+}
+
+data_row_container
+clone_datarows(data_row_container::const_iterator it, const data_row_container::const_iterator &end)
+{
+    const size_t res_size = std::distance(it, end);
+    data_row_container res(res_size);
+#pragma omp parallel for schedule(static, 1 + std::thread::hardware_concurrency() / res_size) num_threads(adj_threads(res_size))
+    for (size_t i = 0; i < res_size; ++i) res[i] = std::make_shared<datamodel::DataRow>(**(it + i));
+    return res;
+}
 
 static const auto comp_lb = [](const datamodel::DataRow_ptr &el, const bpt::ptime &tt) -> bool {
     return el->get_value_time() < tt;
@@ -194,7 +310,7 @@ find_nearest_before(
                                           << " until "
                                           << data.rbegin()->get()->get_value_time());
 
-    if (lag_count == std::numeric_limits<size_t>::max()) return iter;
+    if (!lag_count) return iter;
 
     off_t dist = std::distance(data.begin(), iter);
     if (dist < off_t(lag_count))
@@ -220,7 +336,7 @@ find_nearest_before(
                                              << data.rbegin()->get()->get_value_time());
     --iter;
 
-    if (lag_count == std::numeric_limits<size_t>::max()) return iter;
+    if (!lag_count) return iter;
 
     off_t dist = std::distance(data.begin(), iter);
     if (dist < off_t(lag_count))
@@ -465,42 +581,49 @@ datamodel::DataRow::insert_rows(
         const bpt::ptime &start_time,
         const bpt::time_duration &resolution)
 {
-    LOG4_DEBUG("Inserting data " << arma::size(data) << " starting time " << start_time);
-    if (!rows_container.empty() and data.n_cols != rows_container.begin()->get()->get_values().size())
-        LOG4_WARN(
-                "data.n_cols " << data.n_cols << " != rows_container.begin()->second->get_values().size() " << rows_container.begin()->get()->get_values().size());
-    auto ins_it = lower_bound(rows_container, start_time);
-    if (ins_it != rows_container.end()) rows_container.erase(ins_it, rows_container.end());
-
-    for (size_t row_ix = 0; row_ix < data.n_rows; ++row_ix) {
-        const auto row_time = start_time + resolution * row_ix;
-#ifdef EMO_DIFF
-        const auto feature_end_iter = lower_bound_back(rows_container, row_time - resolution * OFFSET_PRED_MUL);
-        if (feature_end_iter == rows_container.end()) {
-            LOG4_ERROR("Couldn't find anchor row for " << row_time << " in container.");
-            continue;
-        } else {
-            LOG4_DEBUG("Anchor row for " << row_time << " found at " << std::prev(feature_end_iter)->get()->get_value_time());
-        }
-        const std::vector<double> &feature_end_vals = std::prev(feature_end_iter)->get()->get_values();
-#endif
-        std::vector<double> val_row(data.n_cols);
-        for (size_t col_ix = 0; col_ix < data.n_cols; ++col_ix) {
-#ifdef EMO_DIFF
-            val_row[col_ix] = data(row_ix, col_ix) + feature_end_vals[col_ix];
-            LOG4_TRACE("col_ix " << col_ix << ", val_row[col_ix] " << val_row[col_ix] << ", data " << data(row_ix, col_ix) << ", feature_end_vals " << feature_end_vals[col_ix]);
-#else
-            val_row[col_ix] = data(row_ix, col_ix);
-#endif
-        }
-        const auto p_new_row = std::make_shared<DataRow>(row_time, bpt::second_clock::local_time(), common::C_default_value_tick_volume, val_row);
-        LOG4_DEBUG("Inserting row " << p_new_row->to_string());
-        rows_container.push_back(p_new_row);
-    }
-    LOG4_END();
-    return start_time + resolution * (data.n_rows - 1);
+    std::set<bpt::ptime> times;
+    for (size_t i = 0; i < data.n_rows; ++i)
+        times.emplace(start_time + double(i) * resolution);
+    insert_rows(rows_container, data, times);
+    return *times.rbegin();
 }
 
+data_row_container
+datamodel::DataRow::insert_rows(
+        const arma::mat &data,
+        const std::set<bpt::ptime> &times)
+{
+    data_row_container rows_container;
+    insert_rows(rows_container, data, times);
+    return rows_container;
+}
+
+void
+datamodel::DataRow::insert_rows(
+        data_row_container &rows_container,
+        const arma::mat &data,
+        const std::set<bpt::ptime> &times)
+{
+    if (times.size() != data.n_rows)
+        LOG4_THROW("Times " << times.size() << " and data rows " << data.n_rows << " do not match.");
+
+    LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << *times.begin());
+
+    if (!rows_container.empty() && data.n_cols != rows_container.begin()->get()->get_values().size())
+        LOG4_WARN("Data columns " << data.n_cols << " does not equal existing data columns " << rows_container.begin()->get()->get_values().size());
+    auto ins_it = lower_bound_back(rows_container, *times.begin());
+    if (ins_it != rows_container.end()) rows_container.erase(ins_it, rows_container.end());
+
+    const auto time_now = bpt::second_clock::local_time();
+    const auto prev_size = rows_container.size();
+    rows_container.resize(prev_size + data.n_rows);
+#pragma omp parallel for num_threads(adj_threads(data.n_rows))
+    for (size_t row_ix = 0; row_ix < data.n_rows; ++row_ix)
+        rows_container[prev_size + row_ix] = std::make_shared<DataRow>(
+                times ^ row_ix, time_now, common::C_default_value_tick_volume, arma::conv_to<std::vector<double>>::from(data.row(row_ix)));
+
+    LOG4_END();
+}
 
 [[maybe_unused]] datamodel::DataRow::container::const_iterator static
 find(

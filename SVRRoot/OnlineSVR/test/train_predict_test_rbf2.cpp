@@ -10,7 +10,7 @@
 #include "test_harness.hpp"
 #include "../include/onlinesvr.hpp"
 #include "../include/kernel_factory.hpp"
-#include "kernel_basic_integration_test.hpp"
+#include "kernel_basic_integration_test_smo.hpp"
 
 
 #define MODEL_FILE ("../SVRRoot/OnlineSVR/test/test_data/features_level_0.txt")

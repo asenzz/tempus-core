@@ -10,10 +10,10 @@ using namespace svr::context;
 namespace svr{
 namespace web {
 
-void DatasetController::show(std::string datasetName) {
+void DatasetController::show(const std::string dataset_name) {
     content::Dataset model;
     model.pageTitle = "Dataset";
-    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.get_user_dataset(DEFAULT_WEB_USER /* session()["user"] */, datasetName);
+    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.get_user_dataset(DEFAULT_WEB_USER /* session()["user"] */, dataset_name);
 
     if(dataset.get() == nullptr){
         model.pageError = "No such dataset exists!";
@@ -21,8 +21,7 @@ void DatasetController::show(std::string datasetName) {
         model.dataset_name = dataset->get_dataset_name();
         model.description = dataset->get_description();
         model.user_name = dataset->get_user_name();
-        //!!TODO fix!!!
-//        model.lookback_time = bpt::to_simple_string(dataset->get_lookback_time());
+        model.lookback_time = bpt::to_simple_string(dataset->get_max_lookback_time_gap());
         model.priority = svr::datamodel::to_string(dataset->get_priority());
         model.gradients = std::to_string(dataset->get_gradients());
         model.chunk_size = std::to_string(dataset->get_chunk_size());

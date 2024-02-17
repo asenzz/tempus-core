@@ -16,7 +16,7 @@ TEST(ListStoreBufferTests, BasicTests)
     }
 
     int i = 11;
-    ASSERT_FALSE(dq.push(i)); ASSERT_TRUE(dq.pop(i)); ASSERT_EQ(i, 1);
+    ASSERT_FALSE(dq.push(i)); ASSERT_TRUE(dq.pop(i)); EXPECT_TRUE(i == 1);
 
     i = 11;
     ASSERT_TRUE(dq.push(i));
@@ -25,7 +25,7 @@ TEST(ListStoreBufferTests, BasicTests)
     for(int i = 12; i < 1000; ++i)
     {
         int what = i;
-        ASSERT_FALSE(dq.push(what));  ASSERT_TRUE(dq.pop(what)); ASSERT_EQ(what, que[que.size() - 10]);
+        ASSERT_FALSE(dq.push(what));  ASSERT_TRUE(dq.pop(what)); EXPECT_TRUE(what == que[que.size() - 10]);
 
         ASSERT_TRUE(dq.push(i));
         que.push_back(i);

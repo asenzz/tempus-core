@@ -1,6 +1,7 @@
 #include <csignal>
 #include <appcontext.hpp>
 #include "model/DeconQueue.hpp"
+#include "DeconQueueService.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -15,7 +16,7 @@ DeconQueue::DeconQueue(
         const size_t decon_level_number,
         const data_row_container &data
 )
-        : Queue(table_name.empty() ? make_queue_table_name(input_queue_table_name, dataset_id, input_queue_column_name) : table_name, data),
+        : Queue(table_name.empty() ? business::DeconQueueService::make_queue_table_name(input_queue_table_name, dataset_id, input_queue_column_name) : table_name, data),
           input_queue_table_name_(input_queue_table_name),
           input_queue_column_name_(input_queue_column_name),
           dataset_id_(dataset_id),
@@ -32,8 +33,8 @@ datamodel::DeconQueue_ptr DeconQueue::clone_empty() const
 datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t end_ix) const
 {
     auto p_new_decon_queue = clone_empty();
-    if (!data_.empty()) p_new_decon_queue->data_.insert(
-            p_new_decon_queue->data_.end(), data_.begin() + std::min<size_t>(start_ix, data_.size() - 1), data_.begin() + std::min<size_t>(end_ix, data_.size() - 1));
+    if (data_.size() > start_ix) p_new_decon_queue->data_ = clone_datarows(
+            data_.begin() + std::min(start_ix, data_.size() - 1), data_.begin() + std::min(end_ix, data_.size()));
     return p_new_decon_queue;
 }
 
@@ -117,27 +118,13 @@ size_t DeconQueue::get_decon_level_number() const
 }
 
 
-std::string DeconQueue::make_queue_table_name(const std::string &input_queue_table_name, const bigint dataset_id,
-                                              const std::string &input_queue_column_name)
-{
-    if (input_queue_table_name.empty() || input_queue_column_name.empty())
-        LOG4_THROW("Illegal arguments, input queue table name " << input_queue_table_name << ", input queue column name " << input_queue_column_name << ", dataset id " << dataset_id);
-    std::string result = svr::common::sanitize_db_table_name(
-            svr::common::C_decon_queue_table_name_prefix + "_" +
-            input_queue_table_name + "_" +
-            std::to_string(dataset_id) + "_" +
-            input_queue_column_name);
-    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-    return result;
-}
-
 void DeconQueue::reinit_table_name()
 {
     if (input_queue_table_name_.empty() || input_queue_column_name_.empty()) {
         LOG4_WARN("Aborting, input queue column name " << input_queue_column_name_ << ", input queue column name " << input_queue_column_name_ << " not initialized!");
         return;
     }
-    set_table_name(make_queue_table_name(input_queue_table_name_, dataset_id_, input_queue_column_name_));
+    set_table_name(business::DeconQueueService::make_queue_table_name(input_queue_table_name_, dataset_id_, input_queue_column_name_));
 }
 
 
@@ -175,7 +162,7 @@ std::string DeconQueue::data_to_string(const size_t data_size) const
     std::stringstream ss;
     for (const auto &row : get_data()) {
         if (row_id++ > data_size) {
-            ss << ". . . " << (get_data().size() - data_size) << " more" << std::endl;
+            ss << ". . . " << (size() - data_size) << " more" << std::endl;
             break;
         }
         ss << row.get()->to_string() << '\n';

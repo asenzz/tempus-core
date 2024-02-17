@@ -1,22 +1,17 @@
-#include "magma_types.h"
-#include "model/SVRParameters.hpp"
 #ifdef USE_CUDA
-
+#include <thread>
+#include <magma_types.h>
+#include <magma_v2.h>
 #include <cassert>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <cublasLt.h>
 #include <cusolverDn.h>
 #include <cublas_v2.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-
+#include "common/compatibility.hpp"
 #include "common/gpu_handler.hpp"
 #include "common/cuda_util.cuh"
-
 #include "cuqrsolve.hpp"
-#include <thread>
-#include "magma_v2.h"
 
 
 namespace svr {
@@ -69,13 +64,13 @@ G_kernel_from_distances(double *__restrict K, const double *__restrict Z, const 
     K[g_thr_ix] = 1. - Z[g_thr_ix] / divisor;
 }
 
-
+// predict_kernel_matrix = 1. - Z / (2. * std::pow<double>(gamma, 2));
 void kernel_from_distances(double *K, const double *Z, const size_t m, const size_t n, const double gamma)
 {
     double *d_K, *d_Z;
     const size_t mn = m * n;
     const size_t mat_size = mn * sizeof(double);
-    common::gpu_context const ctx;
+    const common::gpu_context ctx;
     cu_errchk(cudaSetDevice(ctx.phy_id()));
     cu_errchk(cudaMalloc(&d_K, mat_size));
     cu_errchk(cudaMalloc(&d_Z, mat_size));
@@ -141,8 +136,10 @@ gpu_copy_upper_submatrix(
 
 
 std::tuple<cusolverDnHandle_t, double *, double *, double *, int *, int *>
-init_cusolver(const size_t gpu_phy_id, const size_t m, const size_t n)
+init_cusolver(const size_t gpu_id, const size_t m, const size_t n)
 {
+    cu_errchk(cudaSetDevice(gpu_id));
+
     cusolverDnHandle_t cusolverH;
     cublasHandle_t cublasH;
     int lwork;
@@ -162,21 +159,24 @@ init_cusolver(const size_t gpu_phy_id, const size_t m, const size_t n)
 }
 
 
-void uninit_cusolver(const cusolverDnHandle_t cusolverH, double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo)
+void uninit_cusolver(const size_t gpu_id, const cusolverDnHandle_t cusolverH, double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo)
 {
-    if (cusolverH) cusolverDnDestroy(cusolverH);
+    cu_errchk(cudaSetDevice(gpu_id));
+
     if (d_Ainput) cu_errchk(cudaFree(d_Ainput));
     if (d_B) cu_errchk(cudaFree(d_B));
     if (d_work) cu_errchk(cudaFree(d_work));
     if (d_Ipiv) cu_errchk(cudaFree(d_Ipiv));
     if (d_devInfo) cu_errchk(cudaFree(d_devInfo));
+    if (cusolverH) cusolverDnDestroy(cusolverH);
 }
 
 
 void dyn_gpu_solve(
-        const size_t m, const size_t n, const double *Left, const double *Right, double *output, cusolverDnHandle_t cusolverH,
+        const size_t gpu_id, const size_t m, const size_t n, const double *Left, const double *Right, double *output, cusolverDnHandle_t cusolverH,
         double *d_Ainput, double *d_B, double *d_work, int *d_Ipiv, int *d_devInfo)
 {
+    cu_errchk(cudaSetDevice(gpu_id));
     cu_errchk(cudaMemcpy(d_Ainput, Left, sizeof(double) * m * m, cudaMemcpyHostToDevice));
     cu_errchk(cudaMemcpy(d_B, Right, sizeof(double) * m * n, cudaMemcpyHostToDevice));
 
@@ -190,35 +190,31 @@ void dyn_gpu_solve(
 
 
 std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaFloat_ptr, magmaInt_ptr>
-init_magma_solver(const svr::common::gpu_context &gtx, const size_t m, const size_t b_n, const bool psd)
+init_magma_solver(const size_t m, const size_t b_n, const bool psd, const size_t gpu_id)
 {
+    cu_errchk(cudaSetDevice(gpu_id));
     magma_queue_t magma_queue = nullptr;
 
-    const magma_int_t phy_dev = gtx.phy_id();
-    cudaSetDevice(phy_dev);
     magma_init(); // initialize Magma
-    magma_queue_create(phy_dev, &magma_queue);
+    magma_queue_create(gpu_id, &magma_queue);
     if (!magma_queue) LOG4_THROW("Failed creating MAGMA queue.");
 
     magma_int_t err;
     magmaDouble_ptr d_a, d_b, d_x, d_wd;
     magmaFloat_ptr d_ws;
-    magmaInt_ptr piv;
+    auto piv = (magmaInt_ptr) malloc(m * sizeof(magma_int_t)); // host mem.
     if ((err = magma_dmalloc(&d_a, m * m)) < MAGMA_SUCCESS) // device memory for a
         LOG4_THROW("Failed calling magma_dmalloc d_a with error code " << err);
     if ((err = magma_dmalloc(&d_b, m * b_n)) < MAGMA_SUCCESS) // device memory for b
         LOG4_THROW("Failed calling magma_dmalloc d_b with error code " << err);
-
     if (psd) {
         if ((err = magma_dmalloc(&d_x, m * b_n)) < MAGMA_SUCCESS) // device memory for x
             LOG4_ERROR("Failed calling magma_dmalloc d_x with error code " << err);
-        if ((err = magma_dmalloc(&d_wd, m * b_n)) < MAGMA_SUCCESS) // device memory for wd
+        if ((err = magma_dmalloc(&d_wd, m * (m + b_n) + m)) < MAGMA_SUCCESS) // device memory for wd
             LOG4_THROW("Failed calling magma_dmalloc d_wd with error code " << err);
         if ((err = magma_smalloc(&d_ws, m * (m + b_n) + m)) < MAGMA_SUCCESS) // device memory for ws
             LOG4_THROW("Failed calling magma_dmalloc d_ws with error code " << err);
-        piv = nullptr;
     } else {
-        piv = nullptr; // Pivoting used by dyn_solve // (magmaInt_ptr) malloc(m * sizeof(magma_int_t)); // host mem.
         d_x = nullptr;
         d_wd = nullptr;
         d_ws = nullptr;
@@ -228,9 +224,10 @@ init_magma_solver(const svr::common::gpu_context &gtx, const size_t m, const siz
 
 
 void uninit_magma_solver(
-        svr::common::gpu_context *&p_ctx, const magma_queue_t &magma_queue,
-        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_wd, const magmaFloat_ptr d_ws, const magmaInt_ptr piv)
+        const magma_queue_t &magma_queue,
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_wd, const magmaFloat_ptr d_ws, const magmaInt_ptr piv, const size_t gpu_id)
 {
+    cu_errchk(cudaSetDevice(gpu_id));
     magma_int_t err;
     if (d_a && (err = magma_free(d_a)) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_free d_a with error code " << err);
@@ -248,15 +245,14 @@ void uninit_magma_solver(
 
     if ((err = magma_finalize()) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_finalize with error code " << err);
-
-    delete p_ctx;
 }
 
 
 void iter_magma_solve(
         const int m, const int b_n, const double *a, const double *b, double *output, const magma_queue_t magma_queue,
-        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_workd, const magmaFloat_ptr d_works, const bool psd)
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_workd, const magmaFloat_ptr d_works, const bool psd, const size_t gpu_id)
 {
+    cu_errchk(cudaSetDevice(gpu_id));
     magma_int_t err, iter, info;
 
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue); // copy a -> d_a
@@ -264,7 +260,7 @@ void iter_magma_solve(
 
     if (!psd) goto __solve_dgesv;
 
-    if ((err = magma_dshposv_gpu_expert(magma_uplo_t::MagmaLower, m, b_n, d_a, m, d_b, m, d_x, m, d_workd, d_works, &iter, magma_mode_t::MagmaHybrid, 1, 0, 0, 0, &info)) < MAGMA_SUCCESS) {
+    if ((err = magma_dshposv_gpu_expert(magma_uplo_t::MagmaLower, m, b_n, d_a, m, d_b, m, d_x, m, d_workd, d_works, &iter, magma_mode_t::MagmaHybrid, 1, 0, 0, 0, &info)) < MAGMA_SUCCESS || info != 0) {
         LOG4_WARN("Call to magma_dshposv_gpu_expert failed with error " << err << ", info " << info << ". Trying magma_dgesv_rbt.");
         if (iter < 0) {
             switch (iter) {
@@ -285,21 +281,24 @@ void iter_magma_solve(
             }
         }
     } else {
-        magma_dgetmatrix(m, b_n, d_x, m, output, m, magma_queue); // copy solution d_x -> output
+        LOG4_TRACE("Call to magma_dshposv_gpu_expert triunfo.");
+        magma_dgetmatrix(m, b_n, d_x, m, output, m, magma_queue);
         return;
     }
 
 __solve_dgesv:
     if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info)) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
-
+    else if (psd)
+        LOG4_DEBUG("Call to magma_dgesv_rbt triunfo.");
     magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 }
 
 
 void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue,
-                     const magmaInt_ptr piv, const magmaDouble_ptr d_a, const magmaDouble_ptr d_b)
+                     const magmaInt_ptr piv, const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const size_t gpu_id)
 {
+    cu_errchk(cudaSetDevice(gpu_id));
     magma_int_t info, err;
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue);
 
@@ -317,6 +316,7 @@ void dyn_magma_solve(const int m, const int b_n, const double *a, const double *
 
     magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 }
+
 
 
 void
@@ -459,169 +459,6 @@ call_gpu_overdetermined(
                  thrust::raw_pointer_cast(gpu_rhs.data()), thrust::raw_pointer_cast(gpu_output.data()));
     cu_errchk(cudaMemcpy(cpu_output, thrust::raw_pointer_cast(gpu_output.data()), sizeof(double) * Ncols * Nrhs,
                          cudaMemcpyDeviceToHost));
-}
-
-
-//##############################################################################
-// Old solver by Emo
-// TODO Port to CUSOLVERMG API
-// TODO Warm start for online learn
-void qrsolve(const size_t Nrows, const size_t Nright, const double *h_Ainput, const double *h_rhs, double *h_B)
-{
-    /* Nrows - number of rows in square matrix in h_Ainput
-       Nright - number of right hand sides
-       d_rhs - ptr to right hand side
-       d_B - ptr to result;
-    */
-    svr::common::gpu_context gtx;
-    cudaSetDevice(gtx.phy_id());
-
-    const auto lda = Nrows;
-    int lwork = 0;
-    int info_gpu = 0;
-    const auto ldb = lda;
-    const auto Ncols = Nrows;
-    const auto m = Ncols;
-    thrust::device_vector<double> d_tau_vector(m);
-    thrust::device_vector<double> d_A_vector(Nrows * lda);
-    thrust::device_vector<double> d_B_vector(Nrows * Nright);
-
-    thrust::device_vector<int> d_Ipiv_vector(m);
-    int *d_Ipiv = thrust::raw_pointer_cast(d_Ipiv_vector.data());
-    double *d_A = thrust::raw_pointer_cast(d_A_vector.data());
-    double *d_B = thrust::raw_pointer_cast(d_B_vector.data());
-
-    cu_errchk(cudaMemcpy(d_A, h_Ainput, sizeof(double) * Nrows * lda, cudaMemcpyHostToDevice));
-    double *d_tau = thrust::raw_pointer_cast(d_tau_vector.data());
-    thrust::device_vector<int> d_devInfo_vector(1);
-    int *devInfo = thrust::raw_pointer_cast(d_devInfo_vector.data());
-    cusolverDnHandle_t cusolverH;
-    cublasHandle_t cublasH;
-    cusolverDnCreate(&cusolverH);
-    cublas_safe_call(cublasCreate(&cublasH));
-    cublas_safe_call(cusolverDnDgetrf_bufferSize(cusolverH, m, m, d_A, lda, &lwork));
-    thrust::device_vector<double> d_work_vector(lwork);
-    double *d_work = thrust::raw_pointer_cast(d_work_vector.data());
-    cu_errchk(cudaMemcpy(d_B, h_rhs, sizeof(double) * Nright * Nrows, cudaMemcpyHostToDevice));
-    cublas_safe_call(cusolverDnDgetrf(cusolverH, m, m, d_A, lda, d_work, d_Ipiv, devInfo));
-    //cudaDeviceSynchronize();
-    cu_errchk(cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost));
-    //cudaDeviceSynchronize();
-    assert(0 == info_gpu);
-    cublas_safe_call(cusolverDnDgetrs(cusolverH, CUBLAS_OP_N, m, Nright, /* nrhs */ d_A, lda, d_Ipiv, d_B, ldb, devInfo));
-    //cudaDeviceSynchronize();
-    cu_errchk(cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost));
-    //cudaDeviceSynchronize();
-    if (info_gpu != 0) std::cout << "cusolverDnDgetrs ended with error " << info_gpu << std::endl;
-    //assert(0 == info_gpu);
-    cu_errchk(cudaMemcpy(h_B, d_B, sizeof(double) * Nright * Nrows, cudaMemcpyDeviceToHost));
-    /*if (cublasH) */cublasDestroy(cublasH);
-    /*if (cusolverH) */cusolverDnDestroy(cusolverH);
-    //cudaDeviceSynchronize();
-}
-
-void solve_bi_cg_stab()
-{
-    /***** BiCGStab Code *****/
-/* ASSUMPTIONS:
-   1. The cuSPARSE and cuBLAS libraries have been initialized.
-   2. The appropriate memory has been allocated and set to zero.
-   3. The matrix A (valA, csrRowPtrA, csrColIndA) and the incomplete-
-      LU lower L (valL, csrRowPtrL, csrColIndL)  and upper U (valU,
-      csrRowPtrU, csrColIndU) triangular factors have been
-      computed and are present in the device (GPU) memory. */
-
-//create the info and analyse the lower and upper triangular factors
-
-#if 0 // TODO port to dense cublas
-    cusparseCreateSolveAnalysisInfo(&infoL);
-    cusparseCreateSolveAnalysisInfo(&infoU);
-    cusparseDcsrsv_analysis(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                            n, descrL, valL, csrRowPtrL, csrColIndL, infoL);
-    cusparseDcsrsv_analysis(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                            n, descrU, valU, csrRowPtrU, csrColIndU, infoU);
-
-//1: compute initial residual r = b - A x0 (using initial guess in x)
-    cusparseDcsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, 1.0,
-                   descrA, valA, csrRowPtrA, csrColIndA, x, 0.0, r);
-    cublasDscal(n,-1.0, r, 1);
-    cublasDaxpy(n, 1.0, f, 1, r, 1);
-//2: Set p=r and \tilde{r}=r
-    cublasDcopy(n, r, 1, p, 1);
-    cublasDcopy(n, r, 1, rw,1);
-    nrmr0 = cublasDnrm2(n, r, 1);
-
-//3: repeat until convergence (based on max. it. and relative residual)
-    for (i=0; i<maxit; i++){
-        //4: \rho = \tilde{r}^{T} r
-        rhop= rho;
-        rho = cublasDdot(n, rw, 1, r, 1);
-        if (i > 0){
-            //12: \beta = (\rho_{i} / \rho_{i-1}) ( \alpha / \omega )
-            beta= (rho/rhop)*(alpha/omega);
-            //13: p = r + \beta (p - \omega v)
-            cublasDaxpy(n,-omega,q, 1, p, 1);
-            cublasDscal(n, beta, p, 1);
-            cublasDaxpy(n, 1.0,  r, 1, p, 1);
-        }
-        //15: M \hat{p} = p (sparse lower and upper triangular solves)
-        cusparseDcsrsv_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                             n, 1.0, descrL, valL, csrRowPtrL, csrColIndL,
-                             infoL, p, t);
-        cusparseDcsrsv_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                             n, 1.0, descrU, valU, csrRowPtrU, csrColIndU,
-                             infoU, t, ph);
-
-        //16: q = A \hat{p} (sparse matrix-vector multiplication)
-        cusparseDcsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, 1.0,
-                       descrA, valA, csrRowPtrA, csrColIndA, ph, 0.0, q);
-
-        //17: \alpha = \rho_{i} / (\tilde{r}^{T} q)
-        temp = cublasDdot(n, rw, 1, q, 1);
-        alpha= rho/temp;
-        //18: s = r - \alpha q
-        cublasDaxpy(n,-alpha, q, 1, r, 1);
-        //19: x = x + \alpha \hat{p}
-        cublasDaxpy(n, alpha, ph,1, x, 1);
-
-        //20: check for convergence
-        nrmr = cublasDnrm2(n, r, 1);
-        if (nrmr/nrmr0 < tol){
-            break;
-        }
-
-        //23: M \hat{s} = r (sparse lower and upper triangular solves)
-        cusparseDcsrsv_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                             n, 1.0, descrL, valL, csrRowPtrL, csrColIndL,
-                             infoL, r, t);
-        cusparseDcsrsv_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                             n, 1.0, descrU, valU, csrRowPtrU, csrColIndU,
-                             infoU, t, s);
-
-        //24: t = A \hat{s} (sparse matrix-vector multiplication)
-        cusparseDcsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, 1.0,
-                       descrA, valA, csrRowPtrA, csrColIndA, s, 0.0, t);
-
-        //25: \omega = (t^{T} s) / (t^{T} t)
-        temp = cublasDdot(n, t, 1, r, 1);
-        temp2= cublasDdot(n, t, 1, t, 1);
-        omega= temp/temp2;
-        //26: x = x + \omega \hat{s}
-        cublasDaxpy(n, omega, s, 1, x, 1);
-        //27: r = s - \omega t
-        cublasDaxpy(n,-omega, t, 1, r, 1);
-
-        //check for convergence
-        nrmr = cublasDnrm2(n, r, 1);
-        if (nrmr/nrmr0 < tol){
-            break;
-        }
-    }
-
-//destroy the analysis info (for lower and upper triangular factors)
-    cusparseDestroySolveAnalysisInfo(infoL);
-    cusparseDestroySolveAnalysisInfo(infoU);
-#endif
 }
 
 // Namespaces

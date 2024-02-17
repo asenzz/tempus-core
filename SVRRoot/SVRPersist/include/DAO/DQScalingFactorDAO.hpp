@@ -23,11 +23,11 @@ public:
 
     virtual bigint get_next_id() = 0;
 
-    virtual bool exists(const DQScalingFactor_ptr &dq_scaling_factor) = 0;
+    virtual bool exists(const datamodel::DQScalingFactor_ptr &dq_scaling_factor) = 0;
 
-    virtual int save(const DQScalingFactor_ptr &dq_scaling_factor) = 0;
+    virtual int save(const datamodel::DQScalingFactor_ptr &dq_scaling_factor) = 0;
 
-    virtual int remove(const DQScalingFactor_ptr &dq_scaling_factor) = 0;
+    virtual int remove(const datamodel::DQScalingFactor_ptr &dq_scaling_factor) = 0;
 
     virtual svr::datamodel::dq_scaling_factor_container_t find_all_by_dataset_id(const bigint dataset_id) = 0;
 };

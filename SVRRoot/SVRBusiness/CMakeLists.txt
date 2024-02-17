@@ -15,11 +15,7 @@ FOREACH(DEP ${DEPENDENCIES})
     INCLUDE_DIRECTORIES(../${DEP}/include)
 ENDFOREACH(DEP)
 INCLUDE_DIRECTORIES(../SVRFix/include)
-IF(USE_CUDA)
-    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc" "src/*.cu" "src/*.cuh")
-ELSE()
-    FILE(GLOB SOURCE_FILES "src/*.cpp" "include/*.h" "include/*.hpp" "include/*.tcc")
-ENDIF()
+INCLUDE("../../cmake/SourceList.cmake")
 
 FIND_PACKAGE(LibPQXX REQUIRED)
 

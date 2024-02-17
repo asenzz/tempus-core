@@ -28,14 +28,14 @@ public:
         return frames;
     }
 
-    void set_frames(std::vector<RowsFrame_ptr> const &frames) {
-        FramesContainer::frames = frames;
+    void set_frames(std::vector<RowsFrame_ptr> const &frames_) {
+        FramesContainer::frames = frames_;
     }
 
     size_t count_rows() const {
         size_t total = 0;
-        for(const RowsFrame_ptr& frame : get_frames()){
-            total += frame->get_data().size();
+        for(const auto &f : get_frames()){
+            total += f->size();
         }
 
         return total;

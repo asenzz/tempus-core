@@ -110,7 +110,7 @@ std::string demangle(const char *mangled)
 
 std::string sanitize_db_table_name(std::string where, char replace_char)
 {
-    std::transform(where.begin(), where.end(), where.begin(), [replace_char](const char &c)
+    std::transform(std::execution::par_unseq, where.begin(), where.end(), where.begin(), [replace_char](const char &c)
     {
         if (isalnum(c)) {
             return c;

@@ -44,8 +44,11 @@ class oemd_coefficients_search
     std::deque<size_t> gpuids;
 
     oemd_coefficients_search();
+
     void fft_acquire();
     void fft_release();
+
+    static size_t to_fft_size(const size_t input_size);
 
     std::tuple<double, double, double, double>
     sift_the_mask(

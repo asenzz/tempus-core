@@ -32,6 +32,12 @@ namespace std {
 }
 
 namespace svr {
+
+unsigned adj_threads(const ssize_t iterations)
+{
+    return std::min<size_t>(iterations, std::thread::hardware_concurrency());
+}
+
 namespace common {
 
 // TODO Do a GPU handler and ctx from a queue

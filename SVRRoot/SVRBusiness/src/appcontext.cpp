@@ -91,7 +91,7 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
                                                          use_threadsafe_dao)), threadsafe_dao(use_threadsafe_dao)
     {
         svr::common::memory_manager::get();
-        //svr::common::ThreadPoolAsio::instance();
+        // svr::common::ThreadPoolAsio::instance();
 
         if (appProperties.get_dao_type() == svr::common::ConcreteDaoType::AsyncDao)
             svr::dao::StoreBufferController::getInstance().startPolling();
@@ -183,7 +183,7 @@ AppContext::~AppContext()
 void AppContext::init_instance(const std::string &config_path, bool use_threadsafe_dao)
 {
     if (AppContext::p_instance)
-        throw std::runtime_error("AppContext instance has already been initialized");
+        LOG4_THROW("AppContext instance has already been initialized");
 
     AppContext::p_instance = new AppContext(config_path, use_threadsafe_dao);
 }

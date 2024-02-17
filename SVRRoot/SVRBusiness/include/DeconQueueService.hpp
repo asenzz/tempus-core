@@ -2,11 +2,13 @@
 
 #include <memory>
 #include <vector>
+#include <csignal>
+#include <appcontext.hpp>
+#include <error.h>
 
 #include "model/DataRow.hpp"
 #include "fast_cvmd.hpp"
-
-
+#include "model/DeconQueue.hpp"
 
 
 namespace svr { namespace dao { class DeconQueueDAO; }}
@@ -43,8 +45,7 @@ class DeconQueueService
 
 public:
     DeconQueueService(svr::dao::DeconQueueDAO &deconQueueDao,
-                      svr::business::InputQueueService &input_queue_service)
-            :
+                      svr::business::InputQueueService &input_queue_service) :
             decon_queue_dao(deconQueueDao),
             input_queue_service(input_queue_service)
     {}
@@ -96,25 +97,16 @@ public:
             const datamodel::Dataset_ptr &p_dataset,
             const datamodel::InputQueue_ptr &p_input_queue,
             datamodel::DeconQueue_ptr &p_decon_queue);
-#if 0
-    static void deconstruct_ticks(
-            const datamodel::InputQueue_ptr &p_input_queue,
-            const datamodel::Dataset_ptr &p_dataset,
-            const std::string &column_name,
-            svr::datamodel::DataRow::container &decon_data);
-#endif
 
     static void reconstruct(
             const datamodel::datarow_range &decon,
-            const size_t levct,
             const recon_type_e type,
             data_row_container &recon);
 
     static data_row_container
     reconstruct(
             const svr::datamodel::datarow_range &data,
-            const recon_type_e type,
-            const size_t levct);
+            const recon_type_e type);
 
     static std::vector<double>
     get_actual_values(
@@ -123,11 +115,9 @@ public:
 
     static void prepare_decon(const datamodel::Dataset_ptr &p_dataset, const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue);
 
-private:
-
-public: size_t test_start_cvmd_pos = 0;
-
     static void dummy_decon(const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue, const size_t levct);
+
+    static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
 };
 
 } /* namespace business */

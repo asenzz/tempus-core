@@ -43,6 +43,24 @@ std::string to_string(const float v);
 
 namespace svr {
 
+#define ALIAS_TEMPLATE_FUNCTION(highLevelF, lowLevelF) \
+template<typename... Args> \
+inline auto highLevelF(Args&&... args) -> decltype(lowLevelF(std::forward<Args>(args)...)) \
+{ \
+    return lowLevelF(std::forward<Args>(args)...); \
+}
+
+unsigned adj_threads(const ssize_t iterations);
+
+template<typename ContainerT, typename PredicateT>
+void remove_if(ContainerT &items, const PredicateT &predicate)
+{
+    for (auto it = items.begin(); it != items.end();) {
+        if (predicate(*it)) it = items.erase(it);
+        else ++it;
+    }
+}
+
 template<typename T> T operator^(const std::set<T> &s, const size_t i)
 {
     return *std::next(s.begin(), i);
@@ -53,12 +71,12 @@ template<typename T, typename C> T operator^(const std::set<T, C> &s, const size
     return *std::next(s.begin(), i);
 }
 
-template<typename T> T operator^(const tbb::concurrent_set <T> &s, const size_t i)
+template<typename T> T operator^(const tbb::concurrent_set<T> &s, const size_t i)
 {
     return *std::next(s.begin(), i);
 }
 
-template<typename T, typename C> T operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
+template<typename T, typename C> T operator^(const tbb::concurrent_set<T, C> &s, const size_t i)
 {
     return *std::next(s.begin(), i);
 }
@@ -143,26 +161,33 @@ typedef std::shared_ptr<arma::mat> matrix_ptr;
 
 
 template<typename T> auto
-operator ==(const std::deque<std::shared_ptr<T>> &lhs, const std::deque<std::shared_ptr<T>> &rhs)
+operator==(const std::deque<std::shared_ptr<T>> &lhs, const std::deque<std::shared_ptr<T>> &rhs)
 {
     if (lhs.size() != rhs.size()) return false;
     for (size_t i = 0; i < lhs.size(); ++i) {
         if (bool(lhs.at(i)) == bool(rhs.at(i))
-            && *lhs.at(i) == *rhs.at(i)) continue;
+            && *lhs.at(i) == *rhs.at(i))
+            continue;
         return false;
     }
     return true;
 }
 
 template<typename T> auto
-operator ==(const std::deque<T> &lhs, const std::deque<T> &rhs)
+operator==(const std::deque<T> &lhs, const std::deque<T> &rhs)
 {
     if (lhs.size() != rhs.size()) return false;
     for (size_t i = 0; i < lhs.size(); ++i) {
-        if(lhs.at(i) == rhs.at(i)) continue;
+        if (lhs.at(i) == rhs.at(i)) continue;
         return false;
     }
     return true;
+}
+
+template<typename T, typename... Ts>
+std::shared_ptr<T> ptr(Ts... args)
+{
+    return std::make_shared<T>(args...);
 }
 
 namespace common {
@@ -173,7 +198,7 @@ template<typename C, typename T = typename C::value_type> auto
 empty(const C &container)
 {
     bool res = true;
-    for (T v : container) res &= v.empty();
+    for (T v: container) res &= v.empty();
     return res;
 }
 
@@ -191,7 +216,7 @@ template<typename T>
 arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
 {
     arma::uvec r;
-#pragma omp parallel for ordered schedule(static, 1)
+#pragma omp parallel for ordered schedule(static, 1 + m2.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(m2.size()))
     for (const auto e: m2) {
         const arma::uvec r_e = arma::find(m1 == e);
 #pragma omp ordered
@@ -204,7 +229,7 @@ template<typename T>
 arma::uvec lower_bound(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
 {
     arma::uvec r;
-#pragma omp parallel for ordered schedule(static, 1)
+#pragma omp parallel for ordered schedule(static, 1 + m2.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(m2.size()))
     for (const auto e: m2) {
         const arma::uvec r_e = arma::find(m1 >= e);
 #pragma omp ordered
@@ -217,7 +242,9 @@ typedef struct drand48_data t_drand48_data;
 typedef t_drand48_data *t_drand48_data_ptr;
 
 t_drand48_data seedme(const size_t thread_id);
+
 double drander(t_drand48_data_ptr buffer);
+
 bool file_exists(const std::string &filename);
 
 #define ELEMCOUNT(array) (sizeof(array)/sizeof(array[0]))
@@ -240,7 +267,7 @@ std::vector<std::shared_ptr<T>> inline
 clone_shared_ptr_elements(const std::vector<std::shared_ptr<T>> &arg)
 {
     std::vector<std::shared_ptr<T>> res;
-    for (const std::shared_ptr<T> &p_elem: arg) res.push_back(std::make_shared<T>(*p_elem));
+    for (const std::shared_ptr<T> &p_elem: arg) res.emplace_back(std::make_shared<T>(*p_elem));
     return res;
 }
 
@@ -249,20 +276,20 @@ std::deque<std::shared_ptr<T>> inline
 clone_shared_ptr_elements(const std::deque<std::shared_ptr<T>> &arg)
 {
     std::deque<std::shared_ptr<T>> res;
-    for (const std::shared_ptr<T> &p_elem: arg) res.push_back(std::make_shared<T>(*p_elem));
+    for (const std::shared_ptr<T> &p_elem: arg) res.emplace_back(std::make_shared<T>(*p_elem));
     return res;
 }
 
 template<typename T, typename L>
-tbb::concurrent_set <std::shared_ptr<T>, L> inline
-clone_shared_ptr_elements(const tbb::concurrent_set <std::shared_ptr<T>, L> &arg)
+tbb::concurrent_set<std::shared_ptr<T>, L> inline
+clone_shared_ptr_elements(const tbb::concurrent_set<std::shared_ptr<T>, L> &arg)
 {
     tbb::concurrent_set<std::shared_ptr<T>, L> res;
-#pragma omp parallel
+#pragma omp parallel num_threads(adj_threads(arg.size()))
 #pragma omp single nowait
     for (const std::shared_ptr<T> &p_elem: arg)
 #pragma omp task
-        res.insert(std::make_shared<T>(*p_elem));
+        res.emplace(std::make_shared<T>(*p_elem));
     return res;
 }
 
@@ -360,7 +387,7 @@ tovcl(const arma::Mat<T> &in)
 
 
 template<typename T> arma::Col<T>
-toarmacol(const tbb::concurrent_vector <T> &v)
+toarmacol(const tbb::concurrent_vector<T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());

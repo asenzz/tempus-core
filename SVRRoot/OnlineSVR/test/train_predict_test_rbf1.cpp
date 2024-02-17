@@ -3,7 +3,7 @@
 
 #include "../include/onlinesvr.hpp"
 #include "test_harness.hpp"
-#include "kernel_basic_integration_test.hpp"
+#include "kernel_basic_integration_test_smo.hpp"
 
 
 #define MODEL_FILE ("../SVRRoot/OnlineSVR/test/test_data/batch_train_output_saved01.txt")

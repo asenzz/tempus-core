@@ -21,7 +21,7 @@ inplace_validate(
     double counter = 0;
     double mae =0;
     const auto predicted_values = online_svr.predict(features_data);
-#pragma omp parallel for reduction(+:mae,counter) default(shared)
+#pragma omp parallel for reduction(+:mae,counter) default(shared) num_threads(adj_threads(current_index - start_inplace_validate_idx))
     for (int i_inplace = start_inplace_validate_idx; i_inplace <= current_index; ++i_inplace){
         for(int mimo_ix = 0; mimo_ix < labels_data.get_length_cols(); ++mimo_ix) {
             mae += std::abs(labels_data.get_value(i_inplace, mimo_ix) -

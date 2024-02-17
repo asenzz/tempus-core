@@ -18,48 +18,35 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
 {
     const double coeff = double(h_mask_fft.size()) / 250.;
     double result = 0;
-    const auto cplx_one = std::complex<double>(1.);
+    constexpr auto cplx_one = std::complex<double>(1.);
     const size_t end_i = h_mask_fft.size() * 2. * C_lambda1 / coeff;
-#pragma omp parallel for reduction(+:result)
+#pragma omp parallel for reduction(+:result) num_threads(adj_threads(end_i))
     for (size_t i = 0; i < end_i; ++i) {
         std::complex<double> zz(1 - h_mask_fft[i].x, -h_mask_fft[i].y);
         std::complex<double> p(1, 0);
         for (size_t k = 0; k < siftings; ++k) p *= zz;
         result += std::norm(p) + fabs(1. - std::norm(cplx_one - p));
     }
-#pragma omp parallel for reduction(+:result) schedule(static, 1 + h_mask_fft.size() / std::thread::hardware_concurrency())
+#pragma omp parallel for reduction(+:result) schedule(static, 1 + h_mask_fft.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(h_mask_fft.size()))
     for (size_t i = end_i; i < h_mask_fft.size(); ++i) {
         std::complex<double> zz(h_mask_fft[i].x, h_mask_fft[i].y);
         std::complex<double> p(1, 0);
         for (size_t k = 0; k < siftings; ++k) p *= zz;
         result += i < h_mask_fft.size() * 2. * C_lambda2 / coeff ? std::norm(p) : C_smooth_factor * std::norm(p);
     }
-#pragma omp parallel for reduction(+:result)
-    for (auto i : h_mask_fft) {
+#pragma omp parallel for reduction(+:result) num_threads(adj_threads(h_mask_fft.size()))
+    for(const auto &i: h_mask_fft) {
         const double zz_norm = std::norm(std::complex<double>{i.x, i.y});
         result += zz_norm > 1 ? zz_norm : 0;
     }
     return result / double(h_mask_fft.size());
 }
 
-void oemd_coefficients_search::do_mult(const size_t m, const size_t n, const std::vector<double> &A_x, std::vector<double> &H)
-{
-    H.resize(m * m);
-#pragma omp parallel for collapse(2)
-    for (size_t i = 0; i < m; ++i) {
-        for (size_t j = 0; j < m; ++j) {
-            const auto ptr_ix = H.data() + i * m + j;
-            *ptr_ix = 0;
-            for (size_t k = 0; k < n; ++k)
-                *ptr_ix += A_x[i * n + k] * A_x[j * n + k];
-        }
-    }
-}
 
 void oemd_coefficients_search::do_diff_mult(const size_t M, const size_t N, const std::vector<double> &diff, std::vector<double> &Bmatrix)
 {
     Bmatrix.resize(M * M, 0.);
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) num_threads(adj_threads(M * M / 2))
     for (size_t i = 0; i < M; ++i) {
         for (size_t j = 0; j <= i; ++j) {
             auto ptr_ix = Bmatrix.data() + i * M + j;
@@ -82,7 +69,7 @@ void oemd_coefficients_search::prep_x_matrix(const size_t M, const size_t N, con
         diff[i] = x[i + 1] - x[i];
     do_diff_mult(M, N, diff, Bmatrix);
     Fmatrix.resize(M);
-#pragma omp parallel for schedule(static, 1 + M / std::thread::hardware_concurrency())
+#pragma omp parallel for schedule(static, 1 + M / std::thread::hardware_concurrency()) num_threads(adj_threads(M))
     for (size_t i = 0; i < M; ++i)
         Fmatrix[i] = -2. * Bmatrix[i];
 }
@@ -236,7 +223,7 @@ oemd_coefficients_search::prepare_masks(
         LOG4_DEBUG("Resizing last mask " << masks.size() - 1 << " to " << fir_search_end_size);
         masks.back().resize(fir_search_end_size);
     }
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(masks.size() - 1))
     for (size_t i = 1; i < masks.size() - 1; ++i) {
         const auto new_size = (size_t) round(
                 std::pow<double>(fir_search_start_size, double(masks.size() - i) / double(masks.size())) * std::pow<double>(fir_search_end_size, double(i) / double(masks.size())));
@@ -249,7 +236,7 @@ oemd_coefficients_search::prepare_masks(
         LOG4_DEBUG("Resizing siftings to " << masks.size());
         siftings.resize(masks.size());
     }
-#pragma omp parallel for schedule(static, 1 + siftings.size() / std::thread::hardware_concurrency())
+#pragma omp parallel for schedule(static, 1 + siftings.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(siftings.size()))
     for (auto &sifting: siftings)
         sifting = DEFAULT_SIFTINGS;
 }
@@ -259,6 +246,7 @@ void oemd_coefficients_search::fft_acquire()
 {
     sem_wait(&sem_fft);
 }
+
 
 
 void oemd_coefficients_search::fft_release()
@@ -275,6 +263,130 @@ oemd_coefficients_search::oemd_coefficients_search() : sem_fft({})
     gpuids.resize(max_gpus);
     for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
 };
+
+
+size_t oemd_coefficients_search::to_fft_size(const size_t input_size)
+{
+    return input_size / 2 + 1;
+}
+
+
+void
+oemd_coefficients_search::smoothen_mask(std::vector<double> &mask, common::t_drand48_data_ptr buffer)
+{
+    const size_t window_size = 3 + 2. * (mask.size() * common::drander(buffer) / 10.);
+    const auto mask_size = mask.size();
+
+    std::vector<double> weights(window_size);
+    double wsum = 0;
+#pragma omp simd reduction(+:wsum)
+    for (size_t i = 0; i < window_size; ++i) {
+        weights[i] = exp(-pow((3. * ((double) i - (window_size / 2))) / (double) (window_size / 2), 2) / 2.);
+        wsum += weights[i];
+    }
+
+    std::vector<double> nmask(mask_size);
+#pragma omp simd
+    for (size_t i = 0; i < mask_size; ++i) {
+        double sum = 0;
+        for (size_t j = std::max<size_t>(0, i - window_size / 2); j <= std::min<size_t>(i + window_size / 2, mask_size - 1); ++j)
+            sum += weights[window_size / 2 + i - j] * mask[j];
+        nmask[i] = sum / wsum;
+    }
+    mask = nmask;
+}
+
+
+void
+oemd_coefficients_search::save_mask(
+        const std::vector<double> &mask,
+        const std::string &queue_name,
+        const size_t level,
+        const size_t levels)
+{
+    size_t ctr = 0;
+    while (file_exists(svr::common::formatter() << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels, queue_name))) { ++ctr; }
+    std::ofstream myfile(svr::common::formatter() << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels, queue_name));
+    if (myfile.is_open()) {
+        LOG4_DEBUG("Saving mask " << level << " to " << C_oemd_fir_coefs_dir << mask_file_name(ctr, level, levels, queue_name));
+        myfile << std::setprecision(std::numeric_limits<double>::max_digits10);
+        for (auto it = mask.cbegin(); it != mask.cend(); ++it)
+            if (it != std::prev(mask.cend()))
+                myfile << *it << ",";
+            else
+                myfile << *it;
+        myfile.close();
+    } else
+        LOG4_ERROR(
+                "Aborting saving! Unable to open file " << C_oemd_fir_coefs_dir << "/" << mask_file_name(ctr, level, levels, queue_name) << " for writing.");
+}
+
+#if 0
+double get_std(double *x, const size_t input_size)
+{
+    double sum = 0.;
+    for (size_t i = 0; i < input_size - 1; ++i) {
+        sum += pow(x[i] - x[i + 1], 2);
+    }
+    return sqrt(sum / (double) input_size);
+}
+#endif
+
+std::vector<double>
+oemd_coefficients_search::fill_auto_matrix(const size_t M, const size_t siftings, const size_t N, const double *x)
+{
+    return {};
+
+    std::vector<double> diff(N - 1);
+#pragma omp parallel for num_threads(adj_threads(N - 1))
+    for (size_t i = 0; i < N - 1; ++i)
+        diff[i] = x[i + 1] - x[i];
+
+    const size_t Msift = M * siftings;
+    std::vector<double> global_sift_matrix(Msift);
+#pragma omp parallel for num_threads(adj_threads(Msift))
+    for (size_t i = 0; i < Msift; ++i) {
+        double sum = 0;
+        for (size_t j = N / 2; j < N - 1 - i; ++j)
+            sum += diff[j] * diff[j + i];
+        global_sift_matrix[i] = sum / double(N - 1. - i - N / 2.);
+    }
+    return global_sift_matrix;
+}
+
+
+int oemd_coefficients_search::do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft)
+{
+    for (auto i: h_mask_fft)
+        if (std::norm<double>({i.x, i.y}) > norm_thresh)
+            return 1;
+    return 0;
+}
+
+
+void oemd_coefficients_search::fix_mask(std::vector<double> &mask)
+{
+    double sum = 0;
+    const double padding_value = 1. / double(mask.size());
+#pragma omp parallel for reduction(+:sum) num_threads(adj_threads(mask.size())) default(shared)
+    for (size_t i = 0; i < mask.size(); ++i) {
+        if (mask[i] < 0) mask[i] = 0;
+        if (isnan(mask[i]) || isinf(mask[i])) {
+            LOG4_DEBUG("Very bad masks!");
+            mask[i] = padding_value;
+        }
+        sum += mask[i];
+    }
+    if (sum == 0) {
+        LOG4_ERROR("Bad masks!");
+#pragma omp parallel for schedule(static, 1 + mask.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(mask.size()))
+        for (auto &m: mask) m = padding_value;
+    } else {
+#pragma omp parallel for schedule(static, 1 + mask.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(mask.size()))
+        for (auto &m: mask) m /= sum;
+    }
+}
+
 
 }
 }

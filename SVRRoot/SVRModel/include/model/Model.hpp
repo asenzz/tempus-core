@@ -22,7 +22,6 @@ class Model : public Entity
     size_t multiout_;
     size_t gradient_ct;
     size_t chunk_size;
-    std::set<size_t> learning_levels; // Features are gathered from learning levels specified here
     std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
     bpt::ptime last_modified {bpt::max_date_time}; // model modified (system) time
     bpt::ptime last_modeled_value_time {bpt::min_date_time}; // last input queue modeled value time
@@ -31,11 +30,11 @@ public:
     Model() = default;
 
     Model(const bigint id, const bigint ensemble_id, const size_t decon_level, const size_t multiout_, const size_t gradient_ct, const size_t chunk_size,
-          const std::set<size_t> &learning_levels = {}, std::deque<OnlineMIMOSVR_ptr> svr_models = {},
+          std::deque<OnlineMIMOSVR_ptr> svr_models = {},
           const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time, t_param_set_ptr p_param_set = {});
 
-    OnlineMIMOSVR_ptr &get_gradient(const size_t i);
-    OnlineMIMOSVR_ptr get_gradient(const size_t i) const;
+    OnlineMIMOSVR_ptr &get_gradient(const size_t i = 0);
+    OnlineMIMOSVR_ptr get_gradient(const size_t i = 0) const;
     std::deque<OnlineMIMOSVR_ptr> &get_gradients();
     std::deque<OnlineMIMOSVR_ptr> get_gradients() const;
     void set_gradient(const size_t i, const OnlineMIMOSVR_ptr &m);
@@ -43,10 +42,10 @@ public:
     size_t get_gradient_count() const { return gradient_ct; }
     size_t get_chunk_size() const { return chunk_size; }
     size_t get_multiout() const { return multiout_; }
-    datamodel::SVRParameters &get_params(const size_t chunk_ix = 0, const size_t grad_ix = 0);
-    datamodel::SVRParameters get_params(const size_t chunk_ix = 0, const size_t grad_ix = 0) const;
-    datamodel::SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0, const size_t grad_ix = 0);
-    datamodel::SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0, const size_t grad_ix = 0) const;
+    datamodel::SVRParameters &get_params(const size_t chunk_ix = std::numeric_limits<size_t>::max(), const size_t grad_ix = std::numeric_limits<size_t>::max());
+    datamodel::SVRParameters get_params(const size_t chunk_ix = std::numeric_limits<size_t>::max(), const size_t grad_ix = std::numeric_limits<size_t>::max()) const;
+    datamodel::SVRParameters_ptr get_params_ptr(const size_t chunk_ix = std::numeric_limits<size_t>::max(), const size_t grad_ix = std::numeric_limits<size_t>::max()) const;
+    datamodel::t_param_set_ptr get_param_set(const size_t chunk_ix = std::numeric_limits<size_t>::max(), const size_t grad_ix = std::numeric_limits<size_t>::max()) const;
 
     void set_params(const datamodel::SVRParameters_ptr &p) {
         datamodel::SVRParameters_ptr existing_p;
@@ -72,11 +71,6 @@ public:
     size_t get_decon_level() const;
 
     void set_decon_level(const size_t _decon_level);
-
-    /** Get/set learning wavelet deconstruction level indexes this model is trained against. */
-    std::set<size_t> get_learning_levels() const;
-
-    void set_learning_levels(const std::set<size_t> &_learning_levels);
 
     bpt::ptime const &get_last_modified() const;
 

@@ -9,6 +9,7 @@
 #include "short_term_fourier_transform.hpp"
 #include "spectral_transform.hpp"
 #include "fast_cvmd.hpp"
+#include "DQScalingFactorService.hpp"
 
 
 namespace svr {
@@ -16,6 +17,7 @@ namespace datamodel {
 
 void Dataset::init_transform()
 {
+    if (transformation_levels_ < 8) return;
     p_oemd_transformer_fat = std::unique_ptr<svr::online_emd>(new svr::online_emd(transformation_levels_ / 4, OEMD_STRETCH_COEF));
     p_cvmd_transformer = std::unique_ptr<svr::fast_cvmd>(new svr::fast_cvmd(transformation_levels_ / 2));
 }
@@ -236,13 +238,13 @@ size_t Dataset::get_transformation_levels() const
 { return transformation_levels_; }
 
 size_t Dataset::get_model_count() const
-{ return transformation_levels_ / 2 - 1; }
+{ return std::max<ssize_t>(1, transformation_levels_ / 2 - 1); }
 
 size_t Dataset::get_transformation_levels_cvmd() const
-{ return transformation_levels_ / 2; }
+{ return std::max<ssize_t>(1, transformation_levels_ / 2); }
 
 size_t Dataset::get_transformation_levels_oemd() const
-{ return transformation_levels_ / 4; }
+{ return std::max<ssize_t>(1, transformation_levels_ / 4); }
 
 void Dataset::set_transformation_levels(const size_t transformation_levels)
 { this->transformation_levels_ = transformation_levels; }
@@ -379,9 +381,13 @@ std::deque<IQScalingFactor_ptr> Dataset::get_iq_scaling_factors() { return iq_sc
 
 void Dataset::set_iq_scaling_factors(const std::deque<IQScalingFactor_ptr> &iq_scaling_factors) { iq_scaling_factors_ = iq_scaling_factors; }
 
-svr::datamodel::dq_scaling_factor_container_t Dataset::get_dq_scaling_factors()
+svr::datamodel::dq_scaling_factor_container_t Dataset::get_dq_scaling_factors() const
 {
-    const std::scoped_lock l(dq_scaling_factors_mutex);
+    return dq_scaling_factors_;
+}
+
+svr::datamodel::dq_scaling_factor_container_t &Dataset::get_dq_scaling_factors()
+{
     return dq_scaling_factors_;
 }
 
@@ -394,35 +400,18 @@ void Dataset::set_dq_scaling_factors(const svr::datamodel::dq_scaling_factor_con
 void Dataset::add_dq_scaling_factors(const dq_scaling_factor_container_t& new_dq_scaling_factors)
 {
     const std::scoped_lock l(dq_scaling_factors_mutex);
-    DQScalingFactor::add(dq_scaling_factors_, new_dq_scaling_factors);
+    business::DQScalingFactorService::add(dq_scaling_factors_, new_dq_scaling_factors);
 }
 
-double Dataset::get_dq_scaling_factor_features(
-        const std::string &input_queue_table_name, const std::string &input_queue_column_name, const size_t decon_level)
+std::shared_ptr<DQScalingFactor> Dataset::get_dq_scaling_factor(
+        const std::string &input_queue_table_name, const std::string &input_queue_column_name, const size_t level)
 {
     const std::scoped_lock l(dq_scaling_factors_mutex);
-    for (const auto &p_dq_scaling_factor: dq_scaling_factors_)
-        if (p_dq_scaling_factor->get_input_queue_table_name() == input_queue_table_name and
-            p_dq_scaling_factor->get_input_queue_column_name() == input_queue_column_name and
-                p_dq_scaling_factor->get_decon_level() == decon_level)
-            return p_dq_scaling_factor->get_features_factor();
-    LOG4_ERROR("Features factor for " << input_queue_table_name << " " << input_queue_column_name << " " << decon_level << " not found.");
-    return std::numeric_limits<double>::signaling_NaN();
+    const auto res = business::DQScalingFactorService::slice(dq_scaling_factors_, id, input_queue_column_name, std::set{level});
+    if (res.empty()) LOG4_ERROR("Could not find scaling factor for " << input_queue_table_name << ", column " << input_queue_column_name << ", level " << level);
+    return *res.begin();
 }
 
-double
-Dataset::get_dq_scaling_factor_labels(
-        const std::string &input_queue_table_name, const std::string &input_queue_column_name, const size_t decon_level)
-{
-    const std::scoped_lock l(dq_scaling_factors_mutex);
-    for (const auto &p_dq_scaling_factor: dq_scaling_factors_)
-        if (p_dq_scaling_factor->get_input_queue_table_name() == input_queue_table_name and
-            p_dq_scaling_factor->get_input_queue_column_name() == input_queue_column_name and
-                p_dq_scaling_factor->get_decon_level() == decon_level)
-            return p_dq_scaling_factor->get_labels_factor();
-    LOG4_ERROR("Labels factor for " << input_queue_table_name << " " << input_queue_column_name << " " << decon_level << " not found.");
-    return std::numeric_limits<double>::signaling_NaN();
-}
 
 
 size_t Dataset::get_max_lag_count()
@@ -430,9 +419,9 @@ size_t Dataset::get_max_lag_count()
     if (max_lag_count_cache_) return max_lag_count_cache_;
 
     max_lag_count_cache_ = 0;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
     for (const auto &e: ensembles_)
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(e->get_models().size()))
         for (const auto &m: e->get_models())
             for (const auto &p: m->get_param_set())
                 if (p)
@@ -446,9 +435,9 @@ size_t Dataset::get_max_decrement()
 {
     if (max_decremental_distance_cache_) return max_decremental_distance_cache_;
     max_decremental_distance_cache_ = 0;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
     for (const auto &e: ensembles_)
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(e->get_models().size()))
         for (const auto &m: e->get_models())
             for (const auto &p: m->get_param_set())
                 if (p)
@@ -463,7 +452,7 @@ size_t Dataset::get_max_residuals_length() const
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
     size_t result = 0;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
     for (const auto &p_ensemble: ensembles_) {
         const size_t res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
 #pragma omp critical
@@ -477,7 +466,7 @@ size_t Dataset::get_max_residuals_length() const
     return result;
 }
 
-size_t Dataset::get_maximum_possible_residuals_length() const
+size_t Dataset::get_max_possible_residuals_length() const
 {
     return get_residuals_length(common::gen_random(8));
 }
@@ -487,6 +476,16 @@ size_t Dataset::get_residuals_length(const std::string &decon_queue_table_name) 
     return std::max(
             p_cvmd_transformer ? p_cvmd_transformer->get_residuals_length(decon_queue_table_name) : 0,
             p_oemd_transformer_fat ? p_oemd_transformer_fat->get_residuals_length(decon_queue_table_name) : 0);
+}
+
+bpt::ptime Dataset::get_last_modeled_time() const
+{
+    bpt::ptime res = bpt::min_date_time;
+    for (const auto &p_ensemble: ensembles_)
+        for (const auto &p_model: p_ensemble->get_models())
+            if (res < p_model->get_last_modeled_value_time())
+                res = p_model->get_last_modeled_value_time();
+    return res;
 }
 
 std::string Dataset::to_string() const

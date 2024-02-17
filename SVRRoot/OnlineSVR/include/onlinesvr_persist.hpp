@@ -10,6 +10,7 @@ datamodel::kernel_type_e get_kernel_type_from_string(const std::string &kernel_t
 
 std::string kernel_type_to_string(const datamodel::kernel_type_e kernel_type);
 
+// TODO Rewrite using serialization library
 template<typename S> bool
 OnlineMIMOSVR::save_online_svr(const OnlineMIMOSVR &osvr, S &output_stream)
 {
@@ -107,7 +108,7 @@ OnlineMIMOSVR::load_online_svr(S &input_stream)
 
         auto param_set = std::make_shared<datamodel::t_param_set>();
         param_set->emplace(svr_parameters);
-        p_loaded_object = std::make_shared<OnlineMIMOSVR>(param_set, multistep_len, CHUNK_DECREMENT);
+        p_loaded_object = std::make_shared<OnlineMIMOSVR>(param_set, multistep_len, C_kernel_default_max_chunk_size);
 
         size_t xrows, xcols;
         input_stream >> trash >> xrows;
@@ -150,9 +151,8 @@ OnlineMIMOSVR::load_online_svr(S &input_stream)
         if (p_loaded_object->save_kernel_matrix) {
             __omp_tpfor_i(size_t, 0, p_loaded_object->ixs.size(),
                           p_loaded_object->p_kernel_matrices->at(i) = init_kernel_matrix(
-                                  p_loaded_object->get_params(),
-                                  p_loaded_object->p_features->rows(p_loaded_object->ixs[i]),
-                                  p_loaded_object->p_labels->rows(p_loaded_object->ixs[i]))
+                                  p_loaded_object->get_params(i),
+                                  p_loaded_object->p_features->rows(p_loaded_object->ixs[i]))
             )
         }
     } catch (const std::exception &ex) {
@@ -238,7 +238,7 @@ OnlineMIMOSVR::load_onlinemimosvr_no_weights_no_kernel(S &input_stream)
 
         auto param_set = std::make_shared<datamodel::t_param_set>();
         param_set->emplace(p_params);
-        p_loaded_object = std::make_shared<OnlineMIMOSVR>(param_set, CHUNK_DECREMENT, _multistep_len);
+        p_loaded_object = std::make_shared<OnlineMIMOSVR>(param_set, C_kernel_default_max_chunk_size, _multistep_len);
 
         size_t xrows, xcols;
         input_stream >> trash >> xrows;

@@ -48,7 +48,7 @@ void DatasetService::recombine_params(predictions_t &tune_predictions, std::vect
         const uint64_t new_row_ct = prev_row_ct * C_tune_keep_preds;
         const uint64_t rand_offset = 0; // std::rand() % std::fmod(new_row_ct - 1, C_filter_combos);
         LOG4_DEBUG("Existing matrix size " << prev_row_ct << "x" << half_levct - 1 << ", adding set of size " << tuniter.size() << ", at level " << target_col_ix << ", filter out " << C_filter_combos << " combinations, new row count " << new_row_ct << ", rand offset " << rand_offset);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(target_col_ix))
         for (int64_t col_ix = target_col_ix; col_ix >= 0; --col_ix) {
             for (double row_ix = new_row_ct - 1 /* rand_offset + ((new_row_ct - 1) - std::fmod(new_row_ct - 1, C_filter_combos)) */; row_ix >= 0; row_ix -= C_filter_combos) {
                 uint64_t target_row_ix = std::round(row_ix / C_filter_combos);
@@ -150,7 +150,7 @@ void DatasetService::process_dataset_test_tune(
     const auto p_decon = p_ensemble->get_decon_queue();
     const auto p_aux_decon = p_ensemble->get_aux_decon_queue(0);
 #ifdef CACHED_FEATURE_ITER
-    APP.model_service.aux_decon_hint = p_aux_decon->get_data().begin(); // lower_bound(p_aux_decon->get_data(), p_decon->get_data()[std::max<size_t>(0, p_decon->get_data().size() - p_dataset->get_max_lag_count() - p_dataset->get_max_decrement() - EMO_TUNE_VALIDATION_WINDOW - MANIFOLD_TEST_VALIDATION_WINDOW - DATA_LUFTA)]->get_value_time());
+    APP.model_service.aux_decon_hint = p_aux_decon->begin(); // lower_bound(p_aux_decon->get_data(), p_decon->at(std::max<size_t>(0, p_decon->size() - p_dataset->get_max_lag_count() - p_dataset->get_max_decrement() - EMO_TUNE_VALIDATION_WINDOW - MANIFOLD_TEST_VALIDATION_WINDOW - DATA_LUFTA))->get_value_time());
 #endif
 #ifndef NEW_SCALING
     const auto dq_scaling_factors = APP.dq_scaling_factor_service.prepare_decon_queue_scaling_factors(p_dataset, p_decon);
@@ -181,7 +181,7 @@ void DatasetService::process_dataset_test_tune(
                                 0,
                                 p_model->get_last_modeled_value_time(),
                                 p_dataset->get_input_queue()->get_resolution()),
-                                p_decon->get_data().end(),
+                                p_decon->end(),
                                 p_decon->get_data() },
                         p_aux_decon->get_data(),
                         p_params->get_lag_count(),

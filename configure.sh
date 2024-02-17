@@ -54,18 +54,6 @@ function configureBuild {
 
 	local last_cpu=$((`lscpu -p | egrep "^[^#].*$" | wc -l` -1))
 
-	cd $BASE_DIR/libs/cppcms-1.0.5/ 
-	mkdir build || rm -rf build/*
-	cd build
-	cmake "$@" ..
-	make -j$last_cpu
-	sudo make install
-
-    cd $BASE_DIR/libs/gtest-1.7.0/
-    cmake .
-    make -j$last_cpu
-    cp lib*.a lib
-
 	cd $BASE_DIR
 	mkdir build || rm -rf build/*
 	cd build

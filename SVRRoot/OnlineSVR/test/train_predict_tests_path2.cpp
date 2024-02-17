@@ -5,19 +5,21 @@
 #include <ModelService.hpp>
 #include <optimizer.hpp>
 #include <appcontext.hpp>
-#include "kernel_basic_integration_test.hpp"
+#include "kernel_basic_integration_test_smo.hpp"
 
 #define DO_TEST_PSO
 
 
-#define VALIDATION_WINDOW 500
+#define TEST_VALIDATION_WINDOW 500
 #define DEFAULT_LAG 650
 #define DEFAULT_SVR_DECREMENT 20000
 #define DEFAULT_ADJACENT 1
-#define DEFAULT_KERNEL kernel_type_e::PATH
-#define INPUT_LIMIT (DEFAULT_SVR_DECREMENT + DEFAULT_LAG + VALIDATION_WINDOW)
+#define DEFAULT_KERNEL datamodel::kernel_type_e::PATH
+#define INPUT_LIMIT (DEFAULT_SVR_DECREMENT + DEFAULT_LAG + TEST_VALIDATION_WINDOW)
 
-static const size_t lag = DEFAULT_LAG;
+using namespace svr;
+
+constexpr size_t lag = DEFAULT_LAG;
 
 #if 0
 static const std::pair<arma::mat, arma::mat>
@@ -47,9 +49,9 @@ run_file(
         const std::string &level_file,
         std::mutex &printout_mutex, std::atomic<size_t> &running_ct)
 {
-    const svr::matrix_ptr p_features = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << svr::C_logged_level << "_" << 0 << ".out");
-    const svr::matrix_ptr p_labels = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << svr::C_logged_level << "_" << 0 << ".out");
-    auto best_parameters = std::make_shared<SVRParameters>(
+    const svr::matrix_ptr p_features = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << 0 << "_" << 0 << ".out");
+    const svr::matrix_ptr p_labels = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << 0 << "_" << 0 << ".out");
+    auto best_parameters = std::make_shared<datamodel::SVRParameters>(
             0, 0, "test path 2", "test path 2", 0, 0, 0, svr::mimo_type_e::single, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
             DEFAULT_LAG);
     {
@@ -103,7 +105,7 @@ run_file(
 
 TEST(path_tune_train_predict2, basic_integration)
 {
-    svr::IKernel<double>::IKernelInit();
+    //svr::IKernel<double>::IKernelInit();
     std::mutex printout_mutex;
     std::atomic<size_t> running_ct = 0;
     std::vector<std::vector<double>> predicted_mx(file_name_pairs.size());

@@ -21,13 +21,13 @@ TEST(InterprocessWriterTests, TestWrite)
 
     auto all1 = reader.read_all();
 
-    ASSERT_EQ(all1.size(), writer_buffer_size);
+    EXPECT_TRUE(all1.size() == writer_buffer_size);
 
-    ASSERT_EQ(all1, etalon_bas);
+    EXPECT_TRUE(all1 == etalon_bas);
 
     auto new1 = reader.read_new(all1.back().time);
 
-    ASSERT_EQ(new1.size(), 0UL);
+    EXPECT_TRUE(new1.size() == 0UL);
 
     for(size_t i = writer_buffer_size; i <  3 * writer_buffer_size / 2; ++i)
     {
@@ -37,21 +37,21 @@ TEST(InterprocessWriterTests, TestWrite)
 
     auto all2 = reader.read_all();
 
-    ASSERT_EQ(all2.size(), writer_buffer_size);
+    EXPECT_TRUE(all2.size() == writer_buffer_size);
 
     auto iter = etalon_bas.begin() + writer_buffer_size / 2;
 
     for(auto bas : all2)
-        ASSERT_EQ(bas, *iter++);
+        EXPECT_TRUE(bas == *iter++);
 
     auto new2 = reader.read_new(all1.back().time);
 
-    ASSERT_EQ(new2.size(), writer_buffer_size / 2);
+    EXPECT_TRUE(new2.size() == writer_buffer_size / 2);
 
     iter = etalon_bas.begin() + writer_buffer_size;
 
     for(auto bas : new2)
-        ASSERT_EQ(bas, *iter++);
+        EXPECT_TRUE(bas == *iter++);
 
     svr::fix::bid_ask_spread minmax (
           std::numeric_limits<double>::min()
@@ -65,9 +65,9 @@ TEST(InterprocessWriterTests, TestWrite)
 
     auto new3 = reader.read_new(new2.back().time);
 
-    ASSERT_EQ(new3.size(), 1UL);
+    EXPECT_TRUE(new3.size() == 1UL);
 
-    ASSERT_EQ(new3.front(), minmax);
+    EXPECT_TRUE(new3.front() == minmax);
 }
 
 

@@ -6,6 +6,7 @@
 #include "../include/spectral_transform.hpp"
 #include "../include/online_emd.hpp"
 #include <chrono>
+#include "DeconQueueService.hpp"
 #include "test_harness.hpp"
 #include "util/string_utils.hpp"
 #ifdef EXPERIMENTAL_FEATURES
@@ -41,22 +42,22 @@ class onlineEmdTransformTest : public testing::Test {
       transformer = std::make_unique<svr::online_emd>(levels, TEST_STRETCH_COEF);
       std::ifstream input_f(input_filename);
       std::string line;
-      input = std::make_shared<datamodel::DeconQueue>(TEST_QUEUE_NAME, "input_table", "input_column", 0, 2 * TEST_LEVELS);
-      std::vector<double> vals(2 * TEST_LEVELS);
+      input = std::make_shared<datamodel::DeconQueue>(TEST_QUEUE_NAME, "input_table", "input_column", 0, 4 * TEST_LEVELS);
+      std::vector<double> vals(4 * TEST_LEVELS);
       const auto time_now = bpt::second_clock::local_time();
       auto time_iter = time_now;
       EXPECT_TRUE(input_f && input_f.good());
       while (!input_f.eof()) {
           std::getline(input_f, line);
           if (line.empty()) continue;
-          vals[TEST_LEVELS] = std::atof(line.c_str());
-          input->get_data().emplace_back(std::make_shared<datamodel::DataRow>(time_now, time_iter, 0., vals));
+          vals[TEST_LEVELS * 2] = std::atof(line.c_str());
+          input->get_data().emplace_back(std::make_shared<datamodel::DataRow>(time_now, time_iter, 1., vals));
           time_iter += bpt::hours(1);
-          if (input->get_data().size() > INPUT_LIMIT) break;
+          if (input->size() > INPUT_LIMIT) break;
       }
       result_f.open(exp_output_filename);
       EXPECT_TRUE(result_f.good());
-      LOG4_DEBUG("Read " << input->get_data().size() << " values.");
+      LOG4_DEBUG("Read " << input->size() << " values.");
   }
 
   //virtual void TearDown(){}
@@ -87,63 +88,55 @@ TEST_F(onlineEmdTransformTest, test_transform_correctness)
 {
     SetUp(transform_input_filename, transform_result_filename);
     std::vector<double> tail;
-    if (TEST_OEMD_PADDING) spectral_transform::mirror_tail(datamodel::datarow_range{input->get_data()}, input->get_data().size() + TEST_OEMD_PADDING, tail);
+    if (TEST_OEMD_PADDING) spectral_transform::mirror_tail(datamodel::datarow_range{input->get_data()}, input->size() + TEST_OEMD_PADDING, tail);
     const auto residuals_len = transformer->get_residuals_length();
+
+    const auto masks_siftings = transformer->get_masks(datamodel::datarow_range{input->get_data()}, tail, input->get_table_name());
+#pragma omp parallel for num_threads(adj_threads(masks_siftings->masks.size()))
+    for (size_t i = 0; i < masks_siftings->masks.size(); ++i)
+        LOG4_DEBUG("Power level of mask " << i << " " << svr::common::meanabs(masks_siftings->masks[i]));
+
     PROFILE_EXEC_TIME(transformer->transform(input), "OEMD transformation.");
 
-    auto delayed_input = std::make_shared<datamodel::DeconQueue>(*input);
-    delayed_input->get_data().erase(input->get_data().begin(), input->get_data().begin() + DECON_OFFSET);
+    auto delayed_input = input->clone(DECON_OFFSET);
+    LOG4_DEBUG("Input size " << input->size() << ", delayed input size " << delayed_input->size() << ", residuals " << residuals_len << ", tail " << tail.size());
     PROFILE_EXEC_TIME(transformer->transform(delayed_input), "OEMD transformation " << DECON_OFFSET << " offset.");
-#if 0
-    double val;
-    for (size_t i = 0; i < decon.size(); ++i) {
-        for (size_t j = 0; j < decon[i].size(); ++j) {
-            this->result_f >> val;
-            //ASSERT_DOUBLE_EQ(decon[i][j], val);
-	    //Remove this when fixed the test files
-            //EXPECT_NEAR (val, decon[i][j], 0.00001);
-        }
-        //myfile << std::endl;
-    }
-    //this->result_f >> val;
-    //ASSERT_TRUE(result_f.eof());
-#endif
-    LOG4_TRACE("Residuals length " << residuals_len);
-    const size_t start_t = residuals_len > input->get_data().size() ? input->get_data().size() - DECON_OFFSET : residuals_len;
-    std::vector<std::vector<double>> decon(TEST_LEVELS, std::vector<double>(input->get_data().size() - start_t));
-#pragma omp parallel for
-    for (size_t t = start_t; t < input->get_data().size(); ++t) {
+
+    const size_t start_t = residuals_len > input->size() ? input->size() - DECON_OFFSET : residuals_len + DECON_OFFSET;
+    std::deque<std::vector<double>> decon(TEST_LEVELS, std::vector<double>(input->size() - start_t));
+    std::vector<double> invec(input->size() - start_t);
+    std::atomic<bool> test_result{true};
+#pragma omp parallel for simd schedule(static, 1 + (input->size() - start_t) / std::thread::hardware_concurrency()) num_threads(adj_threads(input->size() - start_t))
+    for (size_t t = start_t; t < input->size(); ++t) {
         double recon = 0;
         for (size_t l = 0; l < TEST_LEVELS; ++l) {
-            if (!svr::common::isnormalz(input->get_data()[t]->get_value(l)))
-                LOG4_WARN("Decon number " << t << "x" << l << " not normal " << input->get_data()[t]->get_value(l));
-            decon[l][t - start_t] = input->get_data()[t]->get_value(l);
-            recon += input->get_data()[t]->get_value(l);
+            const auto v = input->at(t)->get_value(2 * l);
+            if (!svr::common::isnormalz(v))
+                LOG4_WARN("Decon at " << t << "x" << l << " not normal " << v);
+            decon[l][t - start_t] = v;
+            recon += v;
         }
+        invec[t - start_t] = input->at(t)->get_value(2 * TEST_LEVELS);
+
         const size_t off_t = t >= DECON_OFFSET ? t - DECON_OFFSET : 0;
-        if (!svr::common::isnormalz(delayed_input->get_data()[off_t]->get_value(TEST_LEVELS))) {
-            LOG4_WARN("Recon " << recon << " or padded input " << delayed_input->get_data()[off_t]->get_value(TEST_LEVELS) << " at " << t << " is not normal.");
-        } else {
-            if (!svr::common::isnormalz(recon))
-                LOG4_WARN("Recon " << recon << " or padded input " << delayed_input->get_data()[off_t]->get_value(TEST_LEVELS) << " at " << t << " is not normal.");
+        const auto delayed_in_v = delayed_input->at(off_t)->get_value(TEST_LEVELS * 2);
+        const auto in_v = input->at(t)->get_value(TEST_LEVELS * 2);
+        if (!svr::common::isnormalz(in_v)  || !svr::common::isnormalz(delayed_in_v) || !svr::common::isnormalz(recon))
+            LOG4_WARN("Not znormal, position " << t << ". delayed position " << off_t << ", recon " << recon << ", input " << in_v << ", delayed input " << delayed_in_v);
+        const auto del_recon_diff = std::abs(recon - delayed_in_v);
+        const auto recon_diff = std::abs(recon - in_v);
+        if (recon_diff > TEST_ERROR_THRESHOLD || del_recon_diff > TEST_ERROR_THRESHOLD) {
+            LOG4_ERROR("Different, position " << t << ". delayed position " << off_t << ", recon " << recon << ", input " << in_v << ", delayed input " << delayed_in_v
+                                              << ", recon diff " << recon_diff << ", delayed recon diff " << del_recon_diff);
+            test_result.store(false, std::memory_order_relaxed);
         }
-        if (std::abs(recon - delayed_input->get_data()[off_t]->get_value(TEST_LEVELS)) > TEST_ERROR_THRESHOLD)
-            LOG4_WARN("Recon differs from delayed " << off_t << " input " << t << ", " << recon - delayed_input->get_data()[off_t]->get_value(TEST_LEVELS));
-
-        // Time invariance check
-        if (t < residuals_len + DECON_OFFSET) continue;
-        double diff = 0;
-        for (size_t l = 0; l < TEST_LEVELS; ++l)
-            diff += std::abs(input->get_data()[t]->get_value(l) - delayed_input->get_data()[off_t]->get_value(l));
-        if (diff > TEST_ERROR_THRESHOLD)
-            LOG4_WARN("Decon differ at " << t << " " << diff);
     }
-
+    LOG4_DEBUG("Power of input " << svr::common::meanabs(invec));
+#pragma omp parallel for num_threads(adj_threads(decon.size()))
     for (size_t l = 0; l < decon.size(); ++l) { // Don't parallelize
-        LOG4_DEBUG("Power level " << l << " " << svr::common::meanabs(decon[l]));
-        if (l > 2) continue;
+        LOG4_DEBUG("Power of decon level " << l << " " << svr::common::meanabs(decon[l]));
 #ifdef EXPERIMENTAL_FEATURES
-        matplotlibcpp::plot(trans_decon[l], {{"label", "Level " + std::to_string(l)}});
+        matplotlibcpp::plot(decon[l], {{"label", "Level " + std::to_string(l)}});
 #endif
     }
 
@@ -151,10 +144,11 @@ TEST_F(onlineEmdTransformTest, test_transform_correctness)
     matplotlibcpp::legend();
     matplotlibcpp::show();
 #endif
+    EXPECT_TRUE(test_result.load());
 }
 
 TEST_F(onlineEmdTransformTest, TestBadLevels){
-    ASSERT_THROW(SetUp(transform_input_filename, transform_result_filename, 10),std::runtime_error);
+    ASSERT_THROW(SetUp(transform_input_filename, transform_result_filename, 10), std::runtime_error);
     //std::vector<std::vector<double>> decon;
     //ASSERT_THROW(transformer->transform(this->input, decon), std::runtime_error);
 
@@ -163,7 +157,6 @@ TEST_F(onlineEmdTransformTest, TestGoodLevels){
     ASSERT_NO_THROW(SetUp(transform_input_filename, transform_result_filename, 11));
     std::vector<std::vector<double>> decon;
     //transformer->transform(this->input, decon, 0);
-
 }
 
 TEST(OnlineEmdTestCoefficients, TestMasksSum){

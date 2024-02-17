@@ -168,9 +168,8 @@ int distance_compute_mat_old(const arma::mat &X, arma::mat &Z, double beta)
 int distance_compute(const arma::mat &X, arma::mat &Z, int fresh_dimensions)
 {
     int sizeX = arma::size(X, 1);
-#pragma omp parallel for
+#pragma omp parallel for collapse(2)
     for (int i = 0; i < sizeX; i++) {
-#pragma omp parallel for
         for (int j = 0; j < sizeX; j++) {
             for (int k = 0; k < fresh_dimensions; k++) {
                 //			Z(i,j)+=pow(X(k,i)-X(k,j),2);

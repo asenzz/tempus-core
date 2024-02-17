@@ -1,3 +1,5 @@
+#include "InputQueueService.hpp"
+#include <model/InputQueue.hpp>
 #include <boost/interprocess/exceptions.hpp>
 
 #include "appcontext.hpp"
@@ -8,6 +10,15 @@
 #include "InterprocessReader.hpp"
 #include "util/TimeUtils.hpp"
 
+
+std::string svr::business::InputQueueService::make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
+{
+    std::string result = common::sanitize_db_table_name(
+            common::C_input_queue_table_name_prefix + "_" + user_name + "_" + logical_name + "_" + std::to_string(resolution.total_seconds()));
+    std::transform(std::execution::par_unseq, result.begin(), result.end(), result.begin(), tolower);
+    LOG4_DEBUG("Returning " << result);
+    return result;
+}
 
 using namespace bpt;
 using namespace svr::common;
@@ -145,25 +156,27 @@ InputQueueService::load_latest_from_mmf(
 }
 
 
-data_row_container
+void
 InputQueueService::load_latest(
-        datamodel::InputQueue_ptr const &input_queue,
+        datamodel::InputQueue_ptr p_input_queue,
         const size_t limit,
         const bpt::ptime &last_time)
 {
     // TODO: This method takes last_time inclusively, and the specification for that is not clear.
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
-    LOG4_DEBUG("Getting " << limit << " rows until " << last_time << " from " << input_queue->get_table_name());
+    LOG4_DEBUG("Getting " << limit << " rows until " << last_time << " from " << p_input_queue->get_table_name());
 
-    auto result = load_latest_from_mmf(input_queue, last_time);
-
-    if (!result.empty()) goto __bail;
-
-    result = input_queue_dao.get_latest_queue_data_by_table_name(input_queue->get_table_name(), limit, last_time);
-
-    __bail:
+    auto result = load_latest_from_mmf(p_input_queue, last_time);
+    if (result.empty()) result = input_queue_dao.get_latest_queue_data_by_table_name(p_input_queue->get_table_name(), limit, last_time);
     LOG4_DEBUG("Got " << result.size() << " rows successfully.");
-    return result;
+    if (result.empty())
+        return;
+    if (p_input_queue->get_data().size()) {
+        p_input_queue->get_data().erase(lower_bound_back(p_input_queue->get_data(), result.front()->get_value_time()), p_input_queue->get_data().end());
+        p_input_queue->get_data().insert(p_input_queue->get_data().end(), result.begin(), result.end());
+    } else {
+        p_input_queue->set_data(result);
+    }
 }
 
 
@@ -285,11 +298,11 @@ InputQueueService::clone_with_data(
         const time_period &time_range,
         const size_t minimum_rows_count)
 {
-    auto result_queue = p_input_queue->clone_empty(); // TODO Why do we clone empty when we clone with data?
+    auto result_queue = p_input_queue->clone_empty();
     result_queue->set_data(input_queue_dao.get_queue_data_by_table_name(
             p_input_queue->get_table_name(), time_range.begin(), time_range.end()));
 
-    if (result_queue->get_data().size() < minimum_rows_count)
+    if (result_queue->size() < minimum_rows_count)
         THROW_EX_FS(insufficient_data,
                 "Not enough data in inputQueue in time range " << time_range << " number of observations is lesser than " << minimum_rows_count);
 
@@ -324,7 +337,7 @@ InputQueueService::get_column_data(const datamodel::InputQueue_ptr &queue, const
         return {};
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(column_data.size()))
     for (size_t r_ix = 0; r_ix < column_data.size(); ++r_ix) {
         const auto r = *(column_data.begin() + r_ix);
         if (!r) {
@@ -433,42 +446,36 @@ InputQueueService::compare_to_decon_queue(
     if (p_decon_queue->get_data().empty())
         return boost::posix_time::min_date_time;
 
-#ifndef TRIM_DATA
-    if  (p_input_queue->get_data().front()->get_value_time() > p_decon_queue->get_data().front()->get_value_time()
-                || p_input_queue->get_data().back()->get_value_time() < p_decon_queue->get_data().back()->get_value_time()) {
+    if  (p_input_queue->front()->get_value_time() > p_decon_queue->front()->get_value_time()) {
         LOG4_ERROR("Inconsistency between input queue " << *p_input_queue << " and decon queue " << *p_decon_queue << " detected.");
         return boost::posix_time::min_date_time;
     }
-#endif
 
-    if (std::find(p_input_queue->get_value_columns().begin(), p_input_queue->get_value_columns().end(), p_decon_queue->get_input_queue_column_name()) == p_input_queue->get_value_columns().end()) {
+    if (std::find(std::execution::par_unseq, p_input_queue->get_value_columns().begin(), p_input_queue->get_value_columns().end(),
+                  p_decon_queue->get_input_queue_column_name()) == p_input_queue->get_value_columns().end())
+    {
         LOG4_ERROR("Input queue column " << p_decon_queue->get_input_queue_column_name() << " is missing in " << *p_input_queue);
         return boost::posix_time::max_date_time;
     }
 
-    const auto end_range_iter = p_input_queue->get_data().end();
-    std::atomic<boost::posix_time::ptime> missing_time{boost::posix_time::max_date_time};
-    std::atomic_bool done = false;
-    auto prev_decon_found = p_decon_queue->get_data().begin();
-#pragma omp parallel for
-    for (auto range_iter = lower_bound(p_input_queue->get_data(), p_decon_queue->get_data().back()->get_value_time()); range_iter != end_range_iter; ++range_iter) {
-        if (done.load(std::memory_order_relaxed)) continue;
-        const auto find_res = std::find_if(prev_decon_found, p_decon_queue->get_data().end(),
-                                           [&](const auto &item) { return item->get_value_time() == range_iter->get()->get_value_time(); });
-        if (find_res == p_decon_queue->get_data().end()) {
-            LOG4_DEBUG("Input row at " << range_iter->get()->get_value_time() << " not found in decon queue " << p_decon_queue->get_input_queue_table_name() <<
-                                       " " << p_decon_queue->get_input_queue_column_name());
-            missing_time = range_iter->get()->get_value_time();
-            done.store(true, std::memory_order_relaxed);
-        } else
+    boost::posix_time::ptime missing_time{boost::posix_time::max_date_time};
+#pragma omp parallel for num_threads(adj_threads(p_decon_queue->size()))
+    for (auto range_iter = lower_bound(p_input_queue->get_data(), p_decon_queue->front()->get_value_time()); range_iter != p_input_queue->end(); ++range_iter) {
+        if (std::any_of(
+                std::execution::par_unseq, p_decon_queue->begin(), p_decon_queue->end(),
+                [&range_iter](const auto &item) { return item->get_value_time() == range_iter->get()->get_value_time(); })) continue;
+        LOG4_DEBUG("Input row at " << range_iter->get()->get_value_time() << " not found in decon queue " << p_decon_queue->get_input_queue_table_name() <<
+                                   " " << p_decon_queue->get_input_queue_column_name());
 #pragma omp critical
         {
-            if (find_res > prev_decon_found) prev_decon_found = find_res;
+            if (missing_time > range_iter->get()->get_value_time())
+                missing_time = range_iter->get()->get_value_time();
         }
     }
 
-    LOG4_DEBUG("Compared input queue " << p_input_queue->get_table_name() << " with data from " << p_input_queue->get_data().front()->get_value_time() << " to " <<
-            p_input_queue->get_data().back()->get_value_time() << " with decon queue with data from " << p_decon_queue->get_data().front()->get_value_time() << " to " << p_decon_queue->get_data().back()->get_value_time());
+    LOG4_DEBUG("Compared input queue " << p_input_queue->get_table_name() << " with data from " << p_input_queue->front()->get_value_time() << " to " <<
+            p_input_queue->back()->get_value_time() << " with decon queue with data from " << p_decon_queue->front()->get_value_time() << " to " <<
+            p_decon_queue->back()->get_value_time());
 
     return missing_time;
 }
@@ -483,43 +490,24 @@ InputQueueService::prepare_queues(
 
     prepare_input_data(p_dataset);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size()))
     for (const auto &p_ensemble: p_dataset->get_ensembles()) {
         DeconQueueService::prepare_decon(p_dataset, p_dataset->get_input_queue(), p_ensemble->get_decon_queue());
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size()))
         for (const auto &p_aux_input: p_dataset->get_aux_input_queues())
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(p_aux_input->get_value_columns().size()))
             for (const auto &aux_input_column_name: p_aux_input->get_value_columns()) {
                 auto p_decon_queue = DeconQueueService::find_decon_queue(p_ensemble->get_aux_decon_queues(), p_aux_input->get_table_name(), aux_input_column_name);
                 DeconQueueService::prepare_decon(p_dataset, p_aux_input, p_decon_queue);
             }
     }
 
-#ifdef DEBUG_PREPARE
-    {
-        static size_t call_counter;
-        std::stringstream ss;
-        using namespace svr::common;
-        ss <<
-           "input_queue_" << p_dataset->get_input_queue()->get_table_name() <<
-           "_call_" << call_counter++ << ".out";
-        std::ofstream of(ss.str());
-        of.precision(std::numeric_limits<double>::max_digits10);
-        for (const auto &row: p_dataset->get_input_queue()->get_data()) {
-            of << row->get_value_time() << ", ";
-            for (const auto value: row.get()->get_values()) of << value << ", ";
-            of << "\n";
-        }
-        of.flush();
-    }
-#endif
-
     if (false && getenv("BACKTEST")) {
         const auto decon_queues = p_dataset->get_decon_queues();
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size())) schedule(static, 1)
         for (const auto &p_ensemble: p_dataset->get_ensembles()) {
             APP.decon_queue_service.save(p_ensemble->get_decon_queue());
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_aux_decon_queues().size())) schedule(static, 1)
             for (const auto &p_aux_decon_decon_queue: p_ensemble->get_aux_decon_queues())
                 APP.decon_queue_service.save(p_aux_decon_decon_queue);
         }
@@ -531,7 +519,7 @@ void InputQueueService::prepare_input_data(datamodel::Dataset_ptr &p_dataset)
 {
     LOG4_BEGIN();
     APP.input_queue_service.load(p_dataset->get_input_queue());
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size())) schedule(static, 1)
     for (auto &iq: p_dataset->get_aux_input_queues()) APP.input_queue_service.load(iq);
     LOG4_END();
 }

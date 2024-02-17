@@ -100,7 +100,7 @@ calc_kernel_inversions::calc_kernel_inversions(const double *distance_matrix, co
     //i.e. i , j, k where i closer to k than j by distance_matrix, but Y(j) farther
     size_t inversions = 0;
     const size_t N = Y.n_rows;
-#pragma omp parallel for reduction(+:inversions)
+#pragma omp parallel for reduction(+:inversions) num_threads(adj_threads(N))
     for (size_t i = 0; i < N; ++i) {
         // initialize original index locations
         std::vector<size_t> idx(N);

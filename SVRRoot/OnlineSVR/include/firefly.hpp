@@ -1,6 +1,7 @@
 //
 // Created by zarko on 12/4/22.
 //
+#include <deque>
 #include <set>
 #include <thread>
 #include "common/defines.h"
@@ -19,6 +20,12 @@
 namespace svr {
 namespace optimizer {
 
+struct ffa_particle {
+    int Index;
+    double f;
+    double I;
+};
+
 class firefly {
     static constexpr double delta_base = 1e-3 / .9;
     static constexpr double b_1 = 1;
@@ -30,13 +37,11 @@ class firefly {
     size_t D = 2;	    		        // dimension of the problem
     size_t n = OPT_PARTICLES;			// number of fireflies
     size_t MaxGeneration = MAX_ITERATIONS_OPT;  // number of iterations
-    std::vector<int> Index;		        // sort of fireflies according to fitness values
     size_t sobol_ctr = 0;
 
-    std::vector<std::vector<double>> ffa;	    // firefly agents
-    std::vector<std::vector<double>> ffa_tmp; // intermediate population
-    std::vector<double> f;		        // fitness values
-    std::vector<double> I;		        // light intensity
+    std::deque<std::vector<double>> ffa;	    // firefly agents
+    std::deque<std::vector<double>> ffa_tmp; // intermediate population
+    std::deque<ffa_particle> particles;
     std::vector<double> nbest, allround_best;          // the best solution found so far
     std::vector<double> lb;	        // upper bound
     std::vector<double> ub;         // lower bound
@@ -64,7 +69,7 @@ class firefly {
     void run_iteration();
 
 public:
-    operator std::tuple<double, std::vector<double>>() { return {fbest, allround_best}; }
+    operator std::pair<double, std::vector<double>>() { return {fbest, allround_best}; }
 
     firefly(const size_t D, const size_t n, const size_t MaxGeneration, const double alpha, const double betamin, const double gamma,
             const std::vector<double> &lb, const std::vector<double> &ub, const std::vector<double> &pows, const loss_callback_t function);

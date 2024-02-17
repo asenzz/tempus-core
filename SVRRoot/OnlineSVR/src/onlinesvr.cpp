@@ -29,8 +29,8 @@ OnlineMIMOSVR::OnlineMIMOSVR() : model_type(mimo_type_e::single), multistep_len(
 OnlineMIMOSVR::OnlineMIMOSVR(
         const t_param_set_ptr &p_param_set_,
         const size_t multistep_len_,
-        const size_t chunk_size_) :
-        p_param_set(p_param_set_), multistep_len(multistep_len_), chunk_size(chunk_size_)
+        const size_t max_chunk_size_) :
+        p_param_set(p_param_set_), multistep_len(multistep_len_), max_chunk_size(max_chunk_size_)
 {
     const auto p = front(*p_param_set);
     gradient = p->get_grad_level();
@@ -45,17 +45,17 @@ OnlineMIMOSVR::OnlineMIMOSVR(
         const matrix_ptr &p_ytrain,
         const matrices_ptr &kernel_matrices,
         const size_t multistep_len_,
-        const size_t chunk_size_,
-        const bool pseudo_online) :
-        p_param_set(p_param_set_), multistep_len(multistep_len_), chunk_size(chunk_size_)
+        const size_t max_chunk_size_) :
+        p_param_set(p_param_set_), multistep_len(multistep_len_), max_chunk_size(max_chunk_size_)
 {
+    if (p_param_set->empty()) LOG4_THROW("At least one parameter set should be supplied to construct an SVR model.");
     const auto p = front(*p_param_set);
     gradient = p->get_grad_level();
     decon_level = p->get_decon_level();
     init_model_base(p->get_svr_epsilon(), p->get_model_type());
 
     PROFILE_EXEC_TIME(
-            batch_train(p_xtrain, p_ytrain, kernel_matrices, pseudo_online),
+            batch_train(p_xtrain, p_ytrain, kernel_matrices),
             "Batch SVM train on " << arma::size(*p_ytrain) << " labels and " << arma::size(*p_xtrain) << " features, parameters " << *front(*p_param_set));
 }
 
@@ -99,11 +99,6 @@ void OnlineMIMOSVR::set_params(const datamodel::SVRParameters &svr_parameters_, 
     get_params(chunk_ix) = svr_parameters_;
 }
 
-datamodel::SVRParameters_ptr &OnlineMIMOSVR::get_params_ptr(const size_t chunk_ix)
-{
-    return business::SVRParametersService::find(*p_param_set, chunk_ix, gradient);
-}
-
 datamodel::SVRParameters_ptr OnlineMIMOSVR::get_params_ptr(const size_t chunk_ix) const
 {
     return business::SVRParametersService::find(*p_param_set, chunk_ix, gradient);
@@ -122,17 +117,22 @@ datamodel::SVRParameters OnlineMIMOSVR::get_params(const size_t chunk_ix) const
 void OnlineMIMOSVR::init_model_base(const double epsilon_, const mimo_type_e model_type_)
 {
     model_type = model_type_;
-    if (model_type_ == mimo_type_e::single) {
-        LOG4_DEBUG("Create model of type single");
-        main_components[0]->epsilon = 0.;
-    } else if (model_type_ == mimo_type_e::twin) {
-        LOG4_DEBUG("Create model of type twin");
-        main_components[0]->epsilon = epsilon_;
-        main_components[1]->epsilon = -epsilon_;
-        if (epsilon_ < std::numeric_limits<double>::epsilon()) LOG4_ERROR("Epsilon is zero and twin type SVM selected!");
-    } else {
-        LOG4_ERROR("Unsupported MIMO type was selected. Creating as single.");
-        main_components[0]->epsilon = 0.;
+    switch (model_type) {
+        case mimo_type_e::twin:
+            LOG4_DEBUG("Create model of type twin");
+            main_components.resize(2);
+            main_components[0] = std::make_shared<MimoBase>();
+            main_components[0]->epsilon = epsilon_;
+            main_components[1] = std::make_shared<MimoBase>();
+            main_components[1]->epsilon = -epsilon_;
+            if (epsilon_ < std::numeric_limits<decltype(epsilon_)>::epsilon()) LOG4_ERROR("Epsilon is zero and twin type SVM selected!");
+            break;
+        case mimo_type_e::single:
+        default:
+            LOG4_DEBUG("Create model of type single");
+            main_components.resize(1);
+            main_components[0] = std::make_shared<MimoBase>();
+            main_components[0]->epsilon = epsilon_;
     }
 }
 
@@ -157,14 +157,23 @@ arma::mat OnlineMIMOSVR::get_weights(uint8_t type) const
     return main_components.at(type)->chunk_weights[0];
 }
 
+bool OnlineMIMOSVR::needs_tuning() const
+{
+    if (PROPS.get_tune_parameters()) return true;
+
+    bool tune_parameters = false;
+    for (auto &p: *p_param_set)
+        tune_parameters |= p->get_svr_kernel_param() == 0;
+    return tune_parameters;
+}
 
 arma::mat
-OnlineMIMOSVR::init_kernel_matrix(const SVRParameters &params, const arma::mat &x, const arma::mat &y)
+OnlineMIMOSVR::init_kernel_matrix(const SVRParameters &params, const arma::mat &x)
 {
     arma::mat K;
     switch (params.get_kernel_type()) {
         case kernel_type_e::PATH: {
-            const arma::mat &Z = get_cached_Z(params, x.t(), y, x.n_rows);
+            const arma::mat &Z = get_cached_Z(params, x.t(), x.n_rows);
             if (arma::size(K) != arma::size(Z)) K.set_size(arma::size(Z));
             solvers::kernel_from_distances(K.memptr(), Z.mem, Z.n_rows, Z.n_cols, params.get_svr_kernel_param());
             break;
@@ -247,143 +256,77 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, cons
 #endif
 }
 
-#ifndef NEW_SOLVER
 
 void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters, const bool psd)
 {
     if (K.n_rows != rhs.n_rows) LOG4_THROW("Illegal size K " << arma::size(K) << ", rhs " << arma::size(rhs));
 
+    svr::common::gpu_context ctx;
+    const size_t gpu_phy_id = ctx.phy_id();
 #ifdef USE_MAGMA
-    auto p_ctx = new svr::common::gpu_context();
-    auto [magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, piv] = solvers::init_magma_solver(*p_ctx, K.n_rows, rhs.n_cols, psd);
+    auto [magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, piv] = solvers::init_magma_solver(K.n_rows, rhs.n_cols, psd, gpu_phy_id);
 #else
-    svr::common::gpu_context gtx;
-    const size_t gpu_phy_id = gtx.phy_id();
     auto [cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo] = solvers::init_cusolver(gpu_phy_id, K.n_rows, rhs.n_cols);
 #endif
 
-    auto best_sae = std::numeric_limits<double>::max();
-    if (solved.empty() || arma::size(solved) != arma::size(rhs) || !iters) {
+    if (solved.empty() || arma::size(solved) != arma::size(rhs))
         if (solved.n_rows != K.n_rows || solved.n_cols != rhs.n_cols) solved.set_size(K.n_rows, rhs.n_cols);
+
+    {
         const arma::mat left = K + epsilon_eye_K;
 #ifdef USE_MAGMA
 //        svr::solvers::dyn_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, piv, d_K, d_rhs);
-        svr::solvers::iter_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd);
+        svr::solvers::iter_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd, gpu_phy_id);
 #else
-        svr::solvers::dyn_gpu_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
+        svr::solvers::dyn_gpu_solve(gpu_phy_id, left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
-        best_sae = common::sum<double>(arma::abs(K * solved - rhs));
     }
-
+    double best_sae = common::sum<double>(arma::abs(K * solved - rhs));
     arma::mat best_solution = solved;
-    for (size_t i = 0; i < iters; ++i) {
-        const double iter_add = common::C_singlesolve_delta / ((i + 1.) * double(IRWLS_ITER) / double(iters));
+    size_t best_iter = 0;
+    const auto iters_delta = double(iters) * C_itersolve_delta;
+    for (size_t i = 1; i < iters; ++i) {
+        const double iter_add = iters_delta / (double(i) * C_itersolve_range);
         const arma::mat error_mat = arma::abs(K * solved - rhs);
         const auto this_sae = common::sum<double>(error_mat);
         if (this_sae < best_sae) {
-            LOG4_TRACE("IRWLS iteration " << iter_add << ", SAE " << this_sae << ", kernel dimensions " << arma::size(K) << ", best SAE " << best_sae << ", iter add " << iter_add);
+            LOG4_TRACE("IRWLS iteration " << i << ", add " << iter_add << ", SAE " << this_sae << ", kernel dimensions " << arma::size(K) << ", best SAE " << best_sae << ", iter add " << iter_add);
             best_sae = this_sae;
             best_solution = solved;
+            best_iter = i;
         }
         // const arma::mat mult = error_mat / double(K.n_rows); // TODO Test and implement and test conjugate
         const arma::mat mult = 1. / arma::sqrt(error_mat + iter_add);
-        const arma::mat left = arma::mean(mult, 1) % K + epsilon_eye_K;
+        const arma::mat left = (arma::mean(mult, 1) * arma::ones(1, K.n_cols)) % K + epsilon_eye_K;
         const arma::mat right = rhs % mult;
 #ifdef USE_MAGMA
 //       svr::solvers::dyn_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, piv, d_K, d_rhs);
-       svr::solvers::iter_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd);
+       svr::solvers::iter_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd, gpu_phy_id);
 #else
-        svr::solvers::dyn_gpu_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
+        svr::solvers::dyn_gpu_solve(gpu_phy_id, left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
     }
 
 #ifdef USE_MAGMA
-    solvers::uninit_magma_solver(p_ctx, magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, piv);
+    solvers::uninit_magma_solver(magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, piv, gpu_phy_id);
 #else
-    solvers::uninit_cusolver(cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
+    solvers::uninit_cusolver(gpu_phy_id, cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
 
-    LOG4_DEBUG("IRWLS best SAE " << best_sae << ", kernel dimensions " << arma::size(K) << ", delta " << common::C_singlesolve_delta);
+    LOG4_DEBUG("IRWLS best iteration " << best_iter << ", MAE " << best_sae / double(solved.n_elem) << ", kernel dimensions " << arma::size(K) <<
+                ", delta " << C_itersolve_delta << ", range " << C_itersolve_range << ", kernel " << arma::size(K) << ", solution " << arma::size(solved));
 
     solved = best_solution;
 }
 
-#else
-void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters)
-{
-#if defined(SINGLE_SOLVE)
-    return call_gpu_dynsolve(K + epsilon_eye_K, rhs);
-#else
-    if (solved.empty()) call_gpu_dynsolve(K + epsilon_eye_K, rhs, solved);
-    arma::mat best_solution = solved;
-    size_t best_it = std::numeric_limits<size_t>::max();
-    double best_sae = std::numeric_limits<double>::max();
-    for (size_t i = 0; i < iters; ++i) {
-        arma::mat error_mat(arma::size(solved));
-        double sae = 0;
-#pragma omp parallel for reduction(+:sae) schedule(static, 1)
-        for (size_t col_ix = 0; col_ix < solved.n_cols; ++col_ix) {
-            error_mat.col(col_ix) = arma::abs(K * solved.col(col_ix) - rhs.col(col_ix));
-            const auto this_sae = common::sum<double>(error_mat.col(col_ix));
-            sae += this_sae;
-        }
-        if (sae < best_sae) {
-            best_sae = sae;
-            best_solution = solved;
-            best_it = i;
-        }
-        LOG4_TRACE("IRWLS iteration " << i << ", SAE " << sae << ", kernel dimensions " << arma::size(K) << ", best SAE " << best_sae);
-        // const arma::mat mult = error_mat / double(K.n_rows);
-        const arma::mat mult = 1. / arma::sqrt(error_mat + common::C_singlesolve_delta / ((i + 1.) * IRWLS_ITER / double(iters)));
-#pragma omp parallel for schedule(static, 1) num_threads(solved.n_cols)
-        for (size_t col_ix = 0; col_ix < solved.n_cols; ++col_ix)
-            call_gpu_dynsolve((mult.col(col_ix) * arma::ones(1, K.n_cols)) % K + epsilon_eye_K, rhs.col(col_ix) % mult.col(col_ix), solved.col(col_ix));
-    }
-    const auto sae = common::sumabs<double>(K * solved - rhs);
-    if (sae < best_sae) {
-        best_sae = sae;
-        best_solution = solved;
-        best_it = iters - 1;
-    }
-    LOG4_DEBUG("IRWLS best SAE " << best_sae << ", best iteration " << best_it << ", kernel dimensions " << arma::size(K) << ", delta " << common::C_singlesolve_delta);
-    solved = best_solution;
-#endif
-}
-#endif
-
-
-#if 0
-// ?!?! Emo's oddball solver :)
-arma::mat OnlineMIMOSVR::arma_multisolve(const arma::mat &epsilon_eye_K, const arma::mat &Z, const arma::mat &rhs)
-{
-#if 0
-    const size_t Nrows = arma::size(Z, 1);
-    const size_t multinum = 16; // or 4
-    arma::mat x;
-    1. / double(multinum) * solve_irwls(epsilon_eye_K, Z, rhs, x);
-    for (size_t i = 0; i < multinum - 1; ++i) {
-        arma::mat ZZ = Z.rows(i + 1, Nrows - 1);
-        arma::mat y = solve_irwls(epsilon_eye_K, ZZ.cols(i + 1, Nrows - 1), rhs.rows(i + 1, Nrows - 1));
-        x.rows(i + 1, Nrows - 1) += y * 1. / double(multinum);
-    }
-    return x;
-#else
-    LOG4_THROW("Do not use!");
-    return {};
-#endif
-}
-#endif
 
 arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
 {
-#if 0
+    LOG4_THROW("Deprecated");
     if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
     arma::mat solved = arma::zeros(arma::size(b));
-    PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve");
+//    PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve");
     return solved;
-#endif
-    LOG4_THROW("Deprecated");
-    return {};
 }
 
 
@@ -391,12 +334,7 @@ void
 OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters, const bool psd)
 {
     if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
-
-    PROFILE_EXEC_TIME(solve_irwls(epsilon_eye_K, a, b, solved, iters, psd), "IRWLS solver " << arma::size(a) << ", " << arma::size(b)); // Emo's dynamic (slowest) IRWLS solver
-    // PROFILE_EXEC_TIME(call_gpu_oversolve(a, b, solved), "call_gpu_oversolve " << arma::size(a) << ", " << arma::size(b)); // Emo's solver, best
-    // PROFILE_EXEC_TIME(call_gpu_dynsolve(a, b, solved), "call_gpu_oversolve " << arma::size(a) << ", " << arma::size(b)); // call_gpu_dynsolve
-    // PROFILE_EXEC_TIME(svr::solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve"); // direct CUDA solver, fastest, least precise
-    // PROFILE_EXEC_TIME(do_mkl_solve(a, b, solved), "lock1 without wait");
+    PROFILE_EXEC_TIME(solve_irwls(epsilon_eye_K, a, b, solved, iters, false), "IRWLS solver " << arma::size(a) << ", " << arma::size(b)); // Emo's IRWLS solver
 }
 
 
@@ -408,6 +346,15 @@ OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a
     return r;
 }
 
+size_t OnlineMIMOSVR::get_num_chunks(const size_t n_rows, const size_t chunk_size_)
+{
+    return std::max<size_t>(1, std::ceil(double(n_rows) / double(chunk_size_)));
+}
+
+size_t OnlineMIMOSVR::get_num_chunks() const
+{
+    return get_num_chunks(get_params().get_svr_decremental_distance(), max_chunk_size);
+}
 
 std::deque<arma::uvec> OnlineMIMOSVR::get_indexes() const
 {
@@ -417,32 +364,32 @@ std::deque<arma::uvec> OnlineMIMOSVR::get_indexes() const
 std::deque<arma::uvec>
 OnlineMIMOSVR::get_indexes(const size_t n_rows_dataset, const SVRParameters &svr_parameters) const
 {
-    return get_indexes(n_rows_dataset, svr_parameters, chunk_size);
+    return get_indexes(n_rows_dataset, svr_parameters, max_chunk_size);
 }
 
 std::deque<arma::uvec>
-OnlineMIMOSVR::get_indexes(const size_t n_rows_dataset, const SVRParameters &svr_parameters, const size_t chunk_size_)
+OnlineMIMOSVR::get_indexes(const size_t n_rows_dataset, const SVRParameters &svr_parameters, const size_t max_chunk_size)
 {
     const auto n_rows_train = std::min<size_t>(n_rows_dataset, svr_parameters.get_svr_decremental_distance());
-    const auto num_chunks = n_rows_train / chunk_size_;
+    const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     std::deque<arma::uvec> indexes(num_chunks);
     if (num_chunks == 1) {
         indexes[0] = arma::linspace<arma::uvec>(0, n_rows_train - 1, n_rows_train);
         LOG4_DEBUG("Linear single chunk indexes size " << arma::size(indexes[0]));
         return indexes;
     }
-
-    LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement distance " << svr_parameters.get_svr_decremental_distance() <<
-                              ", max indexes len " << n_rows_train << ", num chunks " << num_chunks << ", chunk size " << chunk_size_);
-    const size_t last_part_size = chunk_size_ * .1;
-    const size_t first_part_size = chunk_size_ - last_part_size;
+    const size_t this_chunk_size = n_rows_train / num_chunks;
+    const size_t last_part_size = this_chunk_size * .1;
+    const size_t first_part_size = this_chunk_size - last_part_size;
+    LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement distance " << svr_parameters.get_svr_decremental_distance() << ", max indexes len " << n_rows_train <<
+        ", num chunks " << num_chunks << ", chunk size " << this_chunk_size << ", first part " << first_part_size << ", last part size " << last_part_size);
     const arma::mat i_full = arma::cumsum(arma::ones(n_rows_train, 1)) - 1;
     const arma::mat first_part = i_full.rows(0, n_rows_train - last_part_size);
     const arma::mat last_part = i_full.rows(n_rows_train - last_part_size + 1, n_rows_train - 1);
     const arma::mat i_shuffle = svr::common::armd::fixed_shuffle(first_part);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(num_chunks))
     for (size_t i = 0; i < num_chunks; ++i) {
-        const arma::mat m_11 = i_shuffle.rows(i * first_part_size, std::min((i + 1) * first_part_size - 1, n_rows_train - last_part_size - 1));
+        const arma::mat m_11 = i_shuffle.rows(i * first_part_size, std::min((i + 1) * first_part_size, n_rows_train - last_part_size));
         indexes[i] = arma::conv_to<arma::uvec>::from(arma::join_cols(m_11, last_part));
     }
 
@@ -518,29 +465,27 @@ bool OnlineMIMOSVR::operator==(OnlineMIMOSVR const &o) const
     return true;
 }
 
-OnlineMIMOSVR::OnlineMIMOSVR(std::stringstream &input_stream) : model_type(mimo_type_e::single), multistep_len(svr::common::__multistep_len) {}
-
-void OnlineMIMOSVR::reset_model(const bool pseudo_online)
+void OnlineMIMOSVR::reset_model()
 {
     samples_trained = 0;
-    if (not pseudo_online) {
-        p_features = std::make_shared<arma::mat>();
-        p_labels = std::make_shared<arma::mat>();
-    }
+    p_features = std::make_shared<arma::mat>();
+    p_labels = std::make_shared<arma::mat>();
     p_kernel_matrices = std::make_shared<std::deque<arma::mat>>();
+#pragma omp parallel for num_threads(adj_threads(main_components.size())) schedule(static, 1)
     for (auto &component : main_components) {
         component->chunk_weights.clear();
+        component->weights_mask.clear();
+        component->chunks_weight.clear();
         component->total_weights.clear();
         component->mae_chunk_values.clear();
     }
     ixs.clear();
 }
 
-
-size_t OnlineMIMOSVR::get_num_chunks() const
+bool OnlineMIMOSVR::is_gradient() const
 {
-    return std::max<size_t>(1, std::ceil(double(get_params().get_svr_decremental_distance()) / double(chunk_size)));
+    if (!p_param_set) return false;
+    return std::any_of(std::execution::par_unseq, p_param_set->begin(), p_param_set->end(), [](const auto &p) -> bool { return p->get_grad_level(); });
 }
-
 
 } // svr

@@ -70,8 +70,8 @@ void DeconQueueService::prepare_decon(const datamodel::Dataset_ptr &p_dataset, c
     const auto first_offending = InputQueueService::compare_to_decon_queue(p_input_queue, p_decon_queue);
     if (first_offending == bpt::max_date_time) return;
     else if (first_offending == bpt::min_date_time) p_decon_queue->get_data().clear();
-    else if (first_offending < p_decon_queue->get_data().back()->get_value_time())
-        p_decon_queue->get_data().erase(lower_bound_back(p_decon_queue->get_data(), first_offending), p_decon_queue->get_data().end());
+    else if (first_offending < p_decon_queue->back()->get_value_time())
+        p_decon_queue->get_data().erase(lower_bound_back(p_decon_queue->get_data(), first_offending), p_decon_queue->end());
     deconstruct(p_dataset, p_input_queue, p_decon_queue);
 
     LOG4_END();
@@ -103,15 +103,15 @@ trim_delta(const datamodel::Dataset_ptr &p_dataset, const datamodel::DeconQueue_
 {
     auto p_new_decon_queue = p_decon_queue->clone_empty();
     for (auto row_iter = lower_bound_back(p_decon_queue->get_data(), period.begin());
-         row_iter != p_decon_queue->get_data().end() && row_iter->get()->get_value_time() <= period.end(); ++row_iter)
+         row_iter != p_decon_queue->end() && row_iter->get()->get_value_time() <= period.end(); ++row_iter)
         p_new_decon_queue->get_data().emplace_back(std::make_shared<DataRow>(**row_iter));
 
     if (p_new_decon_queue->get_data().empty())
         LOG4_ERROR("Empty decon queue " << p_new_decon_queue->to_string() << " for period " << period);
     else
         LOG4_DEBUG(
-            "Returning " << p_new_decon_queue->get_data().size() << " for " << p_new_decon_queue->get_input_queue_table_name() << " "
-             << p_new_decon_queue->get_input_queue_column_name() << " from " << p_new_decon_queue->get_data().front()->get_value_time() << " until " << p_new_decon_queue->get_data().back()->get_value_time() << " for period " << period);
+            "Returning " << p_new_decon_queue->size() << " for " << p_new_decon_queue->get_input_queue_table_name() << " "
+             << p_new_decon_queue->get_input_queue_column_name() << " from " << p_new_decon_queue->front()->get_value_time() << " until " << p_new_decon_queue->back()->get_value_time() << " for period " << period);
 
     return p_new_decon_queue;
 }
@@ -125,7 +125,7 @@ DeconQueueService::extract_copy_data(
     LOG4_BEGIN();
     const auto decon_queues = p_dataset->get_decon_queues();
     std::deque<datamodel::DeconQueue_ptr> new_decon_queues;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(decon_queues.size()))
     for (size_t i = 0; i < decon_queues.size(); ++i) {
         const auto p_new_decon_queue = trim_delta(p_dataset, decon_queues ^ i, period);
 #pragma omp critical
@@ -148,7 +148,7 @@ DeconQueueService::deconstruct(
     auto p_decon_queue = p_dataset->get_decon_queue(p_input_queue, column_name);
     if (!p_decon_queue) {
         p_decon_queue = std::make_shared<DeconQueue>(
-                DeconQueue::make_queue_table_name(p_input_queue->get_table_name(), p_dataset->get_id(), column_name),
+                make_queue_table_name(p_input_queue->get_table_name(), p_dataset->get_id(), column_name),
                 p_input_queue->get_table_name(),
                 column_name,
                 p_dataset->get_id(),
@@ -156,7 +156,7 @@ DeconQueueService::deconstruct(
         APP.decon_queue_service.load(p_decon_queue);
         p_dataset->set_decon_queue(p_decon_queue);
     }
-#if 0 // TODO Implement and test when hardware resources are available to deconstruct high frequency data
+#if 0 // TODO Implement and test when hardware resources are available to deconstruct high frequency (1 ms / 1000 Hz) data
     if (p_input_queue->is_tick_queue())
         deconstruct_ticks(p_input_queue, p_dataset, column_name, p_decon_queue->get_data());
     else
@@ -203,21 +203,25 @@ DeconQueueService::deconstruct(
     const auto test_offset = res_ratio * MANIFOLD_TEST_VALIDATION_WINDOW;
 
 #ifdef NO_MAIN_DECON // Hack to avoid proper deconstruction of unused data
-    if (p_input_queue->get_resolution() == main_resolution) {
+    if (p_input_queue->get_resolution() == main_resolution || p_dataset->get_transformation_levels() < 8) {
         dummy_decon(p_input_queue, p_decon_queue, levct);
         return;
     }
 #endif
     const auto residuals_ct = p_dataset->get_residuals_length(p_decon_queue->get_table_name());
-    const auto oemd_start_time = p_decon_queue->get_data().empty() ? bpt::min_date_time : (
-        p_decon_queue->get_data().end() - std::min(p_decon_queue->get_data().size() - 1, residuals_ct))->get()->get_value_time();
 
-    LOG4_DEBUG("Input data size " << input_data.size() << " columns " << input_data.begin()->get()->get_values().size() << ", OEMD start time " << oemd_start_time <<
-                      ", VMD residual count " << residuals_ct << ", input column index " << input_column_index << ", test offset " << test_offset << ", res_ratio " << res_ratio);
+    LOG4_DEBUG("Input data size " << input_data.size() << " columns " << input_data.begin()->get()->get_values().size() << ", VMD residual count " << residuals_ct <<
+                    ", input column index " << input_column_index << ", test offset " << test_offset << ", res_ratio " << res_ratio);
+    const auto pre_decon_size = p_decon_queue->size();
+    PROFILE_EXEC_TIME(p_dataset->get_cvmd_transformer().transform(input_data, *p_decon_queue, input_column_index, test_offset), "CVMD transform");
+    PROFILE_EXEC_TIME(p_dataset->get_oemd_transformer().transform(p_decon_queue, pre_decon_size, test_offset, residuals_ct), "OEMD fat transform");
 
-    PROFILE_EXEC_TIME(p_dataset->p_cvmd_transformer->transform(input_data, p_decon_queue, input_column_index, test_offset), "CVMD transform");
-
-    PROFILE_EXEC_TIME(p_dataset->p_oemd_transformer_fat->transform(p_decon_queue, test_offset, residuals_ct, oemd_start_time), "OEMD fat transform");
+// Trim not needed data
+    const auto trim_diff = std::max<ssize_t>(
+            p_dataset->get_max_lag_count() + p_decon_queue->size() - pre_decon_size,
+            p_dataset->get_residuals_length(p_decon_queue->get_table_name()));
+    if (trim_diff < ssize_t(p_decon_queue->size()))
+        p_decon_queue->get_data().erase(p_decon_queue->begin(), (p_decon_queue->get_data().rbegin() + trim_diff).base());
 
     LOG4_END();
 }
@@ -229,13 +233,13 @@ void DeconQueueService::dummy_decon(const datamodel::InputQueue_ptr &p_input_que
     const auto &input_data = p_input_queue->get_data();
     const size_t modct = levct / 2 - 1;
     auto initer = input_data.begin();
-    if (!p_decon_queue->get_data().empty()) initer = upper_bound_back(input_data, p_decon_queue->get_data().back()->get_value_time());
+    if (!p_decon_queue->get_data().empty()) initer = upper_bound_back(input_data, p_decon_queue->back()->get_value_time());
     const auto inct = std::distance(initer, input_data.end());
-    const auto prev_outct = p_decon_queue->get_data().size();
+    const auto prev_outct = p_decon_queue->size();
     p_decon_queue->get_data().resize(prev_outct + inct);
-    const auto outiter = p_decon_queue->get_data().begin() + ssize_t(prev_outct);
+    const auto outiter = p_decon_queue->begin() + ssize_t(prev_outct);
     const auto timenow = boost::posix_time::second_clock::local_time();
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(inct))
     for (ssize_t t = 0; t < inct; ++t) {
         std::vector<double> v(levct, 0.);
         const auto inrow = **(initer + t);
@@ -330,23 +334,21 @@ DeconQueueService::deconstruct_ticks(
 data_row_container
 DeconQueueService::reconstruct(
         const svr::datamodel::datarow_range &data,
-        const recon_type_e type,
-        const size_t levct)
+        const recon_type_e type)
 {
     data_row_container res;
-    reconstruct(data, levct, type, res);
+    reconstruct(data, type, res);
     return res;
 }
 
 
 void DeconQueueService::reconstruct(
         const datamodel::datarow_range &decon,
-        const size_t levct,
         const recon_type_e type,
         data_row_container &recon)
 {
     LOG4_BEGIN();
-    if (decon.distance() < 1) LOG4_THROW("No decon to reconstruct.");
+    if (decon.distance() < 1) LOG4_THROW("No deconstructed data to reconstruct.");
     std::function<void(double &, const double)> op;
     switch (type) {
         case recon_type_e::ADDITIVE:
@@ -361,13 +363,15 @@ void DeconQueueService::reconstruct(
             LOG4_THROW("Reconstruction type " << int(type) << " not supported!");
     }
 
+    const auto levct = decon.front()->size();
     const size_t half_levct = levct / 2;
-    if (!recon.empty()) recon.erase(lower_bound(recon, decon.begin()->get()->get_value_time()), recon.end());
+    if (!recon.empty()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.end());
     const auto startout = recon.size();
     const auto ct = decon.distance();
     recon.resize(startout + ct);
     LOG4_DEBUG("Reconstructing " << ct << " rows of " << levct << " levels, type " << int(type) << ", output starting " << startout);
-#pragma omp parallel for
+
+#pragma omp parallel for num_threads(adj_threads(ct))
     for (ssize_t i = 0; i < ct; ++i) {
         const datamodel::DataRow &d = **(decon.begin() + i);
         double v = 0;
@@ -376,30 +380,6 @@ void DeconQueueService::reconstruct(
                 op(v, d.get_value(l));
         recon[startout + i] = std::make_shared<DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{v});
     }
-#if 0
-    {
-        static size_t call_ct = 0;
-        {
-            std::stringstream ss;
-            for (auto row_iter = recon.begin(); row_iter != recon.end(); ++row_iter) {
-                ss << row_iter->get()->to_string() << std::endl;
-            }
-            std::stringstream ss_name;
-            ss_name << "/mnt/faststore/recon_" << call_ct << "_out_data_container.csv";
-            LOG4_FILE(ss_name.str(), ss.str());
-        }
-        {
-            std::stringstream ss;
-            for (auto row_iter = decon.get_container().begin(); row_iter != decon.get_container().end(); ++row_iter) {
-                ss << row_iter->get()->to_string() << std::endl;
-            }
-            std::stringstream ss_name;
-            ss_name << "/mnt/faststore/recon_" << call_ct << "_in_data_container.csv";
-            LOG4_FILE(ss_name.str(), ss.str());
-        }
-        call_ct++;
-    }
-#endif
 
     LOG4_END();
 }
@@ -421,7 +401,8 @@ DeconQueueService::load(const datamodel::DeconQueue_ptr &p_decon_queue, const pt
 }
 
 
-void DeconQueueService::load_latest(const datamodel::DeconQueue_ptr &p_decon_queue, const bpt::ptime &time_to, const size_t limit)
+void
+DeconQueueService::load_latest(const datamodel::DeconQueue_ptr &p_decon_queue, const bpt::ptime &time_to, const size_t limit)
 {
     LOG4_DEBUG("Loading " << limit << " values until " << time_to << " from decon queue " << p_decon_queue->get_table_name());
     reject_nullptr(p_decon_queue);
@@ -494,6 +475,22 @@ const datamodel::DeconQueue_ptr &DeconQueueService::find_decon_queue(
     return *p_decon_queue_iter;
 }
 
+std::string
+DeconQueueService::make_queue_table_name(
+        const std::string &input_queue_table_name,
+        const bigint dataset_id,
+        const std::string &input_queue_column_name)
+{
+    if (input_queue_table_name.empty() || input_queue_column_name.empty())
+        LOG4_THROW("Illegal arguments, input queue table name " << input_queue_table_name << ", input queue column name " << input_queue_column_name << ", dataset id " << dataset_id);
+    std::string result = common::sanitize_db_table_name(
+            common::C_decon_queue_table_name_prefix + "_" +
+            input_queue_table_name + "_" +
+            std::to_string(dataset_id) + "_" +
+            input_queue_column_name);
+    std::transform(std::execution::par_unseq, result.begin(), result.end(), result.begin(), ::tolower);
+    return result;
+}
 
 } // business
 } // svr

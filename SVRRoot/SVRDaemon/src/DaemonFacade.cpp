@@ -112,9 +112,9 @@ void DaemonFacade::start_loop()
         for (svr::business::DatasetService::DatasetUsers &dsu: datasets) {
             di.wait();
             try {
-                PROFILE_EXEC_TIME(DatasetService::process_dataset(dsu.dataset), "Process dataset");
+                PROFILE_EXEC_TIME(DatasetService::process(dsu.dataset), "Process dataset");
                 for (const auto &user: dsu.users)
-                    PROFILE_EXEC_TIME(DatasetService::process_mimo_multival_requests(user, dsu.dataset), "MIMO Process multival requests " << user->get_user_name());
+                    PROFILE_EXEC_TIME(DatasetService::process_requests(user, dsu.dataset), "MIMO Process multival requests " << user->get_user_name());
             } catch (const svr::common::bad_model &ex) {
                 LOG4_ERROR("Bad model while processing dataset " << dsu.dataset->get_id() << " " << dsu.dataset->get_dataset_name()
                             << ". Level " << ex.get_decon_level() << ", column " << ex.get_column_name() << ". Error " << ex.what());

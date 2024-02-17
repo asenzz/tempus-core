@@ -1,12 +1,14 @@
-#include "common/defines.h"
 #include <cstdint>
+#include "common/defines.h"
+#include "common/constants.hpp"
 
 #define MAX_COL_CT 31
 // #define DEBUG_VALUES
 
 typedef uint8_t t_params_vec[MAX_COL_CT];
 
-namespace svr::business {
+namespace svr {
+namespace business {
 
 struct t_param_preds_cu
 {
@@ -26,4 +28,5 @@ recombine_parameters(
         double *p_best_score,
         uint8_t *best_params_ixs);
 
+}
 }

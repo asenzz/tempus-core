@@ -1,4 +1,4 @@
-#include <DAO/StatementPreparerDBTemplate.hpp>
+#include "DAO/StatementPreparerDBTemplate.hpp"
 
 using pqxx::to_string;
 using std::shared_ptr;
@@ -71,18 +71,10 @@ std::string StatementPreparerDBTemplate::escape(std::nullptr_t)
 
 std::string StatementPreparerDBTemplate::escape(const std::shared_ptr<svr::OnlineMIMOSVR> &model)
 {
-    if (model.get() == nullptr) {
-        return "''";
-    }
-    std::stringstream ss;
-    //TO DO check for trouble here
-    model->save_online_svr(*model, ss);
-    std::string compressedString = svr::common::compress(ss.str().c_str(), ss.str().size());
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-//    if (!connection.is_open()) connection = pqxx::connection(connection.connection_string());
-    return connection.quote_raw(reinterpret_cast<const unsigned char *>(compressedString.data()), compressedString.size());
-#pragma GCC diagnostic pop
+    if (!model) return "''";
+    std::stringstream s;
+    OnlineMIMOSVR::save(*model, s);
+    return connection.quote(s);
 }
 
 } /* namespace dao */

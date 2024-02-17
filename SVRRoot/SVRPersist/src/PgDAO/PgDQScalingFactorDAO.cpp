@@ -15,17 +15,17 @@ bigint PgDQScalingFactorDAO::get_next_id()
     return data_source.query_for_type<bigint>(AbstractDAO::get_sql("get_next_id"));
 }
 
-bool PgDQScalingFactorDAO::exists(const DQScalingFactor_ptr& dQscalingFactor)
+bool PgDQScalingFactorDAO::exists(const datamodel::DQScalingFactor_ptr& p_dq_scaling_factor)
 {
     return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_pk")
-            , dQscalingFactor->get_dataset_id()
-            , dQscalingFactor->get_input_queue_table_name()
-            , dQscalingFactor->get_input_queue_column_name()
-            , dQscalingFactor->get_decon_level()
+            , p_dq_scaling_factor->get_dataset_id()
+            , p_dq_scaling_factor->get_input_queue_table_name()
+            , p_dq_scaling_factor->get_input_queue_column_name()
+            , p_dq_scaling_factor->get_decon_level()
         ) == 1;
 }
 
-int PgDQScalingFactorDAO::save(const DQScalingFactor_ptr& p_dq_scaling_factor)
+int PgDQScalingFactorDAO::save(const datamodel::DQScalingFactor_ptr& p_dq_scaling_factor)
 {
     return data_source.update(
             AbstractDAO::get_sql("save"),
@@ -35,14 +35,16 @@ int PgDQScalingFactorDAO::save(const DQScalingFactor_ptr& p_dq_scaling_factor)
             p_dq_scaling_factor->get_input_queue_column_name(),
             p_dq_scaling_factor->get_decon_level(),
             p_dq_scaling_factor->get_features_factor(),
-            p_dq_scaling_factor->get_labels_factor());
+            p_dq_scaling_factor->get_labels_factor(),
+            p_dq_scaling_factor->get_dc_offset_features(),
+            p_dq_scaling_factor->get_dc_offset_labels());
 }
 
-int PgDQScalingFactorDAO::remove(const DQScalingFactor_ptr& dQscalingFactor)
+int PgDQScalingFactorDAO::remove(const datamodel::DQScalingFactor_ptr& p_dqscaling_factor)
 {
-    if(dQscalingFactor->get_id() == 0) return 0;
+    if(p_dqscaling_factor->get_id() == 0) return 0;
 
-    return data_source.update(AbstractDAO::get_sql("remove"), dQscalingFactor->get_id());
+    return data_source.update(AbstractDAO::get_sql("remove"), p_dqscaling_factor->get_id());
 }
 
 svr::datamodel::dq_scaling_factor_container_t PgDQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)

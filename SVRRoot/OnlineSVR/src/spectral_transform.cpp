@@ -99,11 +99,11 @@ void spectral_transform::mirror_tail(const datamodel::datarow_range &input, cons
 {
     const size_t in_colix = input.begin()->get()->get_values().size() / 2;
     const auto input_size = input.distance();
-    LOG4_WARN("Adding mirrored tail of size " << input_size - needed_data_ct << ", to input of size " <<
-                                              input_size << ", tailing data count " << needed_data_ct);
+    LOG4_WARN("Adding mirrored tail of size " << needed_data_ct - input_size << ", to input of size " <<
+                                              input_size << ", total size " << needed_data_ct);
     const auto empty_ct = needed_data_ct - input_size;
     tail.resize(empty_ct);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(adj_threads(empty_ct))
     for (size_t i = 0; i < empty_ct; ++i) {
         const auto phi = double(i) / double(input_size);
         tail[empty_ct - 1 - i] = input[(size_t) std::round(empty_ct * std::abs(std::round(phi) - phi))]->get_value(in_colix);

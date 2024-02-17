@@ -31,8 +31,8 @@ TEST_F(DaoTestFixture, InputQueueWorkflow)
      bpt::ptime const st {bpt::time_from_string("2015-01-01 10:00:00") }
         , fn  { bpt::time_from_string("2015-01-01 10:10:00") };
 
-    datamodel::DataRow_ptr row1 = std::make_shared<DataRow> (st); row1->set_values({0, 0, 0, 0});
-    datamodel::DataRow_ptr row2 = std::make_shared<DataRow> (fn); row2->set_values({1, 1, 1, 1});
+    datamodel::DataRow_ptr row1 = std::make_shared<DataRow>(st, bpt::second_clock::local_time(), 1, 1); row1->set_values({0, 0, 0, 0});
+    datamodel::DataRow_ptr row2 = std::make_shared<DataRow>(fn, bpt::second_clock::local_time(), 1, 1); row2->set_values({1, 1, 1, 1});
     aci.input_queue_service.add_row(iq, row1);
     aci.input_queue_service.add_row(iq, row2);
 
@@ -70,19 +70,19 @@ TEST_F(DaoTestFixture, InputQueueSaveQueueTest) {
 
     }, "Generating " << testDataNumberToGenerate << " InputQueue rows");
 */
-    //PROFILE_EXEC_TIME(EXPECT_EQ(testDataNumberToGenerate, (ssize_t) aci.input_queue_service.save(queue)), "Saving InputQueue");
+    //PROFILE_EXEC_TIME(EXPECT_TRUE(testDataNumberToGenerate == (ssize_t) aci.input_queue_service.save(queue)), "Saving InputQueue");
 
     ASSERT_TRUE(aci.input_queue_service.exists(user1->get_user_name(), "simple_queue", bpt::seconds(60)));
 
     datamodel::InputQueue_ptr queueP2 = aci.input_queue_service.get_queue_metadata(user1->get_user_name(), "simple_queue", bpt::seconds(60));
 
-    EXPECT_EQ(0, long(queueP2->get_data().size()));
+    EXPECT_TRUE(0 == long(queueP2->size()));
 
     PROFILE_EXEC_TIME(queueP2->set_data(aci.input_queue_service.load(queueP2->get_table_name())), "Reading InputQueue data from database");
 
-    EXPECT_EQ(queue->get_data().size(), queueP2->get_data().size());
+    EXPECT_TRUE(queue->size() == queueP2->size());
 
-    //PROFILE_EXEC_TIME(EXPECT_EQ(1, aci.input_queue_service.remove(queue)), "Removing InputQueue table with " << testDataNumberToGenerate << " rows");
+    //PROFILE_EXEC_TIME(EXPECT_TRUE(1 == aci.input_queue_service.remove(queue)), "Removing InputQueue table with " << testDataNumberToGenerate << " rows");
 
     ASSERT_FALSE(aci.input_queue_service.exists(user1->get_user_name(), "simple_queue", bpt::seconds(60)));
 
@@ -113,7 +113,7 @@ TEST_F(DaoTestFixture, GetColumnInFramesTest){
     };
 
     // should save all the data
-    EXPECT_EQ(testDataNumberToGenerate, (ssize_t) aci.input_queue_service.save(queue));
+    EXPECT_TRUE(testDataNumberToGenerate == (ssize_t) aci.input_queue_service.save(queue));
 
     datamodel::DataRow_ptr oldestRecord, newestRecord;
     PROFILE_EXEC_TIME(oldestRecord = aci.input_queue_service.find_oldest_record(queue), "Getting oldest record");
@@ -226,8 +226,10 @@ TEST_F(DaoTestFixture, InputQueueReconciliationWorkflow)
 
     for(size_t i = 0; i < 10; ++i)
     {
-        datamodel::DataRow_ptr row1 = std::make_shared<DataRow> (st1 + resolution * i); row1->set_values({0.0+i, 0.0+i, 0.0+i, 0.0+i});
-        datamodel::DataRow_ptr row2 = std::make_shared<DataRow> (st2 + resolution * i); row2->set_values({0.0+i, 0.0+i, 0.0+i, 0.0+i});
+        datamodel::DataRow_ptr row1 = std::make_shared<DataRow>(st1 + resolution * i, bpt::second_clock::local_time(), 1, 1);
+        row1->set_values({0.0 + i, 0.0 + i, 0.0 + i, 0.0 + i});
+        datamodel::DataRow_ptr row2 = std::make_shared<DataRow>(st2 + resolution * i, bpt::second_clock::local_time(), 1, 1);
+        row2->set_values({0.0 + i, 0.0 + i, 0.0 + i, 0.0 + i});
         aci.input_queue_service.add_row(iq, row1);
         aci.input_queue_service.add_row(iq, row2);
     }

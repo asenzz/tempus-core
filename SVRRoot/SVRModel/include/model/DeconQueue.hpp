@@ -22,8 +22,8 @@ public:
             std::string const &table_name,
             std::string const &input_queue_table_name_,
             std::string const &input_queue_column_name_,
-            const bigint dataset_id_,
-            const size_t decon_level_number_,
+            const bigint dataset_id_ = 0,
+            const size_t decon_level_number_ = 1,
             const data_row_container &data = data_row_container());
     virtual ~DeconQueue(){};
 
@@ -68,8 +68,6 @@ public:
     {
         return data_.empty() ? decon_level_number_ : data_.front()->get_values().size();
     }
-
-    static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
 
     std::vector<double> get_actual_values(const data_row_container::const_iterator &target_iter) const;
     void erase_until(const data_row_container::iterator &target_iter);

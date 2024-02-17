@@ -1,16 +1,15 @@
 #pragma once
 
-#include <set>
 #include <execution>
-#include <algorithm>
 #include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
 #include "model/Entity.hpp"
 #include "util/string_utils.hpp"
 
 
-namespace svr { namespace datamodel { class DQScalingFactor; }}
-using DQScalingFactor_ptr = std::shared_ptr<svr::datamodel::DQScalingFactor>;
-
+namespace svr { namespace datamodel {
+class DQScalingFactor;
+using DQScalingFactor_ptr = std::shared_ptr<DQScalingFactor>;
+}}
 
 namespace svr {
 namespace datamodel {
@@ -29,88 +28,39 @@ private:
 
     double scaling_factor_features;
     double scaling_factor_labels;
+    double dc_offset_features;
+    double dc_offset_labels;
 public:
     DQScalingFactor(
             const bigint id, const bigint dataset_id, const std::string& input_queue_table_name, const std::string& input_queue_column_name,
-                const size_t wavelet_level, const double scale_feat = 1.0, const double scale_labels = 1.0):
-            Entity(id),
-            dataset_id_(dataset_id),
-            input_queue_table_name_(input_queue_table_name),
-            input_queue_column_name_(input_queue_column_name),
-            decon_level_(wavelet_level),
-            scaling_factor_features(scale_feat),
-            scaling_factor_labels(scale_labels)
-    {}
-
+                const size_t decon_level,
+                const double scale_feat = std::numeric_limits<double>::quiet_NaN(),
+                const double scale_labels = std::numeric_limits<double>::quiet_NaN(),
+                const double dc_offset_feat = std::numeric_limits<double>::quiet_NaN(),
+                const double dc_offset_labels = std::numeric_limits<double>::quiet_NaN());
     bool operator==(const DQScalingFactor& other) const;
     bool operator<(const DQScalingFactor &o) const;
 
-    bigint get_dataset_id() const
-    {
-        return dataset_id_;
-    }
-
-    void set_dataset_id(const bigint dataset_id)
-    {
-        dataset_id_ = dataset_id;
-    }
-
-    std::string get_input_queue_table_name() const
-    {
-        return input_queue_table_name_;
-    }
-
-    void set_input_queue_table_name(const std::string& input_queue_table_name)
-    {
-        input_queue_table_name_ = input_queue_table_name;
-    }
-
-    std::string get_input_queue_column_name() const
-    {
-        return input_queue_column_name_;
-    }
-
-    void set_input_queue_column_name(const std::string& input_queue_column_name)
-    {
-        input_queue_column_name_ = input_queue_column_name;
-    }
-
-    size_t get_decon_level() const
-    {
-        return decon_level_;
-    }
-
-    void set_decon_level(const size_t decon_level)
-    {
-        decon_level_ = decon_level;
-    }
-
-    double get_features_factor() const
-    {
-        return scaling_factor_features;
-    }
-
-    void set_features_factor(const double scaling_factor)
-    {
-        scaling_factor_features = scaling_factor;
-    }
-
-    double get_labels_factor() const
-    {
-        return scaling_factor_labels;
-    }
-
-    void set_labels_factor(const double label_factor)
-    {
-        scaling_factor_labels = label_factor;
-    }
+    bigint get_dataset_id() const;
+    void set_dataset_id(const bigint dataset_id);
+    std::string get_input_queue_table_name() const;
+    void set_input_queue_table_name(const std::string& input_queue_table_name);
+    std::string get_input_queue_column_name() const;
+    void set_input_queue_column_name(const std::string& input_queue_column_name);
+    size_t get_decon_level() const;
+    void set_decon_level(const size_t decon_level);
+    double get_features_factor() const;
+    void set_features_factor(const double scaling_factor);
+    double get_labels_factor() const;
+    void set_labels_factor(const double label_factor);
+    double get_dc_offset_features() const;
+    void set_dc_offset_features(const double dc_offset_features_);
+    double get_dc_offset_labels() const;
+    void set_dc_offset_labels(const double dc_offset_labels_);
 
     std::string to_string() const override;
 
     bool in(const dq_scaling_factor_container_t &c);
-
-    void add(dq_scaling_factor_container_t &sf, const bool overwrite = false);
-    static void add(dq_scaling_factor_container_t &sf, const dq_scaling_factor_container_t &new_sf, const bool overwrite = false);
 };
 
 template<typename T> inline std::basic_ostream<T> &

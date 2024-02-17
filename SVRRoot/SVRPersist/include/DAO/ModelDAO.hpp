@@ -2,7 +2,10 @@
 
 #include "DAO/AbstractDAO.hpp"
 
-namespace svr { namespace datamodel {
+namespace svr {
+class OnlineMIMOSVR;
+using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+namespace datamodel {
 class Model;
 using Model_ptr = std::shared_ptr<Model>;
 }}
@@ -23,6 +26,7 @@ public:
     virtual datamodel::Model_ptr get_by_id(const bigint model_id) = 0;
     virtual datamodel::Model_ptr get_by_ensemble_id_and_decon_level(const bigint ensemble_id, size_t decon_level) = 0;
     virtual std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id) = 0;
+    virtual std::deque<OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id) = 0;
 };
 
 }

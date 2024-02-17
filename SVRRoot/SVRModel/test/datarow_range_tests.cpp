@@ -16,29 +16,29 @@ TEST(datarow_range_tests, datarow_range_basic_tests)
     {
         datarow_range dr0(cont);
 /*
-        ASSERT_EQ(dr0.begin(), cont.begin());
-        ASSERT_EQ(dr0.end(), cont.end());
+        EXPECT_TRUE(dr0.begin() == cont.begin());
+        EXPECT_TRUE(dr0.end() == cont.end());
 
-        ASSERT_EQ(dr0.rbegin(), cont.rbegin());
-        ASSERT_EQ(dr0.rend(), cont.rend());
+        EXPECT_TRUE(dr0.rbegin() == cont.rbegin());
+        EXPECT_TRUE(dr0.rend() == cont.rend());
 
-        ASSERT_EQ(dr0.begin(), dr0.end());
-        ASSERT_EQ(dr0.rbegin(), dr0.rend());
+        EXPECT_TRUE(dr0.begin() == dr0.end());
+        EXPECT_TRUE(dr0.rbegin() == dr0.rend());
         */
     }
 
 /*----------------------------------------------------------------------------*/
 
     {
-        cont.push_back(std::make_shared<DataRow>(now));
+        cont.push_back(std::make_shared<DataRow>(now, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
 
         datarow_range dr(cont);
 /*
-        ASSERT_EQ(dr.begin(), cont.begin());
-        ASSERT_EQ(dr.end(), cont.end());
+        EXPECT_TRUE(dr.begin() == cont.begin());
+        EXPECT_TRUE(dr.end() == cont.end());
 
-        ASSERT_EQ(dr.rbegin(), cont.rbegin());
-        ASSERT_EQ(dr.rend(), cont.rend());
+        EXPECT_TRUE(dr.rbegin() == cont.rbegin());
+        EXPECT_TRUE(dr.rend() == cont.rend());
         */
     }
 
@@ -46,14 +46,14 @@ TEST(datarow_range_tests, datarow_range_basic_tests)
 
     {
         auto now1 = now + bpt::seconds(1);
-        cont.push_back(std::make_shared<DataRow>(now1));
+        cont.push_back(std::make_shared<DataRow>(now1, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
 
         now1 += bpt::seconds(1);
-        cont.push_back(std::make_shared<DataRow>(now1));
+        cont.push_back(std::make_shared<DataRow>(now1, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
 
         datarow_range dr2(std::next(cont.begin()), std::prev(cont.end()), cont);
 
-        ASSERT_EQ(std::distance(dr2.begin(), dr2.end()), 1);
+        EXPECT_TRUE(std::distance(dr2.begin(), dr2.end()) == 1);
         ASSERT_EQ(std::distance(dr2.rbegin(), dr2.rend()), 1);
     }
 }

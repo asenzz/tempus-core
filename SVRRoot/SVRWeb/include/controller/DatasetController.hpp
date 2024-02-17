@@ -40,7 +40,7 @@ public:
         attach(new DatasetView(svc), "dataset_ajaxview", "/ajax{1}", "/ajax(/(.*))?", 1);
     }
 
-    void show(std::string datasetName);
+    void show(const std::string dataset_name);
     void showAll();
     void create();
 

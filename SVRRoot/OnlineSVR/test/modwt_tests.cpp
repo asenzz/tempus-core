@@ -110,8 +110,8 @@
 //
 //    std::unique_ptr<svr::spectral_transform> transformer(svr::spectral_transform::create(filterorder, levels));
 //    ASSERT_NE(transformer.get(), nullptr);
-//    ASSERT_EQ(transformer->get_minimal_input_length(0, 15), minimal_data_length);
-//    ASSERT_EQ(transformer->get_minimal_input_length(65000, 15), enough_data_length);
+//    EXPECT_TRUE(transformer->get_minimal_input_length(0, 15) == minimal_data_length);
+//    EXPECT_TRUE(transformer->get_minimal_input_length(65000, 15) == enough_data_length);
 //
 //    std::vector<double> decon_linearized(deconstructed_etalon.size());
 //

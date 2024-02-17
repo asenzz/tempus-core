@@ -16,6 +16,10 @@ class InputQueueDAO;
 using TimeRange = std::pair<boost::posix_time::ptime, boost::posix_time::ptime>;
 using OptionalTimeRange = boost::optional<TimeRange>;
 }
+namespace datamodel {
+class Dataset;
+using Dataset_ptr = std::shared_ptr<Dataset>;
+}
 }
 
 
@@ -61,8 +65,8 @@ public:
     void
     load(const datamodel::InputQueue_ptr &p_input_queue, const bpt::time_period &range, const size_t limit = 0);
 
-    data_row_container
-    load_latest(datamodel::InputQueue_ptr const &input_queue, const size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
+    void
+    load_latest(datamodel::InputQueue_ptr p_input_queue, const size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
 
     datamodel::DataRow_ptr
     load_nth_last_row(const datamodel::InputQueue_ptr &input_queue, const size_t position, const bpt::ptime target_time = bpt::max_date_time);
@@ -110,6 +114,8 @@ public:
     size_t get_count_from_start(const datamodel::InputQueue_ptr &p_input_queue, const boost::posix_time::ptime &time);
 
     //data_row_container shift_times_forward(const data_row_container &data, const bpt::time_duration &resolution);
+
+    static std::string make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
 
 private:
     data_row_container
