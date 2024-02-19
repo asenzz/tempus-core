@@ -33,7 +33,7 @@
 #include "ModelService.hpp"
 
 
-#define TUNE_THREADS (common::gpu_handler::get().get_gpu_devices_count())
+#define TUNE_THREADS (1 + common::gpu_handler::get().get_gpu_devices_count())
 
 
 namespace svr {
@@ -300,8 +300,6 @@ eval_score(const arma::mat &K, const double epsco, const arma::mat &labels, cons
 }
 
 std::atomic<size_t> running_tuners {0};
-constexpr size_t C_grid_depth = 3;
-constexpr double C_grid_range_div = 6;
 
 };
 

@@ -6,8 +6,8 @@
 namespace svr {
 namespace dao {
 
-PgAutotuneTaskDAO::PgAutotuneTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: AutotuneTaskDAO(sqlProperties, dataSource)
+PgAutotuneTaskDAO::PgAutotuneTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: AutotuneTaskDAO(tempus_config, data_source)
 {}
 
 bigint PgAutotuneTaskDAO::get_next_id()

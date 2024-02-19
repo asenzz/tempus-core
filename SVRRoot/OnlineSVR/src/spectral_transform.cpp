@@ -34,9 +34,9 @@ spectral_transform::create(const std::string &transformation_name, const size_t 
         return std::unique_ptr<spectral_transform>(new short_term_fourier_transform_opencl(levels));
 #endif
     if (transformation_name == "oemd")
-        return std::unique_ptr<spectral_transform>(new online_emd(levels, stretch_coef));
+        return std::unique_ptr<spectral_transform>(new oemd::online_emd(levels, stretch_coef));
     if (transformation_name == "cvmd")
-        return std::unique_ptr<spectral_transform>(new fast_cvmd(levels));
+        return std::unique_ptr<spectral_transform>(new vmd::fast_cvmd(levels));
 
 
     return std::unique_ptr<spectral_transform>(new sw_transform(transformation_name, levels));

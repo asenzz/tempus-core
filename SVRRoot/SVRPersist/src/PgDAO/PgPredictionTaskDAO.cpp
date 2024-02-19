@@ -6,8 +6,8 @@
 namespace svr {
 namespace dao {
 
-PgPredictionTaskDAO::PgPredictionTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: PredictionTaskDAO(sqlProperties, dataSource)
+PgPredictionTaskDAO::PgPredictionTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: PredictionTaskDAO(tempus_config, data_source)
 {}
 
 

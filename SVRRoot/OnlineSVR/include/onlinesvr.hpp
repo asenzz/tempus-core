@@ -21,6 +21,8 @@ constexpr unsigned C_interlace_manifold_factor = 1e9; // Every Nth row is used f
 constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
 constexpr double C_mean_weight_threshold = 2;
+constexpr size_t C_grid_depth = 4; // Tune
+constexpr double C_grid_range_div = 5;
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT

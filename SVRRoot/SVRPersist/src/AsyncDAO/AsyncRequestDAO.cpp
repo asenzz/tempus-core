@@ -28,13 +28,13 @@ namespace
 struct AsyncRequestDAO::AsyncImpl
     : AsyncImplBase<datamodel::MultivalResponse_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgRequestDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
     {}
 };
 
-AsyncRequestDAO::AsyncRequestDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: RequestDAO(sqlProperties, dataSource), pImpl(* new AsyncImpl(sqlProperties, dataSource))
+AsyncRequestDAO::AsyncRequestDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: RequestDAO(tempus_config, data_source), pImpl(* new AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncRequestDAO::~AsyncRequestDAO()

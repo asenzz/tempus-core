@@ -17,7 +17,7 @@ namespace dao {
 class EnsembleDAO : public AbstractDAO
 {
 public:
-    static EnsembleDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType daoType, bool use_threadsafe_dao);
+    static EnsembleDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
 
     explicit EnsembleDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
 

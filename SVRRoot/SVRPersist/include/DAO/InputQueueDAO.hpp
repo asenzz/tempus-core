@@ -6,10 +6,10 @@
 namespace svr {
 namespace datamodel {
 class InputQueue;
+
 class DataRow;
 using InputQueue_ptr = std::shared_ptr<InputQueue>;
 using DataRow_ptr = std::shared_ptr<DataRow>;
-
 }
 }
 
@@ -25,14 +25,14 @@ public:
     static InputQueueDAO *build(
             svr::common::PropertiesFileReader &sql_properties,
             svr::dao::DataSource &data_source,
-            svr::common::ConcreteDaoType daoType,
+            svr::common::ConcreteDaoType dao_type,
             bool use_threadsafe_dao);
 
     explicit InputQueueDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source);
 
-    virtual std::vector<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name) = 0;
+    virtual std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name) = 0;
 
-    virtual std::vector<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection) = 0;
+    virtual std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection) = 0;
 
     virtual datamodel::InputQueue_ptr get_queue_metadata(
             const std::string &user_name,
@@ -84,7 +84,7 @@ public:
 
     virtual datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr &queue) = 0;
 
-    virtual std::vector<std::shared_ptr<std::string>> get_db_table_column_names(const datamodel::InputQueue_ptr &queue) = 0;
+    virtual std::deque<std::shared_ptr<std::string>> get_db_table_column_names(const datamodel::InputQueue_ptr &queue) = 0;
 
     virtual OptionalTimeRange get_missing_hours(datamodel::InputQueue_ptr const &, TimeRange const &) = 0;
 

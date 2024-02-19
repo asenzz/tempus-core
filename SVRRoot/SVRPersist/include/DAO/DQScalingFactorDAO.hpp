@@ -14,12 +14,12 @@ class DQScalingFactorDAO : public AbstractDAO
 public:
     static DQScalingFactorDAO *build(
             svr::common::PropertiesFileReader &sql_properties,
-            svr::dao::DataSource &dataSource,
-            svr::common::ConcreteDaoType daoType,
+            svr::dao::DataSource &data_source,
+            svr::common::ConcreteDaoType dao_type,
             bool use_threadsafe_dao);
 
     explicit DQScalingFactorDAO(svr::common::PropertiesFileReader &sql_properties,
-                                svr::dao::DataSource &dataSource);
+                                svr::dao::DataSource &data_source);
 
     virtual bigint get_next_id() = 0;
 

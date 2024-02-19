@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <deque>
 #include <memory>
 #include <boost/date_time.hpp>
 #include <boost/optional.hpp>
@@ -48,12 +49,11 @@ public:
 
     virtual ~InputQueueService();
 
-    std::vector<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name);
+    std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name);
 
-    datamodel::InputQueue_ptr get_queue_metadata(const std::string &user_name, const std::string &logical_name,
-                                      const bpt::time_duration &resolution);
+    std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(const bool uses_fix_connector);
 
-    std::vector<datamodel::InputQueue_ptr> get_all_queues_with_sign(const bool uses_fix_connector);
+    datamodel::InputQueue_ptr get_queue_metadata(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
 
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &input_queue_table_name);
 
@@ -98,7 +98,7 @@ public:
     static data_row_container
     get_column_data(const datamodel::InputQueue_ptr &queue, const size_t column_index);
 
-    std::vector<std::string> get_db_table_column_names(const datamodel::InputQueue_ptr &queue);
+    std::deque<std::string> get_db_table_column_names(const datamodel::InputQueue_ptr &queue);
 
     svr::dao::OptionalTimeRange get_missing_hours(datamodel::InputQueue_ptr const &, svr::dao::TimeRange const &) const;
 

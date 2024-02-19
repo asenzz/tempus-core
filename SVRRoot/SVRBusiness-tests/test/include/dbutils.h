@@ -28,7 +28,7 @@ struct TestEnv
 
     bool init_test_db(char const *db_name);
 
-    bool prepareSvrConfig(char const * dbName, std::string const & daoType);
+    bool prepareSvrConfig(char const * dbName, std::string const & dao_type);
 };
 
 #endif /* DBUTILS_H */

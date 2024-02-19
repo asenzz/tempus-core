@@ -4,8 +4,8 @@
 
 namespace svr { namespace dao {
 
-PgEnsembleDAO::PgEnsembleDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-:EnsembleDAO(sqlProperties, dataSource)
+PgEnsembleDAO::PgEnsembleDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+:EnsembleDAO(tempus_config, data_source)
 {}
 
 datamodel::Ensemble_ptr PgEnsembleDAO::get_by_id(const bigint id) {

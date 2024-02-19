@@ -18,13 +18,13 @@ bool TsIQScalingFactorDAO::exists(const bigint id)
 }
 
 
-int TsIQScalingFactorDAO::save(const IQScalingFactor_ptr& scalingTask)
+int TsIQScalingFactorDAO::save(const IQScalingFactor_ptr &scalingTask)
 {
     return ts_call<int>(&IQScalingFactorDAO::save, scalingTask);
 }
 
 
-int TsIQScalingFactorDAO::remove(const IQScalingFactor_ptr& scalingTask)
+int TsIQScalingFactorDAO::remove(const IQScalingFactor_ptr &scalingTask)
 {
     return ts_call<int>(&IQScalingFactorDAO::remove, scalingTask);
 }

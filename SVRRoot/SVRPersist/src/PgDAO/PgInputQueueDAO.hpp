@@ -11,8 +11,8 @@ class PgInputQueueDAO : public InputQueueDAO
 public:
     explicit PgInputQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
 
-    std::vector<datamodel::InputQueue_ptr> get_all_user_queues(const std::string& user_name);
-    std::vector<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection);
+    std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string& user_name);
+    std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection);
 
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &userName, const std::string &logicalName, const bpt::time_duration &resolution);
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &tableName);
@@ -41,7 +41,7 @@ public:
     datamodel::DataRow_ptr find_oldest_record(const datamodel::InputQueue_ptr& queue);
     datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr& queue);
 
-    std::vector<std::shared_ptr<std::string>> get_db_table_column_names(const datamodel::InputQueue_ptr& queue);
+    std::deque<std::shared_ptr<std::string>> get_db_table_column_names(const datamodel::InputQueue_ptr& queue);
 
     OptionalTimeRange get_missing_hours(datamodel::InputQueue_ptr const &, TimeRange const &);
     void purge_missing_hours(datamodel::InputQueue_ptr const & queue);

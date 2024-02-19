@@ -26,7 +26,7 @@ struct TestEnv
     bool init_test_db(char const *db_name);
     bool init_test_db_98(char const *db_name);
 
-    bool prepareSvrConfig(char const * dbName, std::string const & daoType, int max_loop_count);
+    bool prepareSvrConfig(char const * dbName, std::string const & dao_type, int max_loop_count);
 
     bool run_daemon();
     void run_daemon_nowait();

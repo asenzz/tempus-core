@@ -8,8 +8,8 @@ namespace svr {
 namespace dao {
 
 THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsInputQueueDAO, InputQueueDAO)
-    virtual std::vector<datamodel::InputQueue_ptr> get_all_user_queues(const std::string& user_name);
-    virtual std::vector<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection);
+    virtual std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string& user_name);
+    virtual std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection);
     virtual datamodel::InputQueue_ptr get_queue_metadata(const std::string &user_name, const std::string &logical_name,
                                               const bpt::time_duration &resolution);
     virtual datamodel::InputQueue_ptr get_queue_metadata(const std::string &table_name);
@@ -39,7 +39,7 @@ THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsInputQueueDAO, InputQueueDAO)
     virtual datamodel::DataRow_ptr find_oldest_record(const datamodel::InputQueue_ptr& queue);
     virtual datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr& queue);
 
-    virtual std::vector<std::shared_ptr<std::string>> get_db_table_column_names(const datamodel::InputQueue_ptr& queue);
+    virtual std::deque<std::shared_ptr<std::string>> get_db_table_column_names(const datamodel::InputQueue_ptr& queue);
 
     virtual OptionalTimeRange get_missing_hours(datamodel::InputQueue_ptr const &, TimeRange const &);
     virtual void purge_missing_hours(datamodel::InputQueue_ptr const & queue);

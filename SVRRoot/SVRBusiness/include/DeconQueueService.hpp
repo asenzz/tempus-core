@@ -9,6 +9,7 @@
 #include "model/DataRow.hpp"
 #include "fast_cvmd.hpp"
 #include "model/DeconQueue.hpp"
+#include "IQScalingFactorService.hpp"
 
 
 namespace svr { namespace dao { class DeconQueueDAO; }}
@@ -101,12 +102,14 @@ public:
     static void reconstruct(
             const datamodel::datarow_range &decon,
             const recon_type_e type,
-            data_row_container &recon);
+            data_row_container &recon,
+            const t_iqscaler &unscaler);
 
     static data_row_container
     reconstruct(
             const svr::datamodel::datarow_range &data,
-            const recon_type_e type);
+            const recon_type_e type,
+            const t_iqscaler &unscaler);
 
     static std::vector<double>
     get_actual_values(

@@ -18,6 +18,7 @@ public:
                     rowSet["id"].as<bigint>(0),
                     rowSet["dataset_id"].as<bigint>(0),
                     rowSet["input_queue_table_name"].as<std::string>(""),
+                    rowSet["input_queue_column_name"].as<std::string>(""),
                     rowSet["scaling_factor"].as<double>(1)
                 );
     }

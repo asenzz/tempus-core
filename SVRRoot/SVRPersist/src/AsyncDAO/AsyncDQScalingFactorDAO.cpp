@@ -25,13 +25,13 @@ namespace
 struct AsyncDQScalingFactorDAO::AsyncImpl
     : AsyncImplBase<datamodel::DQScalingFactor_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgDQScalingFactorDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
     {}
 };
 
-AsyncDQScalingFactorDAO::AsyncDQScalingFactorDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: DQScalingFactorDAO (sqlProperties, dataSource), pImpl(* new AsyncImpl(sqlProperties, dataSource))
+AsyncDQScalingFactorDAO::AsyncDQScalingFactorDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: DQScalingFactorDAO (tempus_config, data_source), pImpl(* new AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncDQScalingFactorDAO::~AsyncDQScalingFactorDAO()

@@ -16,7 +16,7 @@ namespace svr { namespace dao {
 class ModelDAO: public AbstractDAO
 {
 public:
-    static ModelDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType daoType, bool use_threadsafe_dao);
+    static ModelDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
     explicit ModelDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
     virtual bigint get_next_id() = 0;
     virtual bool exists(const bigint model_id) = 0;

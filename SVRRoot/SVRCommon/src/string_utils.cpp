@@ -42,7 +42,7 @@ to_tsvs(const std::vector<uint8_t> &v, const char sep)
 std::ostream &
 operator<<(std::ostream &os, const std::vector<size_t> &v)
 {
-    for (auto v_iter = v.begin(); v_iter != std::prev(v.end()); ++v_iter) os << *v_iter << cm_separator;
+    for (auto v_iter = v.begin(); v_iter != std::prev(v.end()); ++v_iter) os << *v_iter << C_cm_separator;
     os << *std::prev(v.end());
     return os;
 }
@@ -50,7 +50,7 @@ operator<<(std::ostream &os, const std::vector<size_t> &v)
 std::basic_ostream<char, std::char_traits<char>> &
 operator<<(std::basic_ostream<char, std::char_traits<char>> &os, const std::vector<uint8_t> &v)
 {
-    for (auto v_iter = v.begin(); v_iter != std::prev(v.end()); ++v_iter) os << *v_iter << cm_separator;
+    for (auto v_iter = v.begin(); v_iter != std::prev(v.end()); ++v_iter) os << *v_iter << C_cm_separator;
     os << *std::prev(v.end());
     return os;
 }
@@ -59,7 +59,7 @@ std::ostream &
 operator<<(std::ostream &os, const std::vector<double> &v)
 {
     os.precision(std::numeric_limits< double >::max_digits10);
-    for (auto v_iter = v.begin(); v_iter != std::prev(v.end()); ++v_iter) os << *v_iter << cm_separator;
+    for (auto v_iter = v.begin(); v_iter != std::prev(v.end()); ++v_iter) os << *v_iter << C_cm_separator;
     os << *std::prev(v.end());
     return os;
 }
@@ -184,9 +184,9 @@ std::vector<size_t> parse_string_range(const std::string &parameter_string)
     std::vector<size_t> result;
     size_t ss{0};
 
-    if (parameter_string.find(dd_separator) != std::string::npos) {
+    if (parameter_string.find(C_dd_separator) != std::string::npos) {
         const int min{std::stoi(parameter_string, &ss)};
-        const int max{std::stoi(parameter_string.substr(ss + dd_separator.size()))};
+        const int max{std::stoi(parameter_string.substr(ss + C_dd_separator.size()))};
 
         result.reserve(max - min + 1);
         for (int i = min; i <= max; ++i)
@@ -195,14 +195,14 @@ std::vector<size_t> parse_string_range(const std::string &parameter_string)
         return result;
     }
 
-    if (parameter_string.find(cm_separator) != std::string::npos) {
+    if (parameter_string.find(C_cm_separator) != std::string::npos) {
         while (ss < parameter_string.size()) {
             const size_t ss_accumulator{ss};
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
             result.push_back(std::stoi(parameter_string.substr(ss_accumulator), &ss));
 #pragma GCC diagnostic pop
-            ss += cm_separator.size() + ss_accumulator;
+            ss += C_cm_separator.size() + ss_accumulator;
         }
 
         return result;
@@ -217,11 +217,11 @@ parse_string_range(const std::string &parameter_string, const std::vector<std::s
 {
     std::vector<std::string> result;
 
-    size_t it_found = parameter_string.find(dd_separator);
+    size_t it_found = parameter_string.find(C_dd_separator);
 
     if (it_found != std::string::npos) {
         std::string token_first(parameter_string, 0, it_found);
-        std::string token_second(parameter_string, it_found + dd_separator.size());
+        std::string token_second(parameter_string, it_found + C_dd_separator.size());
 
         // TODO: Check if improvement needed find here as it is linear complexity (find on small vector)
         auto it_wavelet_first = std::find(set_parameters.begin(), set_parameters.end(), token_first);
@@ -238,9 +238,9 @@ parse_string_range(const std::string &parameter_string, const std::vector<std::s
 
         result.assign(it_wavelet_first, it_wavelet_second);
         result.push_back(*it_wavelet_second);
-    } else if (parameter_string.find(cm_separator) != std::string::npos) {
+    } else if (parameter_string.find(C_cm_separator) != std::string::npos) {
         // TODO: There is no check if the found parameters exist in the parameters set.
-        boost::split(result, parameter_string, boost::is_any_of(cm_separator));
+        boost::split(result, parameter_string, boost::is_any_of(C_cm_separator));
     } else {
         result.push_back(parameter_string);
     }

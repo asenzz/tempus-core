@@ -9,8 +9,8 @@ namespace dao {
 class PgDQScalingFactorDAO : public DQScalingFactorDAO
 {
 public:
-    explicit PgDQScalingFactorDAO(svr::common::PropertiesFileReader& sqlProperties,
-                                  svr::dao::DataSource& dataSource);
+    explicit PgDQScalingFactorDAO(svr::common::PropertiesFileReader& tempus_config,
+                                  svr::dao::DataSource& data_source);
 
     virtual bigint get_next_id();
     virtual bool exists(const datamodel::DQScalingFactor_ptr& p_dq_scaling_factor);

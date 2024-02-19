@@ -14,7 +14,7 @@ namespace dao {
 
 class DeconQueueDAO : public AbstractDAO {
 public:
-    static DeconQueueDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType daoType, bool use_threadsafe_dao);
+    static DeconQueueDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
 
     explicit DeconQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
 

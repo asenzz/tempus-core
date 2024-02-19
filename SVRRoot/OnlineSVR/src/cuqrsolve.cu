@@ -294,7 +294,7 @@ __solve_dgesv:
     magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 }
 
-
+// Doesn't work with NVidia CuSolver 12.1
 void dyn_magma_solve(const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue,
                      const magmaInt_ptr piv, const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const size_t gpu_id)
 {

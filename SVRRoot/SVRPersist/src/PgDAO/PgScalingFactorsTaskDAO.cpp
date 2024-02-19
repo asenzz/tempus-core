@@ -6,8 +6,8 @@
 namespace svr {
 namespace dao {
 
-PgScalingFactorsTaskDAO::PgScalingFactorsTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: ScalingFactorsTaskDAO(sqlProperties, dataSource)
+PgScalingFactorsTaskDAO::PgScalingFactorsTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: ScalingFactorsTaskDAO(tempus_config, data_source)
 {}
 
 

@@ -24,13 +24,13 @@ namespace
 struct AsyncAutotuneTaskDAO::AsyncImpl
     : AsyncImplBase<AutotuneTask_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgAutotuneTaskDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
     {}
 };
 
-AsyncAutotuneTaskDAO::AsyncAutotuneTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: AutotuneTaskDAO(sqlProperties, dataSource), pImpl(*new AsyncImpl(sqlProperties, dataSource))
+AsyncAutotuneTaskDAO::AsyncAutotuneTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: AutotuneTaskDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncAutotuneTaskDAO::~AsyncAutotuneTaskDAO()

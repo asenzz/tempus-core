@@ -213,7 +213,8 @@ DeconQueueService::deconstruct(
     LOG4_DEBUG("Input data size " << input_data.size() << " columns " << input_data.begin()->get()->get_values().size() << ", VMD residual count " << residuals_ct <<
                     ", input column index " << input_column_index << ", test offset " << test_offset << ", res_ratio " << res_ratio);
     const auto pre_decon_size = p_decon_queue->size();
-    PROFILE_EXEC_TIME(p_dataset->get_cvmd_transformer().transform(input_data, *p_decon_queue, input_column_index, test_offset), "CVMD transform");
+    const auto scaler = IQScalingFactorService::get_scaler(*p_dataset, p_decon_queue->get_input_queue_table_name() , p_decon_queue->get_input_queue_column_name());
+    PROFILE_EXEC_TIME(p_dataset->get_cvmd_transformer().transform(input_data, *p_decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
     PROFILE_EXEC_TIME(p_dataset->get_oemd_transformer().transform(p_decon_queue, pre_decon_size, test_offset, residuals_ct), "OEMD fat transform");
 
 // Trim not needed data
@@ -333,19 +334,21 @@ DeconQueueService::deconstruct_ticks(
 
 data_row_container
 DeconQueueService::reconstruct(
-        const svr::datamodel::datarow_range &data,
-        const recon_type_e type)
+        const svr::datamodel::datarow_range &decon,
+        const recon_type_e type,
+        const t_iqscaler &unscaler)
 {
-    data_row_container res;
-    reconstruct(data, type, res);
-    return res;
+    data_row_container recon;
+    reconstruct(decon, type, recon, unscaler);
+    return recon;
 }
 
 
 void DeconQueueService::reconstruct(
         const datamodel::datarow_range &decon,
         const recon_type_e type,
-        data_row_container &recon)
+        data_row_container &recon,
+        const t_iqscaler &unscaler)
 {
     LOG4_BEGIN();
     if (decon.distance() < 1) LOG4_THROW("No deconstructed data to reconstruct.");
@@ -365,20 +368,20 @@ void DeconQueueService::reconstruct(
 
     const auto levct = decon.front()->size();
     const size_t half_levct = levct / 2;
-    if (!recon.empty()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.end());
+    if (recon.size()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.end());
     const auto startout = recon.size();
     const auto ct = decon.distance();
     recon.resize(startout + ct);
     LOG4_DEBUG("Reconstructing " << ct << " rows of " << levct << " levels, type " << int(type) << ", output starting " << startout);
 
-#pragma omp parallel for num_threads(adj_threads(ct))
+#pragma omp parallel for num_threads(adj_threads(ct)) schedule(static, 1 + ct / std::thread::hardware_concurrency())
     for (ssize_t i = 0; i < ct; ++i) {
         const datamodel::DataRow &d = **(decon.begin() + i);
         double v = 0;
         for (size_t l = 0; l < levct; l += 2)
             if (l != half_levct)
                 op(v, d.get_value(l));
-        recon[startout + i] = std::make_shared<DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{v});
+        recon[startout + i] = std::make_shared<DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{unscaler(v)});
     }
 
     LOG4_END();

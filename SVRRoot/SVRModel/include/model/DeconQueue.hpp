@@ -94,7 +94,6 @@ operator<<(std::basic_ostream<T> &os, const DeconQueue &e)
 using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
 
 }
-}
 
 template<>
 inline void store_buffer_push_merge<svr::datamodel::DeconQueue_ptr>(svr::datamodel::DeconQueue_ptr &dest, const svr::datamodel::DeconQueue_ptr &src)
@@ -104,4 +103,6 @@ inline void store_buffer_push_merge<svr::datamodel::DeconQueue_ptr>(svr::datamod
     dest->set_input_queue_table_name(src->get_input_queue_table_name());
     dest->set_input_queue_column_name(src->get_input_queue_column_name());
     dest->set_dataset_id(src->get_dataset_id());
+}
+
 }

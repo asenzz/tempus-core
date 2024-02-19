@@ -11,6 +11,117 @@
 namespace svr {
 namespace datamodel {
 
+DataRow::DataRow(
+        const bpt::ptime &value_time,
+        const bpt::ptime &update_time,
+        double tick_volume,
+        const size_t levels) :
+        value_time_(value_time),
+        update_time_(update_time),
+        tick_volume_(tick_volume),
+        values_(std::vector<double>(levels))
+{}
+
+DataRow::DataRow(
+        const bpt::ptime &value_time,
+        const bpt::ptime &update_time,
+        double tick_volume,
+        const std::vector<double> &values) :
+        value_time_(value_time),
+        update_time_(update_time),
+        tick_volume_(tick_volume),
+        values_(values)
+{}
+
+DataRow::DataRow(
+        const bpt::ptime &value_time,
+        const bpt::ptime &update_time,
+        double tick_volume,
+        const double *values_ptr,
+        const size_t values_size) :
+        value_time_(value_time),
+        update_time_(update_time),
+        tick_volume_(tick_volume),
+        values_(values_size)
+{
+    memcpy(values_.data(), values_ptr, values_size * sizeof(double));
+}
+
+std::vector<double> &DataRow::get_values()
+{
+    return values_;
+}
+
+void DataRow::set_values(const std::vector<double> &values)
+{
+    values_ = values;
+}
+
+double DataRow::get_value(const size_t column_index) const
+{
+    return values_[column_index];
+}
+
+double &DataRow::get_value(const size_t column_index)
+{
+    return values_[column_index];
+}
+
+double DataRow::operator()(const size_t column_index) const
+{
+    return values_[column_index];
+}
+
+double DataRow::at(const size_t column_index) const
+{
+    return values_[column_index];
+}
+
+double &DataRow::operator()(const size_t column_index)
+{
+    return values_[column_index];
+}
+
+double &DataRow::at(const size_t column_index)
+{
+    return values_[column_index];
+}
+
+size_t DataRow::size() const
+{
+    return values_.size();
+}
+
+const bpt::ptime &DataRow::get_update_time() const
+{
+    return update_time_;
+}
+
+void DataRow::set_update_time(const bpt::ptime &update_time)
+{
+    update_time_ = update_time;
+}
+
+const bpt::ptime &DataRow::get_value_time() const
+{
+    return value_time_;
+}
+
+void DataRow::set_value_time(const bpt::ptime &value_time)
+{
+    value_time_ = value_time;
+}
+
+double DataRow::get_tick_volume() const
+{
+    return tick_volume_;
+}
+
+void DataRow::set_tick_volume(const double weight)
+{
+    tick_volume_ = weight;
+}
+
 DataRow::DataRow(const std::string &csv)
 {
     const auto p_row = load(csv);
@@ -80,29 +191,29 @@ bool DataRow::fast_compare(const DataRow::container &lhs, const DataRow::contain
            lhs.rbegin()->get()->get_value_time() == rhs.rbegin()->get()->get_value_time();
 }
 
-std::shared_ptr<DataRow> DataRow::load(const std::string &s)
+std::shared_ptr<DataRow> DataRow::load(const std::string &s, const char delim)
 {
     std::istringstream is(s);
-    char coef_str[MAX_CSV_TOKEN_SIZE];
+    char fld[MAX_CSV_TOKEN_SIZE];
     size_t tix = 0;
     auto r = std::make_shared<DataRow>();
-    while (is.getline(coef_str, MAX_CSV_TOKEN_SIZE, ',')) {
+    while (is.getline(fld, MAX_CSV_TOKEN_SIZE, delim)) {
         switch (tix) {
             case 0:
-                r->value_time_ = bpt::time_from_string(coef_str);
+                r->value_time_ = bpt::time_from_string(fld);
                 break;
             case 1:
-                r->update_time_ = bpt::time_from_string(coef_str);
+                r->update_time_ = bpt::time_from_string(fld);
                 break;
             case 2: {
-                const auto v = std::strtod(coef_str, nullptr);
+                const auto v = std::strtod(fld, nullptr);
                 if (!common::isnormalz(v))
                     LOG4_ERROR("Reading tick volume " << v << " is not znormal.");
                 r->tick_volume_ = v;
                 break;
             }
             default: {
-                const auto v = std::strtod(coef_str, nullptr);
+                const auto v = std::strtod(fld, nullptr);
                 if (!common::isnormalz(v))
                     LOG4_ERROR("Reading price column " << tix - 3 << " " << v << " is not znormal.");
                 r->values_.emplace_back(v);

@@ -8,7 +8,7 @@ namespace dao {
 class AsyncDQScalingFactorDAO : public DQScalingFactorDAO
 {
 public:
-    explicit AsyncDQScalingFactorDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource);
+    explicit AsyncDQScalingFactorDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source);
     ~AsyncDQScalingFactorDAO();
 
     virtual bigint get_next_id();

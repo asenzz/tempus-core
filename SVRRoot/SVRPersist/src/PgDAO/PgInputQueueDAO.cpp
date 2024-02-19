@@ -10,18 +10,21 @@
 namespace svr {
 namespace dao {
 
-PgInputQueueDAO::PgInputQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source)
-: InputQueueDAO(sql_properties, data_source) {
+PgInputQueueDAO::PgInputQueueDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source)
+        : InputQueueDAO(sql_properties, data_source)
+{
 }
 
-datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution) {
+datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
+{
 
     InputQueueRowMapper row_mapper;
     std::string sql = AbstractDAO::get_sql("get_queue_metadata");
     return data_source.query_for_object(&row_mapper, sql, user_name, logical_name, resolution);
 }
 
-datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &table_name) {
+datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string &table_name)
+{
     InputQueueRowMapper row_mapper;
     return data_source.query_for_object(&row_mapper, get_sql("get_queue_metadata_by_table_name"), table_name);
 }
@@ -74,7 +77,7 @@ size_t PgInputQueueDAO::get_count_from_start(const std::string &table_name, cons
     return data_source.query_for_type<long>(sql, target_time);
 }
 
-size_t PgInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr& p_input_queue)
+size_t PgInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr &p_input_queue)
 {
     std::string sql = AbstractDAO::get_sql("create_queue_table");
     std::string table_name = p_input_queue->get_table_name();
@@ -83,7 +86,7 @@ size_t PgInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr& p_input_q
     LOG4_DEBUG("Saving InputQueue with table name: " << table_name);
     std::string value_column_sql;
 
-    for (const std::string& columnName : p_input_queue->get_value_columns())
+    for (const std::string &columnName: p_input_queue->get_value_columns())
         value_column_sql += "\"" + columnName + "\" double precision DEFAULT 0, ";
 
     boost::format sql_format(sql);
@@ -103,23 +106,23 @@ size_t PgInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr& p_input_q
         sql = AbstractDAO::get_sql("save_metadata");
 
         ret = data_source.update(sql,
-                table_name,
-                p_input_queue->get_logical_name(),
-                p_input_queue->get_owner_user_name(),
-                p_input_queue->get_description(),
-                p_input_queue->get_resolution(),
-                p_input_queue->get_legal_time_deviation(),
-                p_input_queue->get_time_zone(),
-                p_input_queue->get_value_columns(),
-                p_input_queue->get_missing_hours_retention(),
-                p_input_queue->get_uses_fix_connection()
-                );
+                                 table_name,
+                                 p_input_queue->get_logical_name(),
+                                 p_input_queue->get_owner_user_name(),
+                                 p_input_queue->get_description(),
+                                 p_input_queue->get_resolution(),
+                                 p_input_queue->get_legal_time_deviation(),
+                                 p_input_queue->get_time_zone(),
+                                 p_input_queue->get_value_columns(),
+                                 p_input_queue->get_missing_hours_retention(),
+                                 p_input_queue->get_uses_fix_connection()
+        );
     }
 
     return ret;
 }
 
-size_t PgInputQueueDAO::save(const datamodel::InputQueue_ptr& p_input_queue, const bpt::ptime &start_time)
+size_t PgInputQueueDAO::save(const datamodel::InputQueue_ptr &p_input_queue, const bpt::ptime &start_time)
 {
     long ret = 0;
 
@@ -134,28 +137,30 @@ size_t PgInputQueueDAO::save(const datamodel::InputQueue_ptr& p_input_queue, con
     return ret;
 }
 
-size_t PgInputQueueDAO::save_data(const datamodel::InputQueue_ptr& p_input_queue, const bpt::ptime &start_time)
+size_t PgInputQueueDAO::save_data(const datamodel::InputQueue_ptr &p_input_queue, const bpt::ptime &start_time)
 {
     data_source.cleanup_queue_table(p_input_queue->get_table_name(), p_input_queue->get_data(), start_time);
     return data_source.batch_update(p_input_queue->get_table_name(), p_input_queue->get_data(), start_time);
 }
 
-size_t PgInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr& inputQueue) {
+size_t PgInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr &inputQueue)
+{
 
     LOG4_DEBUG("Updating InputQueue table metadata: " << inputQueue->get_table_name());
     std::string sql = AbstractDAO::get_sql("update_metadata");
 
     return data_source.update(sql,
-            inputQueue->get_logical_name(),
-            inputQueue->get_description(),
-            inputQueue->get_legal_time_deviation(),
-            inputQueue->get_time_zone(),
-            inputQueue->get_uses_fix_connection(),
-            inputQueue->get_table_name()
-            );
+                              inputQueue->get_logical_name(),
+                              inputQueue->get_description(),
+                              inputQueue->get_legal_time_deviation(),
+                              inputQueue->get_time_zone(),
+                              inputQueue->get_uses_fix_connection(),
+                              inputQueue->get_table_name()
+    );
 }
 
-bool PgInputQueueDAO::exists(const std::string &table_name) {
+bool PgInputQueueDAO::exists(const std::string &table_name)
+{
     return 1 == data_source.query_for_type<long>(AbstractDAO::get_sql("exists"), table_name);
 }
 
@@ -175,10 +180,10 @@ bool PgInputQueueDAO::exists(const datamodel::InputQueue_ptr &p_input_queue)
     return exists(table_name);
 }
 
-size_t PgInputQueueDAO::remove(const datamodel::InputQueue_ptr& p_input_queue)
+size_t PgInputQueueDAO::remove(const datamodel::InputQueue_ptr &p_input_queue)
 {
     std::string table_name = business::InputQueueService::make_queue_table_name(
-                p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
+            p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
 
     LOG4_DEBUG("Removing InputQueue with table name " << table_name);
 
@@ -193,7 +198,7 @@ size_t PgInputQueueDAO::remove(const datamodel::InputQueue_ptr& p_input_queue)
 
 }
 
-size_t PgInputQueueDAO::clear(const datamodel::InputQueue_ptr& p_input_queue)
+size_t PgInputQueueDAO::clear(const datamodel::InputQueue_ptr &p_input_queue)
 {
     std::string table_name = business::InputQueueService::make_queue_table_name(
             p_input_queue->get_owner_user_name(), p_input_queue->get_logical_name(), p_input_queue->get_resolution());
@@ -209,7 +214,8 @@ size_t PgInputQueueDAO::clear(const datamodel::InputQueue_ptr& p_input_queue)
     return data_source.update(sql, table_name);
 }
 
-datamodel::DataRow_ptr PgInputQueueDAO::find_oldest_record(const datamodel::InputQueue_ptr& p_input_queue) {
+datamodel::DataRow_ptr PgInputQueueDAO::find_oldest_record(const datamodel::InputQueue_ptr &p_input_queue)
+{
     std::string sql_format = get_sql("find_oldest_record");
     InputQueueRowRowMapper row_mapper;
 
@@ -219,7 +225,8 @@ datamodel::DataRow_ptr PgInputQueueDAO::find_oldest_record(const datamodel::Inpu
     return data_source.query_for_object(&row_mapper, sql.str());
 }
 
-datamodel::DataRow_ptr PgInputQueueDAO::find_newest_record(const datamodel::InputQueue_ptr& queue) {
+datamodel::DataRow_ptr PgInputQueueDAO::find_newest_record(const datamodel::InputQueue_ptr &queue)
+{
     std::string sql_format = get_sql("find_newest_record");
     InputQueueRowRowMapper row_mapper;
 
@@ -229,27 +236,30 @@ datamodel::DataRow_ptr PgInputQueueDAO::find_newest_record(const datamodel::Inpu
     return data_source.query_for_object(&row_mapper, sql.str());
 }
 
-std::vector<std::shared_ptr<std::string>> PgInputQueueDAO::get_db_table_column_names(const datamodel::InputQueue_ptr& queue)
+std::deque<std::shared_ptr<std::string>> PgInputQueueDAO::get_db_table_column_names(const datamodel::InputQueue_ptr &queue)
 {
     std::string query = get_sql("get_db_table_column_names");
 
     InputQueueDbTableColumnsMapper row_mapper;
-    return data_source.query_for_array(row_mapper, query, queue->get_table_name());
+    return data_source.query_for_deque(row_mapper, query, queue->get_table_name());
 }
 
-std::vector<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_user_queues(const std::string &user_name) {
+std::deque<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_user_queues(const std::string &user_name)
+{
     InputQueueRowMapper row_mapper;
-    return data_source.query_for_array(row_mapper, get_sql("get_all_user_queues"), user_name);
+    return data_source.query_for_deque(row_mapper, get_sql("get_all_user_queues"), user_name);
 }
 
 
-std::vector<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_queues_with_sign(bool uses_fix_connection) {
+std::deque<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_queues_with_sign(bool uses_fix_connection)
+{
     InputQueueRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, get_sql("get_all_queues_with_sign"), uses_fix_connection);
+    return data_source.query_for_deque(rowMapper, get_sql("get_all_queues_with_sign"), uses_fix_connection);
 }
 
 
-bool PgInputQueueDAO::row_exists(const std::string& tableName, const bpt::ptime &valueTime) {
+bool PgInputQueueDAO::row_exists(const std::string &tableName, const bpt::ptime &valueTime)
+{
     std::string sql_format = get_sql("row_exists");
     boost::format sql(sql_format);
     sql % tableName;
@@ -263,9 +273,11 @@ bool PgInputQueueDAO::row_exists(const std::string& tableName, const bpt::ptime 
 
 namespace {
 
-struct MissedHoursrow_mapper : public IRowMapper<bpt::ptime> {
+struct MissedHoursrow_mapper : public IRowMapper<bpt::ptime>
+{
 
-    std::shared_ptr<bpt::ptime> mapRow(const pqxx_tuple& rowSet) const override {
+    std::shared_ptr<bpt::ptime> mapRow(const pqxx_tuple &rowSet) const override
+    {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         if (rowSet.empty())
@@ -275,12 +287,14 @@ struct MissedHoursrow_mapper : public IRowMapper<bpt::ptime> {
     }
 };
 
-struct TimeRange_mapper : public IRowMapper<TimeRange> {
+struct TimeRange_mapper : public IRowMapper<TimeRange>
+{
 
-    std::shared_ptr<TimeRange> mapRow(const pqxx_tuple& rowSet) const override {
+    std::shared_ptr<TimeRange> mapRow(const pqxx_tuple &rowSet) const override
+    {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        if (rowSet.empty() || rowSet[0].is_null() || rowSet[1].is_null() )
+        if (rowSet.empty() || rowSet[0].is_null() || rowSet[1].is_null())
             return std::shared_ptr<TimeRange>();
 #pragma GCC diagnostic pop
 
@@ -289,7 +303,7 @@ struct TimeRange_mapper : public IRowMapper<TimeRange> {
 };
 
 
-OptionalTimeRange get_reconciled_interval_impl(InputQueueDAO & dao, DataSource & data_source, std::string const & iq_name)
+OptionalTimeRange get_reconciled_interval_impl(InputQueueDAO &dao, DataSource &data_source, std::string const &iq_name)
 {
     std::string format = dao.get_sql("get_reconciled_interval");
     boost::format recon_interval_sql(format);
@@ -298,12 +312,14 @@ OptionalTimeRange get_reconciled_interval_impl(InputQueueDAO & dao, DataSource &
     static TimeRange_mapper row_mapper;
 
     auto range = data_source.query_for_object(&row_mapper, recon_interval_sql.str());
-    if(range)
+    if (range)
         return OptionalTimeRange(*range);
     return OptionalTimeRange();
 }
 
-OptionalTimeRange get_missing_hours_impl(InputQueueDAO & dao, DataSource & data_source, std::string const & iq_name, bpt::ptime const & end, bpt::ptime const & start, size_t const & res_seconds)
+
+OptionalTimeRange
+get_missing_hours_impl(InputQueueDAO &dao, DataSource &data_source, std::string const &iq_name, bpt::ptime const &end, bpt::ptime const &start, size_t const &res_seconds)
 {
     std::string sql_format = dao.get_sql("get_missing_hours_start");
     boost::format sqlStart(sql_format);
@@ -320,15 +336,14 @@ OptionalTimeRange get_missing_hours_impl(InputQueueDAO & dao, DataSource & data_
     boost::format sqlEnd(sql_format);
     sqlEnd % iq_name;
 
-    std::shared_ptr<bpt::ptime> missing_end = data_source.query_for_object(&row_mapper, sqlEnd.str(), *missing_start,  start, res_seconds);
-    if (!missing_end)
-        return OptionalTimeRange({start, *missing_start + bpt::seconds(res_seconds)});
+    std::shared_ptr<bpt::ptime> missing_end = data_source.query_for_object(&row_mapper, sqlEnd.str(), *missing_start, start, res_seconds);
+    if (!missing_end) return OptionalTimeRange({start, *missing_start + bpt::seconds(res_seconds)});
 
     return OptionalTimeRange({*missing_end + bpt::seconds(res_seconds), *missing_start + bpt::seconds(res_seconds)});
 }
 
 
-void mark_interval_reconciled_impl(InputQueueDAO & dao, DataSource & data_source, std::string const & iq_name, bpt::ptime const & start, bpt::ptime const & end)
+void mark_interval_reconciled_impl(InputQueueDAO &dao, DataSource &data_source, std::string const &iq_name, bpt::ptime const &start, bpt::ptime const &end)
 {
     std::string sql_format = dao.get_sql("mark_interval_reconciled");
     data_source.update(sql_format, iq_name, start, end);
@@ -336,50 +351,49 @@ void mark_interval_reconciled_impl(InputQueueDAO & dao, DataSource & data_source
 
 }
 
-OptionalTimeRange PgInputQueueDAO::get_missing_hours(datamodel::InputQueue_ptr const &queue, TimeRange const & fromRange)
+OptionalTimeRange PgInputQueueDAO::get_missing_hours(datamodel::InputQueue_ptr const &queue, TimeRange const &from_range)
 {
     size_t const sec = queue->get_resolution().total_seconds();
     bpt::time_duration one_month = bpt::hours(24 * 30);
 
     OptionalTimeRange reconciled_interval = get_reconciled_interval_impl(*this, data_source, queue->get_table_name());
 
-    if(!reconciled_interval)
-        reconciled_interval.reset({fromRange.second, fromRange.second});
+    if (!reconciled_interval)
+        reconciled_interval.reset({from_range.second, from_range.second});
 
-    if(fromRange.second >= reconciled_interval->second + bpt::seconds( 10*sec ))
-    {
-        OptionalTimeRange misses_in_front = get_missing_hours_impl (*this, data_source, queue->get_table_name(), fromRange.second, reconciled_interval->second, sec);
+    if (from_range.second >= reconciled_interval->second + bpt::seconds(10 * sec)) {
+        OptionalTimeRange misses_in_front = get_missing_hours_impl(*this, data_source, queue->get_table_name(), from_range.second, reconciled_interval->second, sec);
 
-        mark_interval_reconciled_impl(*this, data_source, queue->get_table_name(), reconciled_interval->second, fromRange.second);
+        mark_interval_reconciled_impl(*this, data_source, queue->get_table_name(), reconciled_interval->second, from_range.second);
 
-        if(misses_in_front)
+        if (misses_in_front)
             return misses_in_front;
     }
 
 
-    if(fromRange.first < reconciled_interval->first)
-    {
-        auto one_month_to_reconcile = std::max(reconciled_interval->first - one_month, fromRange.first);
+    if (from_range.first < reconciled_interval->first) {
+        auto one_month_to_reconcile = std::max(reconciled_interval->first - one_month, from_range.first);
 
-        OptionalTimeRange misses_in_back = get_missing_hours_impl (*this, data_source, queue->get_table_name()
-                , reconciled_interval->first - queue->get_resolution(), one_month_to_reconcile, sec);
+        OptionalTimeRange misses_in_back = get_missing_hours_impl(*this, data_source, queue->get_table_name(), reconciled_interval->first - queue->get_resolution(),
+                                                                  one_month_to_reconcile, sec);
 
         mark_interval_reconciled_impl(*this, data_source, queue->get_table_name(), one_month_to_reconcile, reconciled_interval->first);
 
-        reconciled_interval->first = std::max(one_month_to_reconcile, fromRange.first);
+        reconciled_interval->first = std::max(one_month_to_reconcile, from_range.first);
 
-        if(misses_in_back)
+        if (misses_in_back)
             return misses_in_back;
 
         // This is to initiate the next round of reconciliation
-        return OptionalTimeRange( { reconciled_interval->first, reconciled_interval->first } );
+        return OptionalTimeRange({reconciled_interval->first, reconciled_interval->first});
     }
 
     //Reconciliation can stop now
     return OptionalTimeRange();
 }
 
-void PgInputQueueDAO::purge_missing_hours(datamodel::InputQueue_ptr const & queue) {
+void PgInputQueueDAO::purge_missing_hours(datamodel::InputQueue_ptr const &queue)
+{
     std::string sql_format = get_sql("purge_missing_hours");
     data_source.update(sql_format, queue->get_table_name());
 }

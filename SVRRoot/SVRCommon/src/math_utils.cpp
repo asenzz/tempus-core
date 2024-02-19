@@ -69,8 +69,10 @@ arma::cx_mat
 ifftshift(const arma::cx_mat &input)
 {
     arma::cx_mat output(arma::size(input));
-    const int N = input.n_elem;
-    __omp_pfor_i(0, N, output(i) = input((i + N - N / 2) % N));
+    const auto N = input.n_elem;
+#pragma omp parallel for schedule(static, 1 + N / std::thread::hardware_concurrency()) num_threads(adj_threads(N))
+    for (size_t i = 0; i < N; ++i)
+        output(i) = input((i + N - N / 2) % N);
     return output;
 }
 

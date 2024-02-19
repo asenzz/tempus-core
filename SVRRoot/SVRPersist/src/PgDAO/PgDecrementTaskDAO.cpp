@@ -5,8 +5,8 @@
 namespace svr {
 namespace dao {
 
-PgDecrementTaskDAO::PgDecrementTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: DecrementTaskDAO(sqlProperties, dataSource)
+PgDecrementTaskDAO::PgDecrementTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: DecrementTaskDAO(tempus_config, data_source)
 {}
 
 bigint PgDecrementTaskDAO::get_next_id()

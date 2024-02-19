@@ -23,13 +23,13 @@ namespace
 struct AsyncPredictionTaskDAO::AsyncImpl
     : AsyncImplBase<PredictionTask_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgPredictionTaskDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
     {}
 };
 
-AsyncPredictionTaskDAO::AsyncPredictionTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: PredictionTaskDAO(sqlProperties, dataSource), pImpl(* new AsyncImpl(sqlProperties, dataSource))
+AsyncPredictionTaskDAO::AsyncPredictionTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: PredictionTaskDAO(tempus_config, data_source), pImpl(* new AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncPredictionTaskDAO::~AsyncPredictionTaskDAO()

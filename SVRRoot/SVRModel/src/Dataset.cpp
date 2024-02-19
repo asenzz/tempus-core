@@ -18,8 +18,8 @@ namespace datamodel {
 void Dataset::init_transform()
 {
     if (transformation_levels_ < 8) return;
-    p_oemd_transformer_fat = std::unique_ptr<svr::online_emd>(new svr::online_emd(transformation_levels_ / 4, OEMD_STRETCH_COEF));
-    p_cvmd_transformer = std::unique_ptr<svr::fast_cvmd>(new svr::fast_cvmd(transformation_levels_ / 2));
+    p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(transformation_levels_ / 4, OEMD_STRETCH_COEF);
+    p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(transformation_levels_ / 2);
 }
 
 Dataset::Dataset(
@@ -144,17 +144,17 @@ bool Dataset::operator==(const Dataset &o) const
 bool Dataset::operator^=(const Dataset &o) const
 {
     bool res = id == o.id
-           && dataset_name_ == o.dataset_name_
-           && user_name_ == o.user_name_
-           && input_queue_.get_id() == o.input_queue_.get_id()
-           && priority_ == o.priority_
-           && gradients_ == o.gradients_
-           && chunk_size_ == o.chunk_size_
-           && multiout_ == o.multiout_
-           && transformation_levels_ == o.transformation_levels_
-           && transformation_name_ == o.transformation_name_
-           && max_lookback_time_gap_ == o.max_lookback_time_gap_
-           && is_active_ == o.is_active_;
+               && dataset_name_ == o.dataset_name_
+               && user_name_ == o.user_name_
+               && input_queue_.get_id() == o.input_queue_.get_id()
+               && priority_ == o.priority_
+               && gradients_ == o.gradients_
+               && chunk_size_ == o.chunk_size_
+               && multiout_ == o.multiout_
+               && transformation_levels_ == o.transformation_levels_
+               && transformation_name_ == o.transformation_name_
+               && max_lookback_time_gap_ == o.max_lookback_time_gap_
+               && is_active_ == o.is_active_;
 
 
     for (const auto &iq: aux_input_queues_) {
@@ -172,10 +172,39 @@ bool Dataset::operator^=(const Dataset &o) const
 
 void Dataset::on_set_id()
 {
-    for (datamodel::Ensemble_ptr &p_ensemble : ensembles_)
+    for (datamodel::Ensemble_ptr &p_ensemble: ensembles_)
         p_ensemble->set_dataset_id(get_id());
 }
 
+vmd::fast_cvmd &Dataset::get_cvmd_transformer()
+{ return *p_cvmd_transformer; }
+
+oemd::online_emd &Dataset::get_oemd_transformer()
+{ return *p_oemd_transformer_fat; }
+
+std::mutex &Dataset::get_dq_scaling_factors_calc_mutex()
+{ return dq_scaling_factors_calc_mutex; }
+
+bool Dataset::get_initialized()
+{ return initialized; }
+
+size_t Dataset::get_gradients() const
+{ return gradients_; };
+
+size_t Dataset::get_chunk_size() const
+{ return chunk_size_; };
+
+size_t Dataset::get_multiout() const
+{ return multiout_; };
+
+void Dataset::set_gradients(const size_t grads)
+{ gradients_ = grads; }
+
+void Dataset::set_chunk_size(const size_t chunk_size)
+{ chunk_size_ = chunk_size; }
+
+void Dataset::set_multiout(const size_t multiout)
+{ multiout_ = multiout; }
 
 std::string Dataset::get_dataset_name() const
 { return dataset_name_; }
@@ -193,7 +222,8 @@ void Dataset::set_user_name(const std::string &user_name)
 datamodel::InputQueue_ptr Dataset::get_input_queue() const
 { return input_queue_.get_obj(); }
 
-void Dataset::set_input_queue(const datamodel::InputQueue_ptr &p_input_queue) { input_queue_.set_obj(p_input_queue); }
+void Dataset::set_input_queue(const datamodel::InputQueue_ptr &p_input_queue)
+{ input_queue_.set_obj(p_input_queue); }
 
 /* Aux input queues columns should be all unique among each other and at least one identical to the main input queue column that is being predicted, the rest are being
  * used as features.
@@ -311,11 +341,13 @@ void Dataset::set_decon_queue(const datamodel::DeconQueue_ptr &p_decon_queue)
 {
     datamodel::Ensemble_ptr p_ensemble = get_ensemble(p_decon_queue->get_input_queue_table_name(), p_decon_queue->get_input_queue_column_name());
     if (!p_ensemble) LOG4_THROW("Ensemble not found!");
-    if (!p_ensemble->get_decon_queue() || (p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_decon_queue->get_input_queue_column_name() && p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_decon_queue->get_input_queue_table_name()))
+    if (!p_ensemble->get_decon_queue() || (p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_decon_queue->get_input_queue_column_name() &&
+                                           p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_decon_queue->get_input_queue_table_name()))
         p_ensemble->set_decon_queue(p_decon_queue);
     auto &aux_decon_queues = p_ensemble->get_aux_decon_queues();
     for (auto &p_aux_decon_queue: aux_decon_queues)
-        if (p_aux_decon_queue->get_input_queue_column_name() == p_decon_queue->get_input_queue_column_name() && p_aux_decon_queue->get_input_queue_table_name() == p_decon_queue->get_input_queue_table_name())
+        if (p_aux_decon_queue->get_input_queue_column_name() == p_decon_queue->get_input_queue_column_name() &&
+            p_aux_decon_queue->get_input_queue_table_name() == p_decon_queue->get_input_queue_table_name())
             p_aux_decon_queue = p_decon_queue;
     LOG4_THROW("Decon queue " << p_decon_queue->to_string() << " not found in dataset!");
 }
@@ -325,7 +357,8 @@ Dataset::get_decon_queues() const
 {
     std::map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr> result;
     for (const auto &p_ensemble: ensembles_) {
-        result[{p_ensemble->get_decon_queue()->get_input_queue_table_name(), p_ensemble->get_decon_queue()->get_input_queue_column_name()}] = p_ensemble->get_decon_queue();
+        result[{p_ensemble->get_decon_queue()->get_input_queue_table_name(),
+                p_ensemble->get_decon_queue()->get_input_queue_column_name()}] = p_ensemble->get_decon_queue();
         for (const auto &p_decon_queue: p_ensemble->get_aux_decon_queues())
             result[{p_decon_queue->get_input_queue_table_name(), p_decon_queue->get_input_queue_column_name()}] = p_decon_queue;
     }
@@ -373,13 +406,45 @@ void Dataset::set_ensembles(const std::deque<datamodel::Ensemble_ptr> &ensembles
     for (const datamodel::Ensemble_ptr &p_ensemble: ensembles_) p_ensemble->set_dataset_id(get_id());
 }
 
-bool Dataset::get_is_active() const { return is_active_; }
+bool Dataset::get_is_active() const
+{ return is_active_; }
 
-void Dataset::set_is_active(const bool is_active) { is_active_ = is_active; }
+void Dataset::set_is_active(const bool is_active)
+{ is_active_ = is_active; }
 
-std::deque<IQScalingFactor_ptr> Dataset::get_iq_scaling_factors() { return iq_scaling_factors_; }
+std::deque<IQScalingFactor_ptr> &Dataset::get_iq_scaling_factors()
+{ return iq_scaling_factors_; }
 
-void Dataset::set_iq_scaling_factors(const std::deque<IQScalingFactor_ptr> &iq_scaling_factors) { iq_scaling_factors_ = iq_scaling_factors; }
+std::deque<IQScalingFactor_ptr> Dataset::get_iq_scaling_factors(const InputQueue &input_queue) const
+{
+    std::deque<IQScalingFactor_ptr> res;
+    for (const auto &iqsf: iq_scaling_factors_)
+        if (iqsf->get_input_queue_table_name() == input_queue.get_table_name())
+            res.emplace_back(iqsf);
+    return res;
+}
+
+IQScalingFactor_ptr Dataset::get_iq_scaling_factor(const std::string &input_queue_table_name, const std::string &input_queue_column_name) const
+{
+    for (const auto &iqsf: iq_scaling_factors_)
+        if (iqsf->get_input_queue_table_name() == input_queue_table_name && iqsf->get_input_queue_column_name() == input_queue_column_name)
+            return iqsf;
+    return nullptr;
+}
+
+void Dataset::set_iq_scaling_factors(const std::deque<IQScalingFactor_ptr> &new_iq_scaling_factors, const bool overwrite)
+{
+    std::copy_if(
+            std::execution::par_unseq, new_iq_scaling_factors.begin(), new_iq_scaling_factors.end(), std::back_inserter(iq_scaling_factors_), [&](const auto &new_iqsf) {
+                for (const auto &old_iqsf: iq_scaling_factors_)
+                    if (new_iqsf->get_input_queue_table_name() == old_iqsf->get_input_queue_table_name() &&
+                        new_iqsf->get_input_queue_column_name() == old_iqsf->get_input_queue_column_name()) {
+                        if (overwrite) old_iqsf->set_scaling_factor(new_iqsf->get_scaling_factor());
+                        return false;
+                    }
+                return true;
+            });
+}
 
 svr::datamodel::dq_scaling_factor_container_t Dataset::get_dq_scaling_factors() const
 {
@@ -397,7 +462,7 @@ void Dataset::set_dq_scaling_factors(const svr::datamodel::dq_scaling_factor_con
     dq_scaling_factors_ = dq_scaling_factors;
 }
 
-void Dataset::add_dq_scaling_factors(const dq_scaling_factor_container_t& new_dq_scaling_factors)
+void Dataset::add_dq_scaling_factors(const dq_scaling_factor_container_t &new_dq_scaling_factors)
 {
     const std::scoped_lock l(dq_scaling_factors_mutex);
     business::DQScalingFactorService::add(dq_scaling_factors_, new_dq_scaling_factors);
@@ -411,7 +476,6 @@ std::shared_ptr<DQScalingFactor> Dataset::get_dq_scaling_factor(
     if (res.empty()) LOG4_ERROR("Could not find scaling factor for " << input_queue_table_name << ", column " << input_queue_column_name << ", level " << level);
     return *res.begin();
 }
-
 
 
 size_t Dataset::get_max_lag_count()
@@ -493,18 +557,18 @@ std::string Dataset::to_string() const
     std::stringstream s;
 
     s << "Id " << get_id()
-       << ", name " << get_dataset_name()
-       << ", input queue table name " << input_queue_.get_id()
-       << ", user name " << get_user_name()
-       << ", priority " << svr::datamodel::to_string(get_priority())
-       << ", description " << get_description()
-       << ", transformation levels " << transformation_levels_
-       << ", transformation name " << transformation_name_
-       << ", gradients " << gradients_
-       << ", chunk size " << chunk_size_
-       << ", multi out " << multiout_
-       << ", max lookback time gap " << bpt::to_simple_string(get_max_lookback_time_gap())
-       << ", is active " << get_is_active();
+      << ", name " << get_dataset_name()
+      << ", input queue table name " << input_queue_.get_id()
+      << ", user name " << get_user_name()
+      << ", priority " << svr::datamodel::to_string(get_priority())
+      << ", description " << get_description()
+      << ", transformation levels " << transformation_levels_
+      << ", transformation name " << transformation_name_
+      << ", gradients " << gradients_
+      << ", chunk size " << chunk_size_
+      << ", multi out " << multiout_
+      << ", max lookback time gap " << bpt::to_simple_string(get_max_lookback_time_gap())
+      << ", is active " << get_is_active();
 
     return s.str();
 }

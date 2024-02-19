@@ -12,6 +12,7 @@
 
 
 namespace svr {
+namespace oemd {
 
 t_coefs_cache online_emd::oemd_coefs_cache;
 
@@ -63,7 +64,7 @@ t_oemd_coefficients_ptr online_emd::get_masks(
     const auto it_coefs = oemd_coefs_cache.find(coefs_key);
     if (it_coefs != oemd_coefs_cache.end()) return it_coefs->second;
 
-    const auto fir_search_input_window_start = std::max<size_t>(0, in_tail_size - oemd_search::fir_search_window_end);
+    const auto fir_search_input_window_start = std::max<size_t>(0, in_tail_size - oemd::fir_search_window_end);
 
     auto coefs = oemd_coefficients::load(levels, queue_name);
     if (coefs && !coefs->siftings.empty()
@@ -72,17 +73,17 @@ t_oemd_coefficients_ptr online_emd::get_masks(
         && !common::empty(coefs->masks))
         goto __bail;
 
-    if (in_tail_size < oemd_search::fir_search_window_end)
-        LOG4_WARN("Input size " << input.distance() << " smaller than recommended " << oemd_search::fir_search_window_end);
+    if (in_tail_size < oemd::fir_search_window_end)
+        LOG4_WARN("Input size " << input.distance() << " smaller than recommended " << oemd::fir_search_window_end);
 
     if (!coefs) coefs = std::make_shared<oemd_coefficients>();
-    oemd_search::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
+    oemd::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
 
     PROFILE_EXEC_TIME(
-            oemd_search::oemd_coefficients_search::get().optimize_levels(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, in_tail_size, queue_name),
+            oemd::oemd_coefficients_search::get().optimize_levels(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, in_tail_size, queue_name),
             "OEMD FIR coefficients search");
 
-__bail:
+    __bail:
     if (!coefs) LOG4_THROW("Could not prepare coefficients for " << levels << ", " << queue_name);
 
     const auto [it_loaded_coefs, rc] = oemd_coefs_cache.emplace(coefs_key, coefs);
@@ -164,7 +165,7 @@ size_t online_emd::get_residuals_length(const oemd_coefficients &coefs, const do
 
 size_t online_emd::get_residuals_length(const double _stretch_coef, const size_t siftings)
 {
-    return oemd_search::fir_search_end_size * _stretch_coef * siftings * 7;
+    return oemd::fir_search_end_size * _stretch_coef * siftings * 7;
 }
 
 
@@ -180,4 +181,6 @@ size_t online_emd::get_residuals_length(const std::string &queue_name)
     return get_residuals_length(*oemd_coefs->second, stretch_coef);
 }
 
+
+}
 }

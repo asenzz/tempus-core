@@ -6,14 +6,14 @@
 namespace svr {
 namespace dao {
 
-DecrementTaskDAO * DecrementTaskDAO::build(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource, svr::common::ConcreteDaoType daoType, bool use_threadsafe_dao)
+DecrementTaskDAO * DecrementTaskDAO::build(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao)
 {
-    return AbstractDAO::build<DecrementTaskDAO, PgDecrementTaskDAO, AsyncDecrementTaskDAO, TsDecrementTaskDAO>(sqlProperties, dataSource, daoType, use_threadsafe_dao);
+    return AbstractDAO::build<DecrementTaskDAO, PgDecrementTaskDAO, AsyncDecrementTaskDAO, TsDecrementTaskDAO>(tempus_config, data_source, dao_type, use_threadsafe_dao);
 }
 
 
-DecrementTaskDAO::DecrementTaskDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: AbstractDAO(sqlProperties, dataSource, "DecrementTaskDAO.properties")
+DecrementTaskDAO::DecrementTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: AbstractDAO(tempus_config, data_source, "DecrementTaskDAO.properties")
 {}
 
 } // namespace dao

@@ -112,9 +112,9 @@ InputQueueService::load(
             p_input_queue->set_data(input_queue_dao.get_queue_data_by_table_name(p_input_queue->get_table_name(), range.begin(), range.end(), limit));
     } else {
         const auto new_data = p_input_queue->get_uses_fix_connection() ?
-                load_latest_from_mmf(p_input_queue, range.end()) :
-                input_queue_dao.get_queue_data_by_table_name(
-                        p_input_queue->get_table_name(), range.begin(), range.end(), limit);
+                              load_latest_from_mmf(p_input_queue, range.end()) :
+                              input_queue_dao.get_queue_data_by_table_name(
+                                      p_input_queue->get_table_name(), range.begin(), range.end(), limit);
         if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
             data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.end());
         data.insert(data.end(), new_data.begin(), new_data.end());
@@ -147,10 +147,10 @@ InputQueueService::load_latest_from_mmf(
     if (last_time < values.front().time - input_queue->get_resolution())
         return result;
 
-    for (const auto &bas :values)
-        result.push_back(std::make_shared<svr::datamodel::DataRow>(bas.time, bas.time, 0,
-                                                                   std::vector<double>{bas.ask_px, double(bas.ask_qty), bas.bid_px,
-                                                                                       double(bas.bid_qty)}));
+    for (const auto &bas: values)
+        result.emplace_back(std::make_shared<svr::datamodel::DataRow>(bas.time, bas.time, 0,
+                                                                      std::vector<double>{bas.ask_px, double(bas.ask_qty), bas.bid_px,
+                                                                                          double(bas.bid_qty)}));
 #endif //BUILD_WITHOUT_SVR_FIX
     return result;
 }
@@ -304,7 +304,7 @@ InputQueueService::clone_with_data(
 
     if (result_queue->size() < minimum_rows_count)
         THROW_EX_FS(insufficient_data,
-                "Not enough data in inputQueue in time range " << time_range << " number of observations is lesser than " << minimum_rows_count);
+                    "Not enough data in inputQueue in time range " << time_range << " number of observations is lesser than " << minimum_rows_count);
 
     return result_queue;
 }
@@ -353,24 +353,18 @@ InputQueueService::get_column_data(const datamodel::InputQueue_ptr &queue, const
 }
 
 
-std::vector<std::string>
+std::deque<std::string>
 InputQueueService::get_db_table_column_names(const datamodel::InputQueue_ptr &queue)
 {
     const auto db_all_columns = input_queue_dao.get_db_table_column_names(queue);
 
-    std::vector<std::string> result;
+    std::deque<std::string> result;
 
-    auto iut = std::find_if(db_all_columns.begin(), db_all_columns.end(), [](std::shared_ptr<std::string> const &col)
-    { return *col == "tick_volume"; });
-    if (iut == db_all_columns.end())
-        return result;
+    auto iut = std::find_if(db_all_columns.begin(), db_all_columns.end(), [](std::shared_ptr<std::string> const &col) { return *col == "tick_volume"; });
+    if (iut == db_all_columns.end()) return result;
 
     iut += 1;
-
-    result.reserve(std::distance(iut, db_all_columns.end()));
-
-    for (auto ir = result.begin(); iut != db_all_columns.end(); ++iut, ++ir)
-        result.push_back(**iut);
+    for (auto ir = result.begin(); iut != db_all_columns.end(); ++iut, ++ir) result.emplace_back(**iut);
 
     return result;
 }
@@ -407,14 +401,14 @@ InputQueueService::find_newest_record(const datamodel::InputQueue_ptr &queue)
 }
 
 
-std::vector<datamodel::InputQueue_ptr>
+std::deque<datamodel::InputQueue_ptr>
 InputQueueService::get_all_user_queues(const std::string &user_name)
 {
     return input_queue_dao.get_all_user_queues(user_name);
 }
 
 
-std::vector<datamodel::InputQueue_ptr> InputQueueService::get_all_queues_with_sign(const bool uses_fix_connector)
+std::deque<datamodel::InputQueue_ptr> InputQueueService::get_all_queues_with_sign(const bool uses_fix_connector)
 {
     return input_queue_dao.get_all_queues_with_sign(uses_fix_connector);
 }
@@ -446,14 +440,13 @@ InputQueueService::compare_to_decon_queue(
     if (p_decon_queue->get_data().empty())
         return boost::posix_time::min_date_time;
 
-    if  (p_input_queue->front()->get_value_time() > p_decon_queue->front()->get_value_time()) {
+    if (p_input_queue->front()->get_value_time() > p_decon_queue->front()->get_value_time()) {
         LOG4_ERROR("Inconsistency between input queue " << *p_input_queue << " and decon queue " << *p_decon_queue << " detected.");
         return boost::posix_time::min_date_time;
     }
 
     if (std::find(std::execution::par_unseq, p_input_queue->get_value_columns().begin(), p_input_queue->get_value_columns().end(),
-                  p_decon_queue->get_input_queue_column_name()) == p_input_queue->get_value_columns().end())
-    {
+                  p_decon_queue->get_input_queue_column_name()) == p_input_queue->get_value_columns().end()) {
         LOG4_ERROR("Input queue column " << p_decon_queue->get_input_queue_column_name() << " is missing in " << *p_input_queue);
         return boost::posix_time::max_date_time;
     }
@@ -463,7 +456,8 @@ InputQueueService::compare_to_decon_queue(
     for (auto range_iter = lower_bound(p_input_queue->get_data(), p_decon_queue->front()->get_value_time()); range_iter != p_input_queue->end(); ++range_iter) {
         if (std::any_of(
                 std::execution::par_unseq, p_decon_queue->begin(), p_decon_queue->end(),
-                [&range_iter](const auto &item) { return item->get_value_time() == range_iter->get()->get_value_time(); })) continue;
+                [&range_iter](const auto &item) { return item->get_value_time() == range_iter->get()->get_value_time(); }))
+            continue;
         LOG4_DEBUG("Input row at " << range_iter->get()->get_value_time() << " not found in decon queue " << p_decon_queue->get_input_queue_table_name() <<
                                    " " << p_decon_queue->get_input_queue_column_name());
 #pragma omp critical
@@ -474,8 +468,9 @@ InputQueueService::compare_to_decon_queue(
     }
 
     LOG4_DEBUG("Compared input queue " << p_input_queue->get_table_name() << " with data from " << p_input_queue->front()->get_value_time() << " to " <<
-            p_input_queue->back()->get_value_time() << " with decon queue with data from " << p_decon_queue->front()->get_value_time() << " to " <<
-            p_decon_queue->back()->get_value_time());
+                                       p_input_queue->back()->get_value_time() << " with decon queue with data from " << p_decon_queue->front()->get_value_time()
+                                       << " to " <<
+                                       p_decon_queue->back()->get_value_time());
 
     return missing_time;
 }
@@ -490,16 +485,18 @@ InputQueueService::prepare_queues(
 
     prepare_input_data(p_dataset);
 
+    APP.iq_scaling_factor_service.prepare(*p_dataset);
 #pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size()))
     for (const auto &p_ensemble: p_dataset->get_ensembles()) {
         DeconQueueService::prepare_decon(p_dataset, p_dataset->get_input_queue(), p_ensemble->get_decon_queue());
 #pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size()))
-        for (const auto &p_aux_input: p_dataset->get_aux_input_queues())
+        for (const auto &p_aux_input: p_dataset->get_aux_input_queues()) {
 #pragma omp parallel for num_threads(adj_threads(p_aux_input->get_value_columns().size()))
             for (const auto &aux_input_column_name: p_aux_input->get_value_columns()) {
                 auto p_decon_queue = DeconQueueService::find_decon_queue(p_ensemble->get_aux_decon_queues(), p_aux_input->get_table_name(), aux_input_column_name);
                 DeconQueueService::prepare_decon(p_dataset, p_aux_input, p_decon_queue);
             }
+        }
     }
 
     if (false && getenv("BACKTEST")) {

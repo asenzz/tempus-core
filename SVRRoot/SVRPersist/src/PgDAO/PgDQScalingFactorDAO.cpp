@@ -5,9 +5,9 @@
 namespace svr {
 namespace dao {
 
-PgDQScalingFactorDAO::PgDQScalingFactorDAO(svr::common::PropertiesFileReader& sqlProperties,
-                                           svr::dao::DataSource& dataSource) :
-    DQScalingFactorDAO(sqlProperties, dataSource)
+PgDQScalingFactorDAO::PgDQScalingFactorDAO(svr::common::PropertiesFileReader& tempus_config,
+                                           svr::dao::DataSource& data_source) :
+    DQScalingFactorDAO(tempus_config, data_source)
 {}
 
 bigint PgDQScalingFactorDAO::get_next_id()

@@ -24,7 +24,7 @@ class RequestDAO : public AbstractDAO
 {
 public:
     static RequestDAO *build(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source,
-                             svr::common::ConcreteDaoType daoType, bool use_threadsafe_dao);
+                             svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
 
     explicit RequestDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source);
 

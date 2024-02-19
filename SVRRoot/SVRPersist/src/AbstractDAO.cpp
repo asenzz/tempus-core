@@ -7,8 +7,8 @@ using namespace svr::common;
 namespace svr {
 namespace dao {
 
-AbstractDAO::AbstractDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource, std::string propsFileName)
-:sql_properties(sqlProperties), propsFileName(std::move(propsFileName)), data_source(dataSource)
+AbstractDAO::AbstractDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source, std::string propsFileName)
+:sql_properties(tempus_config), propsFileName(std::move(propsFileName)), data_source(data_source)
 {
 }
 

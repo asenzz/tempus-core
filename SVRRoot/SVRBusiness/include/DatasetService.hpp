@@ -1,19 +1,15 @@
 #pragma once
 
-#include "online_emd.hpp"
 #include "common/types.hpp"
 #include "model/Dataset.hpp"
 #include "model/SVRParameters.hpp"
 #include "model/Ensemble.hpp"
-#include "model/DataRow.hpp"
 #include "model/Model.hpp"
 #include "model/User.hpp"
-#include "onlinesvr.hpp"
 
 // #define TRIM_DATA
 
 namespace svr {
-class online_emd;
 namespace datamodel {
 class Dataset;
 using Dataset_ptr = std::shared_ptr<Dataset>;

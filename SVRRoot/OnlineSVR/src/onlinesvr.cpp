@@ -259,8 +259,6 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, cons
 
 void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters, const bool psd)
 {
-    if (K.n_rows != rhs.n_rows) LOG4_THROW("Illegal size K " << arma::size(K) << ", rhs " << arma::size(rhs));
-
     svr::common::gpu_context ctx;
     const size_t gpu_phy_id = ctx.phy_id();
 #ifdef USE_MAGMA
@@ -268,27 +266,24 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
 #else
     auto [cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo] = solvers::init_cusolver(gpu_phy_id, K.n_rows, rhs.n_cols);
 #endif
-
-    if (solved.empty() || arma::size(solved) != arma::size(rhs))
-        if (solved.n_rows != K.n_rows || solved.n_cols != rhs.n_cols) solved.set_size(K.n_rows, rhs.n_cols);
+    if (solved.empty() || arma::size(solved) != arma::size(rhs) || solved.n_rows != K.n_rows || solved.n_cols != rhs.n_cols) solved = rhs;
 
     {
         const arma::mat left = K + epsilon_eye_K;
 #ifdef USE_MAGMA
-//        svr::solvers::dyn_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, piv, d_K, d_rhs);
         svr::solvers::iter_magma_solve(left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd, gpu_phy_id);
 #else
         svr::solvers::dyn_gpu_solve(gpu_phy_id, left.n_rows, rhs.n_cols, left.mem, rhs.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
 #endif
     }
-    double best_sae = common::sum<double>(arma::abs(K * solved - rhs));
+    double best_sae = arma::accu(arma::abs(K * solved - rhs));
     arma::mat best_solution = solved;
     size_t best_iter = 0;
     const auto iters_delta = double(iters) * C_itersolve_delta;
     for (size_t i = 1; i < iters; ++i) {
         const double iter_add = iters_delta / (double(i) * C_itersolve_range);
         const arma::mat error_mat = arma::abs(K * solved - rhs);
-        const auto this_sae = common::sum<double>(error_mat);
+        const auto this_sae = arma::accu(error_mat);
         if (this_sae < best_sae) {
             LOG4_TRACE("IRWLS iteration " << i << ", add " << iter_add << ", SAE " << this_sae << ", kernel dimensions " << arma::size(K) << ", best SAE " << best_sae << ", iter add " << iter_add);
             best_sae = this_sae;
@@ -300,7 +295,6 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat 
         const arma::mat left = (arma::mean(mult, 1) * arma::ones(1, K.n_cols)) % K + epsilon_eye_K;
         const arma::mat right = rhs % mult;
 #ifdef USE_MAGMA
-//       svr::solvers::dyn_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, piv, d_K, d_rhs);
        svr::solvers::iter_magma_solve(left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), magma_queue, d_K, d_rhs, d_x, d_tmpd, d_tmpf, psd, gpu_phy_id);
 #else
         svr::solvers::dyn_gpu_solve(gpu_phy_id, left.n_rows, right.n_cols, left.mem, right.mem, solved.memptr(), cusolverH, d_K, d_rhs, d_tmpd, d_piv, d_devinfo);
@@ -333,7 +327,7 @@ arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
 void
 OnlineMIMOSVR::solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters, const bool psd)
 {
-    if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
+    if (a.n_cols != a.n_rows || a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
     PROFILE_EXEC_TIME(solve_irwls(epsilon_eye_K, a, b, solved, iters, false), "IRWLS solver " << arma::size(a) << ", " << arma::size(b)); // Emo's IRWLS solver
 }
 

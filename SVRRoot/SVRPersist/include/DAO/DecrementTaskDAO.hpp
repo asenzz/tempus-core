@@ -11,7 +11,7 @@ namespace dao {
 class DecrementTaskDAO : public AbstractDAO
 {
 public:
-    static DecrementTaskDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType daoType, bool use_threadsafe_dao);
+    static DecrementTaskDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
 
     explicit DecrementTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
 

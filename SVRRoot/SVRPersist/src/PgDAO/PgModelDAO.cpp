@@ -6,8 +6,8 @@
 namespace svr {
 namespace dao {
 
-PgModelDAO::PgModelDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: ModelDAO(sqlProperties, dataSource)
+PgModelDAO::PgModelDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: ModelDAO(tempus_config, data_source)
 {}
 
 bigint PgModelDAO::get_next_id() {

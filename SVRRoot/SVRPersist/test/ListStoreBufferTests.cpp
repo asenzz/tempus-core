@@ -46,11 +46,12 @@ TEST(ListStoreBufferTests, BasicTests)
     ASSERT_EQ(8UL, dq.cont.size()); ASSERT_EQ(999, dq.cont.front()); ASSERT_EQ(997, *(++dq.cont.begin()));
 }
 
-
+namespace svr {
 template<>
-void store_buffer_push_merge<std::string> (std::string& dest, const std::string& src)
+void store_buffer_push_merge<std::string>(std::string &dest, const std::string &src)
 {
     dest += src;
+}
 }
 
 auto first_letter_equal = [](std::string const & s1, std::string const & s2)

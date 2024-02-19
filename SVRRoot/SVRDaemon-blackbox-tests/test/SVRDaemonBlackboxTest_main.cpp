@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     namespace po = boost::program_options;
     po::options_description desc("Allowed options");
     desc.add_options()
-            ("daoType,d", po::value<std::string>(), "Specify dao type (async, postgres)")
+            ("dao_type,d", po::value<std::string>(), "Specify dao type (async, postgres)")
             ("perf,p", "Do performance tests")
             ("h1,1", "Do the 1st half of the test - prepare requests, not run the Daemon")
             ("h2,1", "Do the 2nd half of the test - check results, not run the Daemon");
@@ -24,9 +24,9 @@ int main(int argc, char **argv)
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
-    std::string daoType = "postgres";
+    std::string dao_type = "postgres";
 
-    if (vm.count("daoType")) daoType = vm["daoType"].as<std::string>();
+    if (vm.count("dao_type")) dao_type = vm["dao_type"].as<std::string>();
     if (vm.count("perf")) DaoTestFixture::DoPerformanceTests = true;
     
     DaoTestFixture::DoTestPart = DaoTestFixture::test_completeness::full;
@@ -38,11 +38,11 @@ int main(int argc, char **argv)
         DaoTestFixture::DoTestPart = DaoTestFixture::test_completeness::second_half;
 
     TestEnv& tdb = TestEnv::global_test_env();
-    tdb.dao_type = daoType;
+    tdb.dao_type = dao_type;
     
     char const * dbname = tdb.TestDbUserName;
 
-    if( !tdb.prepareSvrConfig(dbname, daoType, 1)) return 1;
+    if( !tdb.prepareSvrConfig(dbname, dao_type, 1)) return 1;
     std::string hostname = exec("hostname");
     erase_after(hostname, '\n');
     if(!tdb.init_test_db_98(dbname)) return 1;

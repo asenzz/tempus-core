@@ -5,8 +5,8 @@
 namespace svr {
 namespace dao {
 
-PgDatasetDAO::PgDatasetDAO(svr::common::PropertiesFileReader &sqlProperties, svr::dao::DataSource &dataSource)
-        : DatasetDAO(sqlProperties, dataSource)
+PgDatasetDAO::PgDatasetDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+        : DatasetDAO(tempus_config, data_source)
 {}
 
 bool PgDatasetDAO::exists(const bigint dataset_id)

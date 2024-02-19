@@ -14,8 +14,8 @@
 namespace svr {
 
 
-static const std::string dd_separator{".."};
-static const std::string cm_separator{","};
+static const std::string C_dd_separator{".."};
+static const std::string C_cm_separator{","};
 
 std::ostream &operator<<(std::ostream &os, const std::vector<size_t> &v);
 

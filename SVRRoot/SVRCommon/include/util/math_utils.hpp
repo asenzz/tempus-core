@@ -275,11 +275,25 @@ join_rows(const size_t arg_ct...)
     return res;
 }
 
-template<typename T> T
-symmetricity(const arma::Mat<T> &m)
+template<typename T> arma::Mat<T>
+norm(const arma::subview<std::complex<T>> &cxm)
 {
-    return arma::sum(arma::abs(arma::vectorise(arma::symmatu(m) - arma::symmatl(m))));
+    arma::Mat<T> norm_cxm(arma::size(cxm));
+#pragma omp parallel for num_threads(adj_threads(cxm.n_elem)) schedule(static, 1 + cxm.n_elem / std::thread::hardware_concurrency())
+    for (size_t i = 0; i < cxm.n_elem; ++i) norm_cxm[i] = std::norm(cxm[i]);
+    return norm_cxm;
 }
+
+
+template<typename T> arma::Mat<T>
+norm(const arma::Mat<std::complex<T>> &cxm)
+{
+    arma::Mat<T> norm_cxm(arma::size(cxm));
+#pragma omp parallel for num_threads(adj_threads(cxm.n_elem)) schedule(static, 1 + cxm.n_elem / std::thread::hardware_concurrency())
+    for (size_t i = 0; i < cxm.n_elem; ++i) norm_cxm[i] = std::norm(cxm[i]);
+    return norm_cxm;
+}
+
 
 template<typename T> std::string
 present(const arma::Mat<T> &m)
@@ -339,16 +353,11 @@ meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typen
     return res / std::abs(double(std::distance(begin, end)));
 }
 
-template<typename T> T
-sum(const arma::Mat<T> &m)
-{
-    return arma::sum(arma::vectorise(m));
-}
 
 template<typename T> T
-sumabs(const arma::Mat<T> &m)
+accuabs(const arma::Mat<T> &m)
 {
-    return arma::sum(arma::abs(arma::vectorise(m)));
+    return arma::accu(arma::abs(m));
 }
 
 template<typename T> arma::Mat<T>

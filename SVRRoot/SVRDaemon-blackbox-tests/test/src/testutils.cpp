@@ -139,7 +139,7 @@ TestEnv::init_test_db_98(char const *db_name)
 }
 
 
-bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & daoType, int max_loop_count)
+bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & dao_type, int max_loop_count)
 {
     /**************************************************************************/
     // Copying config files
@@ -176,7 +176,7 @@ bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & daoType,
 
     {
         std::stringstream str_sed;
-        str_sed << "sed -ri 's/(DAO_TYPE[ \\t]*=[ \\t]*)([a-zA-Z0-9_]+)/\\1" << daoType << "/g' ";
+        str_sed << "sed -ri 's/(DAO_TYPE[ \\t]*=[ \\t]*)([a-zA-Z0-9_]+)/\\1" << dao_type << "/g' ";
 
         for (char const * cf : ConfigFiles)
         {

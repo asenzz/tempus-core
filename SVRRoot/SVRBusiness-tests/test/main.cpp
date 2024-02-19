@@ -24,10 +24,10 @@ int main(int argc, char **argv)
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    std::string daoType = "postgres";
+    std::string dao_type = "postgres";
 
     if (vm.count("dao_type"))
-        daoType = vm["dao_type"].as<std::string>();
+        dao_type = vm["dao_type"].as<std::string>();
 
     if (vm.count("perf"))
         DaoTestFixture::DoPerformanceTests = true;
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 
     char const * dbname = tdb.TestDbUserName;
 
-    if( !tdb.prepareSvrConfig(dbname, daoType))
+    if( !tdb.prepareSvrConfig(dbname, dao_type))
         return 1;
 
     std::string hostname = exec("hostname"); erase_after(hostname, '\n');

@@ -24,8 +24,8 @@ constexpr unsigned C_kernel_default_max_chunk_size = 6000;
 constexpr unsigned C_max_predict_chunk_size = C_kernel_default_max_chunk_size / 10;
 
 #ifndef TUNE_HYBRID_IDEAL
-constexpr unsigned EMO_SLIDE_SKIP = 7;
-constexpr unsigned EMO_MAX_J = 15;
+constexpr unsigned EMO_SLIDE_SKIP = 6;
+constexpr unsigned EMO_MAX_J = 17;
 constexpr unsigned DEFAULT_EMO_SLIDE_LEN = 270; // 65 // TODO test 5 * 16 + 190 / epsco 20
 constexpr unsigned EMO_SLIDE_LEN = DEFAULT_EMO_SLIDE_LEN; // = EMO_TUNE_TEST_SIZE
 constexpr unsigned EMO_TUNE_VALIDATION_WINDOW = EMO_SLIDE_LEN - EMO_SLIDE_SKIP * EMO_MAX_J; // 200 seems to be the best validation window for predicting the next 120 hours, setting the window to 120 gives worse results for predicting the next 120 hours

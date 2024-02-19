@@ -5,18 +5,93 @@
 #include <vector>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <cufft.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <common/cuda_util.cuh>
-#include <cufft.h>
 #include "model/DeconQueue.hpp"
-#include "online_emd.hpp"
 #include "common/gpu_handler.hpp"
+#include "online_emd.hpp"
 
 
 namespace svr {
+namespace oemd {
 
 
+__global__ void
+gpu_multiply_complex(
+        const size_t input_size,
+        const cufftDoubleComplex *__restrict__ multiplier,
+        cufftDoubleComplex *__restrict__ output)
+{
+    const auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto total_block_size = blockDim.x * gridDim.x;
+
+    cufftDoubleComplex new_output;
+    for (auto j = thread_idx; j < input_size / 2 + 1; j += total_block_size) {//because it is D2Z transform
+        new_output.x = output[j].x * multiplier[j].x - output[j].y * multiplier[j].y;
+        new_output.y = output[j].x * multiplier[j].y + output[j].y * multiplier[j].x;
+        output[j].x = new_output.x / double(input_size); // because of inverse FFT
+        output[j].y = new_output.y / double(input_size);
+    }
+}
+
+
+__global__ void
+vec_power(
+        cufftDoubleComplex *__restrict__ x,
+        const size_t x_size,
+        const int siftings)
+{
+    const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
+    for (size_t j = ix; j < x_size / 2 + 1; j += blockDim.x * gridDim.x) {
+        double px = (1. - x[j].x);
+        double py = -x[j].y;
+
+        double px_out, py_out;
+        for (int i = 1; i < siftings; i++) {
+            px_out = px * (1. - x[j].x) - py * (-x[j].y);
+            py_out = px * (-x[j].y) + py * (1. - x[j].x);
+            px = px_out;
+            py = py_out;
+        }
+        x[j].x = px;
+        x[j].y = py;
+    }
+}
+
+__global__ void
+vec_power(
+        const cufftDoubleComplex *__restrict__ x,
+        cufftDoubleComplex *__restrict__ y,
+        const size_t x_size,
+        const size_t siftings)
+{
+    const auto ix = blockIdx.x * blockDim.x + threadIdx.x;
+    double px, py;
+    for (auto j = ix; j < x_size / 2 + 1; j += blockDim.x * gridDim.x) {
+        px = 1. - x[j].x;
+        py = -x[j].y;
+        for (size_t i = 1; i < siftings; ++i) {
+            px = px * (1. - x[j].x) - py * (-x[j].y);
+            py = px * (-x[j].y) + py * (1. - x[j].x);
+        }
+        y[j].x = px;
+        y[j].y = py;
+    }
+}
+
+
+__global__ void
+vec_subtract_inplace(
+        double *__restrict__ x,
+        const double *__restrict__ y,
+        const size_t x_size)
+{
+    for (auto j = blockIdx.x * blockDim.x + threadIdx.x; j < x_size; j += blockDim.x * gridDim.x) x[j] -= y[j];
+}
+
+#if 0
 __global__ void
 vec_subtract_inplace(
         double *__restrict__ x,
@@ -26,6 +101,7 @@ vec_subtract_inplace(
     const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
     if (ix < x_size) x[ix] -= y[ix];
 }
+#endif
 
 
 __global__ void
@@ -56,286 +132,89 @@ apply_mask(
     }
 }
 
-#ifdef OEMD_FFT // TODO Integrate and test code in libs/emo_param_optimizer/split_oemd.cu
-
-__global __ void
-reduce_mask_trim(
-        const size_t apply_ix,
-        const double *masks,
-        const double *rx,
-        const double *x,
-)
-{
-    rx[ix] += masks[size_t(mask_size - 1 - ix / stretch_coef + j / stretch_coef)] * x[j];
-    sum += masks[size_t(mask_size - 1 - ix / stretch_coef + j / stretch_coef)];
-}
-
-__global__ void
-reduce_mask(
-        double * rx,
-        const double * masks,
-        const double * x,
-        const size_t apply_ix,
-        const size_t mask_size,
-        const double stretch_coef)
-{
-    const size_t m = blockIdx.x * blockDim.x + threadIdx.x;
-    if (m < mask_size * stretch_coef)
-        rx[apply_ix] += masks[size_t(m / stretch_coef)] * x[size_t(apply_ix - mask_size + m / stretch_coef + 1)] / stretch_coef;
-}
-
-
-//modelled along the previous, but using expanded masks and cumsum
-//order of expanded masks is inverted to order of masks
-__global__ void
-apply_mask_initial(
-        double *__restrict__ x,
-        const size_t x_size,
-        const double *__restrict__ expanded_mask,
-        const double *__restrict__ expanded_mask_cumsum,
-        const size_t mask_size,
-        double *__restrict__ rx)
-{
-    const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    if (ix >= x_size) return;
-
-    rx[ix] = 0;
-    if (ix >= mask_size - 1) {
-        const double mask_normalizer = expanded_mask_cumsum[mask_size - 1];
-        double sum = 0;
-        for (size_t m = 0; m < mask_size; ++m)
-            sum += expanded_mask[m] * x[size_t(ix - m)] / mask_normalizer;
-        rx[ix] += sum;
-    } else {
-        for (size_t j = 0; j <= ix; ++j)
-            rx[ix] += expanded_mask[ix - j] * x[j];
-        rx[ix] /= expanded_mask_cumsum[ix];
-    }
-}
-
-
-__global__ void
-gpu_expand_mask(
-        const size_t mask_size,
-        const double *__restrict__ mask,
-        const int stretch_coef,
-        double *expanded_mask)
-{
-    const size_t all_work = (size_t) (mask_size * stretch_coef);
-    const size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_block_size = blockDim.x * gridDim.x;
-
-    for (size_t j = thread_idx; j < all_work; j += total_block_size) {
-        const size_t mask_idx = size_t(j) / size_t(stretch_coef);
-        expanded_mask[j] = mask[mask_size - 1 - mask_idx] / double(stretch_coef); //could be without stretch_coef, using the cumsum
-    }
-}
-
-__global__ void
-gpu_cumsum_mask(
-        const size_t expanded_mask_size,
-        const double *__restrict__ expanded_mask,
-        double *expanded_mask_cumsum)
-{
-    //cumsum using only 1 block!
-    __shared__ double s_cumsum_data[CUDA_BLOCK_SIZE];
-    const size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    double carry_sum = 0;
-    for (size_t i = thread_idx; i < expanded_mask_size; i += CUDA_BLOCK_SIZE) {
-        s_cumsum_data[thread_idx] = expanded_mask[i];
-        __syncthreads();
-        for (unsigned s = 1; s < blockDim.x; s *= 2) {
-            if (thread_idx & s)
-                s_cumsum_data[threadIdx.x] += s_cumsum_data[(threadIdx.x & ~(s - 1)) - 1];
-            __syncthreads();
-        }
-        expanded_mask_cumsum[i] = carry_sum + s_cumsum_data[thread_idx];
-        carry_sum += s_cumsum_data[CUDA_BLOCK_SIZE - 1];
-    }
-}
-
-
-void
-expand_the_mask(
-        const size_t stretch_coef,
-        const size_t mask_size,
-        const size_t input_size,
-        const double *dev_mask,
-        double *&expanded_mask)
-{
-    const size_t expanded_size = std::max(input_size, mask_size * stretch_coef);////assume input_size bigger than mask_size*stretch_coef
-    expanded_mask = (double *) cuda_calloc(expanded_size, sizeof(double));
-    cu_errchk(cudaMemset(expanded_mask, 0, sizeof(double) * expanded_size));
-    //probably exact fixed sizes not important
-    gpu_expand_mask<<<CUDA_THREADS_BLOCKS(expanded_size)>>>(mask_size, dev_mask, stretch_coef, expanded_mask);
-    cu_errchk(cudaPeekAtLastError());
-    //cu_errchk(cudaDeviceSynchronize());
-}
-
-
-void
-cumsum_the_mask(
-        const size_t stretch_coef,
-        const size_t mask_size,
-        const double *expanded_mask,
-        double *&expanded_mask_cumsum)
-{
-    expanded_mask_cumsum = (double *) cuda_calloc(mask_size * stretch_coef, sizeof(double));
-    gpu_cumsum_mask<<<1 /* Must be 1! */, CUDA_BLOCK_SIZE>>>(mask_size * stretch_coef, expanded_mask, expanded_mask_cumsum);
-    cu_errchk(cudaPeekAtLastError());
-    //cu_errchk(cudaDeviceSynchronize());
-}
-
-
-__global__ void
-gpu_multiply_complex(
-    const size_t input_size,
-    const size_t expanded_mask_size,
-    const cufftDoubleComplex *__restrict__ multiplier,
-    cufftDoubleComplex *__restrict__ output,
-    const double *__restrict__ dev_expanded_mask_cumsum)
-{
-    const size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_block_size = blockDim.x * gridDim.x;
-    for (size_t j = thread_idx; j < (input_size / 2 + 1); j += total_block_size) { // because it is D2Z transform
-        cufftDoubleComplex new_output;
-        new_output.x = output[j].x * multiplier[j].x - output[j].y * multiplier[j].y;
-        new_output.y = output[j].x * multiplier[j].y + output[j].y * multiplier[j].x;
-        output[j].x = new_output.x / double(input_size) / dev_expanded_mask_cumsum[expanded_mask_size - 1]; // because of inverse fft
-        output[j].y = new_output.y / double(input_size) / dev_expanded_mask_cumsum[expanded_mask_size - 1];
-    }
-}
-
-
-void do_multiply(
-    const size_t input_size,
-    const size_t expanded_mask_size,
-    const cufftDoubleComplex *dev_expanded_mask_fft,
-    cufftDoubleComplex *dev_input_fft,
-    double *dev_expanded_mask_cumsum)
-{
-    gpu_multiply_complex<<<(input_size + CUDA_BLOCK_SIZE - 1) / CUDA_BLOCK_SIZE, CUDA_BLOCK_SIZE>>>(input_size, expanded_mask_size, dev_expanded_mask_fft, dev_input_fft, dev_expanded_mask_cumsum);
-    cu_errchk(cudaPeekAtLastError());
-    //cu_errchk(cudaDeviceSynchronize());
-
-}
-
-
-void prepare_mask(
-    const int stretch_coef,
-    const size_t input_size,
-    const size_t mask_size,
-    const double *dev_mask,
-    double *&dev_expanded_mask,
-    double *&dev_expanded_mask_cumsum)
-{
-    expand_the_mask(stretch_coef, mask_size, input_size, dev_mask, dev_expanded_mask);
-    cumsum_the_mask(stretch_coef, mask_size, dev_expanded_mask, dev_expanded_mask_cumsum);
-}
-
-
-void apply_mask_via_fft(
-    const int stretch_coef,
-    const size_t input_size,
-    const size_t mask_size,
-    const double *dev_mask,
-    double *dev_input,
-    double *dev_output,
-    double *dev_expanded_mask,
-    double *dev_expanded_mask_cumsum)
-{
-
-    const size_t expanded_size = mask_size * stretch_coef;
-
-    cufftHandle plan_forward;
-    cufftHandle plan_backward;
-
-    cufftDoubleComplex *dev_expanded_mask_fft, *dev_input_fft;
-    cu_errchk(cudaMalloc((void **) &dev_expanded_mask_fft, sizeof(cufftDoubleComplex) * (input_size / 2 + 1)));
-    cu_errchk(cudaMalloc((void **) &dev_input_fft, sizeof(cufftDoubleComplex) * (input_size / 2 + 1)));
-    const int n_batch = 1;
-
-
-    cufft_errchk(cufftPlan1d(&plan_forward, input_size, CUFFT_D2Z, n_batch));
-    cufft_errchk(cufftPlan1d(&plan_backward, input_size, CUFFT_Z2D, n_batch));
-
-    //cudaDeviceSynchronize();
-    cufft_errchk(cufftExecD2Z(plan_forward, dev_expanded_mask, dev_expanded_mask_fft));
-    cufft_errchk(cufftExecD2Z(plan_forward, dev_input, dev_input_fft));
-    do_multiply(input_size, expanded_size, dev_expanded_mask_fft, dev_input_fft, dev_expanded_mask_cumsum);
-
-    cufft_errchk(cufftExecZ2D(plan_backward, dev_input_fft, dev_output));
-    //TODO probably multiplied by the wrong constant now. must be corrected somewhere, maybe even on the host
-
-    //cudaDeviceSynchronize();
-
-    cufftDestroy(plan_forward);
-    cufftDestroy(plan_backward);
-    cu_errchk(cudaFree(dev_expanded_mask_fft));
-    cu_errchk(cudaFree(dev_input_fft))
-}
-
+#ifdef OEMDFFT
 
 void transform_fft(
-    const std::vector<double> &input,
-    std::vector<std::vector<double>> &decon,
-    const std::vector<size_t> &siftings,
-    const std::vector<std::vector<double>> &mask,
-    const double stretch_coef,
-    const size_t levels)
+        datamodel::datarow_range &inout,
+        const std::vector<double> &tail,
+        const std::deque<size_t> &siftings,
+        const std::deque<std::vector<double>> &masks,
+        const double stretch_coef)
 {
-    auto p_remainder = cuda_malloccopy(input);
-    auto p_rx = cuda_malloccopy(input);
-    auto p_rx2 = (double *) cuda_calloc(input.size(), sizeof(double));
-    if (decon.size() != input.size()) decon.resize(input.size());
-    for (size_t l = 0; l < levels - 1; l++) {
-        const size_t actual_l = levels - l - 1;
-        double *dev_mask = cuda_malloccopy(mask[l]);
-        double *dev_expanded_mask;
-        double *dev_expanded_mask_cumsum;
-        prepare_mask(stretch_coef, input.size(), mask[l].size(), dev_mask, dev_expanded_mask, dev_expanded_mask_cumsum);
-        for (size_t s = 0; s < siftings[l]; ++s) {
-            cu_errchk(cudaMemset(p_rx2, 0, sizeof(double) * input.size()));
-            apply_mask_via_fft(get_skewed_stretch_coef(actual_l, mask.back().size(), mask[l].size(), stretch_coef), input.size(),  mask[l].size(), dev_mask, p_rx, p_rx2, dev_expanded_mask, dev_expanded_mask_cumsum);
-                                        //fix the starting mask_size*stretch_coef elements using the slower algorithm
-                                        cu_errchk(cudaMemset (p_rx2, 0, sizeof(double) * mask[l].size() * stretch_coef));
-                                        //apply_mask_middle<<<CUDA_THREADS_BLOCKS_MIDDLE(masks[l].size()*stretch_coef)>>>(p_rx,  masks[l].size()*stretch_coef, dev_expanded_mask,dev_expanded_mask_cumsum, masks[l].size()*stretch_coef, p_rx2);
-                                        apply_mask_initial<<<CUDA_THREADS_BLOCKS(mask[l].size()*stretch_coef)>>>(p_rx, mask[l].size()*stretch_coef, dev_expanded_mask,dev_expanded_mask_cumsum,mask[l].size(), p_rx2);
+    const size_t levels = inout.levels() / 4;
+    const size_t in_colix = levels * 2;
+    const auto full_input_size = inout.distance() + tail.size();
+    cu_errchk(cudaSetDevice(0));
+    const auto max_gpus = common::gpu_handler::get().get_gpu_devices_count();
+    std::deque<size_t> gpuids(max_gpus);
+    for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
+    std::vector<double> h_rx(full_input_size);
+#pragma omp parallel for schedule(static, 1 + full_input_size / std::thread::hardware_concurrency()) num_threads(adj_threads(full_input_size))
+    for (size_t t = 0; t < full_input_size; ++t)
+        h_rx[t] = t < tail.size() ? tail[t] : inout[t - tail.size()]->get_value(in_colix);
 
-            if (s == 0) {
-//                if (stretch_coef > 600) std::this_thread::sleep_for(std::chrono::minutes(10)); // Sleep to cool down GPU
-                std::vector<double> p_host_rx = cuda_copy(p_rx, input.size(), cudaMemcpyDeviceToHost);
-                CU_LOG4_FILE(SAVE_OUTPUT_LOCATION << "oemd_level_" << actual_l << "_in.csv", deep_to_string(p_host_rx));
-                std::vector<double> p_host_rx2 = cuda_copy(p_rx2, input.size(), cudaMemcpyDeviceToHost);
-                CU_LOG4_FILE(SAVE_OUTPUT_LOCATION << "oemd_level_" << actual_l << "_out.csv", deep_to_string(p_host_rx2));
-            }
-            vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input.size())>>>(p_rx, p_rx2, input.size(), start_ix[d]);
-        }
-        cu_errchk(cudaFree(dev_expanded_mask));
-        cu_errchk(cudaFree(dev_expanded_mask_cumsum));
-
-        auto host_rx = cuda_malloccopy(p_rx, input.size() * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost);
-        for (size_t t = 0; t < input.size(); ++t) {
-            if (decon[t].size() != levels) decon[t].resize(levels);
-            decon[t][actual_l] = host_rx[t];
-        }
-        free(host_rx);
-        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input.size())>>>(p_remainder, p_rx, input.size());
-        cu_errchk(cudaMemcpy(p_rx, p_remainder, input.size() * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
-        cu_errchk(cudaFree(dev_mask));
+    std::deque<size_t> start_ix(max_gpus), job_len(max_gpus);
+#pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
+    for (size_t d = 0; d < max_gpus; ++d) {
+        cu_errchk(cudaSetDevice(gpuids[d]));
+        start_ix[d] = d * full_input_size / max_gpus;
+        job_len[d] = d == max_gpus - 1 ? full_input_size - start_ix[d] : full_input_size / max_gpus;
     }
-    {
 
-        double *p_host_rx = cuda_malloccopy(p_rx, input.size() * sizeof(double), cudaMemcpyDeviceToHost);
-        for (size_t t = 0; t < input.size(); ++t) decon[t][0] = p_host_rx[t];
-        free(p_host_rx);
+    std::deque<thrust::device_vector<double>> d_mask(masks.size());
+    for (size_t i = 0; i < masks.size(); i++) d_mask[i].resize(masks[i].size());
+
+    thrust::device_vector<double> d_zm(full_input_size);
+    double *d_zm_ptr = thrust::raw_pointer_cast(d_zm.data());
+    thrust::device_vector<cufftDoubleComplex> d_zm_fft(full_input_size);
+    cufftDoubleComplex *d_zm_fft_ptr = thrust::raw_pointer_cast(d_zm_fft.data());
+    thrust::device_vector<double> d_rem(full_input_size);
+    thrust::device_vector<double> d_imf(full_input_size);
+    double *d_rem_ptr = thrust::raw_pointer_cast(d_rem.data());
+    double *d_imf_ptr = thrust::raw_pointer_cast(d_imf.data());
+    thrust::device_vector<cufftDoubleComplex> d_rem_fft(full_input_size);
+    cufftDoubleComplex *d_rem_fft_ptr = thrust::raw_pointer_cast(d_rem_fft.data());
+    cu_errchk(cudaMemcpy(d_rem_ptr, h_rx.data(), sizeof(double) * full_input_size, cudaMemcpyHostToDevice));
+    d_imf = d_rem;
+    int n_batch = 1;
+    LOG4_DEBUG("Deconstructing " << full_input_size << " values.");
+
+    cufftHandle plan_full_forward, plan_full_backward;
+    cufft_errchk(cufftPlan1d(&plan_full_forward, full_input_size, CUFFT_D2Z, n_batch));
+    cufft_errchk(cufftPlan1d(&plan_full_backward, full_input_size, CUFFT_Z2D, n_batch));
+    for (unsigned i = 0; i < masks.size(); i++) {
+        LOG4_DEBUG("Doing level " << i);
+
+        size_t mask_size = masks[i].size();
+        thrust::host_vector<double> h_mask(mask_size);
+        std::memcpy(h_mask.data(), masks[i].data(), sizeof(double) * mask_size);
+        d_mask[i] = h_mask;
+
+        double *d_mask_ptr = thrust::raw_pointer_cast(d_mask[i].data());
+        online_emd::expand_the_mask(mask_size, full_input_size, d_mask_ptr, d_zm_ptr);
+        cufft_errchk(cufftExecD2Z(plan_full_forward, d_zm_ptr, d_zm_fft_ptr));
+        cufft_errchk(cufftExecD2Z(plan_full_forward, d_rem_ptr, d_rem_fft_ptr));
+        vec_power<<<CUDA_THREADS_BLOCKS(full_input_size / 2 + 1)>>>(d_zm_fft_ptr, full_input_size, siftings[i]);
+        gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(full_input_size / 2 + 1) >>>(full_input_size, d_zm_fft_ptr, d_rem_fft_ptr);
+        cufft_errchk(cufftExecZ2D(plan_full_backward, d_rem_fft_ptr, d_rem_ptr));
+
+        std::vector<double> h_tmp(full_input_size);
+        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(full_input_size)>>>(d_imf_ptr, d_rem_ptr, full_input_size);
+        cu_errchk(cudaMemcpy(h_tmp.data(), d_imf_ptr, sizeof(double) * full_input_size, cudaMemcpyDeviceToHost));
+        for (size_t t = 0; t < full_input_size; ++t)
+            if (t >= tail.size()) inout[t - tail.size()]->set_value(2 * i, h_tmp[t]);
+        d_imf = d_rem;
     }
-    cu_errchk(cudaFree(p_rx2));
-    cu_errchk(cudaFree(p_rx));
-    cu_errchk(cudaFree(p_remainder));
+
+    cu_errchk(cudaMemcpy(h_rx.data(), d_rem_ptr, sizeof(double) * full_input_size, cudaMemcpyDeviceToHost));
+#pragma omp parallel for schedule(static, 1 + full_input_size / std::thread::hardware_concurrency()) num_threads(adj_threads(full_input_size))
+    for (size_t t = 0; t < full_input_size; ++t)
+        if (t >= tail.size()) inout[t - tail.size()]->set_value(masks.size() * 2, h_rx[t]);
+    cufftDestroy(plan_full_forward);
+    cufftDestroy(plan_full_backward);
 }
 
-#endif
+#else
 
 void transform_fir(
         datamodel::datarow_range &inout,
@@ -346,24 +225,24 @@ void transform_fir(
 {
     const size_t levels = inout.levels() / 4;
     const size_t in_colix = levels * 2;
-    const auto in_tail_size = inout.distance() + tail.size();
+    const auto full_input_size = inout.distance() + tail.size();
     const auto max_gpus = common::gpu_handler::get().get_max_running_gpu_threads_number() / CTX_PER_GPU;
     std::deque<size_t> gpuids(max_gpus);
     for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
-    std::vector<double> h_rx(in_tail_size);
-#pragma omp parallel for schedule(static, 1 + in_tail_size / std::thread::hardware_concurrency()) num_threads(adj_threads(in_tail_size))
-    for (size_t t = 0; t < in_tail_size; ++t)
+    std::vector<double> h_rx(full_input_size);
+#pragma omp parallel for schedule(static, 1 + full_input_size / std::thread::hardware_concurrency()) num_threads(adj_threads(full_input_size))
+    for (size_t t = 0; t < full_input_size; ++t)
         h_rx[t] = t < tail.size() ? tail[t] : inout[t - tail.size()]->get_value(in_colix);
     std::deque<double *> d_remainder_ptr(max_gpus), d_rx_ptr(max_gpus), d_rx2_ptr(max_gpus);
     std::deque<size_t> start_ix(max_gpus), job_len(max_gpus);
 #pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
     for (size_t d = 0; d < max_gpus; ++d) {
         cu_errchk(cudaSetDevice(gpuids[d]));
-        start_ix[d] = d * in_tail_size / max_gpus;
-        job_len[d] = d == max_gpus - 1 ? in_tail_size - start_ix[d] : in_tail_size / max_gpus;
+        start_ix[d] = d * full_input_size / max_gpus;
+        job_len[d] = d == max_gpus - 1 ? full_input_size - start_ix[d] : full_input_size / max_gpus;
         d_remainder_ptr[d] = cuda_malloccopy(h_rx);
         d_rx_ptr[d] = cuda_malloccopy(h_rx);
-        cu_errchk(cudaMalloc(&d_rx2_ptr[d], in_tail_size * sizeof(double)));
+        cu_errchk(cudaMalloc(&d_rx2_ptr[d], full_input_size * sizeof(double)));
     }
     for (size_t l = 0; l < levels - 1; l++) {
         const size_t actual_l = levels - l - 1;
@@ -380,12 +259,12 @@ void transform_fir(
 #pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
             for (size_t d = 0; d < max_gpus; ++d) {
                 cu_errchk(cudaSetDevice(gpuids[d]));
-                apply_mask<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(stretch_coef, d_rx_ptr[d], in_tail_size, d_mask_ptr[d], mask[l].size(), stretched_mask_size, d_rx2_ptr[d], start_ix[d]);
-                vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_rx_ptr[d] + start_ix[d], d_rx2_ptr[d] + start_ix[d], job_len[d]);
+                apply_mask<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(stretch_coef, d_rx_ptr[d], full_input_size, d_mask_ptr[d], mask[l].size(), stretched_mask_size, d_rx2_ptr[d], start_ix[d]);
+                oemd::vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_rx_ptr[d] + start_ix[d], d_rx2_ptr[d] + start_ix[d], job_len[d]);
             }
         }
 
-        std::vector<double> h_tmp(in_tail_size);
+        std::vector<double> h_tmp(full_input_size);
 #pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
         for (size_t d = 0; d < max_gpus; ++d) {
             cu_errchk(cudaSetDevice(gpuids[d]));
@@ -395,7 +274,7 @@ void transform_fir(
             for (size_t i = start_ix[d]; i < start_ix[d] + job_len[d]; ++i)
                 if (i >= tail.size()) inout[i - tail.size()]->set_value(2 * actual_l, h_tmp[i]);
 
-            vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_remainder_ptr[d] + start_ix[d], d_rx_ptr[d] + start_ix[d], job_len[d]);
+            oemd::vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_remainder_ptr[d] + start_ix[d], d_rx_ptr[d] + start_ix[d], job_len[d]);
             cu_errchk(cudaMemcpy(d_rx_ptr[d] + start_ix[d], d_remainder_ptr[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
             cu_errchk(cudaFree(d_mask_ptr[d]));
         }
@@ -407,7 +286,7 @@ void transform_fir(
 #pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
         for (size_t d = 0; d < max_gpus; ++d) {
             cu_errchk(cudaSetDevice(gpuids[d]));
-            cu_errchk(cudaMemcpy(d_rx_ptr[d], h_tmp.data(), in_tail_size * sizeof(double), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            cu_errchk(cudaMemcpy(d_rx_ptr[d], h_tmp.data(), full_input_size * sizeof(double), cudaMemcpyKind::cudaMemcpyHostToDevice));
         }
     }
 #pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
@@ -416,8 +295,8 @@ void transform_fir(
         cu_errchk(cudaMemcpy(h_rx.data() + start_ix[d], d_rx_ptr[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost));
     }
     cu_errchk(cudaDeviceSynchronize());
-#pragma omp parallel for schedule(static, 1 + in_tail_size / std::thread::hardware_concurrency()) num_threads(adj_threads(in_tail_size))
-    for (size_t t = 0; t < in_tail_size; ++t)
+#pragma omp parallel for schedule(static, 1 + full_input_size / std::thread::hardware_concurrency()) num_threads(adj_threads(full_input_size))
+    for (size_t t = 0; t < full_input_size; ++t)
         if (t >= tail.size()) inout[t - tail.size()]->set_value(0, h_rx[t]);
 #pragma omp parallel for num_threads(adj_threads(max_gpus)) schedule(static, 1)
     for (size_t d = 0; d < max_gpus; ++d) {
@@ -428,55 +307,13 @@ void transform_fir(
     }
 }
 
-#if 0
-void transform_fir(
-        datamodel::datarow_range &inout,
-        const std::vector<double> &tail,
-        const std::deque<size_t> &siftings,
-        const std::deque<std::vector<double>> &mask,
-        const double stretch_coef)
-{
-    const size_t levels = inout.levels() / 4;
-    const size_t in_colix = levels * 2;
-    const auto in_tail_size = inout.distance() + tail.size();
-    cu_errchk(cudaSetDevice(gpu_id));
-    std::vector<double> h_rx(in_tail_size);
-#pragma omp parallel for schedule(static, 1 + in_tail_size / std::thread::hardware_concurrency())
-    for (size_t t = 0; t < in_tail_size; ++t)
-        h_rx[t] = t < tail.size() ? tail[t] : inout[t - tail.size()]->get_value(in_colix);
-    auto p_remainder = cuda_malloccopy(h_rx);
-    auto p_rx = cuda_malloccopy(h_rx);
-    auto p_rx2 = (double *) cuda_calloc(in_tail_size, sizeof(double));
-    for (size_t l = 0; l < levels - 1; l++) {
-        const size_t actual_l = levels - l - 1;
-        double *dev_mask = cuda_malloccopy(mask[l]);
-        for (size_t s = 0; s < siftings[l]; ++s) {
-            cu_errchk(cudaMemset(p_rx2, 0, sizeof(double) * in_tail_size));
-            apply_mask<<<CUDA_THREADS_BLOCKS(in_tail_size)>>>(stretch_coef, p_rx, in_tail_size, dev_mask, mask[l].size(), stretch_coef * mask[l].size(), p_rx2, 0);
-            vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(in_tail_size)>>>(p_rx, p_rx2, in_tail_size);
-        }
-
-        auto host_rx = cuda_malloccopy(p_rx, in_tail_size * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost);
-        for (size_t t = 0; t < in_tail_size; ++t) {
-            if (decon[t].size() != levels) decon[t].resize(levels);
-            decon[t][actual_l] = host_rx[t];
-        }
-        free(host_rx);
-        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input.size())>>>(p_remainder, p_rx, input.size());
-        cu_errchk(cudaMemcpy(p_rx, p_remainder, input.size() * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
-        cu_errchk(cudaFree(dev_mask));
-    }
-    {
-
-        double *p_host_rx = cuda_malloccopy(p_rx, input.size() * sizeof(double), cudaMemcpyDeviceToHost);
-        for (size_t t = 0; t < input.size(); ++t) decon[t][0] = p_host_rx[t];
-        free(p_host_rx);
-    }
-    cu_errchk(cudaFree(p_rx2));
-    cu_errchk(cudaFree(p_rx));
-    cu_errchk(cudaFree(p_remainder));
-}
 #endif
+
+void online_emd::expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask)
+{
+    cu_errchk(cudaMemset(dev_expanded_mask + mask_size, 0, sizeof(double) * std::max<size_t>(0, input_size - mask_size)));
+    cu_errchk(cudaMemcpy(dev_expanded_mask, dev_mask, sizeof(double) * mask_size, cudaMemcpyDeviceToDevice));
+}
 
 void online_emd::transform(
         datamodel::datarow_range &inout,
@@ -492,5 +329,5 @@ void online_emd::transform(
 #endif
 }
 
-
+} // namespace oemd
 } // namespace svr

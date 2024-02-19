@@ -8,27 +8,31 @@ namespace datamodel {
 class IQScalingFactor : public Entity
 {
 private:
-    bigint dataset_id_;
+    bigint dataset_id_ = 0;
 
-    std::string input_queue_table_name_;
-    double scaling_factor_;
+    std::string input_queue_table_name_ = "";
+    std::string input_queue_column_name_ = "";
+    double scaling_factor_ = 1;
 
 public:
     IQScalingFactor(const bigint id, const bigint dataset_id,
-                const std::string& input_queue_table_name,
-                const double scaling_factor = 1.0) :
-        Entity(id),
-        dataset_id_(dataset_id),
-        input_queue_table_name_(input_queue_table_name),
-        scaling_factor_(scaling_factor)
+                    const std::string &input_queue_table_name,
+                    const std::string &input_queue_column_name,
+                    const double scaling_factor = 1.0) :
+            Entity(id),
+            dataset_id_(dataset_id),
+            input_queue_table_name_(input_queue_table_name),
+            input_queue_column_name_(input_queue_column_name),
+            scaling_factor_(scaling_factor)
     {}
 
-    bool operator==(const IQScalingFactor& other) const
+    bool operator==(const IQScalingFactor &other) const
     {
-        return other.get_id() == get_id() &&
-               other.get_dataset_id() == get_dataset_id() &&
-               other.get_input_queue_table_name() == get_input_queue_table_name() &&
-               other.get_scaling_factor() == get_scaling_factor();
+        return other.id == id &&
+               other.dataset_id_ == dataset_id_ &&
+               other.input_queue_table_name_ == input_queue_table_name_ &&
+               other.input_queue_column_name_ == input_queue_column_name_ &&
+               other.scaling_factor_ == scaling_factor_;
     }
 
     bigint get_dataset_id() const
@@ -46,9 +50,20 @@ public:
         return input_queue_table_name_;
     }
 
-    void set_input_queue_table_name(const std::string& input_queue_table_name)
+    void set_input_queue_table_name(const std::string &input_queue_table_name)
     {
         input_queue_table_name_ = input_queue_table_name;
+    }
+
+
+    std::string get_input_queue_column_name() const
+    {
+        return input_queue_column_name_;
+    }
+
+    void set_input_queue_column_name(const std::string &input_queue_column_name)
+    {
+        input_queue_column_name_ = input_queue_column_name;
     }
 
     double get_scaling_factor() const
@@ -65,16 +80,21 @@ public:
     virtual std::string to_string() const override
     {
         std::stringstream ss;
-        std::string sep {", "};
-
-        ss << "Scaling task id: " << get_id() << sep <<
-              "Dataset id: " << get_dataset_id() << sep <<
-              "Input queue table name: " << get_input_queue_table_name() << sep <<
-              "Scaling factor: " << get_scaling_factor();
-
+        ss << "Scaling task id " << id <<
+              ", dataset id " << dataset_id_ <<
+              ", input queue table name " << input_queue_table_name_ <<
+              ", input queue column name " << input_queue_column_name_ <<
+              ", scaling factor " << scaling_factor_;
         return ss.str();
     }
 };
+
+
+template<typename T> inline std::basic_ostream<T> &
+operator<< (std::basic_ostream<T> &s, const IQScalingFactor &i)
+{
+    return s << i.to_string();
+}
 
 } // namespace datamodel
 } // namespace svr

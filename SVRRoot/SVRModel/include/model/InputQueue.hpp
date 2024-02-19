@@ -42,71 +42,67 @@ private:
 public:
 
     explicit InputQueue(
-            const std::string& table_name = std::string(),
-            const std::string& logical_name = std::string(),
-            const std::string& owner_user_name = std::string(),
-            const std::string& description = std::string(),
-            const bpt::time_duration& resolution = bpt::seconds(DEFAULT_INPUT_QUEUE_RESOLUTION),
-            const bpt::time_duration& legal_time_deviation = bpt::seconds(0),
+            const std::string &table_name = std::string(),
+            const std::string &logical_name = std::string(),
+            const std::string &owner_user_name = std::string(),
+            const std::string &description = std::string(),
+            const bpt::time_duration &resolution = bpt::seconds(DEFAULT_INPUT_QUEUE_RESOLUTION),
+            const bpt::time_duration &legal_time_deviation = bpt::seconds(0),
             const std::string &time_zone = "UTC",
             const std::deque<std::string> &value_columns = std::deque<std::string>(),
             const bool uses_fix_connection = false,
             const data_row_container &rows = data_row_container());
 
-    inline const std::string& get_description() const { return description_; }
-    inline void set_description(const std::string& description) { this->description_ = description; }
+    const std::string &get_description() const;
 
-    inline const bpt::time_duration& get_legal_time_deviation() const {	return legal_time_deviation_;}
-    inline void set_legal_time_deviation(const bpt::time_duration& legalTimeDeviation) {legal_time_deviation_ = legalTimeDeviation;}
+    void set_description(const std::string &description);
 
-    inline const std::string& get_logical_name() const { return logical_name_; }
-    void set_logical_name(const std::string& logicalName);
+    const bpt::time_duration &get_legal_time_deviation() const;
 
-    inline const std::string& get_owner_user_name() const { return owner_user_name_; }
-    void set_owner_user_name(const std::string& ownerUserName);
+    void set_legal_time_deviation(const bpt::time_duration &legalTimeDeviation);
 
-    inline const bpt::time_duration& get_resolution() const { return resolution_; }
-    void set_resolution(const bpt::time_duration& resolution);
+    const std::string &get_logical_name() const;
 
-    inline const std::string& get_time_zone() const {return time_zone_;}
-    inline void set_time_zone(const std::string &time_zone) {time_zone_ = time_zone;}
+    void set_logical_name(const std::string &logicalName);
 
-    inline const std::string get_value_column(const size_t i) const { return value_columns_[i]; }
-    inline const std::deque<std::string>& get_value_columns() const {return value_columns_;}
-    inline void set_value_columns(const std::deque<std::string>& value_columns){ value_columns_ = value_columns; }
+    const std::string &get_owner_user_name() const;
 
-    inline const bool is_tick_queue() const { return resolution_ < bpt::seconds(1); }
+    void set_owner_user_name(const std::string &ownerUserName);
 
-    /* TODO Implement
-    inline const std::deque<std::string> &get_feature_columns() const;
-    inline void set_feature_columns(const std::deque<std::string> &feature_columns) { feature_columns_ = feature_columns; }
-    */
+    const bpt::time_duration &get_resolution() const;
 
-    inline bpt::time_duration const & get_missing_hours_retention() const { static auto const weeks2 = bpt::hours(24 * 14); return weeks2; }
+    void set_resolution(const bpt::time_duration &resolution);
 
-	// end getters and setters
+    const std::string &get_time_zone() const;
+
+    void set_time_zone(const std::string &time_zone);
+
+    const std::string get_value_column(const size_t i) const;
+
+    const std::deque<std::string> &get_value_columns() const;
+
+    void set_value_columns(const std::deque<std::string> &value_columns);
+
+    const bool is_tick_queue() const;
+
+    bpt::time_duration const &get_missing_hours_retention() const;
+
+    // end getters and setters
     InputQueue get_copy_metadata() const;
+
     datamodel::InputQueue_ptr clone_empty() const;
 
-    size_t get_value_column_index(const std::string &column_name) const
-    {
-        const auto pos = find(value_columns_.begin(), value_columns_.end(), column_name);
-        if (pos == value_columns_.end()) THROW_EX_FS(
-                std::invalid_argument, "Column " << column_name << " is not part of input queue " << table_name_);
-        return std::distance(value_columns_.begin(), pos);
-    }
+    size_t get_value_column_index(const std::string &column_name) const;
 
     std::deque<double> get_column_values(
             const std::string &column_name,
             const size_t start_pos = 0,
-            const size_t count = std::numeric_limits<size_t>::max()) const
-    {
-        return Queue::get_column_values(get_value_column_index(column_name), start_pos, count);
-    }
+            const size_t count = std::numeric_limits<size_t>::max()) const;
 
     std::string metadata_to_string() const override;
 
-    bool get_uses_fix_connection() const ;
+    bool get_uses_fix_connection() const;
+
     void set_uses_fix_connection(bool value);
 };
 
@@ -123,11 +119,9 @@ operator<<(const InputQueue &iq, std::basic_ostream<T> &s)
 }
 
 } /* namespace model */
-} /* namespace svr */
-
 
 template<>
-inline void store_buffer_push_merge<svr::datamodel::InputQueue_ptr>(svr::datamodel::InputQueue_ptr &dest, svr::datamodel::InputQueue_ptr const & src)
+inline void store_buffer_push_merge<svr::datamodel::InputQueue_ptr>(svr::datamodel::InputQueue_ptr &dest, svr::datamodel::InputQueue_ptr const &src)
 {
     dest->get_data().insert(dest->end(), src->begin(), src->end());
     dest->set_value_columns(src->get_value_columns());
@@ -139,3 +133,5 @@ inline void store_buffer_push_merge<svr::datamodel::InputQueue_ptr>(svr::datamod
     dest->set_table_name(src->get_table_name());
     dest->set_time_zone(src->get_time_zone());
 }
+
+} /* namespace svr */

@@ -23,13 +23,13 @@ namespace
 struct AsyncModelDAO::AsyncImpl
     : AsyncImplBase<datamodel::Model_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgModelDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
     {}
 };
 
-AsyncModelDAO::AsyncModelDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: ModelDAO(sqlProperties, dataSource), pImpl (* new  AsyncImpl(sqlProperties, dataSource))
+AsyncModelDAO::AsyncModelDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: ModelDAO(tempus_config, data_source), pImpl (* new  AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncModelDAO::~AsyncModelDAO()

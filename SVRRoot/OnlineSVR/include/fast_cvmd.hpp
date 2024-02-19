@@ -12,44 +12,51 @@
 #include "model/DataRow.hpp"
 #include "model/DeconQueue.hpp"
 #include "spectral_transform.hpp"
+#include "IQScalingFactorService.hpp"
 
-#define CVMD_INIT_LEN 1000000 // Last N samples of the input queue used for calculating frequencies
-
-#define OMEGA_DIVISOR 1. // 1e2 // Divides frequency by N, 1. for XAUUSD, 14 for EURUSD
-#define TAU_FIDELITY 0
-#define HAS_DC 0 // Has DC component is false (its removed during scaling)
-#define ALPHA_BINS 100 // 2000 for EURUSD, 1600 for XAUUSD
-#define MAX_VMD_ITERATIONS 500
-#define DEFAULT_PHASE_STEP 1
-#define EPS std::numeric_limits<double>::epsilon()
-#define CVMD_TOL EPS
+constexpr unsigned CVMD_INIT_LEN = 1000000; // Last N samples of the input queue used for calculating frequencies
+constexpr double OMEGA_DIVISOR = 1; // 1e2 // Divides frequency by N, 1. for XAUUSD, 14 for EURUSD
+constexpr double TAU_FIDELITY = 0;
+constexpr bool HAS_DC = false; // Has DC component is false (its removed during scaling)
+constexpr double ALPHA_BINS = 50; // 2000 for EURUSD, 1600 for XAUUSD
+constexpr unsigned MAX_VMD_ITERATIONS = 500;
+constexpr double DEFAULT_PHASE_STEP = 1;
+constexpr size_t C_freq_init_type = 1; // Type of initialization, let's use 1 for now.
+constexpr double CVMD_TOL = 1e-7; // std::numeric_limits<double>::epsilon();
 // #define EMOS_OMEGAS
-#define FASTER_CVMD
-//#define ORTHO_CVMD
+// #define ORTHO_CVMD
 
 namespace svr {
+namespace vmd {
+
 
 typedef std::tuple<std::string /* decon queue table_name */, size_t /* levels */> freq_key_t;
 
-struct fcvmd_frequency_outputs {
+struct fcvmd_frequency_outputs
+{
     arma::vec phase_cos;
     arma::vec phase_sin;
 };
 
 class fast_cvmd final : public spectral_transform
 {
+    size_t levels;
     size_t K; // Number of modes/frequencies. because of DC=1 we use 1 more than the natural number of frequencies (3 in the signal above). Half of VMD levels, quarter of total levels.
     arma::vec f;
     arma::rowvec A;
     arma::mat H;
     arma::uvec even_ixs, odd_ixs, K_ixs;
+    arma::vec row_values, soln;
     bpt::ptime timenow;
-    size_t levels;
     tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> vmd_frequencies;
+    static const business::t_iqscaler C_no_scaler;
 
 public:
-    tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> get_vmd_frequencies() const { return vmd_frequencies; }
-    void set_vmd_frequencies(const tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> &_vmd_frequencies) { vmd_frequencies = _vmd_frequencies; }
+    tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> get_vmd_frequencies() const
+    { return vmd_frequencies; }
+
+    void set_vmd_frequencies(const tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> &_vmd_frequencies)
+    { vmd_frequencies = _vmd_frequencies; }
 
     explicit fast_cvmd(const size_t levels);
 
@@ -58,14 +65,16 @@ public:
     void transform(
             const std::vector<double> &input,
             std::vector<std::vector<double>> &decon,
-            const size_t padding /* = 0 */) override { THROW_EX_FS(std::logic_error, "Not implemented!"); };
+            const size_t padding /* = 0 */) override
+    { THROW_EX_FS(std::logic_error, "Not implemented!"); };
 
     void
     transform(
             const data_row_container &input,
             datamodel::DeconQueue &decon,
             const size_t input_colix = 0,
-            const size_t test_offset = 0);
+            const size_t test_offset = 0,
+            const business::t_iqscaler &scaler = C_no_scaler);
 
     void inverse_transform(
             const std::vector<double> &decon,
@@ -75,9 +84,11 @@ public:
     size_t get_residuals_length(const std::string &decon_queue_table_name);
 
     bool initialized(const std::string &decon_queue_table_name);
-    void initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name);
+
+    void initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name, const business::t_iqscaler &scaler = C_no_scaler);
 };
 
+}
 }
 
 #endif //SVR_FAST_CVMD_HPP

@@ -11,7 +11,7 @@
 #include "oemd_coefficients_search.hpp"
 
 namespace svr {
-namespace oemd_search {
+namespace oemd {
 
 double
 oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const size_t siftings)

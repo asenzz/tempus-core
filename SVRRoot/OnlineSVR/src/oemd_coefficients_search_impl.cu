@@ -9,50 +9,23 @@
 #include <queue>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
-#include <complex>
 #include <iomanip>
-#include <filesystem>
 #include <thrust/execution_policy.h>
 
-#include "optimizer.hpp"
 #include "oemd_coefficients_search.hpp"
-#include "common/gpu_handler.hpp"
+#include "online_emd.hpp"
 #include "../../SVRCommon/include/common/cuda_util.cuh"
 #include "util/TimeUtils.hpp"
 #include "firefly.hpp"
 #include "common/Logging.hpp"
 
+
 namespace svr {
-namespace oemd_search {
+namespace oemd {
+
 
 #define CUDA_SET_DEVICE(__i) cu_errchk(cudaSetDevice(gpuids[(__i) % max_gpus]))
 
-
-void
-oemd_coefficients_search::expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask)
-{
-    cu_errchk(cudaMemset(dev_expanded_mask + mask_size, 0, sizeof(double) * std::max<size_t>(0, input_size - mask_size)));
-    cu_errchk(cudaMemcpy(dev_expanded_mask, dev_mask, sizeof(double) * mask_size, cudaMemcpyDeviceToDevice));
-}
-
-
-__global__ void
-gpu_multiply_complex(
-        const size_t input_size,
-        const cufftDoubleComplex *__restrict__ multiplier,
-        cufftDoubleComplex *__restrict__ output)
-{
-    const auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const auto total_block_size = blockDim.x * gridDim.x;
-
-    cufftDoubleComplex new_output;
-    for (auto j = thread_idx; j < input_size / 2 + 1; j += total_block_size) {//because it is D2Z transform
-        new_output.x = output[j].x * multiplier[j].x - output[j].y * multiplier[j].y;
-        new_output.y = output[j].x * multiplier[j].y + output[j].y * multiplier[j].x;
-        output[j].x = new_output.x / double(input_size); // because of inverse FFT
-        output[j].y = new_output.y / double(input_size);
-    }
-}
 
 __global__ void
 gpu_multiply_smooth(
@@ -66,38 +39,6 @@ gpu_multiply_smooth(
         const double mult = std::exp(-coeff * double(j) / double(input_size));
         output[j].x *= mult;
         output[j].y *= mult;
-    }
-}
-
-
-__global__ void
-vec_subtract_inplace(
-        double *__restrict__ x,
-        const double *__restrict__ y,
-        const size_t x_size)
-{
-    for (auto j = blockIdx.x * blockDim.x + threadIdx.x; j < x_size; j += blockDim.x * gridDim.x) x[j] -= y[j];
-}
-
-
-__global__ void
-vec_power(
-        const cufftDoubleComplex *__restrict__ x,
-        cufftDoubleComplex *__restrict__ y,
-        const size_t x_size,
-        const size_t siftings)
-{
-    const auto ix = blockIdx.x * blockDim.x + threadIdx.x;
-    double px, py;
-    for (auto j = ix; j < x_size / 2 + 1; j += blockDim.x * gridDim.x) {
-        px = 1. - x[j].x;
-        py = -x[j].y;
-        for (size_t i = 1; i < siftings; ++i) {
-            px = px * (1. - x[j].x) - py * (-x[j].y);
-            py = px * (-x[j].y) + py * (1. - x[j].x);
-        }
-        y[j].x = px;
-        y[j].y = py;
     }
 }
 
@@ -177,6 +118,7 @@ sum_expanded(
     }
 }
 
+
 void
 oemd_coefficients_search::transform(
         double *d_values, double *h_mask, const size_t input_size, const size_t mask_size,
@@ -188,7 +130,7 @@ oemd_coefficients_search::transform(
     thrust::device_vector<double> d_mask(mask_size);
     thrust::device_vector<double> d_expanded_mask(input_size);
     cudaMemcpy(thrust::raw_pointer_cast(d_mask.data()), h_mask, sizeof(double) * mask_size, cudaMemcpyHostToDevice);
-    expand_the_mask(mask_size, input_size, thrust::raw_pointer_cast(d_mask.data()), thrust::raw_pointer_cast(d_expanded_mask.data()));
+    online_emd::expand_the_mask(mask_size, input_size, thrust::raw_pointer_cast(d_mask.data()), thrust::raw_pointer_cast(d_expanded_mask.data()));
     thrust::device_vector<cufftDoubleComplex> d_expanded_mask_fft(to_fft_size(input_size));
     thrust::device_vector<cufftDoubleComplex> d_input_fft(to_fft_size(input_size));
     cufftDoubleComplex *dev_expanded_mask_fft = thrust::raw_pointer_cast(d_expanded_mask_fft.data());
@@ -239,7 +181,7 @@ oemd_coefficients_search::sift_the_mask(
 
     double *d_expanded_mask_ptr = thrust::raw_pointer_cast(d_zm_mask.data());
 
-    expand_the_mask(mask_size, expand_size, d_mask, d_expanded_mask_ptr);
+    online_emd::expand_the_mask(mask_size, expand_size, d_mask, d_expanded_mask_ptr);
     const auto fft_size = to_fft_size(expand_size);
     thrust::device_vector<cufftDoubleComplex> d_fzm_mask(fft_size);
     thrust::device_vector<cufftDoubleComplex> d_mask_imf_fft(fft_size);
@@ -288,7 +230,7 @@ oemd_coefficients_search::evaluate_mask(
 
     double *d_expanded_mask;
     cu_errchk(cudaMalloc(&d_expanded_mask, expanded_size * sizeof(*d_expanded_mask)));
-    expand_the_mask(h_mask.size(), expanded_size, d_mask_ptr, d_expanded_mask);
+    online_emd::expand_the_mask(h_mask.size(), expanded_size, d_mask_ptr, d_expanded_mask);
     cufftDoubleComplex *d_expanded_mask_fft;
     cu_errchk(cudaMalloc(&d_expanded_mask_fft, to_fft_size(expanded_size) * sizeof(*d_expanded_mask_fft)));
     cufft_errchk(cufftExecD2Z(plan_mask_forward, d_expanded_mask, d_expanded_mask_fft));
@@ -321,7 +263,7 @@ oemd_coefficients_search::evaluate_mask(
 
     double *d_zm_ptr;
     cu_errchk(cudaMalloc(&d_zm_ptr, full_input_size * sizeof(*d_zm_ptr)));
-    expand_the_mask(h_mask.size(), full_input_size, d_mask_ptr, d_zm_ptr);
+    online_emd::expand_the_mask(h_mask.size(), full_input_size, d_mask_ptr, d_zm_ptr);
     cu_errchk(cudaFree(d_mask_ptr));
 
     cufftDoubleComplex *d_zm_fft_ptr;

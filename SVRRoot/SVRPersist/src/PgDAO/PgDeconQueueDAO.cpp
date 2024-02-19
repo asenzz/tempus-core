@@ -12,8 +12,8 @@ using svr::common::reject_empty;
 
 namespace svr { namespace dao {
 
-PgDeconQueueDAO::PgDeconQueueDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: DeconQueueDAO(sqlProperties, dataSource)
+PgDeconQueueDAO::PgDeconQueueDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: DeconQueueDAO(tempus_config, data_source)
 {}
 
 datamodel::DeconQueue_ptr PgDeconQueueDAO::get_decon_queue_by_table_name(const std::string &tableName) {

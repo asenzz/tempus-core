@@ -57,7 +57,7 @@ void short_term_fourier_transform_ocl_impl::transform(std::vector<double>::const
         frame.resize(frame_size);
         auto const frame_start = buff.begin() + frameno * gpu_frame_size
                  , frame_end = frame_start + frame_size;
-        std::copy(frame_start, frame_end, frame.begin());
+        std::copy(frame_start, frame_end, std::front_inserter(frame));
         frame[1] = *frame_end;
     }
 }

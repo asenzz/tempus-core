@@ -25,9 +25,9 @@ private:
     my_store_buffer_t store_buffer;
 
 public:
-    AsyncImplBase(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource
+    AsyncImplBase(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source
         , ShallowPredicate shallow, DeepPredicate deep, size_t mruCacheSize, size_t storeBufferSize )
-    : pgDao(sqlProperties, dataSource), mru_cache(mruCacheSize, shallow, deep), store_buffer(storeBufferSize, shallow)
+    : pgDao(tempus_config, data_source), mru_cache(mruCacheSize, shallow, deep), store_buffer(storeBufferSize, shallow)
     {
     }
 

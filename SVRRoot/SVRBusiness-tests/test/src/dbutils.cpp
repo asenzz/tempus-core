@@ -100,7 +100,7 @@ bool TestEnv::init_test_db(char const *dbName)
     return true;
 }
 
-bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & daoType)
+bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & dao_type)
 {
     /**************************************************************************/
     // Copying config files
@@ -138,7 +138,7 @@ bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & daoType)
 
     {
         std::stringstream str_sed;
-        str_sed << "sed -ri 's/(DAO_TYPE[ \\t]*=[ \\t]*)([a-zA-Z0-9_]+)/\\1" << daoType << "/g' app.config";
+        str_sed << "sed -ri 's/(DAO_TYPE[ \\t]*=[ \\t]*)([a-zA-Z0-9_]+)/\\1" << dao_type << "/g' app.config";
         std::string out = exec(str_sed.str().c_str(), pec);
         if(pec)
             return false;

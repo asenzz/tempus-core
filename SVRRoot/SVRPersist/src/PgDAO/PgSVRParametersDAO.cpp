@@ -5,8 +5,8 @@
 
 namespace svr { namespace dao {
 
-PgSVRParametersDAO::PgSVRParametersDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: SVRParametersDAO(sqlProperties, dataSource)
+PgSVRParametersDAO::PgSVRParametersDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: SVRParametersDAO(tempus_config, data_source)
 {}
 
 bigint PgSVRParametersDAO::get_next_id()

@@ -14,7 +14,7 @@
 #include "model/DataRow.hpp"
 
 namespace svr {
-namespace oemd_search {
+namespace oemd {
 
 constexpr unsigned FIREFLY_PARTICLES = 500;
 constexpr unsigned FIREFLY_ITERATIONS = 50;
@@ -68,9 +68,6 @@ class oemd_coefficients_search
     fill_auto_matrix(const size_t M, const size_t siftings, const size_t N, const double *x);
 
     void
-    expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask);
-
-    void
     transform(double *d_values, double *h_mask, const size_t input_size, const size_t mask_size, const size_t siftings, double *d_temp, const size_t gpu_id);
 
     //int do_osqp(const size_t mask_size, std::vector<double> &good_mask, const size_t input_size, const double *x, const int gpu_id);
@@ -112,6 +109,7 @@ class oemd_coefficients_search
             const size_t current_level);
 
 public:
+
     static double do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const size_t siftings);
 
     static int do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft);

@@ -61,92 +61,58 @@ public:
 
     DataRow() = default;
 
-    DataRow(const std::string &csv);
+    explicit DataRow(const std::string &csv);
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-
-    DataRow(
+    explicit DataRow(
             const bpt::ptime &value_time,
             const bpt::ptime &update_time = bpt::second_clock::local_time(),
             double tick_volume = common::C_default_value_tick_volume,
-            const size_t levels = 1) :
-            value_time_(value_time),
-            update_time_(update_time),
-            tick_volume_(tick_volume),
-            values_(std::vector<double>(levels))
-    {}
+            const size_t levels = 1);
 
-    DataRow(
+    explicit DataRow(
             const bpt::ptime &value_time,
             const bpt::ptime &update_time = bpt::second_clock::local_time(),
             double tick_volume = common::C_default_value_tick_volume,
-            const std::vector<double> &values = {}) :
-            value_time_(value_time),
-            update_time_(update_time),
-            tick_volume_(tick_volume),
-            values_(values)
-    {}
+            const std::vector<double> &values = {});
 
-    DataRow(
+    explicit DataRow(
             const bpt::ptime &value_time,
             const bpt::ptime &update_time,
             double tick_volume = common::C_default_value_tick_volume,
-            double *values_ptr = nullptr,
-            const size_t values_size = 0) :
-            value_time_(value_time),
-            update_time_(update_time),
-            tick_volume_(tick_volume),
-            values_(common::wrap_vector<double>(values_ptr, values_size))
-    {}
+            const double *values_ptr = nullptr,
+            const size_t values_size = 0);
 
-#pragma GCC diagnostic pop
+    std::vector<double> &get_values();
 
-    std::vector<double> &get_values()
-    { return values_; }
+    void set_values(const std::vector<double> &values);
 
-    void set_values(const std::vector<double> &values)
-    { values_ = values; }
+    double get_value(const size_t column_index) const;
 
-    double get_value(const size_t column_index) const
-    { return values_[column_index]; }
+    double &get_value(const size_t column_index);
 
-    double &get_value(const size_t column_index)
-    { return values_[column_index]; }
+    double operator()(const size_t column_index) const;
 
-    double operator()(const size_t column_index) const
-    { return values_[column_index]; }
+    double at(const size_t column_index) const;
 
-    double at(const size_t column_index) const
-    { return values_[column_index]; }
+    double &operator()(const size_t column_index);
 
-    double &operator()(const size_t column_index)
-    { return values_[column_index]; }
-
-    double &at(const size_t column_index)
-    { return values_[column_index]; }
+    double &at(const size_t column_index);
 
     void set_value(const size_t column_index, const double value);
 
-    size_t size() const { return values_.size(); }
+    size_t size() const;
 
-    const bpt::ptime &get_update_time() const
-    { return update_time_; }
+    const bpt::ptime &get_update_time() const;
 
-    void set_update_time(const bpt::ptime &update_time)
-    { update_time_ = update_time; }
+    void set_update_time(const bpt::ptime &update_time);
 
-    const bpt::ptime &get_value_time() const
-    { return value_time_; }
+    const bpt::ptime &get_value_time() const;
 
-    void set_value_time(const bpt::ptime &value_time)
-    { value_time_ = value_time; }
+    void set_value_time(const bpt::ptime &value_time);
 
-    double get_tick_volume() const
-    { return tick_volume_; }
+    double get_tick_volume() const;
 
-    void set_tick_volume(const double weight)
-    { tick_volume_ = weight; }
+    void set_tick_volume(const double weight);
 
     std::string to_string() const;
 
@@ -156,7 +122,7 @@ public:
 
     static bool fast_compare(const DataRow::container &lhs, const DataRow::container &rhs);
 
-    static std::shared_ptr<DataRow> load(const std::string &s);
+    static std::shared_ptr<DataRow> load(const std::string &s, const char delim = ',');
 };
 
 template<typename T> std::basic_ostream<T> &operator <<(std::basic_ostream<T> &o, const DataRow& r)

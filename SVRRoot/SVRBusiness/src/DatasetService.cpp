@@ -538,10 +538,11 @@ void DatasetService::process_requests(const User_ptr &p_user, datamodel::Dataset
                 request_answered.store(false, std::memory_order_relaxed);
                 continue;
             }
-
+            const auto unscaler = IQScalingFactorService::get_unscaler(*p_dataset, p_ensemble->get_label_aux_decon()->get_input_queue_table_name(), p_ensemble->get_label_aux_decon()->get_input_queue_column_name());
             const auto predicted_recon = APP.decon_queue_service.reconstruct(
                     datamodel::datarow_range(predicted_decon->get_data()),
-                    recon_type_e::ADDITIVE);
+                    recon_type_e::ADDITIVE,
+                    unscaler);
 
             if (predicted_recon.empty()) {
                 LOG4_ERROR("Empty reconstructed data.");

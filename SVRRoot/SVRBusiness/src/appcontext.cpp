@@ -40,7 +40,7 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
 {
     svr::common::PropertiesFileReader &appProperties;
 
-    svr::dao::DataSource &dataSource;
+    svr::dao::DataSource &data_source;
     svr::dao::UserDAO &userDao;
     svr::dao::InputQueueDAO &inputQueueDao;
     svr::dao::SVRParametersDAO &svrParametersDao;
@@ -59,35 +59,35 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
     bool threadsafe_dao;
 
     AppContextImpl(const std::string &config_path, bool use_threadsafe_dao)
-            : appProperties(*new svr::common::PropertiesFileReader(config_path)), dataSource(
+            : appProperties(*new svr::common::PropertiesFileReader(config_path)), data_source(
             *new svr::dao::DataSource(appProperties.get_property<std::string>(config_path, "CONNECTION_STRING"), true)),
-              userDao(*svr::dao::UserDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+              userDao(*svr::dao::UserDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                 use_threadsafe_dao)), inputQueueDao(
-                    *svr::dao::InputQueueDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::InputQueueDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                     use_threadsafe_dao)), svrParametersDao(
-                    *svr::dao::SVRParametersDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::SVRParametersDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                        use_threadsafe_dao)), datasetDao(
-                    *svr::dao::DatasetDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::DatasetDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                  use_threadsafe_dao)), deconQueueDao(
-                    *svr::dao::DeconQueueDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::DeconQueueDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                     use_threadsafe_dao)), ensembleDao(
-                    *svr::dao::EnsembleDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::EnsembleDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                   use_threadsafe_dao)), modelDao(
-                    *svr::dao::ModelDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::ModelDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                use_threadsafe_dao)), requestDao(
-                    *svr::dao::RequestDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::RequestDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                  use_threadsafe_dao)), predictionTaskDao(
-                    *svr::dao::PredictionTaskDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::PredictionTaskDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                         use_threadsafe_dao)), scalingFactorsTaskDao(
-                    *svr::dao::ScalingFactorsTaskDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::ScalingFactorsTaskDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                         use_threadsafe_dao)), autotuneTaskDao(
-                    *svr::dao::AutotuneTaskDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::AutotuneTaskDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                       use_threadsafe_dao)), decrementTaskDao(
-                    *svr::dao::DecrementTaskDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::DecrementTaskDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                        use_threadsafe_dao)), iQScalingFactorDao(
-                    *svr::dao::IQScalingFactorDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::IQScalingFactorDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                          use_threadsafe_dao)), dQScalingFactorDao(
-                    *svr::dao::DQScalingFactorDAO::build(appProperties, dataSource, appProperties.get_dao_type(),
+                    *svr::dao::DQScalingFactorDAO::build(appProperties, data_source, appProperties.get_dao_type(),
                                                          use_threadsafe_dao)), threadsafe_dao(use_threadsafe_dao)
     {
         svr::common::memory_manager::get();
@@ -116,7 +116,7 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
         delete &svrParametersDao;
         delete &inputQueueDao;
         delete &userDao;
-        delete &dataSource;
+        delete &data_source;
         delete &appProperties;
     }
 

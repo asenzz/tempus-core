@@ -29,14 +29,14 @@ struct AsyncDeconQueueDAO::AsyncImpl
     : public AsyncImplBase<datamodel::DeconQueue_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), class PgDeconQueueDAO>
 {
 
-    AsyncImpl(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-    :AsyncImplBase(sqlProperties, dataSource, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 100)
+    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 100)
     {}
 
 };
 
-AsyncDeconQueueDAO::AsyncDeconQueueDAO(svr::common::PropertiesFileReader& sqlProperties, svr::dao::DataSource& dataSource)
-: DeconQueueDAO(sqlProperties, dataSource), pImpl(* new AsyncDeconQueueDAO::AsyncImpl(sqlProperties, dataSource))
+AsyncDeconQueueDAO::AsyncDeconQueueDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
+: DeconQueueDAO(tempus_config, data_source), pImpl(* new AsyncDeconQueueDAO::AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncDeconQueueDAO::~AsyncDeconQueueDAO()
