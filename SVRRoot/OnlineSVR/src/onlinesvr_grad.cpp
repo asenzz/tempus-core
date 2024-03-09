@@ -15,7 +15,7 @@ OnlineMIMOSVR::batch_train(
                              ", pseudo online " << pseudo_online << ", parameters " << p_param_set->to_string());
     const std::scoped_lock learn_lock(learn_mx);
 
-#ifdef MANIFOLD_TEST_DEBUG
+#ifdef INTEGRATION_TEST_DEBUG
     if (!p_param_set->get_decon_level() || p_param_set->get_decon_level() == 28 || p_param_set->get_decon_level() == 2) {
         p_xtrain->save(common::formatter() << "/tmp/xtrain_" << p_param_set->get_decon_level() << ".csv", arma::csv_ascii);
         p_ytrain->save(common::formatter() << "/tmp/ytrain_" << p_param_set->get_decon_level() << ".csv", arma::csv_ascii);
@@ -85,16 +85,16 @@ OnlineMIMOSVR::batch_train(
 
 #pragma omp parallel for num_threads(ixs.size()) schedule(static, 1)
     for (uint32_t i = 0; i < ixs.size(); ++i) {
-        do_over_train_zero_epsilon(*p_features, *p_labels, i);
+        do_over_train_zero_epsilon(i);
         if (!p_param_set[i].get_grad_level()) continue;
-        auto p_grad_parameters = std::make_shared<SVRParameters>(p_param_set[i]);
+        auto p_grad_parameters = ptr<SVRParameters>(p_param_set[i]);
         p_grad_parameters->decrement_gradient()
 
         const arma::uvec other_ixs = get_other_ixs(i);
         grad_svr[i] = OnlineMIMOSVR(
                 p_grad_parameters,
                 p_features,
-                std::make_shared<arma::mat>(single_chunk_predict(p_features->rows(other_ixs)) - p_labels->rows(other_ixs)));
+                ptr<arma::mat>(single_chunk_predict(p_features->rows(other_ixs)) - p_labels->rows(other_ixs)));
     }
     update_total_weights();
     samples_trained = p_features->n_rows;

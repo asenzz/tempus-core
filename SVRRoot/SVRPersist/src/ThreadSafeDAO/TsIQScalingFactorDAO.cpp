@@ -18,21 +18,21 @@ bool TsIQScalingFactorDAO::exists(const bigint id)
 }
 
 
-int TsIQScalingFactorDAO::save(const IQScalingFactor_ptr &scalingTask)
+int TsIQScalingFactorDAO::save(const datamodel::IQScalingFactor_ptr &scalingTask)
 {
     return ts_call<int>(&IQScalingFactorDAO::save, scalingTask);
 }
 
 
-int TsIQScalingFactorDAO::remove(const IQScalingFactor_ptr &scalingTask)
+int TsIQScalingFactorDAO::remove(const datamodel::IQScalingFactor_ptr &scalingTask)
 {
     return ts_call<int>(&IQScalingFactorDAO::remove, scalingTask);
 }
 
 
-std::deque<IQScalingFactor_ptr> TsIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
+std::deque<datamodel::IQScalingFactor_ptr> TsIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
 {
-    return ts_call<std::deque<IQScalingFactor_ptr>>(&IQScalingFactorDAO::find_all_by_dataset_id, dataset_id);
+    return ts_call<std::deque<datamodel::IQScalingFactor_ptr>>(&IQScalingFactorDAO::find_all_by_dataset_id, dataset_id);
 }
 
 

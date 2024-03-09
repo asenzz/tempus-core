@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include "common/Logging.hpp"
 
 namespace svr {
 namespace datamodel{
@@ -23,7 +24,7 @@ public:
     related_object_ptr_t get_obj();
     void set_obj(related_object_ptr_t);
 private:
-    database_id_t id;
+    database_id_t id = database_id_t(0);
     related_object_ptr_t ptr;
 
     void ensure_id();
@@ -91,8 +92,7 @@ void relation<related_obj_t, storage_connector_t, database_id_t>::set_obj(relate
 template <class related_obj_t, class storage_connector_t, typename database_id_t>
 void relation<related_obj_t, storage_connector_t, database_id_t>::ensure_id()
 {
-    if(ptr->get_id() == 0)
-        ptr->set_id( storage_connector_t::get_next_id() );
+    if (ptr && ptr->get_id() == 0) ptr->set_id( storage_connector_t::get_next_id() );
 }
 
 
@@ -157,8 +157,9 @@ void relation<related_obj_t, storage_connector_t, std::string>::set_id(std::stri
 template <class related_obj_t, class storage_connector_t>
 typename relation<related_obj_t, storage_connector_t, std::string>::related_object_ptr_t const & relation<related_obj_t, storage_connector_t, std::string>::get_obj() const
 {
-    if(!ptr)
-        ptr = storage_connector_t::load(id);
+    if (!ptr)
+        if (!(ptr = storage_connector_t::load(id)))
+            LOG4_THROW("Input queue " << id << " not found!");
     return ptr;
 }
 

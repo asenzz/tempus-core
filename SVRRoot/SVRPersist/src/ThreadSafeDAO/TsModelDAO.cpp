@@ -52,9 +52,9 @@ std::deque<datamodel::Model_ptr> TsModelDAO::get_all_ensemble_models(const bigin
     return ts_call<std::deque<datamodel::Model_ptr>>(&ModelDAO::get_all_ensemble_models, ensemble_id);
 }
 
-std::deque<OnlineMIMOSVR_ptr> TsModelDAO::get_svr_by_model_id(const bigint model_id)
+std::deque<datamodel::OnlineMIMOSVR_ptr> TsModelDAO::get_svr_by_model_id(const bigint model_id)
 {
-    return ts_call<std::deque<OnlineMIMOSVR_ptr>>(&ModelDAO::get_svr_by_model_id, model_id);
+    return ts_call<std::deque<datamodel::OnlineMIMOSVR_ptr>>(&ModelDAO::get_svr_by_model_id, model_id);
 }
 
 }

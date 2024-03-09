@@ -11,6 +11,7 @@ int SVR_LOG_LEVEL;
 namespace svr {
 namespace common {
 
+const std::string PropertiesFileReader::TUNE_PARAMETERS = "TUNE_PARAMETERS";
 const std::string PropertiesFileReader::SQL_PROPERTIES_DIR_KEY = "SQL_PROPERTIES_DIR";
 const std::string PropertiesFileReader::LOG_LEVEL_KEY = "LOG_LEVEL";
 const std::string PropertiesFileReader::DAO_TYPE_KEY = "DAO_TYPE";
@@ -87,6 +88,7 @@ PropertiesFileReader::PropertiesFileReader(const std::string& app_config_file, c
 	//__cilkrts_set_param("nworkers", "1");
 #endif
 	read_property_file(app_config_file);
+    tune_parameters_ = get_property<bool>(app_config_file, TUNE_PARAMETERS, DEFAULT_TUNE_PARAMETERS);
 	property_files_location = get_property<std::string>(app_config_file, SQL_PROPERTIES_DIR_KEY, DEFAULT_SQL_PROPERTIES_DIR_KEY);
 	set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, DEFAULT_LOG_LEVEL_KEY));
 	std::string sdao_type = get_property<std::string>(app_config_file, DAO_TYPE_KEY, DEFAULT_DAO_TYPE_KEY);

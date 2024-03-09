@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <execution>
 #include <ostream>
 #include <string>
@@ -10,6 +11,7 @@
 #include <codecvt>
 #include <vector>
 #include "common/types.hpp"
+#include "common/compatibility.hpp"
 
 namespace svr {
 
@@ -107,8 +109,37 @@ static inline std::string toupper(std::string str)
     return str;
 }
 
+
+template<typename T> std::string
+to_binary_string(const std::set<T> &values)
+{
+    using t_chr = typename std::string::value_type;
+    constexpr size_t t_chr_ct = sizeof(size_t) / sizeof(t_chr);
+    std::string res;
+    res.resize(values.size() * t_chr_ct);
+#pragma omp parallel for num_threads(values.size()) collapse(2)
+    for (size_t i = 0; i < values.size(); ++i)
+        for (size_t j = 0; j < t_chr_ct; ++j)
+            res[i * t_chr_ct + j] = reinterpret_cast<const char *>(&*std::next(values.begin(), i))[j];
+    return res;
+}
+
 template<typename T>
 std::string to_string(const std::vector<T> &v)
+{
+    if (v.empty()) return "";
+
+    std::stringstream ss;
+    ss.precision(std::numeric_limits<double>::max_digits10);
+    for (size_t i = 0; i < v.size() - 1; ++i) ss << i << ":" << v[i] << ", ";
+    ss << (v.size() - 1) << ":" << v[v.size() - 1];
+
+    return ss.str();
+}
+
+
+template<typename T>
+std::string to_string(const std::deque<T> &v)
 {
     if (v.empty()) return "";
 
@@ -266,7 +297,7 @@ std::deque<std::string> from_sql_array(const std::string &array_str);
 
 std::string demangle(const char *mangled);
 
-static inline bool ignoreCaseEquals(const std::string &lhs, const std::string &rhs)
+static inline bool ignore_case_equals(const std::string &lhs, const std::string &rhs)
 {
     return tolower(lhs) == tolower(rhs);
 }

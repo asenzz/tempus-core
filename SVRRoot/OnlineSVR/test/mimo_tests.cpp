@@ -39,18 +39,18 @@ void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved)
 
 TEST(mimo_train_predict, batch_train)
 {
-    svr::OnlineMIMOSVR online_svr_tmp;
-    OnlineMIMOSVR_ptr mimo_model;
+    svr::datamodel::OnlineMIMOSVR online_svr_tmp;
+    svr::datamodel::OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = std::make_shared<svr::OnlineMIMOSVR>();// svr::OnlineMIMOSVR::load("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
+        mimo_model = std::make_shared<svr::datamodel::OnlineMIMOSVR>();// svr::OnlineMIMOSVR::load("../SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close");
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineMIMOSVR online_svr_(mimo_model->get_param_set_ptr(), mimo_model->get_multistep_len());
+    svr::datamodel::OnlineMIMOSVR online_svr_(0, 0, mimo_model->get_param_set());
 
     LOG4_DEBUG("multistep_len is " << mimo_model->get_multistep_len());
 
@@ -62,7 +62,7 @@ TEST(mimo_train_predict, batch_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train)), "Batch Train");
+    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows), bpt::not_a_date_time), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(2,3), mimo_model->get_weights(0)(2,3), TOLERANCE);
@@ -73,18 +73,18 @@ TEST(mimo_train_predict, batch_train)
 
 TEST(mimo_train_predict, chunk_train)
 {
-    svr::OnlineMIMOSVR online_svr_tmp;
-    OnlineMIMOSVR_ptr mimo_model;
+    svr::datamodel::OnlineMIMOSVR online_svr_tmp;
+    svr::datamodel::OnlineMIMOSVR_ptr mimo_model;
 
     try {
-        mimo_model = std::make_shared<svr::OnlineMIMOSVR>();
+        mimo_model = std::make_shared<svr::datamodel::OnlineMIMOSVR>();
     } catch (const std::exception &e) {
         LOG4_ERROR("Failed loading model for testing. Please find what happens " << e.what());
         throw;
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineMIMOSVR online_svr_(mimo_model->get_param_set_ptr(), mimo_model->get_multistep_len());
+    svr::datamodel::OnlineMIMOSVR online_svr_(0, 0, mimo_model->get_param_set());
 
     LOG4_DEBUG("multistep_len is " << mimo_model->get_multistep_len());
 
@@ -96,7 +96,10 @@ TEST(mimo_train_predict, chunk_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train)), "Batch Train");
+    PROFILE_EXEC_TIME(
+            online_svr_.batch_train(std::make_shared<arma::mat>(x_train),
+                    std::make_shared<arma::mat>(y_train),
+                            std::make_shared<arma::vec>(y_train.n_rows), bpt::not_a_date_time), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(2,3), mimo_model->get_weights(0)(2,3), TOLERANCE);

@@ -5,7 +5,6 @@ KernelType: RBF_EXPONENTIAL
 KernelParam: 16
 KernelParam2: 0.043443992186703057
 LagCount: 25
-MimoType: 2
 MultistepLen: 15
 SaveKernelMatrix: 0
 X.rows: 486

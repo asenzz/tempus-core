@@ -10,20 +10,16 @@
 #include "common/Logging.hpp"
 
 
-#define TEMPUS_CURSOR_NAME  "tempuscursor"
-#define MIN_CURSOR_ROWS     1e6
-#define CURSORS_PER_QUERY   8
-
-
 namespace svr::dao {
 
 
 class DataSource
 {
+    const std::string C_tempus_cursor_name = "tempuscursor";
 private:
     bool commit_on_scope_exit;
     const std::string connection_string;
-    std::unique_ptr<StatementPreparerDBTemplate> statementPreparerTemplate;
+    std::shared_ptr<StatementPreparerDBTemplate> statementPreparerTemplate;
     std::recursive_mutex mtx;
 
 public:
@@ -125,11 +121,13 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
     Container<T, std::allocator<T>> res;
     try {
         query = statementPreparerTemplate->prepareStatement(sql, args...);
-
         scoped_transaction_guard_ptr trx = open_transaction();
-        pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> cursor(*trx->get_pqxx_work(), query, TEMPUS_CURSOR_NAME, false);
-        const size_t result_size = cursor.size();
-        const size_t num_cursors = std::min<size_t>(CURSORS_PER_QUERY, result_size / MIN_CURSOR_ROWS + 1);
+        const std::string count_query = "SELECT COUNT(*) FROM (" + query + ") AS SUBQ";
+        const auto result = trx->exec(count_query);
+        if (result.empty()) LOG4_THROW("Failed getting result size, using query " << count_query);
+        const auto result_size = result[0][0].as<size_t>(0);
+        trx.reset();
+        const size_t num_cursors = std::min<size_t>(common::C_cursors_per_query, result_size / common::C_min_cursor_rows + 1);
         const size_t cursor_size = result_size / num_cursors;
         LOG4_DEBUG("Getting up to " << result_size << " rows for " << query);
         res.resize(result_size);
@@ -139,7 +137,7 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
             if (start_ix >= result_size) continue;
             const auto end_ix = cur_ix == num_cursors - 1 ? result_size : start_ix + cursor_size;
             scoped_transaction_guard_ptr l_trx = open_transaction();
-            pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> l_cursor(*l_trx->get_pqxx_work(), query, to_string(cur_ix) + TEMPUS_CURSOR_NAME, false);
+            pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> l_cursor(*l_trx->get_pqxx_work(), query, to_string(cur_ix) + C_tempus_cursor_name, false);
             const auto l_result = l_cursor.retrieve(start_ix, end_ix);
             if (l_result.size() < 1 || size_t(l_result.size()) != end_ix - start_ix)
                 LOG4_ERROR("Cursor didn't return expected size " << end_ix - start_ix << ", got " << l_result.size() << " instead.");
@@ -152,11 +150,9 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
                 if (!res[r + start_ix] || !this_res)
                     LOG4_ERROR("Result for " << (r + start_ix) << " is empty, row string " << l_result[r][0]);
             }
-            l_cursor.close();
-            l_trx.reset();
+//            l_cursor.close();
+//            l_trx.reset();
         }
-        cursor.close();
-        trx.reset();
         return res;
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << ", while executing " << query);

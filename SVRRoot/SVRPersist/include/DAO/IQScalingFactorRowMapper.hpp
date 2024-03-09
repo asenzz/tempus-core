@@ -12,15 +12,16 @@ private:
     //empty
 
 public:
-    IQScalingFactor_ptr mapRow(const pqxx_tuple& rowSet) const override
+    datamodel::IQScalingFactor_ptr mapRow(const pqxx_tuple &row_set) const override
     {
-        return std::make_shared<svr::datamodel::IQScalingFactor>(
-                    rowSet["id"].as<bigint>(0),
-                    rowSet["dataset_id"].as<bigint>(0),
-                    rowSet["input_queue_table_name"].as<std::string>(""),
-                    rowSet["input_queue_column_name"].as<std::string>(""),
-                    rowSet["scaling_factor"].as<double>(1)
-                );
+        return ptr<svr::datamodel::IQScalingFactor>(
+                row_set["id"].as<bigint>(0),
+                row_set["dataset_id"].as<bigint>(0),
+                row_set["input_queue_table_name"].as<std::string>(""),
+                row_set["input_queue_column_name"].as<std::string>(""),
+                row_set["scaling_factor"].as<double>(1),
+                row_set["dc_offset"].as<double>(0)
+        );
     }
 
 };

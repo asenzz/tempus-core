@@ -25,6 +25,7 @@ THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsDatasetDAO, DatasetDAO)
     virtual bool unlink_user_from_dataset(const std::string& user_name, const datamodel::Dataset_ptr & dataset);
 
     virtual DatasetDAO::UserDatasetPairs get_active_datasets();
+    virtual size_t get_level_count(const bigint dataset_id);
 };
 
 }

@@ -4,6 +4,17 @@
 namespace svr {
 namespace datamodel {
 
+void User::init_id()
+{
+    if (!id) {
+        boost::hash_combine(id, user_name);
+        boost::hash_combine(id, email);
+        boost::hash_combine(id, name);
+        boost::hash_combine(id, password);
+        boost::hash_combine(id, role);
+    }
+}
+
 bool User::operator==(User const &other) const
 {
     return user_name == other.user_name
@@ -28,7 +39,9 @@ User::User(const bigint user_id,
           role(_role),
           priority(_priority)
 {
-
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
     LOG4_TRACE("User created: " << to_string());
 }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <armadillo>
+#include <boost/date_time/posix_time/posix_time_config.hpp>
 #include <vector>
 #include <tsl/ordered_map.h>
 
@@ -43,18 +45,27 @@ public:
             container &rows_container,
             const arma::mat &data,
             const bpt::ptime &start_time,
-            const bpt::time_duration &resolution);
+            const bpt::time_duration &resolution,
+            const size_t level,
+            const size_t level_ct,
+            const bool merge);
 
     static void
     insert_rows(
             container &rows_container,
             const arma::mat &data,
-            const std::set<bpt::ptime> &times);
+            const std::set<bpt::ptime> &times,
+            const size_t level,
+            const size_t level_ct,
+            const bool merge);
 
     static container
     insert_rows(
             const arma::mat &data,
-            const std::set<bpt::ptime> &times);
+            const std::set<bpt::ptime> &times,
+            const size_t level,
+            const size_t level_ct,
+            const bool merge);
 
     static container
     construct(const std::deque<datamodel::MultivalResponse_ptr> &responses);
@@ -63,24 +74,33 @@ public:
 
     explicit DataRow(const std::string &csv);
 
-    explicit DataRow(
-            const bpt::ptime &value_time,
-            const bpt::ptime &update_time = bpt::second_clock::local_time(),
-            double tick_volume = common::C_default_value_tick_volume,
-            const size_t levels = 1);
+    DataRow(const bpt::ptime &value_time);
 
-    explicit DataRow(
+    DataRow(
             const bpt::ptime &value_time,
-            const bpt::ptime &update_time = bpt::second_clock::local_time(),
-            double tick_volume = common::C_default_value_tick_volume,
-            const std::vector<double> &values = {});
+            const bpt::ptime &update_time,
+            const double tick_volume,
+            const size_t levels);
+
+    DataRow(
+            const bpt::ptime &value_time,
+            const bpt::ptime &update_time,
+            const double tick_volume,
+            const size_t levels,
+            const double value);
+
+    DataRow(
+            const bpt::ptime &value_time,
+            const bpt::ptime &update_time,
+            const double tick_volume,
+            const std::vector<double> &values);
 
     explicit DataRow(
             const bpt::ptime &value_time,
             const bpt::ptime &update_time,
-            double tick_volume = common::C_default_value_tick_volume,
-            const double *values_ptr = nullptr,
-            const size_t values_size = 0);
+            const double tick_volume,
+            const double *values_ptr,
+            const size_t values_size);
 
     std::vector<double> &get_values();
 
@@ -93,6 +113,10 @@ public:
     double operator()(const size_t column_index) const;
 
     double at(const size_t column_index) const;
+
+    double &operator[](const size_t column_index);
+
+    double operator[](const size_t column_index) const;
 
     double &operator()(const size_t column_index);
 
@@ -136,6 +160,7 @@ class container_range
     using C_iter = typename C::iterator;
     using C_citer = typename C::const_iterator;
     using C_riter = typename C::reverse_iterator;
+    using C_criter = typename C::const_reverse_iterator;
 
     ssize_t distance_;
     C_range_iter begin_, end_;
@@ -159,6 +184,8 @@ public:
     T &operator[](const size_t index);
 
     T operator[](const size_t index) const;
+
+    C_range_iter operator()(const ssize_t index) const;
 
     C_range_iter it(const ssize_t index) const;
 
@@ -184,7 +211,11 @@ public:
 
     C_riter rbegin() const;
 
+    C_criter crbegin() const;
+
     C_riter rend() const;
+
+    C_criter crend() const;
 
     C &get_container() const;
 
@@ -242,6 +273,8 @@ lower_bound(const data_row_container &data, const data_row_container::const_iter
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint, const bpt::ptime &time_key);
 
+data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
+
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const bpt::ptime &time_key);
 
@@ -252,6 +285,12 @@ lower_bound_back_before(
         const bpt::ptime &time_key);
 
 data_row_container::const_iterator
+lower_bound_or_before_back(
+        const data_row_container &data,
+        const data_row_container::const_iterator &hint_end,
+        const bpt::ptime &time_key);
+
+data_row_container::const_iterator
 lower_bound_back_before(
         const data_row_container &data,
         const bpt::ptime &time_key);
@@ -259,8 +298,6 @@ lower_bound_back_before(
 data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
-
-data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::iterator find(data_row_container &data, const bpt::ptime &value_time);
 
@@ -290,11 +327,11 @@ find_nearest(
         const data_row_container &data,
         const boost::posix_time::ptime &time);
 
-data_row_container::const_iterator
-find_nearest(
-        const data_row_container &data,
-        const boost::posix_time::ptime &time,
-        bool &check);
+datamodel::DataRow::container::const_iterator
+find_nearest_back(
+        const datamodel::DataRow::container &data,
+        const datamodel::DataRow::container::const_iterator &hint,
+        const boost::posix_time::ptime &time);
 
 data_row_container::iterator
 find_nearest(
@@ -319,14 +356,14 @@ find_nearest_after(
 
 
 bool
-generate_labels(
-        const data_row_container::const_iterator &start_iter, // At start time or before
-        const data_row_container::const_iterator &it_end,
+generate_twap(
+        const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
+        const datamodel::DataRow::container::const_iterator &it_end,
         const bpt::ptime &start_time,
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
-        const size_t col_ix,
-        arma::rowvec &labels_row);
+        const size_t colix,
+        arma::rowvec &row);
 
 double calc_twap(
         const data_row_container::const_iterator &start_iter, // At start time or before

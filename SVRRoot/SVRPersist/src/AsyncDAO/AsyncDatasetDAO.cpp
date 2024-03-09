@@ -42,6 +42,12 @@ bigint AsyncDatasetDAO::get_next_id()
     return pImpl.pgDao.get_next_id();
 }
 
+size_t AsyncDatasetDAO::get_level_count(const bigint dataset_id)
+{
+    const std::scoped_lock lg(pImpl.pgMutex);
+    return pImpl.pgDao.get_level_count(dataset_id);
+}
+
 bool AsyncDatasetDAO::exists(const bigint id)
 {
     AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };

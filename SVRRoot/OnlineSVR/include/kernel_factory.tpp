@@ -11,7 +11,7 @@ namespace svr {
 using svr::datamodel::kernel_type_e;
 
 template<typename scalar_type>
-std::map<kernel_type_e, std::shared_ptr<kernel_factory<scalar_type>>> IKernel<scalar_type>::kernel_factories;
+std::unordered_map<kernel_type_e, std::shared_ptr<kernel_factory<scalar_type>>> IKernel<scalar_type>::kernel_factories;
 
 template<typename scalar_type>
 std::once_flag IKernel<scalar_type>::kernel_init_flag;
@@ -22,7 +22,7 @@ void IKernel<scalar_type>::IKernelInit()
     std::call_once(IKernel<scalar_type>::kernel_init_flag, [](){
         try {
             for (auto k_type = kernel_type_e(0); (int) k_type < (int) kernel_type_e::number_of_kernel_types; ++k_type)
-                IKernel<scalar_type>::kernel_factories.emplace(k_type, std::make_shared<kernel_factory<scalar_type>>(k_type));
+                IKernel<scalar_type>::kernel_factories.emplace(k_type, ptr<kernel_factory<scalar_type>>(k_type));
         } catch (const std::exception &ex) {
             LOG4_ERROR("Something very bad happened during kernel factory init, " << ex.what());
         }

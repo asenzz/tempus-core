@@ -15,6 +15,8 @@ public:
 
     bool exists(const bigint model_id);
 
+    bool svr_exists(const bigint svr_id);
+
     int save(const datamodel::Model_ptr& model);
 
     int remove(const datamodel::Model_ptr& model);
@@ -27,11 +29,10 @@ public:
 
     std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id);
 
-    std::deque<OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id);
+    std::deque<datamodel::OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id);
 };
 
 }
 }
 
 #endif /* PGMODELDAO_HPP */
-

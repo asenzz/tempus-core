@@ -1,21 +1,32 @@
 #pragma once
 
+#include <boost/date_time/posix_time/ptime.hpp>
 #include <memory>
 #include <sstream>
+#include <type_traits>
 #include <vector>
 #include <map>
 #include <set>
 #include <armadillo>
 #include <viennacl/matrix.hpp>
 #include <execution>
-#include <oneapi/tbb/concurrent_map.h>
-#include <oneapi/tbb/concurrent_set.h>
+#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
+#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_unordered_set.h>
+#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_unordered_map.h>
+#include <boost/functional/hash.hpp>
+#include <functional>
+#include <thread>
 
 #include "types.hpp"
 #include "defines.h"
 
+namespace boost {
+#include "hashing.tpp"
+}
 
 namespace std {
+#include "hashing.tpp"
 
 //template<typename T, typename ...Args>
 //std::unique_ptr<T> make_unique( Args&& ...args )
@@ -39,9 +50,63 @@ std::string to_string(const long double v);
 std::string to_string(const double v);
 
 std::string to_string(const float v);
+
+template<typename T, typename C, typename Tr>
+std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
+{
+    if (aset.size() < 2) return s << *aset.begin();
+
+    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << el << ", "; });
+    return s << *std::prev(aset.end());
+}
+
+template<typename C, typename Tr, typename T>
+std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
+{
+    if (aset.size() < 2) return s << *aset.begin();
+    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << *el << ", "; });
+    return s << **std::prev(aset.end());
+}
+
 }
 
 namespace svr {
+
+using mutex_ptr = std::shared_ptr<std::mutex>;
+
+std::string demangle(const std::string &name);
+
+template<typename T>
+bool operator !=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
+{
+    if (lhs.size() != rhs.size()) return true;
+    for (auto lhs_iter = lhs.begin(), rhs_iter = rhs.begin(); lhs_iter != lhs.end(), rhs_iter != rhs.end(); ++lhs_iter, ++rhs_iter) {
+        if (*lhs_iter != *rhs_iter) return true;
+        ++lhs_iter; ++rhs_iter;
+    }
+    return false;
+}
+
+bool operator<(const arma::SizeMat &lhs, const arma::SizeMat &rhs);
+bool operator<(const std::set<size_t> &lhs, const std::set<size_t> &rhs);
+
+using type_info_ref = std::reference_wrapper<const std::type_info>;
+
+struct type_hasher
+{
+    std::size_t operator()(type_info_ref code) const
+    {
+        return code.get().hash_code();
+    }
+};
+
+struct equal_to
+{
+    bool operator()(type_info_ref lhs, type_info_ref rhs) const
+    {
+        return lhs.get() == rhs.get();
+    }
+};
 
 #define ALIAS_TEMPLATE_FUNCTION(highLevelF, lowLevelF) \
 template<typename... Args> \
@@ -55,10 +120,16 @@ unsigned adj_threads(const ssize_t iterations);
 template<typename ContainerT, typename PredicateT>
 void remove_if(ContainerT &items, const PredicateT &predicate)
 {
-    for (auto it = items.begin(); it != items.end();) {
-        if (predicate(*it)) it = items.erase(it);
-        else ++it;
-    }
+    typename std::remove_reference_t<std::remove_const_t<ContainerT>>::iterator it = items.begin();
+    while (items.size() && it != items.end())
+        if (predicate(*it)) {
+            if (items.size() < 2) {
+                items.clear();
+                return;
+            } else
+                it = items.erase(it);
+        } else
+            ++it;
 }
 
 template<typename T> T operator^(const std::set<T> &s, const size_t i)
@@ -92,6 +163,21 @@ template<typename K, typename V> V operator^(const std::map<K, V> &s, const size
 }
 
 template<typename K, typename V> V &operator^(std::map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> K operator%(const std::unordered_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->first;
+}
+
+template<typename K, typename V> V operator^(const std::unordered_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> V &operator^(std::unordered_map<K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
@@ -158,6 +244,7 @@ template<typename V, typename L> V back(const std::set<V, L> &s)
 
 typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
 typedef std::shared_ptr<arma::mat> matrix_ptr;
+typedef std::shared_ptr<arma::vec> vec_ptr;
 
 
 template<typename T> auto
@@ -184,11 +271,6 @@ operator==(const std::deque<T> &lhs, const std::deque<T> &rhs)
     return true;
 }
 
-template<typename T, typename... Ts>
-std::shared_ptr<T> ptr(Ts... args)
-{
-    return std::make_shared<T>(args...);
-}
 
 namespace common {
 
@@ -211,6 +293,7 @@ max_size(const C &container)
             max = item.size();
     return max;
 }
+
 
 template<typename T>
 arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
@@ -395,6 +478,15 @@ toarmacol(const tbb::concurrent_vector<T> &v)
     return r;
 }
 
+template<typename T> arma::Col<T>
+toarmacol(const tbb::concurrent_unordered_set<T> &v)
+{
+    arma::Col<T> r;
+    r.set_size(v.size());
+    std::copy(std::execution::par_unseq, v.begin(), v.end(), r.begin());
+    return r;
+}
+
 
 template<typename T> arma::Mat<T>
 toarma(const viennacl::matrix <T> &in)
@@ -482,6 +574,42 @@ public:
         this->_M_impl._M_start = this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = NULL;
     }
 };
+
+template <typename T>
+struct copyatomic
+{
+    std::atomic<T> _a;
+
+    copyatomic()
+            :_a()
+    {}
+
+    copyatomic(const std::atomic<T> &a)
+            :_a(a.load(std::memory_order_relaxed))
+    {}
+
+    copyatomic(const copyatomic &other)
+            :_a(other._a.load(std::memory_order_relaxed))
+    {}
+
+    copyatomic &operator=(const copyatomic &other)
+    {
+        _a.store(other._a.load(), std::memory_order_relaxed);
+    }
+
+    copyatomic &operator=(const T &other) const
+    {
+        _a.store(other, std::memory_order_relaxed);
+    }
+
+    bool operator==(const T &other) const
+    {
+        return _a.load(std::memory_order_relaxed) == other;
+    }
+
+};
+
+size_t hash_param(const double param_val);
 
 #if 0 // ArrayFire related routines, deprecated
 af::array armat_to_af_2d(const arma::mat &input)

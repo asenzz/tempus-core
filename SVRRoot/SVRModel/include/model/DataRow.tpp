@@ -75,6 +75,13 @@ container_range<C, C_range_iter, T>::operator[](const size_t index) const
     return *(begin_ + index);
 }
 
+
+template<typename C, typename C_range_iter, typename T> C_range_iter
+container_range<C, C_range_iter, T>::operator()(const ssize_t index) const
+{
+    return it(index);
+}
+
 template<typename C, typename C_range_iter, typename T> C_range_iter
 container_range<C, C_range_iter, T>::it(const ssize_t index) const
 {
@@ -117,13 +124,25 @@ C_range_iter container_range<C, C_range_iter, T>::end() const
 template<typename C, typename C_range_iter, typename T>
 typename container_range<C, C_range_iter, T>::C_riter container_range<C, C_range_iter, T>::rbegin() const
 {
-    return end_ == container_.end() ? container_.rbegin() : C_riter(end_);
+    return end_ == container_.end() ? container_.rbegin() : std::make_reverse_iterator(end_);
+}
+
+template<typename C, typename C_range_iter, typename T>
+typename container_range<C, C_range_iter, T>::C_criter container_range<C, C_range_iter, T>::crbegin() const
+{
+    return end_ == container_.end() ? container_.rbegin() : std::make_reverse_iterator(end_);
 }
 
 template<typename C, typename C_range_iter, typename T>
 typename container_range<C, C_range_iter, T>::C_riter container_range<C, C_range_iter, T>::rend() const
 {
     return begin_ == container_.end() ? container_.rend() : C_riter(begin_);
+}
+
+template<typename C, typename C_range_iter, typename T>
+typename container_range<C, C_range_iter, T>::C_criter container_range<C, C_range_iter, T>::crend() const
+{
+    return begin_ == container_.end() ? container_.rend() : C_criter(begin_);
 }
 
 

@@ -1,3 +1,5 @@
+#include <unordered_set>
+#include <unordered_map>
 #include <cppcms/json.h>
 #include <cppcms/session_interface.h>
 #include "controller/RequestController.hpp"
@@ -37,7 +39,7 @@ void RequestView::makeMultivalRequest(cppcms::json::object data)
     std::string vctemp = ivalCols == data.end() ? std::string() : ivalCols->second.str();
     string const valueColumns = std::string("{") + (vctemp.empty() ? "high,low,open,close" : vctemp) + "}";
 
-    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.get(dataset_id);
+    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.load(dataset_id);
     if (!dataset) {
         string error = "No dataset with id " + data["dataset"].str();
         LOG4_ERROR(error);
@@ -54,7 +56,7 @@ void RequestView::makeMultivalRequest(cppcms::json::object data)
         return;
     }
 
-    request = std::make_shared<MultivalRequest>(0, user, dataset_id, second_clock::local_time(), valueTimeStart, valueTimeEnd, resolution.total_seconds(), valueColumns);
+    request = ptr<MultivalRequest>(0, user, dataset_id, second_clock::local_time(), valueTimeStart, valueTimeEnd, resolution.total_seconds(), valueColumns);
     if (!AppContext::get_instance().request_service.save(request)) {
         string error = "Cannot create forecast request!";
         LOG4_ERROR(error);
@@ -108,8 +110,8 @@ void RequestView::getMultivalResults(json::object data)
 
     struct mt4bar
     {
-        std::map<std::string, double> values;
-        std::set<std::string> columns;
+        std::unordered_map<std::string, double> values;
+        std::unordered_set<std::string> columns;
 
         bool good() const
         {
@@ -118,8 +120,8 @@ void RequestView::getMultivalResults(json::object data)
             if (columns.size() != values.size())
                 return false;
 
-            std::set<std::string>::const_iterator icol = columns.begin();
-            std::map<std::string, double>::const_iterator ival = values.begin();
+            std::unordered_set<std::string>::const_iterator icol = columns.begin();
+            std::unordered_map<std::string, double>::const_iterator ival = values.begin();
 
             for (; icol != columns.end(); ++icol, ++ival)
                 if (*icol != ival->first || fabs(ival->second) < std::numeric_limits<double>::epsilon())
@@ -128,7 +130,7 @@ void RequestView::getMultivalResults(json::object data)
         }
     };
 
-    using mt4bars = std::map<bpt::ptime, mt4bar>;
+    using mt4bars = std::unordered_map<bpt::ptime, mt4bar>;
     mt4bars bars;
 
     json::array tmp_array;
@@ -149,7 +151,7 @@ void RequestView::getMultivalResults(json::object data)
 
         tmp["tm"] = to_mt4_date(me.first);
 
-        for (std::map<std::string, double>::const_iterator iter = me.second.values.begin(); iter != me.second.values.end(); ++iter)
+        for (std::unordered_map<std::string, double>::const_iterator iter = me.second.values.begin(); iter != me.second.values.end(); ++iter)
             tmp[std::string(iter->first.begin(), iter->first.begin() + 1)] = iter->second;
 
         tmp_array.push_back(tmp);

@@ -5,9 +5,7 @@
 #include <csignal>
 
 
-using namespace svr::daemon;
-using namespace svr::context;
-using namespace svr::datamodel;
+using namespace svr;
 
 
 void signal_handler(int signum)
@@ -18,7 +16,7 @@ void signal_handler(int signum)
 }
 
 
-std::string parse(int argc, char** argv)
+std::string parse(const int argc, const char** argv)
 {
     boost::program_options::options_description gen_desc = boost::program_options::options_description("Daemon options");
     gen_desc.add_options()
@@ -37,29 +35,33 @@ std::string parse(int argc, char** argv)
     if (vm["config"].as<std::string>().empty())
         THROW_EX_F(std::invalid_argument, "Empty path to config file.");
 
-    AppContext::init_instance(vm["config"].as<std::string>().c_str());
+    context::AppContext::init_instance(vm["config"].as<std::string>().c_str());
     return vm["config"].as<std::string>();
 }
 
 
-namespace {
-    static AppContextDeleter appContextDeleter;
-}
-
-
-int main(int argc, char** argv)
+int main(const int argc, const char** argv)
 {
+#ifdef INTEGRATION_TEST
+    LOG4_FATAL("Integration test build cannot be run in production.");
+    exit(0xff);
+#endif
+
 //    mtrace();
     (void) signal(SIGINT, signal_handler);
     (void) signal(SIGABRT, signal_handler);
     (void) signal(SIGTERM, signal_handler);
+
     omp_set_nested(true);
-    omp_set_max_active_levels((int) std::thread::hardware_concurrency());
-    std::shared_ptr<DaemonFacade> p_daemon_facade;
+    omp_set_max_active_levels(common::C_omp_max_active_levels);
+    omp_set_teams_thread_limit(common::C_omp_teams_thread_limit);
+    if (common::gpu_handler::get().get_gpu_devices_count()) omp_set_default_device(0);
+
+    std::shared_ptr<daemon::DaemonFacade> p_daemon_facade;
     int rc = 0;
     try {
         const std::string config_path = parse(argc, argv);
-        p_daemon_facade = std::make_shared<DaemonFacade>(config_path);
+        p_daemon_facade = ptr<daemon::DaemonFacade>(config_path);
         p_daemon_facade->start_loop();
     } catch (const std::invalid_argument &e) {
         LOG4_ERROR(e.what());

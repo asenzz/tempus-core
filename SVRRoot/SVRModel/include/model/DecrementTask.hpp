@@ -30,6 +30,19 @@ private:
     std::string values_; // json
     std::string suggested_value_;
 
+    virtual void init_id() override
+    {
+        if (!id) {
+            boost::hash_combine(id, dataset_id_);
+            boost::hash_combine(id, start_task_time_);
+            boost::hash_combine(id, end_task_time_);
+
+            boost::hash_combine(id, start_train_time_);
+            boost::hash_combine(id, end_train_time_);
+            boost::hash_combine(id, start_validation_time_);
+            boost::hash_combine(id, end_validation_time_);
+        }
+    }
 public:
     DecrementTask() :
             Entity(),

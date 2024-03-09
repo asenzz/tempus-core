@@ -21,7 +21,6 @@
 #include <util/math_utils.hpp>
 #include <util/string_utils.hpp>
 #include <common/thread_pool.hpp>
-#include <unordered_map>
 
 #include "common/Logging.hpp"
 #include "common/compatibility.hpp"
@@ -299,7 +298,7 @@ void pso_state_io::save_state_to_file(const std::string &filename)
     LOG4_DEBUG("Start save_state_to_file function.");
     bool all_threads_finished = false;
     while (!all_threads_finished) {
-        std::unique_lock<std::mutex> pso_states_lock(pso_states_mutex);
+        std::unique_lock pso_states_lock(pso_states_mutex);
         if (dirty_state.load(std::memory_order_relaxed)) {
             std::ofstream output_file(filename, std::ios::out);
             for (auto state: this->pso_states) {
@@ -312,7 +311,7 @@ void pso_state_io::save_state_to_file(const std::string &filename)
         }
         pso_states_lock.unlock();
         all_threads_finished = true;
-        std::unique_lock<std::mutex> finish_states_lock(finish_state_mutex);
+        std::unique_lock finish_states_lock(finish_state_mutex);
         for (auto finish_state: finish_states) {
                 if (!finish_state.second) {
                     all_threads_finished = false;

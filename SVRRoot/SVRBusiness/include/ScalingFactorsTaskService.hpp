@@ -3,27 +3,29 @@
 #include <memory>
 #include <common/types.hpp>
 
-namespace svr { namespace dao { class ScalingFactorsTaskDAO; } }
+namespace svr { namespace dao { class ScalingFactorsTaskDAO; }}
 
-namespace svr { namespace datamodel { class ScalingFactorsTask; } }
+namespace svr { namespace datamodel { class ScalingFactorsTask; }}
 using ScalingFactorsTask_ptr = std::shared_ptr<svr::datamodel::ScalingFactorsTask>;
 
 namespace svr {
 namespace business {
 
 
-class ScalingFactorsTaskService {
+class ScalingFactorsTaskService
+{
 
-    svr::dao::ScalingFactorsTaskDAO & scalingFactorsTaskDao;
+    svr::dao::ScalingFactorsTaskDAO &scalingFactorsTaskDao;
 
 public:
 
     ScalingFactorsTaskService(svr::dao::ScalingFactorsTaskDAO &scalingFactorsTaskDao) :
-        scalingFactorsTaskDao(scalingFactorsTaskDao) {}
+            scalingFactorsTaskDao(scalingFactorsTaskDao)
+    {}
 
     bool exists(const ScalingFactorsTask_ptr &);
 
-    int save(ScalingFactorsTask_ptr& scalingFactorsTask);
+    int save(ScalingFactorsTask_ptr &scalingFactorsTask);
 
     ScalingFactorsTask_ptr get_by_id(const bigint id);
 };

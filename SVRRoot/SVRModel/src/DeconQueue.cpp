@@ -20,14 +20,15 @@ DeconQueue::DeconQueue(
           input_queue_table_name_(input_queue_table_name),
           input_queue_column_name_(input_queue_column_name),
           dataset_id_(dataset_id),
-          decon_level_number_(decon_level_number) {
+          decon_level_number_(decon_level_number)
+{
 }
 
 
 datamodel::DeconQueue_ptr DeconQueue::clone_empty() const
 {
-    return std::make_shared<DeconQueue>(
-            table_name_, input_queue_table_name_, input_queue_column_name_, dataset_id_, decon_level_number_);
+    return ptr<DeconQueue>(
+            "clone_" + table_name_, input_queue_table_name_, input_queue_column_name_, dataset_id_, decon_level_number_);
 }
 
 datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t end_ix) const
@@ -37,7 +38,6 @@ datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t 
             data_.begin() + std::min(start_ix, data_.size() - 1), data_.begin() + std::min(end_ix, data_.size()));
     return p_new_decon_queue;
 }
-
 
 void DeconQueue::erase_until(const data_row_container::iterator &target_iter)
 {
@@ -92,19 +92,37 @@ void DeconQueue::update_data(const DataRow::container &new_data, const bool over
     LOG4_END();
 }
 
+std::string DeconQueue::get_input_queue_table_name() const
+{
+    return input_queue_table_name_;
+}
+
+std::string DeconQueue::get_input_queue_column_name() const
+{
+    return input_queue_column_name_;
+}
+
+bigint DeconQueue::get_dataset_id() const
+{
+    return dataset_id_;
+}
+
+size_t DeconQueue::get_column_count() const
+{
+    return data_.empty() ? decon_level_number_ : data_.front()->get_values().size();
+}
+
 void DeconQueue::set_input_queue_table_name(const std::string &input_queue_table_name)
 {
     input_queue_table_name_ = input_queue_table_name;
     reinit_table_name();
 }
 
-
 void DeconQueue::set_input_queue_column_name(const std::string &input_queue_column_name)
 {
     input_queue_column_name_ = input_queue_column_name;
     reinit_table_name();
 }
-
 
 void DeconQueue::set_dataset_id(const bigint dataset_id)
 {
@@ -204,7 +222,7 @@ DeconQueue DeconQueue::load(const std::string &file_path)
         for (size_t i = 3; i < row.size() - (row.size() - 3) / 5; ++i) {
             values.push_back(std::atof(row[i].c_str()));
         }
-        const auto data_row_ptr = std::make_shared<svr::datamodel::DataRow>(
+        const auto data_row_ptr = ptr<svr::datamodel::DataRow>(
                 boost::posix_time::time_from_string(row[0]),
                 boost::posix_time::time_from_string(row[1]),
                 std::atoll(row[2].c_str()),

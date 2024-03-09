@@ -24,7 +24,7 @@ using InputQueue_ptr = std::shared_ptr<InputQueue>;
 class InputQueue final : public Queue
 {
     friend svr::business::InputQueueService;
-private:
+
     std::string logical_name_;
     std::string owner_user_name_;
     std::string description_;
@@ -37,7 +37,7 @@ private:
 
     void reinit_table_name();
 
-    bool uses_fix_connection;
+    bool uses_fix_connection = false;
 
 public:
 
@@ -103,7 +103,7 @@ public:
 
     bool get_uses_fix_connection() const;
 
-    void set_uses_fix_connection(bool value);
+    void set_uses_fix_connection(const bool value);
 };
 
 template<typename T> std::basic_ostream<T> &

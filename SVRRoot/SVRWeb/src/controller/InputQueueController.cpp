@@ -68,7 +68,10 @@ void InputQueueController::create()
 void InputQueueView::getAllInputQueues()
 {
     session()["user"] = DEFAULT_WEB_USER;
-    return_result(AppContext::get_instance().input_queue_service.get_all_user_queues(DEFAULT_WEB_USER /* session()["user"] */ ));
+    std::vector<datamodel::InputQueue_ptr> queue_vector;
+    const auto queues = APP.input_queue_service.get_all_user_queues(DEFAULT_WEB_USER /* session()["user"] */ );
+    std::copy(std::execution::par_unseq, queues.begin(), queues.end(), std::back_inserter(queue_vector));
+    return_result(queue_vector);
 }
 
 void InputQueueView::main(std::string string)
@@ -263,7 +266,7 @@ parsed_header parseMT4DataHeader(const std::string &rawHeader,
     return headersWithType;
 }
 
-using db_columns = std::vector<std::string>;
+using db_columns = std::deque<std::string>;
 
 struct header_to_column_mapper
 {
@@ -308,7 +311,7 @@ struct header_to_column_mapper
 
             parsed_header::const_iterator const it_header =
                     std::find_if(ph.begin(), ph.end(), [&column](parsed_header_element const &v) {
-                        return ignoreCaseEquals(v.first, column);
+                        return ignore_case_equals(v.first, column);
                     });
 
             if (it_header != ph.end())
@@ -372,14 +375,14 @@ void InputQueueView::historyData(cppcms::json::object data)
 
         size_t const timeIndex = std::find_if(headersWithType.begin(), headersWithType.end(),
                                               [&](pair<string, string> const &v) {
-                                                  return ignoreCaseEquals(v.first, "Time");
+                                                  return ignore_case_equals(v.first, "Time");
                                               }) - headersWithType.begin();
         size_t const volumeIndex = std::find_if(headersWithType.begin(), headersWithType.end(),
                                                 [&](pair<string, string> const &v) {
-                                                    return ignoreCaseEquals(v.first, "Volume");
+                                                    return ignore_case_equals(v.first, "Volume");
                                                 }) - headersWithType.begin();
 
-        header_to_column_mapper mapper(headersWithType, AppContext::get_instance().input_queue_service.get_db_table_column_names(queue));
+        header_to_column_mapper mapper(headersWithType, APP.input_queue_service.get_db_table_column_names(queue));
 
         LOG4_DEBUG("Loaded history queue " << barFrom << " " << barTo);
         for (size_t barIx = barFrom; barIx < barTo; ++barIx) {
@@ -447,7 +450,7 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     }
 
     bpt::ptime valueTime = bpt::time_from_string(obj["time"].str());
-    datamodel::DataRow_ptr row = std::make_shared<DataRow>(valueTime, second_clock::local_time(), tick_volume, values);
+    datamodel::DataRow_ptr row = ptr<DataRow>(valueTime, second_clock::local_time(), tick_volume, values);
 
     LOG4_DEBUG(row->to_string());
 

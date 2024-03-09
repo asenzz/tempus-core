@@ -1,9 +1,9 @@
-#include <model/Model.hpp>
-#include <model/Ensemble.hpp>
-#include "onlinesvr.hpp"
-
-#include <appcontext.hpp>
 #include <utility>
+#include <atomic>
+#include "appcontext.hpp"
+#include "model/Model.hpp"
+#include "model/Ensemble.hpp"
+#include "onlinesvr.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -17,20 +17,43 @@ bool Model::operator==(const Model &o) const
 Model::Model(const bigint id, const bigint ensemble_id, const size_t decon_level,
              const size_t multiout_, const size_t gradient_ct, const size_t chunk_size,
              std::deque<OnlineMIMOSVR_ptr> svr_model, const bpt::ptime &last_modified,
-             const bpt::ptime &last_modeled_value_time, t_param_set_ptr p_param_set
-)
+             const bpt::ptime &last_modeled_value_time)
         : Entity(id),
           ensemble(ensemble_id),
           decon_level(decon_level),
-          multiout_(multiout_),
+          multiout(multiout_),
           gradient_ct(gradient_ct),
-          chunk_size(chunk_size),
+          max_chunk_size(chunk_size),
           svr_models(std::move(svr_model)),
           last_modified(last_modified),
-          last_modeled_value_time(last_modeled_value_time),
-          p_param_set(std::move(p_param_set))
+          last_modeled_value_time(last_modeled_value_time)
 {
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
 }
+
+void Model::init_id()
+{
+    if (!id) {
+        boost::hash_combine(id, ensemble.get_id());
+        boost::hash_combine(id, decon_level);
+    }
+}
+
+size_t Model::get_gradient_count() const
+{ return gradient_ct; }
+
+void Model::set_max_chunk_size(const size_t chunk_size)
+{
+    max_chunk_size = chunk_size;
+}
+
+size_t Model::get_max_chunk_size() const
+{ return max_chunk_size; }
+
+size_t Model::get_multiout() const
+{ return multiout; }
 
 void Model::reset()
 {
@@ -38,26 +61,6 @@ void Model::reset()
     last_modified = bpt::min_date_time;
     svr_models.clear();
     ensemble = ensemble_relation();
-}
-
-datamodel::SVRParameters &Model::get_params(const size_t chunk_ix, const size_t grad_ix)
-{
-    return *business::SVRParametersService::find(*p_param_set, chunk_ix, grad_ix);
-}
-
-datamodel::SVRParameters Model::get_params(const size_t chunk_ix, const size_t grad_ix) const
-{
-    return *business::SVRParametersService::find(*p_param_set, chunk_ix, grad_ix);
-}
-
-datamodel::SVRParameters_ptr Model::get_params_ptr(const size_t chunk_ix, const size_t grad_ix) const
-{
-    return business::SVRParametersService::find(*p_param_set, chunk_ix, grad_ix);
-}
-
-t_param_set_ptr Model::get_param_set(const size_t chunk_ix, const size_t grad_ix) const
-{
-    return business::SVRParametersService::slice(*p_param_set, chunk_ix, grad_ix);
 }
 
 /** Get ensemble database ID this model is part of */
@@ -87,14 +90,19 @@ void Model::set_decon_level(const size_t _decon_level)
 }
 
 /** Get pointer to an OnlineSVR model instance */
-OnlineMIMOSVR_ptr &Model::get_gradient(const size_t i)
-{
-    return svr_models[i];
-}
-
 OnlineMIMOSVR_ptr Model::get_gradient(const size_t i) const
 {
-    return svr_models[i];
+    const auto svr_model_iter = std::find_if(std::execution::par_unseq, svr_models.begin(), svr_models.end(), [&](const auto &p_svr_model) {
+        return p_svr_model->get_gradient_level() == i;
+    });
+    if (svr_model_iter != svr_models.end()) return *svr_model_iter;
+    LOG4_WARN("Gradient " << i << " not found!");
+    return nullptr;
+}
+
+datamodel::SVRParameters_ptr Model::get_head_params() const
+{
+    return (svr_models.empty() || (**svr_models.cbegin()).get_param_set().empty()) ? nullptr : *(**svr_models.cbegin()).get_param_set().cbegin();
 }
 
 std::deque<OnlineMIMOSVR_ptr> &Model::get_gradients()
@@ -107,18 +115,44 @@ std::deque<OnlineMIMOSVR_ptr> Model::get_gradients() const
     return svr_models;
 }
 
-void Model::set_gradient(const size_t i, const OnlineMIMOSVR_ptr &m)
+
+void Model::set_gradient(const OnlineMIMOSVR_ptr &m)
 {
-    if (svr_models.size() < i + 1) svr_models.resize(i + 1);
-    svr_models[i] = m;
+    std::atomic<bool> found{false};
+#pragma omp parallel for num_threads(adj_threads(svr_models.size()))
+    for (size_t g = 0; g < svr_models.size(); ++g) {
+        if (m->get_gradient_level() == svr_models[g]->get_gradient_level()) {
+            svr_models[g] = m;
+            svr_models[g]->set_model_id(id);
+            found.store(true, std::memory_order_relaxed);
+        }
+    }
+    if (found.load()) return;
+    svr_models.emplace_back(m);
+    svr_models.back()->set_model_id(id);
 }
 
 /** Set member svr model point to a OnlineSVR instance
- * \param _svr_models new OnlineSVR instance
+ * \param new_svr_models new OnlineSVR instance
  */
-void Model::set_gradients(const std::deque<OnlineMIMOSVR_ptr> &_svr_models)
+void Model::set_gradients(const std::deque<OnlineMIMOSVR_ptr> &new_svr_models, const bool overwrite)
 {
-    svr_models = _svr_models;
+    const size_t prev_size = svr_models.size();
+    for (const auto &new_m: new_svr_models) {
+        std::atomic<bool> found = false;
+#pragma omp parallel for num_threads(adj_threads(prev_size))
+        for (size_t i = 0; i < prev_size; ++i)
+            if (new_m->get_gradient_level() == svr_models[i]->get_gradient_level() && new_m->get_decon_level() == svr_models[i]->get_decon_level()) {
+                if (overwrite) {
+                    svr_models[i] = new_m;
+                    svr_models[i]->set_model_id(id);
+                }
+                found.store(true, std::memory_order_relaxed);
+            }
+        if (found) continue;
+        svr_models.emplace_back(new_m);
+        svr_models.back()->set_model_id(id);
+    }
 }
 
 /** Get last time model was updated */
@@ -153,6 +187,9 @@ std::string Model::to_string() const
     s << "Model ID " << id
       << ", ensemble ID " << ensemble.get_id()
       << ", decon level " << decon_level
+      << ", gradients " << gradient_ct
+      << ", outputs " << multiout
+      << ", chunk size " << max_chunk_size
       << ", last modified time " << last_modified
       << ", last modeled value time " << last_modeled_value_time;
     return s.str();
@@ -161,3 +198,4 @@ std::string Model::to_string() const
 
 }
 }
+

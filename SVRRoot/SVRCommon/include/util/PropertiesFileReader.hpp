@@ -64,6 +64,7 @@ public:
     size_t get_tune_run_limit() const { return tune_run_limit_; }
 
 private:
+    static const std::string TUNE_PARAMETERS;
     static const std::string SQL_PROPERTIES_DIR_KEY;
     static const std::string LOG_LEVEL_KEY;
     static const std::string COMMENT_CHARS;

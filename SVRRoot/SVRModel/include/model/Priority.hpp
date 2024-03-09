@@ -10,19 +10,19 @@ enum class Priority{ Low = 0, BelowNormal = 1, Normal = 2, AboveNormal = 3, High
 inline Priority get_priority_from_string(const std::string& priority_str){
     Priority priority = Priority::Normal;
 
-    using svr::common::ignoreCaseEquals;
+    using svr::common::ignore_case_equals;
 
-    if (ignoreCaseEquals(priority_str, "Low")) {
+    if (ignore_case_equals(priority_str, "Low")) {
         priority = Priority::Low;
-    } else if (ignoreCaseEquals(priority_str, "BelowNormal")) {
+    } else if (ignore_case_equals(priority_str, "BelowNormal")) {
         priority = Priority::BelowNormal;
-    } else if (ignoreCaseEquals(priority_str, "Normal")) {
+    } else if (ignore_case_equals(priority_str, "Normal")) {
         priority = Priority::Normal;
-    } else if (ignoreCaseEquals(priority_str, "AboveNormal")) {
+    } else if (ignore_case_equals(priority_str, "AboveNormal")) {
         priority = Priority::AboveNormal;
-    } else if (ignoreCaseEquals(priority_str, "High")) {
+    } else if (ignore_case_equals(priority_str, "High")) {
         priority = Priority::High;
-    } else if (ignoreCaseEquals(priority_str, "Max")){
+    } else if (ignore_case_equals(priority_str, "Max")){
         priority = Priority::Max;
     }
     return priority;

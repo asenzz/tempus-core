@@ -2,38 +2,33 @@
 #include <util/string_utils.hpp>
 #include <common/Logging.hpp>
 
-using namespace svr::datamodel;
-using namespace svr::common;
-
 namespace svr {
 namespace dao {
 
-User_ptr UserRowMapper::mapRow(const pqxx_tuple& rowSet) const
+User_ptr UserRowMapper::mapRow(const pqxx_tuple& row_set) const
 {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-	if (rowSet.empty()){
+	if (row_set.empty()){
 		LOG4_ERROR("No row returned from database!");
 		return nullptr;
 	}
 #pragma GCC diagnostic pop
-	svr::datamodel::ROLE role;
-	svr::datamodel::Priority priority = static_cast<svr::datamodel::Priority>(rowSet["priority"].as<int>((int)svr::datamodel::Priority::Normal));
+	datamodel::ROLE role;
+	datamodel::Priority priority = static_cast<datamodel::Priority>(row_set["priority"].as<int>((int)datamodel::Priority::Normal));
 
-	if(ignoreCaseEquals(rowSet["role"].as<std::string>(""), "admin"))
-		role = svr::datamodel::ROLE::ADMIN;
+	if(common::ignore_case_equals(row_set["role"].as<std::string>(""), "admin"))
+		role = datamodel::ROLE::ADMIN;
 	else
-	    role = svr::datamodel::ROLE::USER;
+	    role = datamodel::ROLE::USER;
 
-	return std::make_shared<User>(
-			rowSet["user_id"].as<bigint>(std::numeric_limits<bigint>::quiet_NaN()),
-			rowSet["username"].as<std::string>(""),
-			rowSet["email"].as<std::string>(""),
-			rowSet["password"].as<std::string>(""),
-			rowSet["name"].as<std::string>(""),
-			role,
-			priority
-	);
+    return ptr<datamodel::User>(
+            row_set["user_id"].as<bigint>(0),
+            row_set["username"].as<std::string>(),
+            row_set["email"].as<std::string>(),
+            row_set["password"].as<std::string>(),
+            row_set["name"].as<std::string>(),
+            role, priority);
 }
 
 } /* namespace dao */

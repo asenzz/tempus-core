@@ -58,7 +58,7 @@ struct Bar : Command
         if(!nr)
             throw std::runtime_error("Bar: Input queue is empty");
 
-        using ColMapper = std::map<std::string, size_t> ;
+        using ColMapper = std::unordered_map<std::string, size_t> ;
         ColMapper mapper;
 
         for(size_t i = 0; i < queue->get_value_columns().size(); ++i)

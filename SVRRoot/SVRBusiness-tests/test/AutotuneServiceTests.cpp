@@ -1,4 +1,5 @@
 #include "include/DaoTestFixture.h"
+#include "common/constants.hpp"
 #include <iostream>
 #include <vector>
 #include <model/Model.hpp>
@@ -21,7 +22,7 @@ TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
             "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 4, 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 

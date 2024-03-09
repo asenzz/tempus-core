@@ -40,14 +40,14 @@ struct fcvmd_frequency_outputs
 
 class fast_cvmd final : public spectral_transform
 {
-    size_t levels;
-    size_t K; // Number of modes/frequencies. because of DC=1 we use 1 more than the natural number of frequencies (3 in the signal above). Half of VMD levels, quarter of total levels.
+    const size_t levels = 0;
+    const size_t K = 0; // Number of modes/frequencies. because of DC=1 we use 1 more than the natural number of frequencies (3 in the signal above). Half of VMD levels, quarter of total levels.
     arma::vec f;
     arma::rowvec A;
-    arma::mat H;
-    arma::uvec even_ixs, odd_ixs, K_ixs;
+    const arma::mat H;
+    const arma::uvec even_ixs, odd_ixs, K_ixs;
     arma::vec row_values, soln;
-    bpt::ptime timenow;
+    const bpt::ptime timenow;
     tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> vmd_frequencies;
     static const business::t_iqscaler C_no_scaler;
 

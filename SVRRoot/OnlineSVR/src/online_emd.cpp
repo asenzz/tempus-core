@@ -25,10 +25,11 @@ void online_emd::transform(
     const size_t residuals_ct = custom_residuals_ct == std::numeric_limits<size_t>::max() ? get_residuals_length(p_decon_queue->get_table_name()) : custom_residuals_ct;
 
     auto start_decon_iter = p_decon_queue->begin() + decon_start_ix;
-    if (std::distance(p_decon_queue->begin(), start_decon_iter) >= ssize_t(residuals_ct))
+    ssize_t dist = 0;
+    if ((dist = std::distance(p_decon_queue->begin(), start_decon_iter)) >= ssize_t(residuals_ct))
         start_decon_iter -= residuals_ct;
     else {
-        LOG4_ERROR("Not enough data to produce time invariant output " << residuals_ct);
+        if (decon_start_ix) LOG4_ERROR("Not enough data " << dist <<  " to produce time invariant output " << residuals_ct);
         start_decon_iter = p_decon_queue->begin();
     }
 
@@ -36,7 +37,7 @@ void online_emd::transform(
     datamodel::datarow_range in_range(start_decon_iter, p_decon_queue->end(), p_decon_queue->get_data());
     if (in_range.distance() < ssize_t(residuals_ct)) mirror_tail(in_range, residuals_ct, tail);
 
-#ifdef MANIFOLD_TEST
+#ifdef INTEGRATION_TEST
     datamodel::datarow_range in_range_test(start_decon_iter, p_decon_queue->end() - test_offset, p_decon_queue->get_data());
     if (in_range_test.distance() < ssize_t(residuals_ct))
         mirror_tail(in_range_test, residuals_ct, tail);
@@ -76,7 +77,7 @@ t_oemd_coefficients_ptr online_emd::get_masks(
     if (in_tail_size < oemd::fir_search_window_end)
         LOG4_WARN("Input size " << input.distance() << " smaller than recommended " << oemd::fir_search_window_end);
 
-    if (!coefs) coefs = std::make_shared<oemd_coefficients>();
+    if (!coefs) coefs = ptr<oemd_coefficients>();
     oemd::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
 
     PROFILE_EXEC_TIME(
@@ -171,7 +172,7 @@ size_t online_emd::get_residuals_length(const double _stretch_coef, const size_t
 
 size_t online_emd::get_residuals_length(const std::string &queue_name)
 {
-    LOG4_WARN("Getting default masks residuals length!");
+    LOG4_WARN("Getting default masks residuals length.");
     const auto oemd_coefs = oemd_coefs_cache.find({levels, queue_name});
     if (levels < 1)
         LOG4_THROW("Unsupported number of levels " << levels << ", " << queue_name << " requested for OEMD.");

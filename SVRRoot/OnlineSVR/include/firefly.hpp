@@ -6,6 +6,7 @@
 #include <thread>
 #include "common/defines.h"
 #include "optimizer.hpp"
+#include "common/compatibility.hpp"
 
 
 #ifndef SVR_FIREFLY_HPP
@@ -14,49 +15,47 @@
 // #define FFA_HARD_WALL
 #define ADAPTIVE_FFA
 // #define DUMP	1
-// #define FFA_RANDOMLESNESS 20.  // Decrease of randomness as iterations pass, range 0 - MAX_GENERATIONS, higher is more randomness at the last iteration, slower decrease of randomness.
-
+// #define FIREFLY_CUDA
 
 namespace svr {
 namespace optimizer {
 
 struct ffa_particle {
-    int Index;
-    double f;
-    double I;
+    int Index = 0;
+    double f = 0;
+    double I = 0;
 };
 
 class firefly {
     static constexpr double delta_base = 1e-3 / .9;
     static constexpr double b_1 = 1;
     static constexpr double beta0 = 1;
-    double delta; // delta parameter for calculating alpha_new
 
-    std::vector<double> levy_random;
+    const arma::vec levy_random;
 
-    size_t D = 2;	    		        // dimension of the problem
-    size_t n = OPT_PARTICLES;			// number of fireflies
-    size_t MaxGeneration = MAX_ITERATIONS_OPT;  // number of iterations
-    size_t sobol_ctr = 0;
+    const size_t D = 2;	    		        // dimension of the problem
+    const size_t n = OPT_PARTICLES;			// number of fireflies
+    const size_t MaxGeneration = MAX_ITERATIONS_OPT;  // number of iterations
+    const size_t sobol_ctr = 0;
 
-    std::deque<std::vector<double>> ffa;	    // firefly agents
-    std::deque<std::vector<double>> ffa_tmp; // intermediate population
-    std::deque<ffa_particle> particles;
-    std::vector<double> nbest, allround_best;          // the best solution found so far
-    std::vector<double> lb;	        // upper bound
-    std::vector<double> ub;         // lower bound
+    const arma::vec range;
+    const arma::vec lb;	        // upper bound
+    const arma::vec ub;         // lower bound
 
     double alpha = FFA_ALPHA;	    // alpha parameter
-    double betamin = FFA_BETAMIN;  // beta parameter
-    double gamma = FFA_GAMMA;	   // gamma parameter
+    const double betamin = FFA_BETAMIN;  // beta parameter
+    const double gamma = FFA_GAMMA;	   // gamma parameter
 
-    double fbest;			        // the best objective function
+    double delta = 0; // delta parameter for calculating alpha_new
+    arma::mat ffa;	    // firefly agents
+    std::deque<ffa_particle> particles;
+    arma::vec best_parameters;          // the best solution found so far
 
-    loss_callback_t function = [&](const std::vector<double> &args) -> double
+    double best_score = std::numeric_limits<double>::max();   // the best objective function
+
+    const loss_callback_t function = [&](const std::vector<double> &args) -> double
     {
-        double res = 0;
-        for (const auto a: args) res += std::abs(a);
-        return res;
+        return std::numeric_limits<double>::quiet_NaN();
     };
 
     double alpha_new(const double alpha, const double NGen);
@@ -69,10 +68,10 @@ class firefly {
     void run_iteration();
 
 public:
-    operator std::pair<double, std::vector<double>>() { return {fbest, allround_best}; }
+    operator std::pair<double, std::vector<double>>() { return {best_score, common::wrap_vector(best_parameters.memptr(), best_parameters.n_elem)}; }
 
     firefly(const size_t D, const size_t n, const size_t MaxGeneration, const double alpha, const double betamin, const double gamma,
-            const std::vector<double> &lb, const std::vector<double> &ub, const std::vector<double> &pows, const loss_callback_t function);
+            const arma::vec &lb, const arma::vec &ub, const arma::vec &pows, const loss_callback_t function);
 };
 
 

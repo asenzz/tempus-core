@@ -14,8 +14,8 @@ private:
 public:
     DecrementTask_ptr mapRow(const pqxx_tuple& rowSet) const override
     {
-        return std::make_shared<svr::datamodel::DecrementTask>(
-                    rowSet["id"].as<bigint>(),
+        return ptr<svr::datamodel::DecrementTask>(
+                    rowSet["id"].as<bigint>(0),
                     rowSet["dataset_id"].is_null() ? 0 : rowSet["dataset_id"].as<bigint>(),
                     rowSet["start_task_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_task_time"].as<std::string>()),
                     rowSet["end_task_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_task_time"].as<std::string>()),

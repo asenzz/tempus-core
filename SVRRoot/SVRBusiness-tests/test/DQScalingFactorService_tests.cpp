@@ -1,4 +1,5 @@
 #include "include/DaoTestFixture.h"
+#include "common/constants.hpp"
 
 #include <model/User.hpp>
 #include <model/InputQueue.hpp>
@@ -20,7 +21,7 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(
-            0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+         0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);
@@ -65,7 +66,7 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-            svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+                                                                       svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);

@@ -1,7 +1,6 @@
 #include "controller/DatasetController.hpp"
 #include "view/DatasetView.hpp"
 #include "appcontext.hpp"
-
 #include "controller/MainController.hpp"
 
 using namespace svr::datamodel;
@@ -23,8 +22,8 @@ void DatasetController::show(const std::string dataset_name) {
         model.user_name = dataset->get_user_name();
         model.lookback_time = bpt::to_simple_string(dataset->get_max_lookback_time_gap());
         model.priority = svr::datamodel::to_string(dataset->get_priority());
-        model.gradients = std::to_string(dataset->get_gradients());
-        model.chunk_size = std::to_string(dataset->get_chunk_size());
+        model.gradients = std::to_string(dataset->get_gradient_count());
+        model.chunk_size = std::to_string(dataset->get_max_chunk_size());
         model.multiout = std::to_string(dataset->get_multiout());
         model.transformation_levels = std::to_string(dataset->get_transformation_levels());
         model.transformation_wavelet = dataset->get_transformation_name();

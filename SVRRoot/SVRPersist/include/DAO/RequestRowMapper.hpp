@@ -13,7 +13,7 @@ class MultivalRequestRowMapper : public IRowMapper<svr::datamodel::MultivalReque
 
 public:
     datamodel::MultivalRequest_ptr mapRow(const pqxx_tuple& rowSet) const override {
-        datamodel::MultivalRequest_ptr request = std::make_shared<svr::datamodel::MultivalRequest>();
+        datamodel::MultivalRequest_ptr request = ptr<svr::datamodel::MultivalRequest>();
 
         request->set_id(rowSet["request_id"].as<bigint>());
         request->dataset_id = rowSet["dataset_id"].as<bigint>();
@@ -33,7 +33,7 @@ class MultivalResponseRowMapper : public IRowMapper<svr::datamodel::MultivalResp
 public:
     datamodel::MultivalResponse_ptr mapRow(const pqxx_tuple& rowSet) const override
     {
-        datamodel::MultivalResponse_ptr response = std::make_shared<svr::datamodel::MultivalResponse>();
+        datamodel::MultivalResponse_ptr response = ptr<svr::datamodel::MultivalResponse>();
 
         response->set_id(rowSet["response_id"].as<bigint>());
         response->request_id = rowSet["request_id"].as<bigint>();
@@ -50,7 +50,7 @@ class ValueRequestRowMapper : public IRowMapper<svr::datamodel::ValueRequest>
 
 public:
     datamodel::ValueRequest_ptr mapRow(const pqxx_tuple& rowSet) const override {
-        datamodel::ValueRequest_ptr valReq = std::make_shared<svr::datamodel::ValueRequest>();
+        datamodel::ValueRequest_ptr valReq = ptr<svr::datamodel::ValueRequest>();
 
         valReq->set_id(rowSet["request_id"].as<bigint>());
         valReq->request_time = bpt::time_from_string(rowSet["request_time"].as<std::string>());

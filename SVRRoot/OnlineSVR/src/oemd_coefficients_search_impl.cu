@@ -15,7 +15,7 @@
 #include "oemd_coefficients_search.hpp"
 #include "online_emd.hpp"
 #include "../../SVRCommon/include/common/cuda_util.cuh"
-#include "util/TimeUtils.hpp"
+#include "util/time_utils.hpp"
 #include "firefly.hpp"
 #include "common/Logging.hpp"
 
@@ -423,7 +423,7 @@ oemd_coefficients_search::find_good_mask_ffly(
         std::deque<cufftHandle> &plan_sift_forward, std::deque<cufftHandle> &plan_sift_backward,
         const size_t current_level)
 {
-    svr::optimizer::loss_callback_t loss_function = [&](std::vector<double> &x) -> double {
+    svr::optimizer::loss_callback_t loss_function = [&](const std::vector<double> &x) -> double {
         static std::mutex mx_incr;
         static size_t gl_incr;
         std::unique_lock<std::mutex> ul(mx_incr);
@@ -443,7 +443,7 @@ oemd_coefficients_search::find_good_mask_ffly(
     double score;
     std::tie(score, h_mask) = svr::optimizer::firefly(
             h_mask.size(), FIREFLY_PARTICLES, FIREFLY_ITERATIONS, FFA_ALPHA, FFA_BETAMIN, FFA_GAMMA,
-            std::vector(h_mask.size(), 0.), std::vector(h_mask.size(), 1./h_mask.size()), std::vector(h_mask.size(), 1.),
+            arma::vec(h_mask.size()), arma::vec(h_mask.size(), arma::fill::value(1. / h_mask.size())), arma::vec(h_mask.size(), arma::fill::ones),
             loss_function).operator std::pair<double, std::vector<double>>();
     fix_mask(h_mask);
     return score;

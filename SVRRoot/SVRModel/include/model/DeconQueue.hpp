@@ -16,6 +16,14 @@ namespace datamodel {
 class DeconQueue: public Queue
 {
     friend svr::business::DeconQueueService;
+
+    std::string input_queue_table_name_; // TODO Replace with pointer to Input Queue
+    std::string input_queue_column_name_; // TODO Replace with pointer to Input Queue
+    bigint dataset_id_ = 0; // TODO Replace with pointer to Dataset
+    size_t decon_level_number_ = 0;
+
+    void reinit_table_name();
+
 public:
     DeconQueue();
     DeconQueue(
@@ -25,7 +33,6 @@ public:
             const bigint dataset_id_ = 0,
             const size_t decon_level_number_ = 1,
             const data_row_container &data = data_row_container());
-    virtual ~DeconQueue(){};
 
     std::shared_ptr<DeconQueue> clone_empty() const;
 
@@ -33,24 +40,15 @@ public:
 
     virtual void update_data(const DataRow::container &new_data, const bool overwrite = true) override;
 
-    inline std::string get_input_queue_table_name() const
-    {
-        return input_queue_table_name_;
-    }
+    std::string get_input_queue_table_name() const;
 
     void set_input_queue_table_name(const std::string &input_queue_table_name_);
 
-    inline std::string get_input_queue_column_name() const
-    {
-        return input_queue_column_name_;
-    }
+    std::string get_input_queue_column_name() const;
 
     void set_input_queue_column_name(const std::string &input_queue_column_name_);
 
-    inline bigint get_dataset_id() const
-    {
-        return dataset_id_;
-    }
+    bigint get_dataset_id() const;
 
     void set_dataset_id(const bigint dataset_id_);
 
@@ -64,24 +62,15 @@ public:
 
     std::string data_to_string(const size_t data_size = DISPLAY_ROWS_LIMIT) const;
 
-    size_t get_column_count() const
-    {
-        return data_.empty() ? decon_level_number_ : data_.front()->get_values().size();
-    }
+    size_t get_column_count() const;
 
     std::vector<double> get_actual_values(const data_row_container::const_iterator &target_iter) const;
+
     void erase_until(const data_row_container::iterator &target_iter);
+
     void erase_until(const boost::posix_time::ptime &target_time);
 
     static DeconQueue load(const std::string &file_path);
-
-private:
-    std::string input_queue_table_name_; // TODO Replace with pointer to Input Queue
-    std::string input_queue_column_name_; // TODO Replace with pointer to Input Queue
-    bigint dataset_id_ = 0; // TODO Replace with pointer to Dataset
-    size_t decon_level_number_ = 0;
-
-    void reinit_table_name();
 };
 
 template<typename T> std::basic_ostream<T> &

@@ -8,7 +8,7 @@
 #include "DAO/ScopedTransaction.hpp"
 
 #include "InterprocessReader.hpp"
-#include "util/TimeUtils.hpp"
+#include "util/time_utils.hpp"
 
 
 std::string svr::business::InputQueueService::make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
@@ -69,24 +69,24 @@ InputQueueService::load(
 
 
 void
-InputQueueService::load(const datamodel::InputQueue_ptr &p_input_queue)
+InputQueueService::load(datamodel::InputQueue &input_queue)
 {
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
-    LOG4_DEBUG("Loading " << *p_input_queue);
+    LOG4_TRACE("Loading " << input_queue);
 
-    data_row_container &data = p_input_queue->get_data();
+    data_row_container &data = input_queue.get_data();
     if (data.empty()) {
-        if (p_input_queue->get_uses_fix_connection())
-            p_input_queue->set_data(load_latest_from_mmf(p_input_queue, bpt::min_date_time));
+        if (input_queue.get_uses_fix_connection())
+            input_queue.set_data(load_latest_from_mmf(input_queue, bpt::min_date_time));
         else
-            p_input_queue->set_data(input_queue_dao.get_queue_data_by_table_name(
-                    p_input_queue->get_table_name(), bpt::min_date_time, bpt::max_date_time, 0));
+            input_queue.set_data(input_queue_dao.get_queue_data_by_table_name(
+                    input_queue.get_table_name(), bpt::min_date_time, bpt::max_date_time, 0));
     } else {
-        const auto new_data = p_input_queue->get_uses_fix_connection() ?
-                              load_latest_from_mmf(p_input_queue, bpt::max_date_time) :
+        const auto new_data = input_queue.get_uses_fix_connection() ?
+                              load_latest_from_mmf(input_queue, bpt::max_date_time) :
                               input_queue_dao.get_queue_data_by_table_name(
-                                      p_input_queue->get_table_name(),
-                                      data.back()->get_value_time() + p_input_queue->get_resolution(),
+                                      input_queue.get_table_name(),
+                                      data.back()->get_value_time() + input_queue.get_resolution(),
                                       bpt::max_date_time, 0);
         if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
             data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.end());
@@ -97,24 +97,24 @@ InputQueueService::load(const datamodel::InputQueue_ptr &p_input_queue)
 
 void
 InputQueueService::load(
-        const datamodel::InputQueue_ptr &p_input_queue,
+        datamodel::InputQueue &input_queue,
         const bpt::time_period &range,
         const size_t limit)
 {
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
-    LOG4_DEBUG("Getting up to " << limit << " rows during " << range << " from " << p_input_queue->get_table_name());
+    LOG4_DEBUG("Getting up to " << limit << " rows during " << range << " from " << input_queue.get_table_name());
 
-    data_row_container &data = p_input_queue->get_data();
+    data_row_container &data = input_queue.get_data();
     if (data.empty()) {
-        if (p_input_queue->get_uses_fix_connection())
-            p_input_queue->set_data(load_latest_from_mmf(p_input_queue, range.begin()));
+        if (input_queue.get_uses_fix_connection())
+            input_queue.set_data(load_latest_from_mmf(input_queue, range.begin()));
         else
-            p_input_queue->set_data(input_queue_dao.get_queue_data_by_table_name(p_input_queue->get_table_name(), range.begin(), range.end(), limit));
+            input_queue.set_data(input_queue_dao.get_queue_data_by_table_name(input_queue.get_table_name(), range.begin(), range.end(), limit));
     } else {
-        const auto new_data = p_input_queue->get_uses_fix_connection() ?
-                              load_latest_from_mmf(p_input_queue, range.end()) :
+        const auto new_data = input_queue.get_uses_fix_connection() ?
+                              load_latest_from_mmf(input_queue, range.end()) :
                               input_queue_dao.get_queue_data_by_table_name(
-                                      p_input_queue->get_table_name(), range.begin(), range.end(), limit);
+                                      input_queue.get_table_name(), range.begin(), range.end(), limit);
         if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
             data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.end());
         data.insert(data.end(), new_data.begin(), new_data.end());
@@ -124,17 +124,17 @@ InputQueueService::load(
 
 data_row_container
 InputQueueService::load_latest_from_mmf(
-        datamodel::InputQueue_ptr const &input_queue,
+        const datamodel::InputQueue &input_queue,
         const bpt::ptime &last_time)
 {
     data_row_container result;
 #ifndef BUILD_WITHOUT_SVR_FIX
-    if (not input_queue->get_uses_fix_connection()) return result;
+    if (not input_queue.get_uses_fix_connection()) return result;
 
     svr::fix::mm_file_reader::bid_ask_spread_container values;
 
     try {
-        svr::fix::mm_file_reader reader(input_queue->get_logical_name());
+        svr::fix::mm_file_reader reader(input_queue.get_logical_name());
         values = reader.read_new(last_time);
     }
     catch (std::runtime_error const &) {
@@ -144,11 +144,11 @@ InputQueueService::load_latest_from_mmf(
         return result;
     }
 
-    if (last_time < values.front().time - input_queue->get_resolution())
+    if (last_time < values.front().time - input_queue.get_resolution())
         return result;
 
     for (const auto &bas: values)
-        result.emplace_back(std::make_shared<svr::datamodel::DataRow>(bas.time, bas.time, 0,
+        result.emplace_back(ptr<svr::datamodel::DataRow>(bas.time, bas.time, 0,
                                                                       std::vector<double>{bas.ask_px, double(bas.ask_qty), bas.bid_px,
                                                                                           double(bas.bid_qty)}));
 #endif //BUILD_WITHOUT_SVR_FIX
@@ -166,7 +166,7 @@ InputQueueService::load_latest(
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
     LOG4_DEBUG("Getting " << limit << " rows until " << last_time << " from " << p_input_queue->get_table_name());
 
-    auto result = load_latest_from_mmf(p_input_queue, last_time);
+    auto result = load_latest_from_mmf(*p_input_queue, last_time);
     if (result.empty()) result = input_queue_dao.get_latest_queue_data_by_table_name(p_input_queue->get_table_name(), limit, last_time);
     LOG4_DEBUG("Got " << result.size() << " rows successfully.");
     if (result.empty())
@@ -344,7 +344,7 @@ InputQueueService::get_column_data(const datamodel::InputQueue_ptr &queue, const
             LOG4_ERROR("Invalid row at " << result.size() << ", skipping.");
             continue;
         }
-        result[r_ix] = std::make_shared<DataRow>(r->get_value_time(), r->get_update_time(), r->get_tick_volume(), std::vector{r->get_value(column_index)});
+        result[r_ix] = ptr<DataRow>(r->get_value_time(), r->get_update_time(), r->get_tick_volume(), std::vector{r->get_value(column_index)});
     }
 
     LOG4_END();
@@ -452,6 +452,7 @@ InputQueueService::compare_to_decon_queue(
     }
 
     boost::posix_time::ptime missing_time{boost::posix_time::max_date_time};
+    OMP_LOCK(missing_time_l)
 #pragma omp parallel for num_threads(adj_threads(p_decon_queue->size()))
     for (auto range_iter = lower_bound(p_input_queue->get_data(), p_decon_queue->front()->get_value_time()); range_iter != p_input_queue->end(); ++range_iter) {
         if (std::any_of(
@@ -460,17 +461,15 @@ InputQueueService::compare_to_decon_queue(
             continue;
         LOG4_DEBUG("Input row at " << range_iter->get()->get_value_time() << " not found in decon queue " << p_decon_queue->get_input_queue_table_name() <<
                                    " " << p_decon_queue->get_input_queue_column_name());
-#pragma omp critical
-        {
-            if (missing_time > range_iter->get()->get_value_time())
-                missing_time = range_iter->get()->get_value_time();
-        }
+        omp_set_lock(&missing_time_l);
+        if (missing_time > range_iter->get()->get_value_time())
+            missing_time = range_iter->get()->get_value_time();
+        omp_unset_lock(&missing_time_l);
     }
 
     LOG4_DEBUG("Compared input queue " << p_input_queue->get_table_name() << " with data from " << p_input_queue->front()->get_value_time() << " to " <<
-                                       p_input_queue->back()->get_value_time() << " with decon queue with data from " << p_decon_queue->front()->get_value_time()
-                                       << " to " <<
-                                       p_decon_queue->back()->get_value_time());
+               p_input_queue->back()->get_value_time() << " with decon queue with data from " << p_decon_queue->front()->get_value_time()
+                                       << " to " << p_decon_queue->back()->get_value_time());
 
     return missing_time;
 }
@@ -483,15 +482,15 @@ InputQueueService::prepare_queues(
 {
     LOG4_DEBUG("Preparing input queue " << p_dataset->get_input_queue()->get_table_name());
 
-    prepare_input_data(p_dataset);
+    prepare_input_data(*p_dataset);
+    APP.iq_scaling_factor_service.prepare(*p_dataset, true);
 
-    APP.iq_scaling_factor_service.prepare(*p_dataset);
-#pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size()))
+#pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size())) schedule(static, 1)
     for (const auto &p_ensemble: p_dataset->get_ensembles()) {
         DeconQueueService::prepare_decon(p_dataset, p_dataset->get_input_queue(), p_ensemble->get_decon_queue());
-#pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size()))
+#pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size())) schedule(static, 1)
         for (const auto &p_aux_input: p_dataset->get_aux_input_queues()) {
-#pragma omp parallel for num_threads(adj_threads(p_aux_input->get_value_columns().size()))
+#pragma omp parallel for num_threads(adj_threads(p_aux_input->get_value_columns().size())) schedule(static, 1)
             for (const auto &aux_input_column_name: p_aux_input->get_value_columns()) {
                 auto p_decon_queue = DeconQueueService::find_decon_queue(p_ensemble->get_aux_decon_queues(), p_aux_input->get_table_name(), aux_input_column_name);
                 DeconQueueService::prepare_decon(p_dataset, p_aux_input, p_decon_queue);
@@ -512,12 +511,12 @@ InputQueueService::prepare_queues(
     LOG4_END();
 }
 
-void InputQueueService::prepare_input_data(datamodel::Dataset_ptr &p_dataset)
+void InputQueueService::prepare_input_data(datamodel::Dataset &dataset)
 {
     LOG4_BEGIN();
-    APP.input_queue_service.load(p_dataset->get_input_queue());
-#pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size())) schedule(static, 1)
-    for (auto &iq: p_dataset->get_aux_input_queues()) APP.input_queue_service.load(iq);
+    APP.input_queue_service.load(*dataset.get_input_queue());
+#pragma omp parallel for num_threads(adj_threads(dataset.get_aux_input_queues().size())) schedule(static, 1)
+    for (auto &iq: dataset.get_aux_input_queues()) APP.input_queue_service.load(*iq);
     LOG4_END();
 }
 
@@ -528,12 +527,12 @@ InputQueueService::shift_times_forward(const data_row_container &data, const bpt
     data_row_container new_data_cont;
     for (size_t ix = 0; ix < data.size() - 1; ++ix) {
         if (ix == 0) {
-            auto new_data_row = std::make_shared<DataRow>(*data.begin()->get());
+            auto new_data_row = ptr<DataRow>(*data.begin()->get());
             new_data_cont.insert({new_data_row->get_value_time() - resolution, new_data_row});
         } else {
             auto data_row = std::next(data.begin(), ix);
             auto data_row_next = std::next(data_row);
-            auto new_data_row = std::make_shared<DataRow>(*data_row_next->get());
+            auto new_data_row = ptr<DataRow>(*data_row_next->get());
             new_data_row->set_value_time(data_row->get()->get_value_time());
             new_data_cont.insert({new_data_row->get_value_time(), new_data_row});
         }

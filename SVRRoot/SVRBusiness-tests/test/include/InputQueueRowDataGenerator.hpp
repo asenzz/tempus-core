@@ -44,7 +44,7 @@ public:
 
         ++_rowsGeneratedByFar;
 
-        return std::make_shared<svr::datamodel::DataRow>(
+        return svr::ptr<svr::datamodel::DataRow>(
                 _currentValueTime,
                 bpt::second_clock::local_time(),
                 1.2,

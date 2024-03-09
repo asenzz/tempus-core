@@ -10,7 +10,7 @@ class DeconQueueRowMapper : public IRowMapper<svr::datamodel::DeconQueue> {
 public:
     datamodel::DeconQueue_ptr mapRow(const pqxx_tuple &rowSet) const override {
 
-        return std::make_shared<svr::datamodel::DeconQueue>(
+        return ptr<svr::datamodel::DeconQueue>(
                 rowSet["table_name"].as<std::string>(""),
                 rowSet["input_queue_table_name"].as<std::string>(""),
                 rowSet["input_queue_column_name"].as<std::string>(""),

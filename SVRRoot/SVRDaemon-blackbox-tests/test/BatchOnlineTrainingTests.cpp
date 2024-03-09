@@ -41,7 +41,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
 
     tdb.prepareSvrConfig(tdb.TestDbUserName, tdb.dao_type, -1);
 
-    datamodel::Dataset_ptr p_dataset = aci.dataset_service.get(svr::default_dataset_id);
+    datamodel::Dataset_ptr p_dataset = aci.dataset_service.load(svr::default_dataset_id);
     datamodel::InputQueue_ptr iq = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_QUEUE);
     iq->set_data(aci.input_queue_service.load(BATCH_TRAIN_QUEUE));
 //    datamodel::InputQueue_ptr iq_aux = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_AUX_QUEUE);
@@ -119,7 +119,7 @@ update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_contain
 void
 prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &start_predict_time)
 {
-    datamodel::MultivalRequest_ptr p_request = std::make_shared<MultivalRequest>(
+    datamodel::MultivalRequest_ptr p_request = ptr<MultivalRequest>(
             bigint(0),
             iq->get_owner_user_name(),
             default_dataset_id,

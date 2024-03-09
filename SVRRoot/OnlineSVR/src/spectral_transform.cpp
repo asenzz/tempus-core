@@ -106,7 +106,7 @@ void spectral_transform::mirror_tail(const datamodel::datarow_range &input, cons
 #pragma omp parallel for num_threads(adj_threads(empty_ct))
     for (size_t i = 0; i < empty_ct; ++i) {
         const auto phi = double(i) / double(input_size);
-        tail[empty_ct - 1 - i] = input[(size_t) std::round(empty_ct * std::abs(std::round(phi) - phi))]->get_value(in_colix);
+        tail[empty_ct - 1 - i] = input[(size_t) std::round((input_size - 1) * std::abs(std::round(phi) - phi))]->get_value(in_colix);
     }
 }
 

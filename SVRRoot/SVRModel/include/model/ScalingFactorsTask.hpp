@@ -35,14 +35,16 @@ public:
                 && other.get_mse()                  == get_mse();
     }
 
+    virtual void init_id() override {};
+
     bigint get_dataset_id() const
     {
         return dataset_id;
     }
 
-    void set_dataset_id(const bigint dataset_id)
+    void set_dataset_id(const bigint dataset_id_)
     {
-        this->dataset_id = dataset_id;
+        dataset_id = dataset_id_;
     }
 
     void set_force_recalculate_scaling_factors(const bool force_recalculate)

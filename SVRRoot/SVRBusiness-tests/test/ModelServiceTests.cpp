@@ -1,5 +1,6 @@
 #include "include/DaoTestFixture.h"
 #include "DAO/EnsembleDAO.hpp"
+#include "common/constants.hpp"
 #include <model/User.hpp>
 
 using namespace svr;
@@ -10,26 +11,25 @@ using datamodel::kernel_type;
 TEST_F(DaoTestFixture, ModelWorkflow)
 {
     size_t decon_level = 2;
-    auto paramset = std::make_shared<svr::datamodel::t_param_set>();
-    paramset->emplace(std::make_shared<svr::datamodel::SVRParameters>(
-            0, 100, "q_svrwave_xauusd_60", "open", 2, 0, 0, svr::mimo_type_e::single, 0.1, 0.5, 1, 10, 1, 0.5, kernel_type::RBF, 35));
-    OnlineMIMOSVR_ptr svr_model = std::make_shared<svr::OnlineMIMOSVR>(paramset);
-
+    auto paramset = std::make_shared<datamodel::t_param_set>();
+    paramset->emplace(std::make_shared<datamodel::SVRParameters>(
+            0, 100, "q_svrwave_xauusd_60", "open", 2, 0, 0, 0.1, 0.5, 1, 10, 1, 0.5, kernel_type::RBF, 35));
+    datamodel::OnlineMIMOSVR_ptr svr_model = otr<datamodel::OnlineMIMOSVR>(0, 0, *paramset);
     bpt::ptime last_modified = bpt::time_from_string("2015-05-20 10:45:00");
     bpt::ptime last_modeled_value_time = bpt::time_from_string("2015-05-20 10:47:00");
 
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    User_ptr user1 = std::make_shared<datamodel::User>(
             bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser",
-            svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
+            datamodel::ROLE::ADMIN, datamodel::Priority::High);
 
     aci.user_service.save(user1);
 
-    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+    datamodel::InputQueue_ptr iq = std::make_shared<datamodel::InputQueue>(
             "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5),
             "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>();//0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{} , svr::datamodel::Priority::Normal, "", 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>();//0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{} , datamodel::Priority::Normal, "", 2, "sym7");
 
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
@@ -38,27 +38,27 @@ TEST_F(DaoTestFixture, ModelWorkflow)
 
     ASSERT_EQ(0UL, ens.size());
 
-    datamodel::DeconQueue_ptr p_decon_queue = std::make_shared<svr::datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr p_decon_queue = std::make_shared<datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
 
-    svr::datamodel::DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>(bpt::second_clock::local_time(), bpt::second_clock::local_time(), 1, 1);
+    datamodel::DataRow_ptr row = std::make_shared<datamodel::DataRow>(bpt::second_clock::local_time(), bpt::second_clock::local_time(), 1, 1);
     row->set_values({3, 4, 5});
 
     p_decon_queue->get_data().push_back(row);
 
     aci.decon_queue_service.save(p_decon_queue);
 
-    datamodel::Ensemble_ptr ensemble(new svr::datamodel::Ensemble(0L, ds->get_id(), p_decon_queue->get_table_name(), std::deque<std::string>{}));
+    datamodel::Ensemble_ptr ensemble(new datamodel::Ensemble(0L, ds->get_id(), p_decon_queue->get_table_name(), std::deque<std::string>{}));
 
     ds->get_ensembles().push_back(ensemble);
 
     aci.ensemble_service.save(ensemble);
 
     auto test_model = std::make_shared<Model>(
-            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, C_kernel_default_max_chunk_size,
+            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, common::C_kernel_default_max_chunk_size,
             std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     datamodel::Model_ptr test_model_0 = std::make_shared<Model>(
-            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, C_kernel_default_max_chunk_size,
+            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, common::C_kernel_default_max_chunk_size,
             std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     ASSERT_FALSE(aci.model_service.exists(test_model));

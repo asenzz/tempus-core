@@ -21,8 +21,8 @@ private:
     std::string email;
     std::string name;
     std::string password;
-    ROLE role;
-    Priority priority;
+    ROLE role = ROLE::USER;
+    Priority priority = Priority::Normal;
 
 public:
     bool operator==(User const &other) const;
@@ -39,6 +39,8 @@ public:
     );
 
     ~User() = default;
+
+    virtual void init_id() override;
 
     void set_email(const std::string &email);
 

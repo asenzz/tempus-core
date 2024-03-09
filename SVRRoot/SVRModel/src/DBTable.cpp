@@ -1,18 +1,29 @@
-#include <model/DBTable.hpp>
-
 #include <algorithm>
+#include "common/parallelism.hpp"
+#include "model/DBTable.hpp"
 
 namespace svr {
 namespace datamodel {
 
-Queue::Queue(const Queue &rhs) : table_name_(rhs.table_name_), data_(rhs.data_)
+Queue::Queue(const Queue &rhs) : Entity(rhs), table_name_(rhs.table_name_), data_(rhs.data_)
 {
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
 }
 
 
 Queue::Queue(const std::string &table_name, const data_row_container &data) :
         table_name_(table_name), data_(data)
 {
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
+}
+
+void Queue::init_id()
+{
+    if (!id) boost::hash_combine(id, table_name_);
 }
 
 std::string Queue::get_table_name() const
@@ -23,6 +34,8 @@ std::string Queue::get_table_name() const
 void Queue::set_table_name(const std::string &table_name)
 {
     table_name_ = table_name;
+    id = 0;
+    boost::hash_combine(id, table_name_);
 }
 
 const DataRow::container &Queue::get_data() const

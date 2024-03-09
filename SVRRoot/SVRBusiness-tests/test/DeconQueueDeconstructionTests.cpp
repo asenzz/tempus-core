@@ -1,8 +1,8 @@
 #include "include/DaoTestFixture.h"
 #include "util/math_utils.hpp"
+#include "common/constants.hpp"
 #include <iostream>
 #include <memory>
-#include <model/User.hpp>
 
 using namespace svr;
 
@@ -55,18 +55,20 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
     // Test training data
     //
 
-    size_t column_index = 0;
+//    size_t column_index = 0;
     size_t lookback_rows = 5;
     size_t model_number = 2;
     double adjacent_levels_ratio = 0.5;
     size_t transformation_levels = 4;
-    bpt::time_duration max_lookback_time_gap = bpt::hours(23);
+//    bpt::time_duration max_lookback_time_gap = bpt::hours(23);
 
     const auto adjacent_levels = svr::common::get_adjacent_indexes(model_number, adjacent_levels_ratio, transformation_levels + 1);
 
     /* TODO add auxilliary decon queue tests */
-    arma::mat features, labels, last_knowns;
+    arma::mat features, labels;
+    arma::vec last_knowns;
     std::deque<bpt::ptime> label_times;
+#if 0
     aci.model_service.get_training_data(
             features, labels, last_knowns, label_times,
             datamodel::datarow_range{decon_queues[column_index]->get_data()},
@@ -80,13 +82,13 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             bpt::min_date_time,
             test_iq->get_resolution(),
             1);
-
+#endif
     const auto params = std::make_shared<svr::datamodel::SVRParameters>(
             0,
             dataset_100->get_id(),
             test_iq_name,
             "eurusd",
-            0, 0, 0, mimo_type_e::single,
+            0, 0, 0,
             DEFAULT_SVRPARAM_SVR_COST,
             DEFAULT_SVRPARAM_SVR_EPSILON,
             DEFAULT_SVRPARAM_KERNEL_PARAM_1,

@@ -17,7 +17,7 @@
 
 namespace {
 
-constexpr unsigned INPUT_LIMIT = std::numeric_limits<size_t>::max();
+constexpr auto INPUT_LIMIT = std::numeric_limits<unsigned>::max();
 constexpr unsigned DECON_LEVELS = 32;
 constexpr double TEST_TOL = 1e-14;
 const std::string transform_input_filename = "xauusd_1_2023.csv";

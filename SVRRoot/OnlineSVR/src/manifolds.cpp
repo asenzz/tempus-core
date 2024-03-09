@@ -21,8 +21,8 @@
 
 
 namespace svr {
+namespace datamodel {
 
-static std::map<double /* sum */, arma::mat /* labels */> cached_labels;
 
 #if 0 // Matlab code to generate ideal kernel matrix prototype
 std::scoped_lock lg (mlab_mx);
@@ -140,62 +140,15 @@ std::scoped_lock lg (mlab_mx);
     LOG4_END();
 #endif /* EXPERIMENTAL_FEATURES */
 
-
-std::tuple<matrix_ptr, matrix_ptr>
-prepare_manifold_train_data(
-        const arma::mat &F,
-        const arma::mat &L,
-        double &scaling_factor)
-{
-    const auto n_samples = F.n_rows * F.n_rows / C_interlace_manifold_factor;
-    auto p_manifold_features = std::make_shared<arma::mat>(n_samples, F.n_cols * 2);
-    auto p_manifold_labels = std::make_shared<arma::mat>(n_samples, L.n_cols);
-
-    arma::cube L_diff(L.n_rows, L.n_rows, L.n_cols);
-    const arma::rowvec L_t = L.t();
-
-#pragma omp parallel for collapse(2) num_threads(adj_threads(L.n_rows * L.n_cols))
-    for (size_t r = 0; r < L.n_rows; ++r)
-        for (size_t c = 0; c < L.n_cols; ++c)
-            L_diff.slice(c).row(r) = L(r, c) - L_t.row(c); // Asymmetric distance matrix
-
-#pragma omp parallel for collapse(3) num_threads(adj_threads(L.n_rows * L.n_rows * L.n_cols))
-    for (size_t i = 0; i < L.n_rows; ++i)
-        for (size_t j = 0; j < L.n_rows; ++j)
-            for (size_t k = 0; k < L.n_cols; ++k) {
-                const auto r = i + j * L.n_rows; // TODO Double check if i * L.n_rows + j works better for row index
-                if (r % C_interlace_manifold_factor) continue;
-                const size_t rand_add = std::rand() % C_interlace_manifold_factor;
-                const size_t r_i = std::min<size_t>(L.n_rows - 1, i + rand_add);
-                const size_t r_j = std::min<size_t>(L.n_rows - 1, j + rand_add);
-                p_manifold_labels->at(r / C_interlace_manifold_factor, k) = L_diff(r_i, r_j, k);
-                p_manifold_features->row(r / C_interlace_manifold_factor) = arma::join_rows(F.row(r_i), F.row(r_j));
-            }
-
-    {
-        const arma::uvec shuffle_ix = arma::shuffle(arma::regspace<arma::uvec>(
-                p_manifold_labels->n_rows - EMO_TUNE_TEST_SIZE * EMO_TUNE_TEST_SIZE / double(C_interlace_manifold_factor), p_manifold_labels->n_rows - 1));
-        p_manifold_labels->shed_rows(shuffle_ix.head(shuffle_ix.n_elem - EMO_TUNE_TEST_SIZE));
-        p_manifold_features->shed_rows(shuffle_ix.head(shuffle_ix.n_elem - EMO_TUNE_TEST_SIZE));
-    }
-
-    LOG4_DEBUG("Generated " << arma::size(*p_manifold_labels) << " manifold label matrix and " << arma::size(*p_manifold_features) <<
-                " manifold feature matrix from " << arma::size(F) << " feature matrix and " << arma::size(L) << " label matrix.");
-    scaling_factor = business::DQScalingFactorService::calc_scaling_factor(*p_manifold_labels);
-    *p_manifold_labels /= scaling_factor;
-    return {p_manifold_features, p_manifold_labels};
-}
-
-
 void
-OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p)
+OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::ptime &last_value_time)
 {
     if (p_manifold) {
         LOG4_ERROR("Manifold already initialized!");
         return;
     }
 
-    datamodel::SVRParameters_ptr p_manifold_parameters = std::make_shared<datamodel::SVRParameters>(*p);
+    auto p_manifold_parameters = otr(*p);
     switch (p->get_kernel_type()) {
         case datamodel::kernel_type_e::DEEP_PATH:
             p_manifold_parameters->set_kernel_type(datamodel::kernel_type_e::PATH);
@@ -207,39 +160,59 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p)
             LOG4_ERROR("Kernel type " << int(p->get_kernel_type()) << " not handled.");
             return;
     }
-
     p_manifold_parameters->set_svr_decremental_distance(p->get_svr_decremental_distance() * p->get_svr_decremental_distance() / C_interlace_manifold_factor);
     p_manifold_parameters->set_lag_count(p_features->n_cols * 2);
     p_manifold_parameters->set_chunk_ix(0);
     p_manifold_parameters->set_grad_level(0);
-    const auto param_set = std::make_shared<datamodel::t_param_set>();
-    param_set->emplace(p_manifold_parameters);
-    p_manifold = std::make_shared<OnlineMIMOSVR>(param_set, multistep_len, max_chunk_size);
-    const auto [p_manifold_features, p_manifold_labels] = prepare_manifold_train_data(*p_features, *p_labels, p_manifold->labels_scaling_factor);
-    p_manifold->batch_train(p_manifold_features, p_manifold_labels);
+    p_manifold = otr<OnlineMIMOSVR>(id * id + id + 1, model_id, t_param_set{p_manifold_parameters}, p_dataset);
+
+    const auto n_samples = p_features->n_rows * p_features->n_rows / C_interlace_manifold_factor;
+    auto p_manifold_features = ptr<arma::mat>(n_samples, p_features->n_cols * 2);
+    auto p_manifold_labels = ptr<arma::mat>(n_samples, p_labels->n_cols);
+    auto p_manifold_lastknowns = ptr<arma::vec>(n_samples);
+
+    arma::cube L_diff(p_labels->n_rows, p_labels->n_rows, p_labels->n_cols);
+    const arma::mat L_t = p_labels->t();
+
+#pragma omp parallel for collapse(2) num_threads(adj_threads(p_labels->n_rows * p_labels->n_cols))
+    for (size_t r = 0; r < p_labels->n_rows; ++r)
+        for (size_t c = 0; c < p_labels->n_cols; ++c)
+            L_diff.slice(c).row(r) = p_labels->at(r, c) - L_t.row(c); // Asymmetric distances cube
+
+    std::random_device rd;  // a seed source for the random number engine
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> rand_int(0, C_interlace_manifold_factor);
+#pragma omp parallel for collapse(3) num_threads(adj_threads(p_labels->n_rows * p_labels->n_rows * p_labels->n_cols))
+    for (size_t i = 0; i < p_labels->n_rows; ++i)
+        for (size_t j = 0; j < p_labels->n_rows; ++j)
+            for (size_t k = 0; k < p_labels->n_cols; ++k) {
+                const auto r = i + j * p_labels->n_rows;
+                if (r % C_interlace_manifold_factor || r / C_interlace_manifold_factor >= n_samples) continue;
+                const auto r_i = common::bounce<size_t>(i + rand_int(gen), p_labels->n_rows - 1);
+                const auto r_j = common::bounce<size_t>(j + rand_int(gen), p_labels->n_rows - 1);
+                p_manifold_labels->at(r / C_interlace_manifold_factor, k) = L_diff(r_i, r_j, k);
+                p_manifold_features->row(r / C_interlace_manifold_factor) = arma::join_rows(p_features->row(r_i), p_features->row(r_j));
+            }
+
+    LOG4_DEBUG("Generated " << arma::size(*p_manifold_labels) << " manifold label matrix and " << arma::size(*p_manifold_features) <<
+                            " manifold feature matrix from " << arma::size(*p_features) << " feature matrix and " << arma::size(*p_labels) << " label matrix.");
+    p_manifold->labels_scaling_factor = business::DQScalingFactorService::calc_scaling_factor(*p_manifold_labels);
+    *p_manifold_labels /= p_manifold->labels_scaling_factor;
+    p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_lastknowns, last_value_time);
 }
 
-bool OnlineMIMOSVR::is_manifold(datamodel::SVRParameters_ptr &p_manifold_parameters) const
+datamodel::SVRParameters_ptr OnlineMIMOSVR::is_manifold() const
 {
-    return business::SVRParametersService::is_manifold(*p_param_set, p_manifold_parameters);
+    return business::SVRParametersService::is_manifold(param_set);
 }
-
-bool OnlineMIMOSVR::is_manifold() const
-{
-    datamodel::SVRParameters_ptr p_manifold_parameters;
-    return business::SVRParametersService::is_manifold(*p_param_set, p_manifold_parameters);
-}
-
 
 arma::mat OnlineMIMOSVR::manifold_predict(const arma::mat &x_predict) const
 {
     arma::mat predict_features(x_predict.n_rows * p_features->n_rows, p_features->n_cols + x_predict.n_cols);
 #pragma omp parallel for collapse(2) num_threads(adj_threads(x_predict.n_rows * p_features->n_rows))
     for (size_t i_p = 0; i_p < x_predict.n_rows; ++i_p)
-        for (size_t i_x = 0; i_x < p_features->n_rows; ++i_x) {
-            const auto r = p_features->n_rows * i_p + i_x;
-            predict_features.row(r) = arma::join_rows(p_features->row(i_x), x_predict.row(i_p));
-        }
+        for (size_t i_x = 0; i_x < p_features->n_rows; ++i_x)
+            predict_features.row(p_features->n_rows * i_p + i_x) = arma::join_rows(p_features->row(i_x), x_predict.row(i_p));
     auto manifold_predict = p_manifold->predict(predict_features);
     arma::mat result(x_predict.n_rows, p_labels->n_cols);
 #pragma omp parallel for num_threads(adj_threads(result.n_rows)) schedule(static, 1)
@@ -248,4 +221,10 @@ arma::mat OnlineMIMOSVR::manifold_predict(const arma::mat &x_predict) const
     return result;
 }
 
-} // namespace svr {
+OnlineMIMOSVR_ptr OnlineMIMOSVR::get_manifold()
+{
+    return p_manifold;
+}
+
+} // datamodel
+} // namespace svr

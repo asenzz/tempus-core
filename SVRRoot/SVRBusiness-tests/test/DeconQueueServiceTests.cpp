@@ -3,6 +3,7 @@
 #include "include/InputQueueRowDataGenerator.hpp"
 #include "../../OnlineSVR/test/test_harness.hpp"
 #include "online_emd.hpp"
+#include "common/constants.hpp"
 
 using namespace svr;
 
@@ -21,7 +22,7 @@ TEST_F(DaoTestFixture, DeconQueueWorkflow)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>
-            (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+            (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -101,8 +102,8 @@ TEST_F(DaoTestFixture, testDeconRecon)
     aci.input_queue_service.save(p_all_data_inputqueue_1h);
     auto p_inputq = p_all_data_inputqueue->clone_empty();
     datamodel::Dataset_ptr p_dataset = std::make_shared<svr::datamodel::Dataset>(
-            bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal, "dsDescription", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
-    APP.ensemble_service.init_default_ensembles(p_dataset);
+            bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal, "dsDescription", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
+    APP.ensemble_service.init_ensembles(p_dataset);
     p_dataset->set_is_active(true);
     aci.dataset_service.save(p_dataset);
 
@@ -152,7 +153,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     bpt::ptime end_time = aci.input_queue_service.find_newest_record(p_inputq)->get_value_time();
     ASSERT_FALSE(start_time.is_special());
     ASSERT_FALSE(end_time.is_special());
-    APP.ensemble_service.init_default_ensembles(p_dataset);
+    APP.ensemble_service.init_ensembles(p_dataset);
     datamodel::DeconQueue_ptr p_online_decon_queue;
     const auto residuals_length = p_dataset->get_residuals_length();
     LOG4_DEBUG("Residuals length " << residuals_length);
@@ -221,7 +222,8 @@ TEST_F(DaoTestFixture, testDeconRecon)
     PROFILE_EXEC_TIME(APP.decon_queue_service.reconstruct(
             *p_online_decon_queue,
             svr::business::recon_type_e::ADDITIVE,
-            recon_queue->get_data()),
+            recon_queue->get_data(),
+            business::IQScalingFactorService::C_default_scaler),
                       "Reconstruction of " << TEST_DECON_LEVELS << " levels containing " << p_inputq->size() << " rows.");
 
     double total_diff = 0;
@@ -275,7 +277,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
             "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -321,7 +323,7 @@ TEST_F(DaoTestFixture, TestDQUpdates)
             bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 

@@ -9,6 +9,7 @@
 
 #define TYPEOF(TO) std::remove_reference<std::remove_const<decltype(TO)>::type>::type
 
+#define OMP_LOCK(lock_name) omp_lock_t lock_name; omp_init_lock(&lock_name);
 
 #define __non_stpfor(TY, IX, FROM, TO, STEP, ...) \
     for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; }

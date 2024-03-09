@@ -17,12 +17,10 @@ public:
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &userName, const std::string &logicalName, const bpt::time_duration &resolution);
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &tableName);
 
-    std::deque<datamodel::DataRow_ptr> get_queue_data_by_table_name(const std::string &tableName,
-            const bpt::ptime &timeFrom = bpt::min_date_time,
-            const bpt::ptime &timeTo = bpt::max_date_time,
-            size_t limit = 0);
-    std::deque<datamodel::DataRow_ptr> get_latest_queue_data_by_table_name(const std::string &tableName,
-            const size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
+    std::deque<datamodel::DataRow_ptr> get_queue_data_by_table_name(
+            const std::string &tableName, const bpt::ptime &timeFrom = bpt::min_date_time, const bpt::ptime &timeTo = bpt::max_date_time, size_t limit = 0);
+    std::deque<datamodel::DataRow_ptr> get_latest_queue_data_by_table_name(
+            const std::string &tableName, const size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
     datamodel::DataRow_ptr get_nth_last_row(const std::string &table_name, const size_t position, const bpt::ptime target_time = bpt::max_date_time);
 
     size_t get_count_from_start(const std::string &table_name, const bpt::ptime target_time = bpt::max_date_time);

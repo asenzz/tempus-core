@@ -46,7 +46,7 @@ class firefly {
     double betamin = FFA_BETAMIN;  // beta parameter
     double gamma = FFA_GAMMA;	   // gamma parameter
 
-    std::vector<double> fbest;			        // the best objective function
+    std::vector<double> best_score;			        // the best objective function
 
 /*Write your own objective function */
     loss_callback_t function;

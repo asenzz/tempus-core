@@ -9,7 +9,8 @@
 
 namespace bpt = boost::posix_time;
 
-namespace svr::dao{
+namespace svr {
+namespace dao {
 
 class StatementPreparerDBTemplate
 {
@@ -17,9 +18,9 @@ class StatementPreparerDBTemplate
 
     std::string escape(std::nullptr_t);
 
-    std::string escape(const std::shared_ptr<svr::OnlineMIMOSVR> &model);
+    std::string escape(const std::shared_ptr<datamodel::OnlineMIMOSVR> &model);
 
-    std::string escape(const svr::datamodel::Priority &priority);
+    std::string escape(const datamodel::Priority &priority);
 
     std::string escape(const bpt::ptime &);
 
@@ -52,7 +53,7 @@ class StatementPreparerDBTemplate
     static inline std::string escape(const double v)
     { return common::to_string_with_precision(v); }
 
-    std::string escape(svr::datamodel::ROLE role);
+    std::string escape(datamodel::ROLE role);
 
     template<typename T>
     inline std::string escape(T t)
@@ -128,9 +129,10 @@ class StatementPreparerDBTemplate
 
 public:
 
-    explicit StatementPreparerDBTemplate(const std::string &connection_string) : connection(connection_string) {}
+    explicit StatementPreparerDBTemplate(const std::string &connection_string) : connection(connection_string)
+    {}
 
-//    virtual ~StatementPreparerDBTemplate() {}
+    //    virtual ~StatementPreparerDBTemplate() {}
 
 
     template<typename T, typename... Targs>
@@ -160,5 +162,6 @@ public:
     }
 };
 
-} /* namespace svr::dao */
+}
+} // dao
 

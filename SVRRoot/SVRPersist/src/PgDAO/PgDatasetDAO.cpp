@@ -35,8 +35,8 @@ int PgDatasetDAO::save(const datamodel::Dataset_ptr &dataset)
                 dataset->get_aux_input_table_names(),
                 dataset->get_priority(),
                 dataset->get_description(),
-                dataset->get_gradients(),
-                dataset->get_chunk_size(),
+                dataset->get_gradient_count(),
+                dataset->get_max_chunk_size(),
                 dataset->get_multiout(),
                 dataset->get_transformation_levels(),
                 dataset->get_transformation_name(),
@@ -52,8 +52,8 @@ int PgDatasetDAO::save(const datamodel::Dataset_ptr &dataset)
                 dataset->get_aux_input_table_names(),
                 dataset->get_priority(),
                 dataset->get_description(),
-                dataset->get_gradients(),
-                dataset->get_chunk_size(),
+                dataset->get_gradient_count(),
+                dataset->get_max_chunk_size(),
                 dataset->get_multiout(),
                 dataset->get_transformation_levels(),
                 dataset->get_transformation_name(),
@@ -114,6 +114,11 @@ PgDatasetDAO::UserDatasetPairs PgDatasetDAO::get_active_datasets()
         result.emplace_back(p->first, p->second);
 
     return result;
+}
+
+size_t PgDatasetDAO::get_level_count(const bigint dataset_id)
+{
+    return data_source.query_for_type<size_t>(AbstractDAO::get_sql("get_level_count"), dataset_id);
 }
 
 }

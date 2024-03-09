@@ -8,14 +8,15 @@
 
 #define TUNE_KEEP_PREDS (2)
 
-#define MANIFOLD_TEST
-#ifdef MANIFOLD_TEST
+#define INTEGRATION_TEST
+#ifdef INTEGRATION_TEST
 constexpr unsigned TEST_OFFSET_DEFAULT = 345;
 #endif
 
 // #define OUTPUT_LIBSVM_TRAIN_DATA // To output LibSVM train files for every model
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
 
+#define MIN_LEVEL_COUNT 8
 
 #define PRIMARY_COLUMN "xauusd_avg_bid" // Ignore tuning or validating other input queue columns in case of aux columns
 #define NO_MAIN_DECON
@@ -38,12 +39,6 @@ constexpr unsigned TEST_OFFSET_DEFAULT = 345;
 
 // #define TUNE_IDEAL
 #define TUNE_HYBRID
-
-#ifdef TUNE_HYBRID
-// #define TUNE_HYBRID_IDEAL // Ideal matrix comparison tune
-// #define HYBRID_QUANTILES // Kernel quantiles score
-#endif
-
 
 #define FFA_ALPHA       .5   // Starting randomness
 #define FFA_BETAMIN     .2   // Attraction
@@ -75,7 +70,7 @@ constexpr unsigned TEST_OFFSET_DEFAULT = 345;
 #define DEFAULT_SLIDE_COUNT ("13")
 #define DEFAULT_TUNE_RUN_LIMIT ("3600")
 #define DEFAULT_SCALING_ALPHA ("0.01")
-#define DEFAULT_MULTISTEP_LEN ("1")
+#define DEFAULT_MULTISTEP_LEN ("4")
 #define DEFAULT_HARDWARE_CONCURRENCY (16)
 #define DEFAULT_FEATURES_MAX_TIME_GAP (bpt::hours(60))
 
@@ -83,14 +78,13 @@ constexpr unsigned TEST_OFFSET_DEFAULT = 345;
 #define DEFAULT_SVRPARAM_DECON_LEVEL 0
 #define DEFAULT_SVRPARAM_CHUNK_IX 0
 #define DEFAULT_SVRPARAM_GRAD_LEVEL 0
-#define DEFAULT_SVRPARAM_MIMO_TYPE (svr::mimo_type_e::single)
 #define DEFAULT_SVRPARAM_SVR_COST 0
 #define DEFAULT_SVRPARAM_SVR_EPSILON 0
 #define DEFAULT_SVRPARAM_KERNEL_PARAM_1 0
 #define DEFAULT_SVRPARAM_KERNEL_PARAM_2 0
-#define DEFAULT_SVRPARAM_DECREMENT_DISTANCE C_kernel_default_max_chunk_size
+#define DEFAULT_SVRPARAM_DECREMENT_DISTANCE common::C_kernel_default_max_chunk_size
 #define DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO 1
-#define DEFAULT_SVRPARAM_KERNEL_TYPE (svr::datamodel::kernel_type_e::PATH)
+#define DEFAULT_SVRPARAM_KERNEL_TYPE svr::datamodel::kernel_type_e::PATH
 #define DEFAULT_SVRPARAM_LAG_COUNT 1000
 
 
@@ -109,3 +103,4 @@ constexpr double BAD_VALIDATION = 1e6;
 
 constexpr unsigned CUDA_BLOCK_SIZE = 1024;
 constexpr unsigned TILE_WIDTH = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
+

@@ -282,8 +282,8 @@ struct MissedHoursrow_mapper : public IRowMapper<bpt::ptime>
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         if (rowSet.empty())
 #pragma GCC diagnostic pop
-            return std::make_shared<bpt::ptime>();
-        return std::make_shared<bpt::ptime>(rowSet[0].as<bpt::ptime>(bpt::ptime{}));
+            return ptr<bpt::ptime>();
+        return ptr<bpt::ptime>(rowSet[0].as<bpt::ptime>(bpt::not_a_date_time));
     }
 };
 
@@ -298,7 +298,7 @@ struct TimeRange_mapper : public IRowMapper<TimeRange>
             return std::shared_ptr<TimeRange>();
 #pragma GCC diagnostic pop
 
-        return std::make_shared<TimeRange>(rowSet[0].as<bpt::ptime>({}), rowSet[1].as<bpt::ptime>(bpt::ptime{}));
+        return ptr<TimeRange>(rowSet[0].as<bpt::ptime>({}), rowSet[1].as<bpt::ptime>(bpt::ptime{}));
     }
 };
 

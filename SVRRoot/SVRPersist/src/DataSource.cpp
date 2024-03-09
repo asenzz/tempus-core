@@ -37,7 +37,7 @@ void DataSource::reopen_connection()
         LOG4_INFO("Attempt number to create new transaction : " << attempt_numb);
         try {
             p_connection.reset();
-            p_connection = std::make_shared<pqxx::connection>(connection_string);
+            p_connection = ptr<pqxx::connection>(connection_string);
         } catch (const std::exception &e) {
             LOG4_ERROR("Can't open transaction for thread " << std::this_thread::get_id() << ", due error " << e.what() << ", sleeping " << sleep_seconds << " secs.");
             sleep(sleep_seconds);
@@ -52,7 +52,7 @@ void DataSource::reopen_connection()
 scoped_transaction_guard_ptr DataSource::open_transaction()
 {
     //std::scoped_lock<std::recursive_mutex> l(mtx);
-    return std::make_shared<scoped_transaction_guard>(connection_string, *this);
+    return ptr<scoped_transaction_guard>(connection_string, *this);
 }
 
 long DataSource::batch_update(const std::string& table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)

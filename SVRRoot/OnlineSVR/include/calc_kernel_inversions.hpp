@@ -21,7 +21,7 @@ class calc_kernel_inversions
 public:
     operator double() { return _weight; }
 
-    calc_kernel_inversions(const double *distance_matrix, const arma::mat &Y);
+    calc_kernel_inversions(const double *Z, const arma::mat &Y);
 };
 
 }

@@ -654,7 +654,7 @@ kernel_global_alignment<scalar_type>::operator()(
     if (kernel_values_cache__.size() > MAX_KERNEL_CACHE_SIZE)
         kernel_values_cache__.erase(kernel_values_cache__.begin());
     kernel_values_cache__.insert(
-            kernel_values_cache__.end(), {kernel_cache_key, std::make_shared<vektor<double>>(kernel_values)});
+            kernel_values_cache__.end(), {kernel_cache_key, ptr<vektor<double>>(kernel_values)});
 #endif
 }
 

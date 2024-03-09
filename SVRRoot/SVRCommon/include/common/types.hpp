@@ -8,7 +8,7 @@
 #include <boost/date_time.hpp>
 
 using bigint = uint64_t;
-using MessageProperties = std::map<std::string, std::map<std::string, std::string>>;
+using MessageProperties = std::unordered_map<std::string, std::unordered_map<std::string, std::string>>;
 
 namespace bpt = boost::posix_time;
 

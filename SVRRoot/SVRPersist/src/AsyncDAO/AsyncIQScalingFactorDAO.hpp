@@ -16,11 +16,11 @@ public:
 
     virtual bool exists(const bigint id);
 
-    virtual int save(const IQScalingFactor_ptr &p_iq_scaling_factor);
+    virtual int save(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor);
 
-    virtual int remove(const IQScalingFactor_ptr &p_iq_scaling_factor);
+    virtual int remove(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor);
 
-    virtual std::deque<IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
+    virtual std::deque<datamodel::IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
 
 private:
     struct AsyncImpl;

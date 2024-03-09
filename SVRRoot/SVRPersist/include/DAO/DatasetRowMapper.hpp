@@ -10,10 +10,10 @@ class DatasetRowMapper : public IRowMapper<svr::datamodel::Dataset>{
 public:
     datamodel::Dataset_ptr mapRow(const pqxx_tuple& row_set) const override{
 
-        using svr::common::ignoreCaseEquals;
+        using svr::common::ignore_case_equals;
         
-        return std::make_shared<svr::datamodel::Dataset>(
-                row_set["id"].as<bigint>(),
+        return ptr<svr::datamodel::Dataset>(
+                row_set["id"].as<bigint>(0),
                 row_set["dataset_name"].as<std::string>(""),
                 row_set["user_name"].as<std::string>(""),
                 row_set["main_input_queue_table_name"].as<std::string>(""),
@@ -36,9 +36,9 @@ class UserDatasetRowMapper : public IRowMapper<std::pair<std::string, datamodel:
     DatasetRowMapper datasetRowMapper;
 public:
     std::shared_ptr<std::pair<std::string, datamodel::Dataset_ptr>> mapRow(const pqxx_tuple& row_set) const override {
-        return std::make_shared<std::pair<std::string, datamodel::Dataset_ptr>>
+        return ptr<std::pair<std::string, datamodel::Dataset_ptr>>
         (
-              row_set["linked_user_name"].as<std::string>()
+              row_set["linked_user_name"].as<std::string>("")
             , datasetRowMapper.mapRow(row_set)
         );
     }

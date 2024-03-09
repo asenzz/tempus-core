@@ -10,8 +10,8 @@ class PredictionTaskRowMapper : public IRowMapper<svr::datamodel::PredictionTask
 public:
     PredictionTask_ptr mapRow(const pqxx_tuple& rowSet) const override {
 
-        return std::make_shared<svr::datamodel::PredictionTask>(
-                rowSet["id"].as<bigint>(),
+        return ptr<svr::datamodel::PredictionTask>(
+                rowSet["id"].as<bigint>(0),
                 rowSet["dataset_id"].as<bigint>(0),
                 rowSet["start_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_time"].as<std::string>("")),
                 rowSet["end_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_time"].as<std::string>("")),

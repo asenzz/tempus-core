@@ -14,7 +14,7 @@ private:
 public:
     datamodel::DQScalingFactor_ptr mapRow(const pqxx_tuple& rowSet) const override
     {
-        return std::make_shared<svr::datamodel::DQScalingFactor>(
+        return ptr<svr::datamodel::DQScalingFactor>(
                     rowSet["id"].as<bigint>(0),
                     rowSet["dataset_id"].as<bigint>(0),
                     rowSet["input_queue_table_name"].as<std::string>(""),

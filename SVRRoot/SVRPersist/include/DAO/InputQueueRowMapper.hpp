@@ -17,19 +17,19 @@ public:
     virtual ~InputQueueRowMapper()
     {}
 
-    datamodel::InputQueue_ptr mapRow(const pqxx_tuple &rowSet) const override
+    datamodel::InputQueue_ptr mapRow(const pqxx_tuple &row_set) const override
     {
-        if (rowSet["table_name"].is_null()) LOG4_THROW("Cannot map a row with empty table_name");
-        datamodel::InputQueue_ptr result = std::make_shared<datamodel::InputQueue>(
-                rowSet["table_name"].as<std::string>(),
-                rowSet["logical_name"].as<std::string>(""),
-                rowSet["user_name"].as<std::string>(""),
-                rowSet["description"].as<std::string>(""),
-                rowSet["resolution"].as<bpt::time_duration>({}),
-                rowSet["legal_time_deviation"].as<bpt::time_duration>({}),
-                rowSet["timezone"].as<std::string>(""),
-                svr::common::from_sql_array(rowSet["value_columns"].as<std::string>("")), // Should be in order of appearance
-                rowSet["uses_fix_connection"].as<bool>(false)
+        if (row_set["table_name"].is_null()) LOG4_THROW("Cannot map a row with empty table_name");
+        datamodel::InputQueue_ptr result = ptr<datamodel::InputQueue>(
+                row_set["table_name"].as<std::string>(""),
+                row_set["logical_name"].as<std::string>(""),
+                row_set["user_name"].as<std::string>(""),
+                row_set["description"].as<std::string>(""),
+                row_set["resolution"].as<bpt::time_duration>({}),
+                row_set["legal_time_deviation"].as<bpt::time_duration>({}),
+                row_set["timezone"].as<std::string>(""),
+                svr::common::from_sql_array(row_set["value_columns"].as<std::string>("")), // Should be in order of appearance
+                row_set["uses_fix_connection"].as<bool>(false)
         );
         return result;
     }
@@ -47,7 +47,7 @@ public:
 
     std::shared_ptr<std::string> mapRow(const pqxx_tuple &rowSet) const override
     {
-        return std::make_shared<std::string>(rowSet[0].as<std::string>(""));
+        return otr<std::string>(rowSet[0].as<std::string>());
     }
 };
 

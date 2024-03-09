@@ -4,6 +4,7 @@
 
 #include "appcontext.hpp"
 #include "model/Ensemble.hpp"
+#include "common/Logging.hpp"
 #include "model/Model.hpp"
 #include "onlinesvr.hpp"
 #include "ModelService.hpp"
@@ -13,6 +14,21 @@
 namespace svr {
 namespace datamodel {
 
+bool Ensemble::operator==(const Ensemble &o)
+{
+    return dataset_id == o.dataset_id && models == o.models && p_decon_queue == o.p_decon_queue && aux_decon_queues == o.aux_decon_queues;
+}
+
+Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::deque<datamodel::Model_ptr> &models,
+         const datamodel::DeconQueue_ptr &p_decon_queue, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues)
+        : Entity(id), dataset_id(dataset_id), models(models),
+          p_decon_queue(p_decon_queue), aux_decon_queues(aux_decon_queues)
+{
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
+    if (dataset_id) set_dataset_id(dataset_id);
+}
 
 Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::string &decon_queue_table_name,
                    const std::deque<std::string> &aux_decon_queue_table_names, const bool load_decon_data) : Entity(id), dataset_id(dataset_id)
@@ -20,9 +36,7 @@ Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::string &
     if (!decon_queue_table_name.empty()) {
         p_decon_queue = APP.decon_queue_service.get_by_table_name(decon_queue_table_name);
         if (!p_decon_queue) {
-            p_decon_queue = std::make_shared<DeconQueue>();
-            p_decon_queue->set_dataset_id(dataset_id);
-            p_decon_queue->set_table_name(decon_queue_table_name);
+            p_decon_queue = std::make_shared<DeconQueue>(decon_queue_table_name, "", "", dataset_id);
             LOG4_DEBUG("Decon queue " << decon_queue_table_name << " does not exist in database, creating with default configuration.");
         } else if (load_decon_data)
             try {
@@ -35,9 +49,7 @@ Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::string &
     for (const std::string &aux_decon_queue_table_name: aux_decon_queue_table_names) {
         auto p_aux_decon_queue = APP.decon_queue_service.get_by_table_name(aux_decon_queue_table_name);
         if (!p_aux_decon_queue) {
-            p_aux_decon_queue = std::make_shared<DeconQueue>();
-            p_aux_decon_queue->set_dataset_id(dataset_id);
-            p_decon_queue->set_table_name(aux_decon_queue_table_name);
+            p_aux_decon_queue = ptr<DeconQueue>(aux_decon_queue_table_name, "", "", dataset_id);
             LOG4_DEBUG("Aux decon queue " << decon_queue_table_name << " does not exist in database, creating with default configuration.");
         } else if (load_decon_data)
             try {
@@ -47,22 +59,43 @@ Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::string &
             }
         aux_decon_queues.emplace_back(p_aux_decon_queue);
     }
-
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
     if (dataset_id) set_dataset_id(dataset_id);
 }
 
+void Ensemble::init_id()
+{
+    if (!id) {
+        boost::hash_combine(id, dataset_id);
+        if (p_decon_queue) boost::hash_combine(id, p_decon_queue->get_id());
+    }
+}
 
 void Ensemble::set_dataset_id(const bigint dataset_id_)
 {
     dataset_id = dataset_id_;
-    if (p_decon_queue) p_decon_queue->set_dataset_id(dataset_id_);
+    if (p_decon_queue)
+        p_decon_queue->set_dataset_id(dataset_id_);
+#pragma omp parallel for num_threads(adj_threads(aux_decon_queues.size()))
     for (const auto &p_aux_decon: aux_decon_queues)
         if (p_aux_decon)
             p_aux_decon->set_dataset_id(dataset_id_);
-    for (auto &p_model: models)
-        if (p_model && p_model->get_gradients().size())
-            for (auto &p_param: p_model->get_param_set())
+#pragma omp parallel for num_threads(adj_threads(models.size()))
+    for (auto &p_model: models) {
+        if (!p_model) continue;
+        p_model->set_ensemble_id(id);
+        for (auto &p_svr_model: p_model->get_gradients()) {
+            if (!p_svr_model) continue;
+            p_svr_model->set_model_id(p_model->get_id());
+            for (auto &p_param: p_svr_model->get_param_set()) {
+                if (!p_param) continue;
                 p_param->set_dataset_id(dataset_id_);
+                p_param->set_input_queue_table_name(p_decon_queue->get_input_queue_table_name());
+            }
+        }
+    }
 }
 
 datamodel::Model_ptr Ensemble::get_model(const size_t levix)
@@ -97,9 +130,25 @@ std::deque<bigint> Ensemble::get_models_ids()
     return res;
 }
 
-void Ensemble::set_models(const std::deque<datamodel::Model_ptr> &m)
+void Ensemble::set_models(const std::deque<datamodel::Model_ptr> &new_models, const bool overwrite)
 {
-    models = m;
+    const auto prev_size = models.size();
+    for (const auto &p_new_model: new_models) {
+        std::atomic<bool> found = false;
+#pragma omp parallel for num_threads(adj_threads(prev_size))
+        for (size_t i = 0; i < prev_size; ++i)
+            if (models[i]->get_decon_level() == p_new_model->get_decon_level() &&
+                (!models[i]->get_ensemble_id() || !p_new_model->get_ensemble_id() || models[i]->get_ensemble_id() == p_new_model->get_ensemble_id())) {
+                if (overwrite || models[i]->get_gradients().empty()) {
+                    models[i] = p_new_model;
+                    models[i]->set_ensemble_id(id);
+                }
+                found.store(true, std::memory_order_relaxed);
+            }
+        if (found) continue;
+        models.emplace_back(p_new_model);
+        models.back()->set_ensemble_id(id);
+    }
 }
 
 datamodel::DeconQueue_ptr Ensemble::get_decon_queue() const
@@ -176,13 +225,22 @@ std::string Ensemble::to_string() const
     std::stringstream s;
     s << "Ensemble ID " << id << ", dataset ID " << dataset_id << ", models:\n";
     for (const auto &p_model: models)
-        if (p_model) s << "\t" << p_model->to_string() << "\n";
+        if (p_model) s << "\t" << *p_model << "\n";
     if (p_decon_queue)
-        s << "Main decon queue:\n" << p_decon_queue->to_string() << "\n, aux decon queues:\n";
+        s << "Main decon queue:\n" << *p_decon_queue << "\n, aux decon queues:\n";
     for (const auto &p_aux_decon_queue: aux_decon_queues)
-        if (p_aux_decon_queue)
-            s << "\t" << p_aux_decon_queue->to_string() << "\n";
+        if (p_aux_decon_queue) s << '\t' << *p_aux_decon_queue << '\n';
     return s.str();
+}
+
+size_t Ensemble::get_level_ct() const
+{
+    return business::ModelService::to_level_ct(models.size());
+}
+
+size_t Ensemble::get_model_ct() const
+{
+    return models.size();
 }
 
 }

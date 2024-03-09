@@ -24,11 +24,10 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
-
 #include <unordered_map>
-#include <boost/functional/hash.hpp>
 #include <atomic>
 #include <mutex>
+#include "common/compatibility.hpp"
 
 // CONSTANTS
 #define PSO_MAX_SIZE 1000 // max swarm size
@@ -188,8 +187,8 @@ private:
     ~pso_state_io()= default;
     pso_state_io(const pso_state_io&)= delete;
     pso_state_io& operator=(const pso_state_io&)= delete;
-    std::unordered_map<std::pair<std::string, std::string>, pso_state, boost::hash<std::pair<std::string, std::string>>> pso_states;
-    std::unordered_map <std::pair<std::string, std::string>, bool, boost::hash<std::pair<std::string, std::string>>> finish_states;
+    std::unordered_map<std::pair<std::string, std::string>, pso_state> pso_states;
+    std::unordered_map<std::pair<std::string, std::string>, bool> finish_states;
 
     std::atomic<bool> dirty_state;
     std::mutex pso_states_mutex;

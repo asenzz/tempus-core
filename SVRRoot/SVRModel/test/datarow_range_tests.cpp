@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-
+#include <model/Entity.hpp>
 #include <model/DataRow.hpp>
 
 using namespace svr::datamodel;
@@ -30,7 +30,7 @@ TEST(datarow_range_tests, datarow_range_basic_tests)
 /*----------------------------------------------------------------------------*/
 
     {
-        cont.push_back(std::make_shared<DataRow>(now, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
+        cont.emplace_back(svr::ptr<DataRow>(now, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
 
         datarow_range dr(cont);
 /*
@@ -46,10 +46,10 @@ TEST(datarow_range_tests, datarow_range_basic_tests)
 
     {
         auto now1 = now + bpt::seconds(1);
-        cont.push_back(std::make_shared<DataRow>(now1, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
+        cont.push_back(svr::ptr<DataRow>(now1, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
 
         now1 += bpt::seconds(1);
-        cont.push_back(std::make_shared<DataRow>(now1, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
+        cont.push_back(svr::ptr<DataRow>(now1, bpt::second_clock::local_time(), svr::common::C_default_value_tick_volume, 1));
 
         datarow_range dr2(std::next(cont.begin()), std::prev(cont.end()), cont);
 

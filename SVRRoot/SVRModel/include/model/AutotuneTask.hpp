@@ -34,6 +34,15 @@ private:
     int status = 0;         // 0 - new, 1 - in process, 2 - done, 3 - error
     double mse = -1.0;
 
+    virtual void init_id() override
+    {
+        if (!id) {
+            boost::hash_combine(id, dataset_id);
+            boost::hash_combine(id, result_dataset_id);
+            boost::hash_combine(id, creation_time);
+            boost::hash_combine(id, done_time);
+        }
+    }
 public:
     AutotuneTask() : Entity(), vp_slide_period_sec(bpt::seconds(0))
     {}

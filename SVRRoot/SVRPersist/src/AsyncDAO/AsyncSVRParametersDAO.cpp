@@ -46,7 +46,7 @@ bigint AsyncSVRParametersDAO::get_next_id()
 
 bool AsyncSVRParametersDAO::exists(const bigint id)
 {
-    auto svrParams = std::make_shared<SVRParameters>();
+    auto svrParams = ptr<SVRParameters>();
     svrParams->set_id(id);
 
     if (pImpl.cached(svrParams)) return true;

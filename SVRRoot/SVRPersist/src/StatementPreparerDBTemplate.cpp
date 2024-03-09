@@ -27,9 +27,9 @@ string StatementPreparerDBTemplate::escape(const char *t)
     return "'" + connection.esc(string(t)) + "'";
 }
 
-string StatementPreparerDBTemplate::escape(svr::datamodel::ROLE role)
+string StatementPreparerDBTemplate::escape(datamodel::ROLE role)
 {
-    return string("'") + (role == svr::datamodel::ROLE::ADMIN ? "ADMIN" : "USER") + "'";
+    return string("'") + (role == datamodel::ROLE::ADMIN ? "ADMIN" : "USER") + "'";
 }
 
 string StatementPreparerDBTemplate::escape(const ptime &time)
@@ -59,7 +59,7 @@ string StatementPreparerDBTemplate::escape(const bool &flag)
     return flag ? "TRUE" : "FALSE";
 }
 
-std::string StatementPreparerDBTemplate::escape(const svr::datamodel::Priority &priority)
+std::string StatementPreparerDBTemplate::escape(const datamodel::Priority &priority)
 {
     return std::to_string((int) priority);
 }
@@ -69,11 +69,11 @@ std::string StatementPreparerDBTemplate::escape(std::nullptr_t)
     return "null";
 }
 
-std::string StatementPreparerDBTemplate::escape(const std::shared_ptr<svr::OnlineMIMOSVR> &model)
+std::string StatementPreparerDBTemplate::escape(const std::shared_ptr<datamodel::OnlineMIMOSVR> &model)
 {
     if (!model) return "''";
     std::stringstream s;
-    OnlineMIMOSVR::save(*model, s);
+    datamodel::OnlineMIMOSVR::save(*model, s);
     return connection.quote(s);
 }
 

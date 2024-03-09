@@ -229,8 +229,7 @@ size_t PgDeconQueueDAO::get_level_count(const datamodel::DeconQueue_ptr &p_decon
 
     if (result != 0) goto __bail;
 
-    p_dataset = APP.dataset_service.get(p_decon_queue->get_dataset_id());
-    if (p_dataset) result = p_dataset->get_transformation_levels();
+    result = APP.dataset_service.get_level_count(p_decon_queue->get_dataset_id());
 
 __bail:
     LOG4_DEBUG("Returning " << result << " for " << p_decon_queue->get_table_name());

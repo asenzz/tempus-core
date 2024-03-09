@@ -29,7 +29,10 @@ IF(BUILD_MAIN)
     ADD_EXECUTABLE(${PROJECT_NAME} "src/main.cpp")
 ELSE()
     LIST(REMOVE_ITEM SOURCE_FILES "main.cpp")
-    ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES})
+    ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES}
+            include/calc_cache.hpp
+            src/calc_cache.cpp
+            include/calc_cache.tpp)
 ENDIF()
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} crypto rt wavelib)

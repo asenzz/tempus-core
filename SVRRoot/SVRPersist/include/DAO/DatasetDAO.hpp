@@ -27,6 +27,7 @@ public:
 
     virtual std::deque<datamodel::Dataset_ptr> find_all_user_datasets(const std::string& user_name) = 0;
 
+    virtual size_t get_level_count(const bigint dataset_id) = 0;
     virtual bool link_user_to_dataset(const std::string& user_name, const datamodel::Dataset_ptr & dataset) = 0;
     virtual bool unlink_user_from_dataset(const std::string& user_name, const datamodel::Dataset_ptr & dataset) = 0;
 

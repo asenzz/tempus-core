@@ -107,7 +107,7 @@ TEST(path_train_predict, basic_integration)
     svr::IKernel<double>::IKernelInit();
 
     OnlineMIMOSVR_ptr model, model2;
-    auto p_svr_parameters = std::make_shared<SVRParameters>(0, 0, "test", "test", 0, 0, 0, svr::mimo_type_e::single, 1e5, 0, 0, 0, C_kernel_default_max_chunk_size, 1, kernel_type_e::PATH, 1);
+    auto p_svr_parameters = std::make_shared<SVRParameters>(0, 0, "test", "test", 0, 0, 0, 1e5, 0, 0, 0, C_kernel_default_max_chunk_size, 1, kernel_type_e::PATH, 1);
     rapidcsv::Document doc(
             "/var/tmp/devicetracker_export_2023_04_27-08_54_03.csv", // "/var/tmp/processed_csv_devicetracker.csv",
             rapidcsv::LabelParams(),

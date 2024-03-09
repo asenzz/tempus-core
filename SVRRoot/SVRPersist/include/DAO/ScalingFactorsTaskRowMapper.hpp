@@ -10,8 +10,8 @@ class ScalingFactorsTaskRowMapper : public IRowMapper<svr::datamodel::ScalingFac
 public:
     ScalingFactorsTask_ptr mapRow(const pqxx_tuple& rowSet) const override {
 
-        return std::make_shared<svr::datamodel::ScalingFactorsTask>(
-                rowSet["id"].as<bigint>(),
+        return ptr<svr::datamodel::ScalingFactorsTask>(
+                rowSet["id"].as<bigint>(0),
                 rowSet["dataset_id"].as<bigint>(0),
                 rowSet["status"].as<int>(0),
                 rowSet["mse"].as<double>(0)

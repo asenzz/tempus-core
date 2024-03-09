@@ -38,10 +38,10 @@ export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 export OMP_NESTED=true
 #export KMP_AFFINITY=compact # Kills performance
 #export KMP_HW_SUBSET=2s,10c,2t # Slows down noticeably, find better values
-export OMP_WAIT_POLICY=PASSIVE                        # sets spincount to zero
-#export OMP_SCHEDULE=dynamic,1                        # May disable nesting (bug in OMP?)
-export MAX_ACTIVE_LEVELS=$(( 100 * $NUM_THREADS ))    # Nested depth
-export OMP_THREAD_LIMIT=$MAX_ACTIVE_LEVELS            # Increase with RAM size
+export OMP_WAIT_POLICY=PASSIVE                            # Sets spincount to zero
+#export OMP_SCHEDULE=dynamic,1                            # May disable nesting (bug in OMP?)
+export MAX_ACTIVE_LEVELS=$(( 10 * $NUM_THREADS ))         # Nested depth
+export OMP_THREAD_LIMIT=$(( 10 * $MAX_ACTIVE_LEVELS ))    # Increase with RAM size
 # export OMP_NUM_THREADS=${NUM_THREADS}
 export CILK_NWORKERS=${NUM_THREADS}
 export MKL_NUM_THREADS=${NUM_THREADS}

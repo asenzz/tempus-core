@@ -8,12 +8,12 @@ namespace dao {
 
 class EnsembleRowMapper : public IRowMapper<svr::datamodel::Ensemble> {
 public:
-    datamodel::Ensemble_ptr mapRow(const pqxx_tuple &rowSet) const override {
-        return std::make_shared<svr::datamodel::Ensemble>(
-                rowSet["id"].as<bigint>(),
-                rowSet["dataset_id"].as<bigint>(),
-                rowSet["decon_queue_table_name"].is_null() ? "" : rowSet["decon_queue_table_name"].as<std::string>(),
-                svr::common::from_sql_array(rowSet["aux_decon_queues_table_names"].as<std::string>())
+    datamodel::Ensemble_ptr mapRow(const pqxx_tuple &row_set) const override {
+        return ptr<svr::datamodel::Ensemble>(
+                row_set["id"].as<bigint>(0),
+                row_set["dataset_id"].as<bigint>(0),
+                row_set["decon_queue_table_name"].is_null() ? "" : row_set["decon_queue_table_name"].as<std::string>(),
+                svr::common::from_sql_array(row_set["aux_decon_queues_table_names"].as<std::string>())
         );
     }
 };

@@ -69,7 +69,7 @@ public:
 //class IKernal provides access to kernel factory
 template<typename scalar_type>
 class IKernel {
-    static std::map<kernel_type_e, std::shared_ptr<kernel_factory<scalar_type>>> kernel_factories;
+    static std::unordered_map<kernel_type_e, std::shared_ptr<kernel_factory<scalar_type>>> kernel_factories;
     static std::once_flag kernel_init_flag;
 
 public:

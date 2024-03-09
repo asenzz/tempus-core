@@ -250,7 +250,8 @@ void uninit_magma_solver(
 
 void iter_magma_solve(
         const int m, const int b_n, const double *a, const double *b, double *output, const magma_queue_t magma_queue,
-        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_workd, const magmaFloat_ptr d_works, const bool psd, const size_t gpu_id)
+        const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_workd,
+        const magmaFloat_ptr d_works, const bool psd, const size_t gpu_id)
 {
     cu_errchk(cudaSetDevice(gpu_id));
     magma_int_t err, iter, info;

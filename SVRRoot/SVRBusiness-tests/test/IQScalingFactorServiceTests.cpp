@@ -1,4 +1,5 @@
 #include "include/DaoTestFixture.h"
+#include "common/constants.hpp"
 
 #include <model/User.hpp>
 #include <model/InputQueue.hpp>
@@ -19,12 +20,12 @@ TEST_F(DaoTestFixture, IQScalingFactorWorkflow)
             "SlowInputQueue", "SlowInputQueue_logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "JamesMayTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "JamesMayTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);
 
-    IQScalingFactor_ptr iqsf = IQScalingFactor_ptr(new svr::datamodel::IQScalingFactor(0, ds->get_id(), iq->get_table_name(), 1.434));
+    datamodel::IQScalingFactor_ptr iqsf = otr<datamodel::IQScalingFactor>(0, ds->get_id(), iq->get_table_name(), "column", 1.434);
 
     ASSERT_EQ(1, aci.iq_scaling_factor_service.save(iqsf));
 

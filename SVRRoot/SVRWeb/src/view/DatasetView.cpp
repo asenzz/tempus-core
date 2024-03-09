@@ -144,7 +144,7 @@ std::vector<std::pair<std::string, std::string>> DatasetForm::get_wavelet_filter
 
 void DatasetWithForm::load_form_data ()
 {
-    object = std::make_shared<svr::datamodel::Dataset> ();
+    object = ptr<svr::datamodel::Dataset> ();
     object->set_dataset_name (form.name.value ());
     object->set_description (form.description.value ());
     //    object->set_lookback_time(bpt::duration_from_string(form.lookback_time.value()));

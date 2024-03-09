@@ -94,7 +94,7 @@ size_t merge_compute_inversions(double *arr, size_t N)
 }
 
 
-calc_kernel_inversions::calc_kernel_inversions(const double *distance_matrix, const arma::mat &Y)
+calc_kernel_inversions::calc_kernel_inversions(const double *Z, const arma::mat &Y)
 {
     //Compute sum of number of inversions of the distance_matrix vs Y,
     //i.e. i , j, k where i closer to k than j by distance_matrix, but Y(j) farther
@@ -105,13 +105,12 @@ calc_kernel_inversions::calc_kernel_inversions(const double *distance_matrix, co
         // initialize original index locations
         std::vector<size_t> idx(N);
         std::iota(idx.begin(), idx.end(), 0);
-        std::stable_sort(idx.begin(), idx.end(),
-                         [&](size_t j, size_t k) { return distance_matrix[i * N + j] > distance_matrix[i * N + k]; });
+        std::stable_sort(std::execution::par_unseq, idx.begin(), idx.end(),
+                         [&](const size_t j, const size_t k) { return Z[i * N + j] > Z[i * N + k]; });
         //idx are now sorted according to distance with i^th element
         std::vector<double> Ydistances(N);
-        for (size_t j = 0; j < N; ++j) {
+        for (size_t j = 0; j < N; ++j)
             Ydistances[j] = std::fabs(arma::mean(Y.row(idx[j]) - Y.row(idx[i])));
-        }
         //merge_compute_inversions is faster, gives the same result
         //inversions+=get_inversions_count(Ydistances.data(),N);
         inversions += merge_compute_inversions(Ydistances.data(), N);

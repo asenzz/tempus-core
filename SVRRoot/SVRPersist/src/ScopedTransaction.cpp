@@ -10,7 +10,6 @@ namespace svr::dao {
 scoped_transaction_guard::scoped_transaction_guard(const std::string &connection_string, DataSource &data_source)
         : commit_on_destroy(true), data_source(data_source.lock()), connection(pqxx::connection(connection_string))
 {
-    //connection.set_session_var("search_path", "svr,public");
     trx = new pqxx::work(connection);
     LOG4_TRACE("Opening new transaction from thread " << std::this_thread::get_id() << " trx " << trx);
 }
@@ -41,8 +40,6 @@ scoped_transaction_guard::~scoped_transaction_guard()
     }
 
     delete trx;
-
-    //data_source.unlock();
 }
 
 

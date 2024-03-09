@@ -14,6 +14,7 @@
 
 namespace svr {
 
+#define ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
 
 template<typename T>
 std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
@@ -41,6 +42,18 @@ std::atomic<T> &operator &= (std::atomic<T> &lhs, const T &rhs)
 
 namespace common {
 
+template<typename T> std::enable_if_t<std::is_integral_v<T>, T>
+bounce(const T v, const T lim)
+{
+    return v > lim ? lim - v % lim : v;
+}
+
+template<typename T> std::enable_if_t<!std::is_integral_v<T>, T>
+bounce(const T v, const T lim)
+{
+    return v > lim ? lim - std::fmod(v, lim) : v;
+}
+
 const size_t C_int_nan = 0xDeadBeef;
 const size_t C_ip_max = 0x100000000;
 
@@ -63,9 +76,9 @@ template<typename T> bool sane(const arma::Mat<T> &m)
     return !m.has_nonfinite() && !m.empty();
 }
 
-template<typename T> bool isnormalz(const T v) { return !v || std::isnormal(v); }
+template<typename T> bool isnormalz(const T v) { return v == 0 || std::isnormal(v); }
 
-std::vector<double> levy(const size_t d); // Return colvec of columns d
+arma::vec levy(const size_t d);
 double randouble();
 arma::cx_mat matlab_fft(const arma::mat &input);
 arma::cx_mat matlab_fft(const arma::cx_mat &input);
@@ -493,16 +506,8 @@ const auto _n_elem  = v.size(); \
 v.resize(_n_elem + 1); \
 v(_n_elem) = (val); }
 
-// Add to vector thread safe
-#define AVEC_PUSH_TS(v, val)            \
-_Pragma("omp critical")                 \
-    {                                   \
-        const auto _n_elem  = v.size(); \
-        v.resize(_n_elem + 1);          \
-        v(_n_elem) = (val);             \
-    }
-
 namespace armd {
+
     void check_mat(const arma::mat &input);
 
     void print_mat(const arma::mat & input, const std::string mat_name = "");

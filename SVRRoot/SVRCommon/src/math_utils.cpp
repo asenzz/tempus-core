@@ -8,18 +8,19 @@
 #include <cstdarg>
 
 namespace svr {
+
+
 namespace common {
 
-std::vector<double> levy(const size_t d) // Return colvec of columns d
+arma::vec levy(const size_t d) // Return colvec of columns d
 {
     constexpr double beta = 3. / 2.;
     static const double sigma = std::pow(tgamma(1. + beta) * sin(M_PI * beta / 2.) / (tgamma((1. + beta) / 2.) * beta * std::pow(2, ((beta - 1.) / 2.))), 1. / beta);
 
-    arma::mat u(1, d, arma::fill::randn);
+    arma::vec u(d, arma::fill::randn);
     u = u * sigma;
-    arma::mat v(1, d, arma::fill::randn);
-    arma::mat step = u / arma::pow(arma::abs(v), 1. / beta);
-    return common::tovec(step);
+    arma::vec v(d, arma::fill::randn);
+    return u / arma::pow(arma::abs(v), 1. / beta);
 }
 
 double randouble()
@@ -120,19 +121,22 @@ std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, co
         max_index -= max_index - level_count + 1;
     }
 
+    OMP_LOCK(level_indexes_l)
 #pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / std::thread::hardware_concurrency())
     for (ssize_t level_index = min_index; level_index <= max_index; ++level_index) {
         if (level_index >= 0
             && level_index < ssize_t(level_count)
-            && (level_count == 1 || level_index != ssize_t(level_count) / 2)
-            && level_index % 2 == 0)
-#pragma omp critical
+            && (level_count < MIN_LEVEL_COUNT || (level_index != ssize_t(level_count) / 2 && level_index % 2 == 0)
+            || level_index > ssize_t(level_count) / 2))
+        {
+            omp_set_lock(&level_indexes_l);
             level_indexes.emplace(level_index);
-        else
-            LOG4_TRACE("Skipping level " << std::to_string(level_index) << " adjacent ratio " << ratio << " for level " << level);
+            omp_unset_lock(&level_indexes_l);
+        } else
+            LOG4_TRACE("Skipping level " << level_index << " adjacent ratio " << ratio << " for level " << level);
     }
 
-    LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << to_string(level_indexes));
+    LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << level_indexes);
 
     return level_indexes;
 }

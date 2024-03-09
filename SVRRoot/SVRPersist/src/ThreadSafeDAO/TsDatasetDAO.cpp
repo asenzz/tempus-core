@@ -12,6 +12,10 @@ bigint TsDatasetDAO::get_next_id()
     return ts_call<bigint>(&DatasetDAO::get_next_id);
 }
 
+size_t TsDatasetDAO::get_level_count(const bigint dataset_id)
+{
+    return ts_call<bigint>(&DatasetDAO::get_level_count, dataset_id);
+}
 
 bool TsDatasetDAO::exists(const bigint dataset_id)
 {

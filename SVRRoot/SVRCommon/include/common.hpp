@@ -5,7 +5,7 @@
 #include "util/string_utils.hpp"
 #include "util/ValidationUtils.hpp"
 #include "util/CompressionUtils.hpp"
-#include "util/TimeUtils.hpp"
+#include "util/time_utils.hpp"
 #include "util/MemoryManager.hpp"
 //#include "duma.h"
 //#include <mcheck.h>

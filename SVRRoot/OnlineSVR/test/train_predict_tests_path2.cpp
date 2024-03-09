@@ -10,7 +10,7 @@
 #define DO_TEST_PSO
 
 
-#define TEST_VALIDATION_WINDOW 500
+#define C_test_validation_window 500
 #define DEFAULT_LAG 650
 #define DEFAULT_SVR_DECREMENT 20000
 #define DEFAULT_ADJACENT 1
@@ -52,7 +52,7 @@ run_file(
     const svr::matrix_ptr p_features = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << 0 << "_" << 0 << ".out");
     const svr::matrix_ptr p_labels = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << 0 << "_" << 0 << ".out");
     auto best_parameters = std::make_shared<datamodel::SVRParameters>(
-            0, 0, "test path 2", "test path 2", 0, 0, 0, svr::mimo_type_e::single, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
+            0, 0, "test path 2", "test path 2", 0, 0, 0, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
             DEFAULT_LAG);
     {
 #ifdef DO_TEST_PSO

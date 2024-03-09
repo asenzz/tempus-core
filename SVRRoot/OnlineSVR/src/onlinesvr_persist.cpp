@@ -5,11 +5,68 @@
 #include "onlinesvr_persist.tpp"
 
 namespace svr {
+namespace datamodel {
 
-OnlineMIMOSVR::OnlineMIMOSVR(std::stringstream &input_stream)
+bigint OnlineMIMOSVR::get_model_id() const
+{
+    return model_id;
+}
+
+OnlineMIMOSVR::OnlineMIMOSVR(const bigint id, const bigint model_id, std::stringstream &input_stream) : Entity(id), model_id(model_id)
 {
     boost::archive::binary_iarchive ia(input_stream);
     ia >> *this;
 }
 
+std::string OnlineMIMOSVR::save() const
+{
+    std::stringstream res;
+    save(*this, res);
+    return res.str();
 }
+
+void OnlineMIMOSVR::set_model_id(const size_t new_model_id)
+{
+    model_id = new_model_id;
+}
+
+
+void OnlineMIMOSVR::init_id()
+{
+    if (!id) {
+        boost::hash_combine(id, column_name);
+        boost::hash_combine(id, decon_level);
+        boost::hash_combine(id, gradient);
+        SVRParameters_ptr p_head_params;
+        if ((p_head_params = get_params_ptr())) {
+            boost::hash_combine(id, p_head_params->get_input_queue_table_name());
+            boost::hash_combine(id, p_head_params->get_input_queue_column_name());
+        }
+    }
+}
+
+
+std::string OnlineMIMOSVR::to_string() const
+{
+    std::stringstream s;
+    s << " Samples trained " << samples_trained <<
+    ", features " << p_features->rows(0, 10) <<
+    ", labels " << p_labels->rows(0, 10) <<
+    ", labels scaling factor " << labels_scaling_factor <<
+    ", kernel matrices " << (p_kernel_matrices ? p_kernel_matrices->size() : 0) <<
+    ", indexes " << ixs.size() <<
+    ", multiout " << multistep_len <<
+    ", max chunk size " << max_chunk_size <<
+    ", gradient level " << gradient <<
+    ", decon level " << decon_level <<
+    ", manifold " << p_manifold ? p_manifold->to_string() : "nil";
+    return s.str();
+}
+
+std::basic_ostream<char> &OnlineMIMOSVR::operator<<(std::basic_ostream<char> &os) const
+{
+    return os << to_string();
+}
+
+} // datamodel
+} // svr

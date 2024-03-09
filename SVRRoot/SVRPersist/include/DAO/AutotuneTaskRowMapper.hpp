@@ -10,7 +10,7 @@ class AutotuneTaskRowMapper : public IRowMapper<svr::datamodel::AutotuneTask>{
 public:
     AutotuneTask_ptr mapRow(const pqxx_tuple& rowSet) const override {
 
-        return std::make_shared<svr::datamodel::AutotuneTask>(
+        return ptr<svr::datamodel::AutotuneTask>(
                 rowSet["id"].as<bigint>(0),
                 rowSet["dataset_id"].as<bigint>(0),
                 rowSet["result_dataset_id"].as<bigint>(0),

@@ -40,7 +40,7 @@ private:
 
 struct InputQueue : public Main
 {
-    svr::datamodel::InputQueue_ptr object = std::make_shared<svr::datamodel::InputQueue>();
+    svr::datamodel::InputQueue_ptr object = svr::dtr<svr::datamodel::InputQueue>();
     InputQueueForm form;
 
     void load_form_data()
@@ -136,7 +136,7 @@ struct traits<svr::datamodel::DataRow_ptr>
 
     static svr::datamodel::DataRow_ptr get(value const &v)
     {
-        return std::make_shared<svr::datamodel::DataRow>();
+        return svr::ptr<svr::datamodel::DataRow>();
     }
 
     static void set(value &v, svr::datamodel::DataRow_ptr const &in)

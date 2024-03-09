@@ -42,7 +42,7 @@ struct traits<content::Tick> {
         tick.low = std::stod(v.get<std::string>("low"));
         tick.close = std::stod(v.get<std::string>("close"));
         tick.weight = std::stod(v.get<std::string>("tick_volume"));
-        tick.isFinal = svr::common::ignoreCaseEquals(v.get<std::string>("isFinal"), "true");
+        tick.isFinal = svr::common::ignore_case_equals(v.get<std::string>("isFinal"), "true");
         tick.period = std::stoi(v.get<std::string>("period"));
         tick.clientTime = bpt::time_from_string(v.get<std::string>("clientTime"));
 

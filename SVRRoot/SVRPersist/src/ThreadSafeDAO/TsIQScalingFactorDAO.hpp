@@ -13,11 +13,11 @@ THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsIQScalingFactorDAO, IQScalingFactorDA
 
     virtual bool exists(const bigint id);
 
-    virtual int save(const IQScalingFactor_ptr &scalingTask);
+    virtual int save(const datamodel::IQScalingFactor_ptr &scalingTask);
 
-    virtual int remove(const IQScalingFactor_ptr &scalingTask);
+    virtual int remove(const datamodel::IQScalingFactor_ptr &scalingTask);
 
-    virtual std::deque<IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
+    virtual std::deque<datamodel::IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
 };
 
 }

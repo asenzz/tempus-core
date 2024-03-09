@@ -53,40 +53,35 @@ AsyncUserDAO::~AsyncUserDAO()
 
 User_ptr AsyncUserDAO::get_by_user_name(const std::string& user_name)
 {
-    User_ptr user{ std::make_shared<svr::datamodel::User>() };
-    user->set_user_name(user_name);
-
+    auto user = ptr<svr::datamodel::User>(0, user_name, "", "");
     pImpl.seekAndCache(user, &PgUserDAO::get_by_user_name, user_name);
     return user;
 }
 
 std::vector<User_ptr> AsyncUserDAO::get_all_users()
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.get_all_users();
 }
 
 std::vector<User_ptr> AsyncUserDAO::get_all_users_by_priority()
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.get_all_users_by_priority();
 }
 
 bigint AsyncUserDAO::get_next_id()
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.get_next_id();
 }
 
 bool AsyncUserDAO::exists(std::string const &user_name)
 {
-    User_ptr user{ std::make_shared<svr::datamodel::User>() };
-    user->set_user_name(user_name);
+    auto user = ptr<svr::datamodel::User>(0, user_name, "", "");
+    if(pImpl.cached(user)) return true;
 
-    if(pImpl.cached(user))
-        return true;
-
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.exists(user_name);
 }
 
@@ -109,7 +104,7 @@ int AsyncUserDAO::remove(const User_ptr& user)
 
 bool AsyncUserDAO::login(const std::string& user_name, const std::string& enc_password)
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.login(user_name, enc_password);
 }
 

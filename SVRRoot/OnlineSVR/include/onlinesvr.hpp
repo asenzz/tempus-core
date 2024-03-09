@@ -3,26 +3,35 @@
 // Bagged MIOC-SVR on chunks
 // TODO test gradient boosting, find warm-start online solver, test manifold
 
-#include <limits>
+#include <boost/date_time/posix_time/ptime.hpp>
 #include <memory>
 #include <set>
-#include <tuple>
 #include <armadillo>
 #include <deque>
 #include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
-#include "common/compatibility.hpp"
 #include "common/constants.hpp"
+#include "common/defines.h"
 #include "model/SVRParameters.hpp"
+#include "model/Entity.hpp"
+
 
 namespace svr {
+namespace business {
+class calc_cache;
+}
 
-constexpr unsigned C_interlace_manifold_factor = 1e9; // Every Nth row is used from a manifold dataset to train the produced model
+namespace datamodel {
+
+constexpr unsigned C_interlace_manifold_factor = 1000; // Every Nth row is used from a manifold dataset to train the produced model
 constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
-constexpr double C_mean_weight_threshold = 2;
-constexpr size_t C_grid_depth = 4; // Tune
-constexpr double C_grid_range_div = 5;
+constexpr size_t C_grid_depth = 2; // Tune
+constexpr double C_grid_range_div = 8;
+constexpr double C_tune_range_min_lambda = 0;
+constexpr double C_tune_range_max_lambda = 1e2;
+const std::deque<double> C_tune_extra_lambdas {};//{1e1, 1e2};
+constexpr double C_tune_range_min_gammamulti = 1;
+constexpr double C_tune_range_max_gammamulti = 1e2;
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -39,218 +48,200 @@ constexpr double C_grid_range_div = 5;
     }
 */
 
-
-struct t_param_preds {
-    const double score = std::numeric_limits<double>::max();
-    svr::datamodel::SVRParameters_ptr p_params;
-    std::shared_ptr<std::deque<arma::mat>> p_predictions;
-    std::shared_ptr<std::deque<arma::mat>> p_labels;
-    std::shared_ptr<std::deque<arma::mat>> p_last_knowns;
-
-    t_param_preds(const double score,
-                  const datamodel::SVRParameters_ptr &params,
-                  const std::shared_ptr<std::deque<arma::mat>> &predictions,
-                  const std::shared_ptr<std::deque<arma::mat>> &labels,
-                  const std::shared_ptr<std::deque<arma::mat>> &last_knowns) :
-            score(score), p_params(params), p_predictions(predictions), p_labels(labels), p_last_knowns(last_knowns) {}
-};
-typedef std::shared_ptr<t_param_preds> t_param_preds_ptr;
-
-struct param_preds_cmp
+struct t_gradient_data
 {
-    bool operator()(const t_param_preds_ptr &lhs, const t_param_preds_ptr &rhs) const
-    {
-        return lhs->score < rhs->score;
-    }
+    matrix_ptr p_features, p_labels;
+    vec_ptr p_last_knowns;
 };
 
-typedef std::deque /* chunk */ <std::set<t_param_preds_ptr, param_preds_cmp>> t_gradient_tuned_parameters;
-typedef tbb::concurrent_map<size_t /* level */, std::deque /* grad */ <t_gradient_tuned_parameters>> t_tuned_parameters;
+class Dataset;
 
-struct MimoBase
-{
-    std::deque<arma::mat> chunk_weights;
-    std::deque<arma::mat> weights_mask;
-    std::deque<double> chunks_weight;
-    arma::mat total_weights;
-    double epsilon;
-    std::deque<double> mae_chunk_values;
-    template<class A> void serialize(A &ar, const unsigned int version);
-};
-typedef std::shared_ptr<MimoBase> MimoBase_ptr;
+using Dataset_ptr = std::shared_ptr<Dataset>;
 
 class OnlineMIMOSVR;
+
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
-class  OnlineMIMOSVR
+class OnlineMIMOSVR : public Entity
 {
-    std::mutex learn_mx;
-
-    tbb::concurrent_set<size_t> tmp_ixs;
-    size_t samples_trained;
-    matrix_ptr p_features;
-    matrix_ptr p_labels;
-    datamodel::t_param_set_ptr p_param_set;
+    bigint model_id = 0;
+    Dataset_ptr p_dataset;
+    std::string column_name;
+    std::set<size_t> tmp_ixs;
+    size_t samples_trained = 0;
+    matrix_ptr p_features, p_labels;
+    vec_ptr p_last_knowns;
+    t_param_set param_set;
     OnlineMIMOSVR_ptr p_manifold;
     double labels_scaling_factor = 1;
     matrices_ptr p_kernel_matrices;
-    mimo_type_e model_type;
-    std::deque<MimoBase_ptr> main_components;
+    std::deque<arma::mat> chunk_weights;
+    std::deque<double> chunks_weight;
+    arma::mat total_weights;
+    std::deque<double> chunk_bias;
+    std::deque<double> chunk_mae;
     std::deque<arma::uvec> ixs;
-    size_t multistep_len = svr::common::__multistep_len;
-    size_t max_chunk_size = C_kernel_default_max_chunk_size;
-    size_t gradient = std::numeric_limits<size_t>::max();
-    size_t decon_level = std::numeric_limits<size_t>::max();
+    size_t multistep_len = svr::common::C_default_multistep_len;
+    size_t max_chunk_size = common::C_kernel_default_max_chunk_size;
+    size_t gradient = DEFAULT_SVRPARAM_GRAD_LEVEL;
+    size_t decon_level = DEFAULT_SVRPARAM_DECON_LEVEL;
 
-    void init_model_base(const double epsilon, const mimo_type_e model_type);
+    virtual void init_id() override;
+
+    virtual std::string to_string() const override;
+
+    virtual std::basic_ostream<char> &operator << (std::basic_ostream<char> &os) const override;
 
 public:
-    OnlineMIMOSVR(const datamodel::t_param_set_ptr &p_param_set_,
-                  const size_t multistep_len = svr::common::__multistep_len,
-                  const size_t chunk_size = C_kernel_default_max_chunk_size);
+    OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
-    OnlineMIMOSVR(const datamodel::t_param_set_ptr &p_param_set_,
-                  const matrix_ptr &p_xtrain, const matrix_ptr &p_ytrain,
-                  const matrices_ptr &p_kernel_matrices = nullptr,
-                  const size_t multistep_len = svr::common::__multistep_len,
-                  const size_t chunk_size = C_kernel_default_max_chunk_size);
+    OnlineMIMOSVR(
+            const bigint id, const bigint model_id, const t_param_set &param_set,
+            const matrix_ptr &p_xtrain, const matrix_ptr &p_ytrain, const vec_ptr &p_ylastknown,
+            const bpt::ptime &last_value_time, const matrices_ptr &p_kernel_matrices = nullptr,
+            const Dataset_ptr &p_dataset = nullptr);
 
-    explicit OnlineMIMOSVR(std::stringstream &input_stream);
+    explicit OnlineMIMOSVR(const bigint id, const bigint model_id, std::stringstream &input_stream);
 
     OnlineMIMOSVR();
+
     ~OnlineMIMOSVR() = default;
 
-    void reset_model();
+    void reset();
 
     bool operator==(OnlineMIMOSVR const &) const;
 
-    template<typename S> static bool save(const OnlineMIMOSVR &osvr, S &output_stream);
+    template<typename S> static void save(const OnlineMIMOSVR &osvr, S &output_stream);
+
+    std::string save() const;
+
     template<typename S> static OnlineMIMOSVR_ptr load(S &input_stream);
+
     template<class A> void serialize(A &ar, const unsigned int version);
 
+    business::calc_cache &ccache();
+
+    bigint get_model_id() const;
+
+    void set_model_id(const size_t new_model_id);
+
+    Dataset_ptr get_dataset() const;
+
+    Dataset_ptr &get_dataset();
+
+    void set_dataset(const Dataset_ptr &p_dataset);
 
     // Move to solver module
-    static void solve_irwls(const arma::mat &epsilon_eye_K, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters, const bool psd);
+    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
+
     static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
-    static void solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, arma::mat &solved, const size_t iters, const bool psd);
-    static arma::mat solve_dispatch(const arma::mat &epsilon_eye_K, const arma::mat &a, const arma::mat &b, const size_t iters, const bool psd);
+
+    static void solve_dispatch(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
+
+    static arma::mat solve_dispatch(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, const size_t iters, const bool psd);
+
     static arma::mat direct_solve(const arma::mat &a, const arma::mat &b);
 
-    ssize_t get_samples_trained_number() const
-    {
-        return samples_trained;
-    }
+    size_t get_gradient_level() const;
 
-    void clear_kernel_matrix()
-    {
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(p_kernel_matrices->size()))
-        for (auto &k: *p_kernel_matrices) k.clear();
-    }
+    size_t get_decon_level() const;
 
-    void init_manifold(const datamodel::SVRParameters_ptr &p);
+    ssize_t get_samples_trained_number() const;
 
-    datamodel::t_param_set_ptr get_param_set_ptr() const;
-    datamodel::t_param_set_ptr &get_param_set_ptr();
-    svr::datamodel::t_param_set get_param_set() const;
-    svr::datamodel::t_param_set &get_param_set();
-    void set_param_set(const datamodel::t_param_set_ptr &p_svr_param_set);
-    void set_param_set(const datamodel::t_param_set &svr_param_set_);
-    void set_params(const datamodel::SVRParameters_ptr &p_svr_parameters_, const size_t chunk_ix = 0);
-    void set_params(const datamodel::SVRParameters &svr_parameters_, const size_t chunk_ix = 0);
-    datamodel::SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0) const;
-    datamodel::SVRParameters &get_params(const size_t chunk_ix = 0);
-    datamodel::SVRParameters get_params(const size_t chunk_ix = 0) const;
+    void clear_kernel_matrix();
 
-    void do_over_train_zero_epsilon(const arma::mat &xx_train, const arma::mat &yy_train, const arma::mat &eye_K, const size_t chunk_idx);
+    void init_manifold(const SVRParameters_ptr &p, const bpt::ptime &last_manifold_time);
 
-    bool is_manifold(datamodel::SVRParameters_ptr &p_out) const;
-    bool is_manifold() const;
+    OnlineMIMOSVR_ptr get_manifold();
+
+    t_param_set get_param_set() const;
+
+    t_param_set &get_param_set();
+
+    void set_param_set(const t_param_set &param_set_);
+
+    void set_params(const SVRParameters_ptr &p_svr_parameters_, const size_t chunk_ix = 0);
+
+    void set_params(const SVRParameters &svr_parameters_, const size_t chunk_ix = 0);
+
+    SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0) const;
+
+    SVRParameters_ptr is_manifold() const;
+
     bool is_gradient() const;
+
+    static bool needs_tuning(const t_param_set &param_set);
+
     bool needs_tuning() const;
 
-    static void tune(t_gradient_tuned_parameters &predictions,
-                     const datamodel::t_param_set &template_parameters,
-                     const arma::mat &features,
-                     const arma::mat &labels,
-                     const arma::mat &last_knowns,
-                     const size_t chunk_size);
+    void tune();
+
+    void recombine_params(const size_t chunk_ix);
 
 #if defined(TUNE_HYBRID)
-    double produce_kernel_inverse_order(const datamodel::SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &y_train);
+    double produce_kernel_inverse_order(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &y_train);
 #endif
 
-    size_t get_num_chunks() const;
+    size_t get_num_chunks();
+
     static size_t get_num_chunks(const size_t n_rows, const size_t chunk_size_);
-    static std::deque<arma::uvec> get_indexes(const size_t n_rows, const datamodel::SVRParameters &svr_parameters, const size_t max_chunk_size);
-    std::deque<arma::uvec> get_indexes(const size_t n_rows, const datamodel::SVRParameters &svr_parameters) const;
+
+    static std::deque<arma::uvec> get_indexes(const size_t n_rows, const SVRParameters &svr_parameters, const size_t max_chunk_size);
+
     arma::uvec get_other_ixs(const size_t i) const;
+
     std::deque<arma::uvec> get_indexes() const;
 
-    void batch_train(const matrix_ptr &p_xtrain, const matrix_ptr &p_ytrain, const matrices_ptr &kernel_matrices = nullptr);
+    arma::mat predict(const arma::mat &x_predict);
 
-    arma::mat predict(const arma::mat &x_predict, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time, const bool masked = false) const;
+    arma::mat manifold_predict(const arma::mat &x_predict) const;
 
-    arma::mat single_chunk_predict(const arma::mat &x_predict, const bpt::ptime &pred_time, const size_t chunk_ix) const;
+    t_gradient_data produce_residuals();
 
-    std::pair<matrix_ptr, matrix_ptr> produce_residuals() const;
+    void learn(const arma::mat &new_x_train, const arma::mat &new_y_train, const arma::vec &new_y_last_knowns, const bpt::ptime &last_value_time,
+                 const bool temp_learn = false, const std::deque<size_t> &forget_ixs = {});
 
-    size_t learn(const arma::mat &new_x_train, const arma::mat &new_y_train, const bool temp_learn = false, const std::deque<size_t> forget_ixs = {}, const bpt::ptime &label_time = bpt::special_values::not_a_date_time);
+    void batch_train(const matrix_ptr &p_xtrain, const matrix_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time, const matrices_ptr &precalc_kernel_matrices = nullptr);
 
     arma::mat &get_features();
 
     arma::mat &get_labels();
 
-    size_t get_multistep_len() const
-    {
-        return multistep_len;
-    }
+    size_t get_multistep_len() const;
 
-    mimo_type_e get_model_type() const
-    {
-        return model_type;
-    }
+    arma::uvec get_active_ixs() const;
 
-    arma::uvec get_active_ixs()
-    {
-        arma::uvec active_ixs;
-        for (const auto &ix: ixs) active_ixs.insert_rows(active_ixs.n_rows, ix);
-        active_ixs = arma::unique(active_ixs);
-        return active_ixs;
-    }
+    arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &x_predict, const bpt::ptime &time);
 
-    static arma::mat
-    init_predict_kernel_matrix(
-            const datamodel::SVRParameters &svr_parameters,
-            const arma::mat &x_train,
-            const arma::mat &x_predict,
-            const bpt::ptime &predicted_time);
+    arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &x_predict);
 
-    arma::mat manifold_predict(const arma::mat &x_predict) const;
+    arma::mat prepare_K(const SVRParameters &params, const arma::mat &x, const bpt::ptime &time);
 
-    static arma::mat init_kernel_matrix(const datamodel::SVRParameters &params, const arma::mat &x);
+    static arma::mat prepare_K(const SVRParameters &params, const arma::mat &x);
 
-    static std::deque<arma::mat> *prepare_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t);
-    static arma::mat *prepare_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, size_t len = 0);
-    static arma::mat *prepare_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
+    static matrix_ptr prepare_Z(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
-    static double get_cached_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const size_t train_len, const double meanabs_labels);
-    static std::deque<arma::mat> &get_cached_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &pred_time = bpt::special_values::not_a_date_time);
-    static arma::mat &get_cached_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const size_t short_size_X = 0);
-    static arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &pred_time);
+    static matrix_ptr prepare_Z(const SVRParameters &params, const arma::mat &features_t);
 
-    static void clear_gradient_caches(const datamodel::SVRParameters &p);
+    static matrix_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
 
-    static double calc_gamma(const arma::mat &Z, const double train_len, const double mean_L);
-    static double calc_epsco(const arma::mat &K, const size_t train_len);
-    void calc_weights(const size_t chunk_ix, const arma::mat &y_train, const arma::mat &epsco_eye_K, MimoBase &component, const size_t iters);
+    static matrix_ptr prepare_Zy(const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t);
+
+    static std::shared_ptr<std::deque<arma::mat>> prepare_cumulatives(const SVRParameters &params, const arma::mat &features_t);
+
+    static double calc_gamma(const arma::mat &Z, const double mean_L);
+
+    static double calc_epsco(const arma::mat &K);
+
+    void calc_weights(const size_t chunk_ix, const size_t iters);
+
     void update_total_weights();
-    arma::mat &get_weights(uint8_t type);
-    arma::mat get_weights(uint8_t type) const;
 };
 
-} // svr
+using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
-using OnlineMIMOSVR_ptr = std::shared_ptr<svr::OnlineMIMOSVR>;
+} // datamodel
+} // svr
 
 #define MANIFOLD_SET(_MX_, _MY_, _NX_, _NY_, _OX_, _OY_) {  \
     (_MX_) = arma::join_rows((_NX_), (_OY_));               \

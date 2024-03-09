@@ -4,6 +4,7 @@
 #include <model/User.hpp>
 #include "include/InputQueueRowDataGenerator.hpp"
 #include "InputQueueService.hpp"
+#include "common/constants.hpp"
 
 using namespace svr;
 using svr::datamodel::Priority;
@@ -51,7 +52,7 @@ protected:
 
     //vec_svr_parameters details
     svr::datamodel::SVRParameters svr_parameters;
-//            0, 0, expectedTableName, "", 0, 0, 0, mimo_type_e::single,
+//            0, 0, expectedTableName, "", 0, 0, 0,
 //            2.05521, 0.16373, 1.4742, 1.40931, 1000, 0.357722, kernel_type::RBF, 10,
 //            DEFAULT_APP_HYPERPARAMS(PROPS)};
 
@@ -79,8 +80,8 @@ protected:
 
     void InitDataset(){
         testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, userName, testQueue, std::deque<datamodel::InputQueue_ptr>{},
-                                                   priority, "description", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
-                                                   max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
+                                                                priority, "description", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
+                                                                max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
     }
 
@@ -117,7 +118,7 @@ protected:
 
     void InitEnsemble(){
         //ensembles = aci.ensemble_service.init_ensembles_from_dataset(testDataset, deconQueues);
-        testDataset->set_ensembles(ensembles);
+        testDataset->set_ensembles(ensembles, false);
 
         ASSERT_EQ(ensembles.size(), deconQueues.size());
     }

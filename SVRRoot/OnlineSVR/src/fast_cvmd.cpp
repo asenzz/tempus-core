@@ -41,7 +41,7 @@ fast_cvmd::fast_cvmd(const size_t _levels) :
     spectral_transform(std::string("cvmd"), _levels),
     levels(_levels),
     K(_levels / 2),
-    f(_levels, arma::fill::zeros),
+    f(_levels),
     A(_levels),
     H(arma::eye(_levels, _levels)),
     even_ixs(arma::regspace<arma::uvec>(0, 2, _levels - 2)),
@@ -258,10 +258,10 @@ fast_cvmd::transform(
     data_row_container::const_iterator iterin;
     if (decon.empty()) {
         iterin = input.begin();
-        soln[0] = scaler(iterin->get()->get_value(in_colix));
+        soln[0] = scaler((**iterin)[in_colix]);
     } else {
         iterin = lower_bound_back(input, decon.back()->get_value_time());
-        while (iterin->get()->get_value_time() <= decon.back()->get_value_time() && iterin != input.end()) ++iterin;
+        while ((**iterin).get_value_time() <= decon.back()->get_value_time() && iterin != input.end()) ++iterin;
         if (iterin == input.end()) {
             LOG4_WARN("No input data newer than " << decon.back()->get_value_time() << " to deconstruct.");
             return;
@@ -269,13 +269,13 @@ fast_cvmd::transform(
         memcpy(soln.memptr(), decon.back()->get_values().data() + levels, levels * sizeof(double));
     }
 
-    const auto new_decon_ct = std::distance(iterin , input.end());
+    const auto in_ct = std::distance(iterin , input.end());
     const auto prev_decon_ct = decon.size();
-    decon.get_data().resize(prev_decon_ct + new_decon_ct);
-#pragma omp parallel for num_threads(adj_threads(new_decon_ct)) schedule(static, 1 + new_decon_ct / std::thread::hardware_concurrency())
-    for (size_t t = prev_decon_ct; t < decon.size(); ++t) {
-        const auto p_in_row = (iterin + (t - prev_decon_ct))->get();
-        decon[t] = std::make_shared<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels * 2);
+    decon.get_data().resize(prev_decon_ct + in_ct);
+#pragma omp parallel for num_threads(adj_threads(in_ct)) schedule(static, 1 + in_ct / std::thread::hardware_concurrency())
+    for (ssize_t t = 0; t < in_ct; ++t) {
+        const auto p_in_row = *(iterin + t - prev_decon_ct);
+        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels * 2);
     }
 
     f.rows(even_ixs) = -phase_cos.rows(K_ixs) % soln.rows(even_ixs) + phase_sin.rows(K_ixs) % soln.rows(odd_ixs);
@@ -284,7 +284,7 @@ fast_cvmd::transform(
 #pragma omp single
     for (size_t t = prev_decon_ct; t < decon.size() && iterin != input.end(); ++iterin, ++t)
     {
-        soln = arma::solve(H, -A.t() * (-arma::solve(A * arma::solve(H, A.t()), A * arma::solve(H, f) + scaler(iterin->get()->get_value(in_colix)))) - f);
+        soln = arma::solve(H, -A.t() * (-arma::solve(A * arma::solve(H, A.t()), A * arma::solve(H, f) + scaler((**iterin)[in_colix]))) - f);
 #pragma omp task
         memcpy(decon[t]->get_values().data() + levels, soln.mem, levels * sizeof(double));
 #pragma omp task

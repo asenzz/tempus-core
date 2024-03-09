@@ -64,7 +64,7 @@ struct Mirror : Command
         if(data.front()->get_values().size() != queue->get_value_columns().size() )
             throw std::runtime_error("Mirror: input queue column number does not correspond to that in the metadata.");
 
-        using ColMapper = std::map<std::string, size_t> ;
+        using ColMapper = std::unordered_map<std::string, size_t> ;
         ColMapper mapper;
 
         for(size_t i = 0; i < queue->get_value_columns().size(); ++i)

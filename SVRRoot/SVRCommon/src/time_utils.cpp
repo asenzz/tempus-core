@@ -1,4 +1,4 @@
-#include <util/TimeUtils.hpp>
+#include <util/time_utils.hpp>
 #include <sstream>
 
 namespace svr {
@@ -10,9 +10,9 @@ operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time:
 }
 
 /*
-const boost::posix_time::time_duration &operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs)
+const boost::posix_time::time_duration operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs)
 {
-    return boost::posix_time::microseconds(lhs.total_microseconds()) / double(rhs.total_microseconds());
+    return boost::posix_time::ticks(lhs.ticks()) / double(rhs.ticks());
 }
 */
 

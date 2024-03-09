@@ -12,7 +12,7 @@ namespace optimizer {
 #define OPT_PARTICLES 100
 
 
-typedef std::function<double (std::vector<double>&)> loss_callback_t;
+typedef std::function<double (const std::vector<double>&)> loss_callback_t;
 typedef std::vector<std::pair<double, std::vector<double>>> pso_returns_t;
 
 enum class PsoTopology : size_t {global = 0, ring = 1, random = 2};

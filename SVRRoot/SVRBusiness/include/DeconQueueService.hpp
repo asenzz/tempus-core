@@ -118,7 +118,7 @@ public:
 
     static void prepare_decon(const datamodel::Dataset_ptr &p_dataset, const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue);
 
-    static void dummy_decon(const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue, const size_t levct);
+    static void dummy_decon(const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue, const size_t levix, const size_t levct, const t_iqscaler &iq_scaler);
 
     static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
 };

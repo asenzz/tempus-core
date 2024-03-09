@@ -27,9 +27,9 @@ public:
         const auto value_time = bpt::time_from_string(value_time_str);
         if (value_time.is_not_a_date_time() or value_time.is_special() or value_time.is_infinity() or value_time.date().year() <= 1400 or value_time.date().year() >= 10000)
             LOG4_ERROR("Value time not parsed correctly from " << value_time_str);
-		return std::make_shared<svr::datamodel::DataRow>(
+		return ptr<svr::datamodel::DataRow>(
 			value_time,
-			bpt::time_from_string(rowSet["update_time"].as<std::string>()),
+			bpt::time_from_string(rowSet["update_time"].as<std::string>("")),
 			svr::common::Round(rowSet["tick_volume"].as<double>(std::numeric_limits<double>::quiet_NaN())),
 			values
 		);

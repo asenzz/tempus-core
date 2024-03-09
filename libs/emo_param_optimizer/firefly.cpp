@@ -62,7 +62,7 @@ firefly::firefly(
     this->alpha = alpha;
     this->betamin = betamin;
     this->gamma = gamma;
-    this->fbest.resize(MaxGeneration, std::numeric_limits<double>::max());
+    this->best_score.resize(MaxGeneration, std::numeric_limits<double>::max());
 
     Index.resize(n, 0);
     f.resize(n, 0.);
@@ -265,7 +265,7 @@ void firefly::ffa_main()
 
         // find the current best
         for (size_t i = 0; i < D; ++i) nbest[i] = ffa[0][i];
-        fbest[t - 1] = I[0];
+        best_score[t - 1] = I[0];
 
         // move all fireflies to the better locations
         double rate;
@@ -273,13 +273,13 @@ void firefly::ffa_main()
             rate = 0.5;
         } else {
             double a, b;
-            if (floor(log10(fabs(fbest[t - 2]))) == floor(log10(fabs(fbest[t - 1])))) {
-                const double theta = floor(log10(fabs(fbest[t - 1] - trunc(fbest[t - 1]))));
-                a = fbest[t - 2] - pow(10, theta) * floor(fbest[t - 2] / pow(10, theta + 1.));
-                b = fbest[t - 1] - pow(10, theta) * floor(fbest[t - 1] / pow(10, theta + 1.));
+            if (floor(log10(fabs(best_score[t - 2]))) == floor(log10(fabs(best_score[t - 1])))) {
+                const double theta = floor(log10(fabs(best_score[t - 1] - trunc(best_score[t - 1]))));
+                a = best_score[t - 2] - pow(10, theta) * floor(best_score[t - 2] / pow(10, theta + 1.));
+                b = best_score[t - 1] - pow(10, theta) * floor(best_score[t - 1] / pow(10, theta + 1.));
             } else {
-                a = fbest[t - 2];
-                b = fbest[t - 1];
+                a = best_score[t - 2];
+                b = best_score[t - 1];
             }
             rate = 1. / (1. + exp(-a / b));
         }

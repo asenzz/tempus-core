@@ -3,6 +3,7 @@
 #include "DAO/DataSource.hpp"
 #include "DAO/InputQueueDAO.hpp"
 #include "InputQueueService.hpp"
+#include "common/constants.hpp"
 #include <iostream>
 
 #include <model/User.hpp>
@@ -38,7 +39,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
         aci.flush_dao_buffers();
 
         datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(),
-                                                                   iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), decon_levels, "sym7");
+                                                                              iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), decon_levels, "sym7");
 
         // ASSERT_EQ(ds->get_ensemble_svr_parameters().size(), 0UL);
 
@@ -62,7 +63,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
     aci.flush_dao_buffers();
 
     {
-        datamodel::Dataset_ptr ds = aci.dataset_service.get(dataset_id);
+        datamodel::Dataset_ptr ds = aci.dataset_service.load(dataset_id);
 /*
         auto const svr_params = ds->get_ensemble_svr_parameters();
 
@@ -80,7 +81,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
     }
 
     {
-        datamodel::Dataset_ptr ds = aci.dataset_service.get(dataset_id);
+        datamodel::Dataset_ptr ds = aci.dataset_service.load(dataset_id);
 
      //   auto svr_params = ds->get_ensemble_svr_parameters();
         //svr_params.begin()->second[4]->set_svr_C(6);
@@ -93,7 +94,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
     aci.flush_dao_buffers();
 
     {
-        datamodel::Dataset_ptr ds = aci.dataset_service.get(dataset_id);
+        datamodel::Dataset_ptr ds = aci.dataset_service.load(dataset_id);
 
         // auto const svr_params = ds->get_ensemble_svr_parameters();
 
@@ -112,7 +113,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
 
 
 
-    datamodel::Dataset_ptr ds = aci.dataset_service.get(dataset_id);
+    datamodel::Dataset_ptr ds = aci.dataset_service.load(dataset_id);
     datamodel::InputQueue_ptr iq = aci.input_queue_service.get_queue_metadata(iq_table_name);
     User_ptr user1 = aci.user_service.get_user_by_user_name(user_name);
 

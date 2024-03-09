@@ -60,10 +60,9 @@ public:
     data_row_container
     load(const std::string &table_name, const bpt::ptime &time_from = bpt::min_date_time, const bpt::ptime &timeTo = bpt::max_date_time, size_t limit = 0);
 
-    void load(const datamodel::InputQueue_ptr &p_input_queue);
+    void load(datamodel::InputQueue &input_queue);
 
-    void
-    load(const datamodel::InputQueue_ptr &p_input_queue, const bpt::time_period &range, const size_t limit = 0);
+    void load(datamodel::InputQueue &p_input_queue, const bpt::time_period &range, const size_t limit = 0);
 
     void
     load_latest(datamodel::InputQueue_ptr p_input_queue, const size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
@@ -119,8 +118,8 @@ public:
 
 private:
     data_row_container
-    load_latest_from_mmf(datamodel::InputQueue_ptr const &input_queue, const bpt::ptime &last_time);
-    static void prepare_input_data(datamodel::Dataset_ptr &p_dataset);
+    load_latest_from_mmf(const datamodel::InputQueue &input_queue, const bpt::ptime &last_time);
+    static void prepare_input_data(datamodel::Dataset &dataset);
 };
 
 } /* namespace business */

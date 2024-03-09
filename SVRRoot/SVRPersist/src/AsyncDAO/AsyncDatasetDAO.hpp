@@ -28,6 +28,7 @@ public:
     bool link_user_to_dataset(const std::string& user_name, const datamodel::Dataset_ptr & dataset);
     bool unlink_user_from_dataset(const std::string& user_name, const datamodel::Dataset_ptr & dataset);
     UserDatasetPairs get_active_datasets();
+    size_t get_level_count(const bigint dataset_id);
 private:
     struct AsyncImpl;
     AsyncImpl & pImpl;

@@ -1,5 +1,5 @@
 #include "EnsembleService.hpp"
-#include <util/TimeUtils.hpp>
+#include <util/time_utils.hpp>
 #include <util/PerformanceUtils.hpp>
 
 #include "appcontext.hpp"
@@ -14,73 +14,57 @@
 #include "onlinesvr.hpp"
 #include "DaemonFacade.hpp"
 
-
-using namespace svr::common;
-using namespace svr::datamodel;
-
-
 namespace svr {
 namespace business {
 
+EnsembleService::EnsembleService(
+        svr::dao::EnsembleDAO &ensemble_dao,
+        svr::business::ModelService &model_service,
+        svr::business::DeconQueueService &decon_queue_service) :
+        ensemble_dao_(ensemble_dao),
+        model_service_(model_service),
+        decon_queue_service_(decon_queue_service)
+{}
+
+
+void EnsembleService::load_decon(const datamodel::Ensemble_ptr &p_ensemble)
+{
+#pragma omp parallel num_threads(adj_threads(1 + p_ensemble->get_aux_decon_queues().size()))
+    {
+#pragma omp task
+        if (p_ensemble->get_decon_queue())
+            APP.decon_queue_service.load_latest(p_ensemble->get_decon_queue());
+#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_aux_decon_queues().size()))
+        for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
+            if (p_aux_decon_queue)
+                APP.decon_queue_service.load_latest(p_aux_decon_queue);
+    }
+}
 
 void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble, const bool load_decon_data)
 {
-    reject_nullptr(p_ensemble);
+    common::reject_nullptr(p_ensemble);
 
     if (!p_ensemble->get_id()) {
         LOG4_ERROR("Ensemble is not configured in database ensembles table.");
         return;
     }
 
-    p_ensemble->set_models(model_service_.get_all_models_by_ensemble_id(p_ensemble->get_id()));
-    if (p_ensemble->get_models().size() != p_dataset->get_model_count())
-        ModelService::init_default_models(p_dataset, p_ensemble);
-
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_models().size()))
-    for (auto &m: p_ensemble->get_models())
-        APP.model_service.configure(p_dataset, p_ensemble, m);
-
-    if (load_decon_data && p_ensemble->get_decon_queue())
-        APP.decon_queue_service.load_latest(p_ensemble->get_decon_queue());
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_aux_decon_queues().size()))
-    for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
-        if (load_decon_data && p_aux_decon_queue)
-            APP.decon_queue_service.load_latest(p_aux_decon_queue);
+    APP.model_service.init_models(p_dataset, p_ensemble);
+    if (load_decon_data) load_decon(p_ensemble);
 }
 
 
-void EnsembleService::train(
-        const datamodel::Dataset_ptr &p_dataset,
-        datamodel::Ensemble_ptr &p_ensemble,
-        const tbb::concurrent_map<size_t, matrix_ptr> &dataset_features,
-        const tbb::concurrent_map<size_t, matrix_ptr> &labels,
-        const tbb::concurrent_map<size_t, matrix_ptr> &last_knowns,
-        const tbb::concurrent_map<size_t, bpt::ptime> &last_row_time)
+void EnsembleService::train(datamodel::Ensemble &ensemble, const std::unordered_map<size_t, matrix_ptr> &dataset_features, const t_training_data &training_data)
 {
-    t_tuned_parameters tuned_parameters;
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_models().size()))
-    for (auto p_model: p_ensemble->get_models()) {
-        tuned_parameters[p_model->get_decon_level()] = std::deque<t_gradient_tuned_parameters>(p_model->get_gradient_count());
-        ModelService::tune(
-                p_model,
-                tuned_parameters[p_model->get_decon_level()],
-                dataset_features.at(p_model->get_decon_level()),
-                labels.at(p_model->get_decon_level()),
-                last_knowns.at(p_model->get_decon_level()));
-    }
-
-// Recombine parameters works only on the first gradient and with same number of chunks (decrement distance) across all models
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(tuned_parameters.begin()->second.size()))
-    for (size_t chunk_ix = 0; chunk_ix < tuned_parameters.begin()->second.size(); ++chunk_ix)
-        DatasetService::recombine_params(p_dataset, p_ensemble, tuned_parameters, chunk_ix, 0);
-
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_models().size()))
-    for (auto p_model: p_ensemble->get_models())
+#pragma omp parallel for num_threads(adj_threads(ensemble.get_models().size())) schedule(static, 1)
+    for (auto p_model: ensemble.get_models())
         ModelService::train(
-                p_model,
+                *p_model,
                 dataset_features.at(p_model->get_decon_level()),
-                labels.at(p_model->get_decon_level()),
-                last_row_time.at(p_model->get_decon_level()));
+                training_data.labels.at(p_model->get_decon_level()),
+                training_data.last_knowns.at(p_model->get_decon_level()),
+                training_data.last_row_time);
 }
 
 datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(
@@ -105,30 +89,15 @@ datamodel::DeconQueue_ptr EnsembleService::predict(
 
     auto p_aux_decon = p_ensemble->get_aux_decon_queue(p_ensemble->get_column_name())->clone_empty();
     if (!p_aux_decon) LOG4_THROW("Auxiliary decon queue for column " << p_ensemble->get_column_name() << " not found.");
+    const auto aux_dq_scaling_factors = APP.dq_scaling_factor_service.slice(p_dataset->get_dq_scaling_factors(), p_dataset->get_id(), p_ensemble->get_column_name(), {});
 
-    const auto aux_dq_scaling_factors = APP.dq_scaling_factor_service.slice(
-            p_dataset->get_dq_scaling_factors(), p_dataset->get_id(), p_ensemble->get_column_name(), {});
-
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_models().size()))
-    for (const auto &p_model: p_ensemble->get_models()) {
+#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_models().size())) schedule(static, 1)
+    for (auto &p_model: p_ensemble->get_models()) {
         const auto it_level_feats = dataset_features.find(p_model->get_decon_level());
         if (it_level_feats == dataset_features.end())
             LOG4_THROW("Features for level " << p_model->get_decon_level() << " are missing.");
 
-        const auto level_preds = ModelService::predict(p_ensemble, p_model, aux_dq_scaling_factors, it_level_feats->second,
-                                                       p_dataset->get_input_queue()->get_resolution());
-        for (const auto &pred_row: level_preds) {
-            data_row_container::iterator it_row;
-#pragma omp critical
-            {
-                if ((it_row = lower_bound_back(p_aux_decon->get_data(), pred_row->get_value_time())) == p_aux_decon->end()) {
-                    auto p_new_row = std::make_shared<DataRow>(pred_row->get_value_time(), bpt::second_clock::local_time(), 1,
-                                                               std::vector<double>(p_dataset->get_transformation_levels(), 0.));
-                    it_row = p_aux_decon->get_data().insert(it_row, p_new_row);
-                }
-            }
-            it_row->get()->set_value(p_model->get_decon_level(), pred_row->get_value(0));
-        }
+        ModelService::predict(p_ensemble, p_model, aux_dq_scaling_factors, it_level_feats->second, p_dataset->get_input_queue()->get_resolution(), *p_aux_decon);
     }
 
     LOG4_END();
@@ -149,9 +118,9 @@ EnsembleService::get(
         const datamodel::Dataset_ptr &p_dataset,
         const datamodel::DeconQueue_ptr &p_decon_queue)
 {
-    reject_nullptr(p_dataset);
-    reject_nullptr(p_decon_queue);
-    reject_empty(p_decon_queue->get_table_name());
+    common::reject_nullptr(p_dataset);
+    common::reject_nullptr(p_decon_queue);
+    common::reject_empty(p_decon_queue->get_table_name());
 
     return ensemble_dao_.get_by_dataset_and_decon_queue(p_dataset, p_decon_queue);
 }
@@ -170,11 +139,8 @@ EnsembleService::is_ensemble_input_queue(
     );
 
     if (!res)
-        LOG4_DEBUG(
-                "Skipping ensemble for column " << p_ensemble->get_decon_queue()->get_input_queue_column_name() <<
-                                                " of input queue "
-                                                << p_ensemble->get_decon_queue()->get_input_queue_table_name()
-                                                << ". Not a value column.");
+        LOG4_DEBUG("Skipping ensemble for column " << p_ensemble->get_decon_queue()->get_input_queue_column_name() <<
+                                                   " of input queue " << p_ensemble->get_decon_queue()->get_input_queue_table_name() << ". Not a value column.");
 
     return res;
 }
@@ -233,7 +199,7 @@ bool EnsembleService::save_ensembles(const std::deque<datamodel::Ensemble_ptr> &
 
 bool EnsembleService::exists(const datamodel::Ensemble_ptr &ensemble)
 {
-    reject_nullptr(ensemble);
+    common::reject_nullptr(ensemble);
     if (ensemble->get_id() <= 0) return false;
     return ensemble_dao_.exists(ensemble->get_id());
 }
@@ -251,7 +217,7 @@ size_t EnsembleService::remove_by_dataset_id(const bigint dataset_id)
 
 int EnsembleService::remove(const datamodel::Ensemble_ptr &p_ensemble)
 {
-    reject_nullptr(p_ensemble);
+    common::reject_nullptr(p_ensemble);
     model_service_.remove_by_ensemble_id(p_ensemble->get_id());
     int ret_val = ensemble_dao_.remove(p_ensemble); // First we need to remove ensembles due "REFERENCE" in db
     if (p_ensemble->get_decon_queue())
@@ -259,37 +225,83 @@ int EnsembleService::remove(const datamodel::Ensemble_ptr &p_ensemble)
     return ret_val;
 }
 
-void EnsembleService::init_default_ensembles(datamodel::Dataset_ptr &p_dataset)
+
+bool EnsembleService::check(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<std::string> &value_columns)
 {
-    datamodel::InputQueue_ptr p_input_queue = p_dataset->get_input_queue();
+    tbb::concurrent_vector<bool> present(value_columns.size(), false);
+#pragma omp parallel for collapse(2)
+    for (const auto &e: ensembles)
+        for (size_t i = 0; i < value_columns.size(); ++i)
+            if (e->get_column_name() == value_columns[i])
+                present[i] = true;
+    return std::all_of(std::execution::par_unseq, present.begin(), present.end(), [](const auto &p) { return p == true; });
+}
+
+
+void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bool load_data)
+{
+    auto p_input_queue = p_dataset->get_input_queue();
     std::deque<datamodel::DeconQueue_ptr> main_decon_queues, aux_decon_queues;
-    get_decon_queues_from_input_queue(p_dataset, p_input_queue, main_decon_queues);
-    for (const auto &p_aux_input_queue: p_dataset->get_aux_input_queues())
-        get_decon_queues_from_input_queue(p_dataset, p_aux_input_queue, aux_decon_queues);
-    std::deque<datamodel::Ensemble_ptr> ensembles;
-#pragma omp parallel for num_threads(adj_threads(main_decon_queues.size()))
-    for (const auto &p_main_decon: main_decon_queues) {
-        auto p_ensemble = std::make_shared<Ensemble>(
-                0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, aux_decon_queues);
-        ModelService::init_default_models(p_dataset, p_ensemble);
-        ensembles.emplace_back(p_ensemble);
+    if (load_data) PROFILE_EXEC_TIME(APP.input_queue_service.load(*p_input_queue), "Loading " << p_input_queue->get_table_name());
+    get_decon_queues_from_input_queue(*p_dataset, *p_input_queue, main_decon_queues);
+    for (const auto &p_aux_input_queue: p_dataset->get_aux_input_queues()) {
+        if (load_data) PROFILE_EXEC_TIME(APP.input_queue_service.load(*p_aux_input_queue), "Loading " << p_aux_input_queue->get_table_name());
+        get_decon_queues_from_input_queue(*p_dataset, *p_aux_input_queue, aux_decon_queues);
+    }
+#pragma omp parallel num_threads(adj_threads(main_decon_queues.size() + aux_decon_queues.size()))
+#pragma omp single
+    if (load_data) {
+        for (auto &dq: main_decon_queues)
+#pragma omp task
+            APP.decon_queue_service.load(dq);
+        for (auto &dq: aux_decon_queues)
+#pragma omp task
+            APP.decon_queue_service.load(dq);
     }
 
-    p_dataset->set_ensembles(ensembles);
+    if (!check(p_dataset->get_ensembles(), p_dataset->get_input_queue()->get_value_columns()) && p_dataset->get_id())
+        p_dataset->set_ensembles(APP.ensemble_service.get_all_by_dataset_id(p_dataset->get_id()), true);
+
+    OMP_LOCK(ens_emplace_l)
+    auto &ensembles = p_dataset->get_ensembles();
+#pragma omp parallel for num_threads(adj_threads(main_decon_queues.size())) schedule(static, 1)
+    for (size_t i = 0; i < main_decon_queues.size(); ++i) {
+        const auto &p_main_decon = main_decon_queues[i];
+        std::remove_reference_t<decltype(ensembles)>::iterator ens_iter;
+        datamodel::Ensemble_ptr p_ensemble;
+        omp_set_lock(&ens_emplace_l);
+        if ((ens_iter = std::find_if(std::execution::par_unseq, ensembles.begin(), ensembles.end(),
+                                     [&p_main_decon](const auto &p_ensemble) {
+                                         return p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_main_decon->get_input_queue_table_name() &&
+                                                p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
+                                     })) == ensembles.end())
+            p_ensemble = ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, aux_decon_queues));
+        else
+            p_ensemble = *ens_iter;
+        omp_unset_lock(&ens_emplace_l);
+        APP.model_service.init_models(p_dataset, p_ensemble);
+    }
 
     LOG4_END();
 }
 
 void EnsembleService::get_decon_queues_from_input_queue(
-        const datamodel::Dataset_ptr &p_dataset, const datamodel::InputQueue_ptr &p_input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
+        const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
 {
-    for (size_t i = 0; i < p_input_queue->get_value_columns().size(); i++) {
-        const std::string column_name = p_input_queue->get_value_column(i);
-        svr::datamodel::DeconQueue_ptr p_decon_queue = std::make_shared<DeconQueue>(
-                DeconQueueService::make_queue_table_name(p_input_queue->get_table_name(), p_dataset->get_id(), column_name),
-                p_input_queue->get_table_name(), column_name, p_dataset->get_id(),
-                p_dataset->get_transformation_levels());
-        decon_queues.emplace_back(p_decon_queue);
+    const auto prev_size = decon_queues.size();
+    for (size_t i = 0; i < input_queue.get_value_columns().size(); ++i) {
+        const std::string column_name = input_queue.get_value_column(i);
+        std::atomic<bool> skip = false;
+#pragma omp parallel for num_threads(adj_threads(decon_queues.size()))
+        for (size_t i = 0; i < prev_size; ++i) {
+            const auto &dq = decon_queues[i];
+            if (dq->get_input_queue_table_name() == input_queue.get_table_name() && dq->get_input_queue_column_name() == column_name)
+                skip.store(true, std::memory_order_relaxed);
+        }
+        if (skip) continue;
+        decon_queues.emplace_back(dtr<datamodel::DeconQueue>(
+                DeconQueueService::make_queue_table_name(input_queue.get_table_name(), dataset.get_id(), column_name),
+                input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_transformation_levels()));
     }
 }
 
@@ -329,29 +341,6 @@ EnsembleService::update_ensemble_decon_queues(
 bool EnsembleService::exists(const bigint ensemble_id)
 {
     return ensemble_dao_.exists(ensemble_id);
-}
-
-
-DataRow::container::iterator
-EnsembleService::get_start(
-        DataRow::container &cont,
-        const size_t decremental_offset,
-        const boost::posix_time::ptime &model_last_time,
-        const boost::posix_time::time_duration &resolution)
-{
-    if (decremental_offset < 1) {
-        LOG4_ERROR("Decremental offset " << decremental_offset << " returning end.");
-        return cont.end();
-    }
-    // Returns an iterator with the earliest value time needed to train a model with the most current data.
-    LOG4_DEBUG("Size is " << cont.size() << " decrement " << decremental_offset);
-    if (cont.size() <= decremental_offset) {
-        LOG4_WARN("Container size " << cont.size() << " is less or equal to needed size " << decremental_offset);
-        return cont.begin();
-    } else if (model_last_time == boost::posix_time::min_date_time)
-        return std::next(cont.begin(), cont.size() - decremental_offset);
-    else
-        return find_nearest(cont, model_last_time + resolution);
 }
 
 

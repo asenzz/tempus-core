@@ -151,8 +151,6 @@ private:
     size_t lag_count;
     size_t chunks_ct;
     size_t labels_ct;
-    bool skip = false;
-public:
 
 public:
     SVRParameters() : SVRParameters(DEFAULT_SVR_HYPERPARAMS) {}
@@ -169,7 +167,7 @@ public:
             const chunk_label_params_t &chunk_label_params = {},
             // Global parameters needed by SVR algorithms
             const size_t chunks_ct = 0,
-            const size_t labels_ct = common::__multistep_len)
+            const size_t labels_ct = common::C_default_multistep_len)
             : Entity(id),
               dataset_id(dataset_id),
               input_queue_table_name(input_queue_table_name),
@@ -282,16 +280,6 @@ public:
     void set_decon_level(const size_t decon_level)
     {
         this->decon_level_ = decon_level;
-    }
-
-    void set_skip(const bool _skip)
-    {
-        skip = _skip;
-    }
-
-    bool get_skip() const
-    {
-        return skip;
     }
 
     double get_svr_C(const size_t chunk_ix, const size_t label_col) const

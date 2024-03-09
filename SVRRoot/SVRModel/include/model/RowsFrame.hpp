@@ -80,7 +80,7 @@ public:
         return this->data.size() == frame_size;
     }
 
-    const std::string to_string() const {
+    std::string to_string() const {
         std::stringstream ss;
 
         ss  <<"Frame size: " << get_frame_size()
