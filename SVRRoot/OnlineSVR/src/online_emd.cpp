@@ -17,33 +17,33 @@ namespace oemd {
 t_coefs_cache online_emd::oemd_coefs_cache;
 
 void online_emd::transform(
-        datamodel::DeconQueue_ptr &p_decon_queue,
+        datamodel::DeconQueue &decon_queue,
         const size_t decon_start_ix,
         const size_t test_offset,
         const size_t custom_residuals_ct)
 {
-    const size_t residuals_ct = custom_residuals_ct == std::numeric_limits<size_t>::max() ? get_residuals_length(p_decon_queue->get_table_name()) : custom_residuals_ct;
+    const size_t residuals_ct = custom_residuals_ct == std::numeric_limits<size_t>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
 
-    auto start_decon_iter = p_decon_queue->begin() + decon_start_ix;
+    auto start_decon_iter = decon_queue.begin() + decon_start_ix;
     ssize_t dist = 0;
-    if ((dist = std::distance(p_decon_queue->begin(), start_decon_iter)) >= ssize_t(residuals_ct))
+    if ((dist = std::distance(decon_queue.begin(), start_decon_iter)) >= ssize_t(residuals_ct))
         start_decon_iter -= residuals_ct;
     else {
         if (decon_start_ix) LOG4_ERROR("Not enough data " << dist <<  " to produce time invariant output " << residuals_ct);
-        start_decon_iter = p_decon_queue->begin();
+        start_decon_iter = decon_queue.begin();
     }
 
     std::vector<double> tail;
-    datamodel::datarow_range in_range(start_decon_iter, p_decon_queue->end(), p_decon_queue->get_data());
-    if (in_range.distance() < ssize_t(residuals_ct)) mirror_tail(in_range, residuals_ct, tail);
+    datamodel::datarow_range in_range(start_decon_iter, decon_queue.end(), decon_queue.get_data());
+    if (in_range.distance() < ssize_t(residuals_ct)) business::DeconQueueService::mirror_tail(in_range, residuals_ct, tail);
 
 #ifdef INTEGRATION_TEST
-    datamodel::datarow_range in_range_test(start_decon_iter, p_decon_queue->end() - test_offset, p_decon_queue->get_data());
+    datamodel::datarow_range in_range_test(start_decon_iter, decon_queue.end() - test_offset, decon_queue.get_data());
     if (in_range_test.distance() < ssize_t(residuals_ct))
-        mirror_tail(in_range_test, residuals_ct, tail);
-    const auto p_coefs = get_masks(in_range_test, tail, p_decon_queue->get_table_name());
+        business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail);
+    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name());
 #else
-    const auto p_coefs = get_masks(in_range, tail, p_decon_queue->get_table_name());
+    const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name());
 #endif
 
     PROFILE_EXEC_TIME(transform(

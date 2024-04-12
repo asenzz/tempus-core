@@ -7,6 +7,9 @@
 
 #include "util/CompressionUtils.hpp"
 
+// #pragma warning ( push )
+// #pragma warning (disable: "-Wunsupported-floating-point-opt")
+
 
 namespace svr
 {

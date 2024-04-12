@@ -15,8 +15,8 @@
 #include <thread>
 #include <boost/thread/shared_mutex.hpp>
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-#include <CL/cl.hpp>
+#pragma GCC diagnostic ignored "-Wall"
+#include <CL/opencl.hpp>
 #pragma GCC diagnostic pop
 
 
@@ -150,8 +150,6 @@ public:
 
 } //namespace common
 
-#define CTX svr::common::gpu_context().ctx()
-
 namespace cl12
 {
 template<typename cl_class>
@@ -189,7 +187,7 @@ public:
         return *this;
     }
 
-    cl_int enqueue(const command_queue& queue, const ::cl::NDRange& offset, const ::cl::NDRange& global, const ::cl::NDRange& local = ::cl::NullRange, const VECTOR_CLASS<::cl::Event>* events = NULL, ::cl::Event* event = NULL);
+    cl_int enqueue(const command_queue& queue, const ::cl::NDRange& offset, const ::cl::NDRange& global, const ::cl::NDRange& local = ::cl::NullRange, const ::cl::vector<::cl::Event>* events = NULL, ::cl::Event* event = NULL);
 private:
     template<class T, class... Args>
     void set_args(size_t args_sz, T t, Args... args)

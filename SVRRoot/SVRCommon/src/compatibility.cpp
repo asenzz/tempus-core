@@ -7,29 +7,6 @@
 
 #include "common/parallelism.hpp"
 
-namespace std {
-
-std::string to_string(const long double v)
-{
-    std::ostringstream out;
-    out.precision(std::numeric_limits<double>::max_digits10);
-    return out.str();
-}
-
-std::string to_string(const double v)
-{
-    std::ostringstream out;
-    out.precision(std::numeric_limits<double>::max_digits10);
-    return out.str();
-}
-
-std::string to_string(const float v)
-{
-    std::ostringstream out;
-    out.precision(std::numeric_limits<float>::max_digits10);
-    return out.str();
-}
-}
 
 namespace svr {
 
@@ -55,12 +32,6 @@ std::string demangle(const std::string &name) {
 bool operator<(const arma::SizeMat &lhs, const arma::SizeMat &rhs)
 {
     return lhs.n_rows * lhs.n_cols < rhs.n_rows * rhs.n_cols;
-}
-
-
-unsigned adj_threads(const ssize_t iterations)
-{
-    return std::min<size_t>(iterations, std::thread::hardware_concurrency());
 }
 
 namespace common {
@@ -250,9 +221,9 @@ double Round(const double &dbl)
     return round(dbl * multi_div) / multi_div;
 }
 
-size_t hash_param(const double param_val)
+size_t hash_lambda(const double param_val)
 {
-    return param_val * 1e5;
+    return param_val * 1e7;
 }
 
 } // common

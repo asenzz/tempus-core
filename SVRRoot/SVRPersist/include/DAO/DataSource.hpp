@@ -17,10 +17,8 @@ class DataSource
 {
     const std::string C_tempus_cursor_name = "tempuscursor";
 private:
-    bool commit_on_scope_exit;
     const std::string connection_string;
     std::shared_ptr<StatementPreparerDBTemplate> statementPreparerTemplate;
-    std::recursive_mutex mtx;
 
 public:
     explicit DataSource(const std::string &connection_string, const bool commit_on_scope_exit = true);
@@ -28,10 +26,6 @@ public:
     virtual ~DataSource();
 
     scoped_transaction_guard_ptr open_transaction();
-
-    DataSource &lock();
-
-    DataSource &unlock();
 
     template<typename T, typename ...Args> std::shared_ptr<T>
     query_for_object(IRowMapper<T> *rowMapper, const std::string &sql, Args &&... args);

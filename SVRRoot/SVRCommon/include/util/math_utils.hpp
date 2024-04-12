@@ -10,14 +10,17 @@
 #include <numeric>
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
+#include <common.hpp>
 #include "common/compatibility.hpp"
+#include "util/math_utils.hpp"
+#include "common/gpu_handler.hpp"
 
 namespace svr {
 
 #define ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
 
 template<typename T>
-std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
+std::vector<T> &operator/=(std::vector<T> &lsh, const T rhs)
 {
     for (T &v: lsh) v /= rhs;
     return lsh;
@@ -25,7 +28,7 @@ std::vector<T> &operator /= (std::vector<T> &lsh, const T rhs)
 
 
 template<typename T>
-std::atomic<T> &operator += (std::atomic<T> &lhs, const T &rhs)
+std::atomic<T> &operator+=(std::atomic<T> &lhs, const T &rhs)
 {
     lhs.store(lhs.load() + rhs);
     return lhs;
@@ -33,7 +36,7 @@ std::atomic<T> &operator += (std::atomic<T> &lhs, const T &rhs)
 
 
 template<typename T>
-std::atomic<T> &operator &= (std::atomic<T> &lhs, const T &rhs)
+std::atomic<T> &operator&=(std::atomic<T> &lhs, const T &rhs)
 {
     lhs.store(lhs.load() & rhs);
     return lhs;
@@ -45,13 +48,13 @@ namespace common {
 template<typename T> std::enable_if_t<std::is_integral_v<T>, T>
 bounce(const T v, const T lim)
 {
-    return v > lim ? lim - v % lim : v;
+    return (v > lim) ? (lim - v % lim) : v;
 }
 
-template<typename T> std::enable_if_t<!std::is_integral_v<T>, T>
+template<typename T> std::enable_if_t<not std::is_integral_v<T>, T>
 bounce(const T v, const T lim)
 {
-    return v > lim ? lim - std::fmod(v, lim) : v;
+    return (v > lim) ? (lim - std::fmod(v, lim)) : v;
 }
 
 const size_t C_int_nan = 0xDeadBeef;
@@ -63,27 +66,31 @@ const size_t C_ip_max = 0x100000000;
  * @param   a       Dividend
  * @param   n       Divisor
  */
-template<typename T>
-T mod(T a, int n)
+
+template<typename T, typename Td> arma::Mat<T>
+mod(const arma::Mat<T> &a, const Td n)
 {
-    return a - floor(a / n) * n;
+    return a - arma::floor(a / n) * n;
 }
 
 void cholesky_check(viennacl::matrix<double> &A);
 
-template<typename T> bool sane(const arma::Mat<T> &m)
-{
-    return !m.has_nonfinite() && !m.empty();
-}
 
-template<typename T> bool isnormalz(const T v) { return v == 0 || std::isnormal(v); }
+template<typename T> bool isnormalz(const T v)
+{ return v == 0 || std::isnormal(v); }
 
 arma::vec levy(const size_t d);
+
 double randouble();
+
 arma::cx_mat matlab_fft(const arma::mat &input);
+
 arma::cx_mat matlab_fft(const arma::cx_mat &input);
+
 arma::cx_mat fftshift(const arma::cx_mat &input);
+
 arma::cx_mat matlab_ifft(const arma::cx_mat &input);
+
 arma::cx_mat ifftshift(const arma::cx_mat &input);
 
 
@@ -175,10 +182,10 @@ skew_mask(const std::vector<scalar_t> &values, const double exp, const double mu
 {
     std::vector<scalar_t> result(values);
     for (size_t t = 0; t < values.size(); ++t) {
-   //     if (t < values.size() / 2)
-   //         result[t] *= mult * std::pow(double(t)/double(values.size()), exp);
-   //     else
-            result[t] *= mult * std::pow(1. - double(t)/double(values.size()), exp);
+        //     if (t < values.size() / 2)
+        //         result[t] *= mult * std::pow(double(t)/double(values.size()), exp);
+        //     else
+        result[t] *= mult * std::pow(1. - double(t) / double(values.size()), exp);
     }
     normalize(result, 0, 1);
     return result;
@@ -199,7 +206,7 @@ stretch_cut_mask(const std::vector<scalar_t> &values, const double factor, const
 }
 
 template<typename T> std::vector<T>
-operator +(const std::vector<T> &lhs, const std::vector<T> &rhs)
+operator+(const std::vector<T> &lhs, const std::vector<T> &rhs)
 {
     const size_t output_len = std::min<size_t>(lhs.size(), rhs.size());
     std::vector<T> res(output_len);
@@ -212,20 +219,20 @@ operator +(const std::vector<T> &lhs, const std::vector<T> &rhs)
 template<typename T> T
 snap_copy(const T v, const std::vector<T> &sorted_possible_values)
 {
-    if (v <= (sorted_possible_values.front() + *std::next(sorted_possible_values.begin()) ) / 2.)  return sorted_possible_values.front();
+    if (v <= (sorted_possible_values.front() + *std::next(sorted_possible_values.begin())) / 2.) return sorted_possible_values.front();
     if (v > (sorted_possible_values[sorted_possible_values.size() - 2] + sorted_possible_values.back()) / 2.) return sorted_possible_values.back();
     for (size_t i = 1; i < sorted_possible_values.size() - 1; ++i) {
-        if ( v > (sorted_possible_values[i - 1] + sorted_possible_values[i]) / 2. && v < (sorted_possible_values[i] + sorted_possible_values[i + 1]) / 2. )
+        if (v > (sorted_possible_values[i - 1] + sorted_possible_values[i]) / 2. && v < (sorted_possible_values[i] + sorted_possible_values[i + 1]) / 2.)
             return sorted_possible_values[i];
     }
     LOG4_THROW("Cannot snap " << v);
     return std::numeric_limits<T>::quiet_NaN();
 }
 
-template<typename T, template<typename, typename> typename Container>  T
+template<typename T, template<typename, typename> typename Container> T
 snap_inplace(T &v, const Container<T, std::allocator<T>> &sorted_possible_values)
 {
-    if (v < (sorted_possible_values.front() + *std::next(sorted_possible_values.begin()) ) / 2.)  {
+    if (v < (sorted_possible_values.front() + *std::next(sorted_possible_values.begin())) / 2.) {
         v = sorted_possible_values.front();
         return v;
     }
@@ -234,7 +241,7 @@ snap_inplace(T &v, const Container<T, std::allocator<T>> &sorted_possible_values
         return v;
     }
     for (size_t i = 1; i < sorted_possible_values.size() - 1; ++i) {
-        if ( v > (sorted_possible_values[i - 1] + sorted_possible_values[i]) / 2. && v < (sorted_possible_values[i] + sorted_possible_values[i + 1]) / 2. ) {
+        if (v > (sorted_possible_values[i - 1] + sorted_possible_values[i]) / 2. && v < (sorted_possible_values[i] + sorted_possible_values[i + 1]) / 2.) {
             v = sorted_possible_values[i];
             return v;
         }
@@ -251,11 +258,6 @@ min(const T &arg1, const T &arg2, const T &arg3)
     if (arg3 < m) m = arg3;
     return m;
 }
-
-
-arma::mat fmod(const arma::mat &a, const double n);
-
-std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, const size_t level_count);
 
 bool is_power_of_two(size_t value);
 
@@ -313,8 +315,22 @@ present(const arma::Mat<T> &m)
 {
     std::stringstream res;
     const auto vm = arma::vectorise(m);
-    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev " << arma::stddev(vm) <<
-        ", var " << arma::var(vm) << ", median " << arma::median(vm) <<  ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs " << arma::mean(arma::abs(vm));
+    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
+        << arma::stddev(vm) <<
+        ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "
+        << arma::mean(arma::abs(vm));
+    return res.str();
+}
+
+template<typename T> std::string
+present(const arma::subview<T> &m)
+{
+    std::stringstream res;
+    const auto vm = arma::vectorise(m);
+    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
+        << arma::stddev(vm) <<
+        ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "
+        << arma::mean(arma::abs(vm));
     return res.str();
 }
 
@@ -417,7 +433,7 @@ template<typename scalar_t> scalar_t
 inv_log_return(
         const scalar_t log_ret_x,
         const scalar_t x_1
-        )
+)
 {
     const auto res = x_1 * std::exp(log_ret_x);
 #ifndef NDEBUG
@@ -442,7 +458,8 @@ inv_diff_return(
 
 
 template<class T>
-T ABS(T X) {
+T ABS(T X)
+{
     if (X >= 0)
         return X;
     else
@@ -450,7 +467,8 @@ T ABS(T X) {
 }
 
 template<class T>
-T SIGN(T X) {
+T SIGN(T X)
+{
     if (X >= 0)
         return (T) 1;
     else
@@ -462,36 +480,36 @@ double get_uniform_random_value();
 std::vector<double> get_uniform_random_vector(const size_t size);
 
 // TODO: rewrite with iterators
-std::vector<double> get_uniform_random_vector(const std::pair<std::vector<double>, std::vector<double>>& boundaries);
+std::vector<double> get_uniform_random_vector(const std::pair<std::vector<double>, std::vector<double>> &boundaries);
 
 
 // TODO: rewrite with template
 template<typename T>
-std::vector<size_t> argsort(const std::vector<T>& v)
+std::vector<size_t> argsort(const std::vector<T> &v)
 {
-    std::vector<size_t> result (v.size());
+    std::vector<size_t> result(v.size());
     std::iota(result.begin(), result.end(), 0);
 
-    std::sort(result.begin(), result.end(), [&](size_t i, size_t j) {return v[i] < v[j];});
+    std::sort(result.begin(), result.end(), [&](size_t i, size_t j) { return v[i] < v[j]; });
 
     return result;
 }
 
-std::vector<double> operator* (const std::vector<double>& v1, const double& m);
+std::vector<double> operator*(const std::vector<double> &v1, const double &m);
 
-std::vector<double> operator* (const double& m, const std::vector<double>& v1);
+std::vector<double> operator*(const double &m, const std::vector<double> &v1);
 
-std::vector<double> operator* (const std::vector<double>& v1, const std::vector<double>& v2);
+std::vector<double> operator*(const std::vector<double> &v1, const std::vector<double> &v2);
 
-std::vector<double> operator+ (const std::vector<double>& v1, const std::vector<double>& v2);
+std::vector<double> operator+(const std::vector<double> &v1, const std::vector<double> &v2);
 
-std::vector<double> operator- (const std::vector<double>& v1, const std::vector<double>& v2);
+std::vector<double> operator-(const std::vector<double> &v1, const std::vector<double> &v2);
 
-std::vector<double> operator-(const std::vector<double>& v);
+std::vector<double> operator-(const std::vector<double> &v);
 
-std::vector<double> operator^(const std::vector<double>& v, const double a);
+std::vector<double> operator^(const std::vector<double> &v, const double a);
 
-std::vector<double> operator^(const double a, const std::vector<double>& v);
+std::vector<double> operator^(const double a, const std::vector<double> &v);
 
 double dot_product(double const *a, double const *b, const size_t size);
 
@@ -506,41 +524,29 @@ const auto _n_elem  = v.size(); \
 v.resize(_n_elem + 1); \
 v(_n_elem) = (val); }
 
-namespace armd {
+void shuffle_matrix(const arma::mat &x, const arma::mat &y, arma::uvec &shuffled_rows, arma::uvec &shuffled_cols);
 
-    void check_mat(const arma::mat &input);
+arma::mat pdist(const arma::mat &input);
 
-    void print_mat(const arma::mat & input, const std::string mat_name = "");
+double mean(const arma::mat &input);
 
-    void serialize_mat(const std::string &filename, const arma::mat &input, const std::string mat_name = "");
+arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level);
 
-    void serialize_vec(const std::string &filename, const arma::uvec &input, const std::string vec_name = "");
-
-    arma::uvec set_to_arma_uvec(const std::set<size_t> &input);
-
-    arma::uvec complement_vectors(std::set<size_t> svi, arma::uvec new_ixs);
-
-    void shuffle_matrix(const arma::mat & x, const arma::mat & y, arma::uvec & shuffled_rows, arma::uvec & shuffled_cols);
-
-    arma::mat pdist(const arma::mat & input);
-
-    double mean_all(const arma::mat & input);
-
-    arma::mat rows(arma::mat & input, arma::uvec & ixs);
-
-    arma::mat rows(arma::mat & input, std::set<size_t> & ixs);
-
-    void print_arma_sizes(const arma::mat &input, const std::string input_name);
-
-    arma::uvec subview_indexes(arma::uvec batch_ixs, arma::uvec ix_tracker);
-
-    arma::mat shuffle_admat(const arma::mat & to_shuffle, const size_t level);
-
-    arma::mat fixed_shuffle(const arma::mat & to_shuffle);
-}
+arma::uvec fixed_shuffle(const arma::uvec &to_shuffle);
 
 double calc_quant_offset_mul(const double main_to_aux_period_ratio, const double level, const double levels_count);
+
 double get_quantization_max(const double main_to_aux_period_ratio);
+
+double mean(const arma::mat &input);
+
+arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level);
+
+arma::uvec fixed_shuffle(const arma::uvec &to_shuffle);
+
+arma::uvec complement_vectors(std::set<size_t> svi, arma::uvec new_ixs);
+
+arma::uvec subview_indexes(arma::uvec batch_ixs, arma::uvec ix_tracker);
 
 }
 }

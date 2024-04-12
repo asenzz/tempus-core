@@ -21,13 +21,13 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(
-         0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+         0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);
 
 
-    datamodel::DQScalingFactor_ptr dqsf = datamodel::DQScalingFactor_ptr(new svr::datamodel::DQScalingFactor(0, ds->get_id(), iq->get_table_name(), "up", 0, 1.434, 0.0));
+    datamodel::DQScalingFactor_ptr dqsf = otr<datamodel::DQScalingFactor>(0, 0, 0, 0, 0, 1.434, 0, 0, 0);
 
     EXPECT_TRUE(1 == aci.dq_scaling_factor_service.save(dqsf));
 
@@ -37,7 +37,7 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
 
     ASSERT_TRUE(aci.dq_scaling_factor_service.exists(dqsf));
 
-    auto sfs = aci.dq_scaling_factor_service.find_all_by_dataset_id(ds->get_id());
+    auto sfs = aci.dq_scaling_factor_service.find_all_by_model_id(ds->get_id());
 
     EXPECT_TRUE(1UL == sfs.size());
 
@@ -66,7 +66,7 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-                                                                       svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+                                                                       svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);

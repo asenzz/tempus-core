@@ -20,7 +20,7 @@
 #pragma once
 
 #include <vector>
-
+#include <boost/throw_exception.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
@@ -28,6 +28,12 @@
 #include <atomic>
 #include <mutex>
 #include "common/compatibility.hpp"
+
+namespace svr {
+namespace optimizer {
+
+#define PSO_TOPOLOGY            svr::optimizer::PsoTopology::global
+#define PSO_SAVE_STATE_PATH     svr::common::formatter() << "/tmp/pso_state_" << PRIMARY_COLUMN << "_" << _p_svr_parameters->get_decon_level() << ".sav"
 
 // CONSTANTS
 #define PSO_MAX_SIZE 1000 // max swarm size
@@ -53,18 +59,16 @@
 #define PSO_W_LIN_DEC 1
 
 
-
 // PSO SOLUTION -- Initialized by the user
-typedef struct {
+typedef struct
+{
     double error;
     double *gbest; // should contain DIM elements!!
 } pso_result_t;
 
 
-
 // OBJECTIVE FUNCTION TYPE
 typedef double (*pso_obj_fun_t)(double *, int, void *);
-
 
 
 // PSO SETTINGS
@@ -86,16 +90,15 @@ struct pso_settings_t
     double w_min; // min inertia weight value
 
     int clamp_pos; // whether to keep particle position within defined bounds (TRUE)
-                   // or apply periodic boundary conditions (FALSE)
+    // or apply periodic boundary conditions (FALSE)
     int nhood_strategy; // neighborhood strategy (see PSO_NHOOD_*)
     int nhood_size; // neighborhood size 
     int w_strategy; // inertia weight strategy (see PSO_W_*)
 };
 
 
-
 // return the swarm size based on dimensionality
-int pso_calc_swarm_size(int dim);
+int pso_calc_swarm_size(const int dim);
 
 // set the default PSO settings
 void pso_set_default_settings(pso_settings_t *p_settings);
@@ -105,41 +108,40 @@ void pso_set_default_settings(pso_settings_t *p_settings);
 // and store the result in *solution
 std::vector<std::pair<double, std::vector<double>>>
 pso_solve(
-        const std::function<double(std::vector<double>&)>& f,
+        const std::function<double(std::vector<double> &)> &f,
         pso_settings_t *settings,
         const size_t decon_level,
-        const std::string& column_name);
+        const std::string &column_name);
 
-
-class pso_state {
-public:
+struct pso_state
+{
     //std::vector<double> pos_;
-    std::vector <std::vector<double>> pos_;
-    std::vector <std::vector<double>> vel_;
-    std::vector <std::vector<double>> pos_nb_;
-    std::vector <std::vector<double>> pos_b_;
-    std::vector <double> fit_;
-    std::vector <double> fit_b_;
-    std::vector <bool> particles_ready_;
+    std::vector<std::vector<double>> pos_;
+    std::vector<std::vector<double>> vel_;
+    std::vector<std::vector<double>> pos_nb_;
+    std::vector<std::vector<double>> pos_b_;
+    std::vector<double> fit_;
+    std::vector<double> fit_b_;
+    std::vector<bool> particles_ready_;
     std::vector<double> gbest_;
     int step_;
     double error_;
 
-public:
     friend class boost::serialization::access;
     // When the class Archive corresponds to an output archive, the
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
 
     pso_state();
+
     pso_state(
-            std::vector <std::vector<double>> pos,
-            std::vector <std::vector<double>> vel,
-            std::vector <std::vector<double>> pos_nb,
-            std::vector <std::vector<double>> pos_b,
-            std::vector <double> fit,
-            std::vector <double> fit_b,
-            std::vector <bool> particles_ready,
+            std::vector<std::vector<double>> pos,
+            std::vector<std::vector<double>> vel,
+            std::vector<std::vector<double>> pos_nb,
+            std::vector<std::vector<double>> pos_b,
+            std::vector<double> fit,
+            std::vector<double> fit_b,
+            std::vector<bool> particles_ready,
             std::vector<double> gbest,
             int step,
             double error);
@@ -147,7 +149,8 @@ public:
     std::string save_to_string();
 
     template<class Archive>
-    void serialize(Archive &ar, const unsigned int version) {
+    void serialize(Archive &ar, const unsigned int version)
+    {
         ar & pos_;
         ar & vel_;
         ar & pos_nb_;
@@ -161,36 +164,43 @@ public:
 
     }
 
-    static std::vector <std::vector<double>> convert2vector2d(size_t dim1, size_t dim2, const void *input);
+    static std::vector<std::vector<double>> convert2vector2d(size_t dim1, size_t dim2, const void *input);
 
-    static void convert_from_vector2d(const std::vector <std::vector<double>> & input, size_t dim1, size_t dim2, void *output);
+    static void convert_from_vector2d(const std::vector<std::vector<double>> &input, size_t dim1, size_t dim2, void *output);
 
-    static bool load_from_string(const std::string & full_message, pso_state &success) ;
-
+    static bool load_from_string(const std::string &full_message, pso_state &success);
 };
 
-class pso_state_io{
-public:
-    static pso_state_io& get_instance(){
-        static pso_state_io instance;
-        return instance;
-    }
-    void  read_state_file(const std::string & input_state_file);
-    void save_state_to_file(const std::string & filename);
-    bool get_state(const std::pair<std::string, std::string> & model_id, pso_state& state);
-    void update_state(const std::pair<std::string, std::string> & model_id, const pso_state& state);
-    void set_finish_state(const std::pair<std::string, std::string> & model_id, bool status);
-private:
-    pso_state_io(){
-        dirty_state.store(false, std::memory_order_relaxed);
-    };
-    ~pso_state_io()= default;
-    pso_state_io(const pso_state_io&)= delete;
-    pso_state_io& operator=(const pso_state_io&)= delete;
+class pso_state_io
+{
+    pso_state_io();
+
+    ~pso_state_io() = default;
+
+    pso_state_io(const pso_state_io &) = delete;
+
+    pso_state_io &operator=(const pso_state_io &) = delete;
+
     std::unordered_map<std::pair<std::string, std::string>, pso_state> pso_states;
     std::unordered_map<std::pair<std::string, std::string>, bool> finish_states;
 
     std::atomic<bool> dirty_state;
     std::mutex pso_states_mutex;
     std::mutex finish_state_mutex;
+
+public:
+    static pso_state_io &get_instance();
+
+    void read_state_file(const std::string &input_state_file);
+
+    void save_state_to_file(const std::string &filename);
+
+    bool get_state(const std::pair<std::string, std::string> &model_id, pso_state &state);
+
+    void update_state(const std::pair<std::string, std::string> &model_id, const pso_state &state);
+
+    void set_finish_state(const std::pair<std::string, std::string> &model_id, bool status);
 };
+
+}
+}

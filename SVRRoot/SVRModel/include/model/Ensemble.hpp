@@ -9,6 +9,21 @@
 namespace svr {
 namespace datamodel {
 
+struct t_level_predict_features
+{
+    std::deque<bpt::ptime> times;
+    mat_ptr p_features;
+};
+using t_predict_features = std::unordered_map<size_t /* level */, t_level_predict_features>;
+
+struct t_training_data
+{
+    std::unordered_map<size_t /* level */, mat_ptr> labels;
+    std::unordered_map<size_t /* level */, mat_ptr> features;
+    std::unordered_map<size_t /* level */, vec_ptr> last_knowns;
+    bpt::ptime last_row_time;
+};
+
 class Ensemble : public Entity
 {
     bigint dataset_id = 0; /* TODO Replace with pointer to a dataset */
@@ -37,7 +52,7 @@ public:
 
     std::deque<datamodel::Model_ptr> &get_models();
 
-    datamodel::Model_ptr get_model(const size_t levix = 0);
+    datamodel::Model_ptr get_model(const size_t levix = 0) const;
 
     const std::deque<datamodel::Model_ptr> &get_models() const;
 
@@ -58,9 +73,9 @@ public:
 
     std::deque<datamodel::DeconQueue_ptr> &get_aux_decon_queues();
 
-    datamodel::DeconQueue_ptr &get_aux_decon_queue(const size_t i = 0);
+    datamodel::DeconQueue_ptr get_aux_decon_queue(const size_t i = 0) const;
 
-    datamodel::DeconQueue_ptr get_aux_decon_queue(const std::string &column_name);
+    datamodel::DeconQueue_ptr get_aux_decon_queue(const std::string &column_name) const;
 
     std::deque<data_row_container_ptr> get_aux_decon_datas();
 
@@ -80,4 +95,5 @@ public:
 using Ensemble_ptr = std::shared_ptr<Ensemble>;
 
 }
+
 }

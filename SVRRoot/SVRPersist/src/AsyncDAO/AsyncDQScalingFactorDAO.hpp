@@ -15,10 +15,10 @@ public:
     virtual bool exists(const datamodel::DQScalingFactor_ptr& dq_scaling_factor);
     virtual int save(const datamodel::DQScalingFactor_ptr& dq_scaling_factor);
     virtual int remove(const datamodel::DQScalingFactor_ptr& dq_scaling_factor);
-    virtual svr::datamodel::dq_scaling_factor_container_t find_all_by_dataset_id(const bigint dataset_id);
+    virtual svr::datamodel::dq_scaling_factor_container_t find_all_by_model_id(const bigint model_id);
 
 private:
-    class AsyncImpl;
+    struct AsyncImpl;
     AsyncImpl & pImpl;
 };
 

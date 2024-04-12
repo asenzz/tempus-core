@@ -1,4 +1,3 @@
-#ifdef USE_CUDA
 #include <thread>
 #include <magma_types.h>
 #include <magma_v2.h>
@@ -12,6 +11,7 @@
 #include "common/gpu_handler.hpp"
 #include "common/cuda_util.cuh"
 #include "cuqrsolve.hpp"
+#include "../../SVRCommon/include/common/defines.h"
 
 
 namespace svr {
@@ -44,17 +44,32 @@ G_score_kernel(
     if (thr_ix == 0) *score = _sh_sum[0] / (norm_ker * norm_ref);
 }
 
-
 template<unsigned k_block_size> __global__ void
 G_kernel_from_distances_symm(double *__restrict K, const double *__restrict dist, const size_t mm, const size_t m, const double divisor)
 {
-    const auto g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
-    const auto row_ix = g_thr_ix % m;
-    const auto col_ix = g_thr_ix / m;
-    if (g_thr_ix >= mm || row_ix <= col_ix) return;
-    K[m * row_ix + col_ix] = K[g_thr_ix] = 1. - dist[g_thr_ix] / divisor;
+    const size_t g_thr_ix = threadIdx.x + blockIdx.x * k_block_size;
+    if (g_thr_ix >= mm) return;
+    const size_t col = g_thr_ix / m;
+    K[g_thr_ix + col] = K[((g_thr_ix + col) % m) * m + col] = 1. - dist[g_thr_ix] / divisor;
 }
 
+void kernel_from_distances_symm(double *K, const double *Z, const size_t m, const double gamma)
+{
+    LOG4_THROW("Buggy.");
+
+    double *d_K, *d_Z;
+    const auto mm = m * m;
+    const auto mat_size = mm * sizeof(double);
+    const common::gpu_context ctx;
+    cu_errchk(cudaSetDevice(ctx.phy_id()));
+    cu_errchk(cudaMalloc(&d_K, mat_size));
+    cu_errchk(cudaMalloc(&d_Z, mat_size));
+    cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
+    G_kernel_from_distances_symm<CUDA_BLOCK_SIZE><<<CUDA_THREADS_BLOCKS(mm / 2)>>>(d_K, d_Z, mm / 2, m, 2. * gamma * gamma);
+    cu_errchk(cudaMemcpy(K, d_K, mat_size, cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(d_K));
+    cu_errchk(cudaFree(d_Z));
+}
 
 template<unsigned k_block_size> __global__ void
 G_kernel_from_distances(double *__restrict K, const double *__restrict Z, const size_t mn, const double divisor)
@@ -64,7 +79,7 @@ G_kernel_from_distances(double *__restrict K, const double *__restrict Z, const 
     K[g_thr_ix] = 1. - Z[g_thr_ix] / divisor;
 }
 
-// predict_kernel_matrix = 1. - Z / (2. * std::pow<double>(gamma, 2));
+// K = 1 - Z / (2 * gamma * gamma)
 void kernel_from_distances(double *K, const double *Z, const size_t m, const size_t n, const double gamma)
 {
     double *d_K, *d_Z;
@@ -90,11 +105,12 @@ score_kernel(
         const size_t m,
         const double gamma)
 {
+#if 0
     double *d_K, *d_Z, *d_ref;
     const size_t mm = m * m;
     const size_t mat_size = mm * sizeof(double);
 
-    common::gpu_context ctx;
+    const common::gpu_context ctx;
     cu_errchk(cudaSetDevice(ctx.phy_id()));
     cu_errchk(cudaMalloc(&d_K, mat_size));
     cu_errchk(cudaMalloc(&d_Z, mat_size));
@@ -119,6 +135,8 @@ score_kernel(
     cu_errchk(cudaFree(d_K));
     cublas_safe_call(cublasDestroy(cublasH));
     return 2. - score;
+#endif
+    return 0;
 }
 
 
@@ -446,7 +464,7 @@ call_gpu_overdetermined(
         const size_t Nrows, const size_t Ncols, const size_t Nrhs, const double *cpu_matrix,
         const double *cpu_rhs, double *cpu_output)
 {
-    svr::common::gpu_context gtx;
+    const svr::common::gpu_context gtx;
     cudaSetDevice(gtx.phy_id());
 
     thrust::device_vector<double> gpu_matrix(Nrows * Ncols);
@@ -465,6 +483,3 @@ call_gpu_overdetermined(
 // Namespaces
 }
 }
-
-#endif /* USE_CUDA */
-

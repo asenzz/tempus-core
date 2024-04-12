@@ -5,19 +5,18 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #pragma GCC diagnostic pop
+#include "compatibility.hpp"
 
-
-#define TYPEOF(TO) std::remove_reference<std::remove_const<decltype(TO)>::type>::type
 
 #define OMP_LOCK(lock_name) omp_lock_t lock_name; omp_init_lock(&lock_name);
 
 #define __non_stpfor(TY, IX, FROM, TO, STEP, ...) \
     for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; }
 #define __non_tpfor(TY, IX, FROM, TO, ...) __non_stpfor(TY, IX, FROM, TO, ++IX, __VA_ARGS__)
-#define __non_pfor(IX, FROM, TO, ...) __non_stpfor(TYPEOF(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
+#define __non_pfor(IX, FROM, TO, ...) __non_stpfor(dtype(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
 #define __non_pfor_i(FROM, TO, ...) __non_pfor(i, FROM, TO, __VA_ARGS__)
 #define __non_tpfor_i(TY, FROM, TO, ...) __non_stpfor(TY, i, FROM, TO,  ++i, __VA_ARGS__)
-#define __non_spfor(IX, FROM, TO, STEP, ...) __non_stpfor(TYPEOF(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define __non_spfor(IX, FROM, TO, STEP, ...) __non_stpfor(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define __non_spfor_i(FROM, TO, STEP, ...) __non_spfor(i, FROM, TO, (STEP), __VA_ARGS__)
 #define __non_stpfor_i(TY, FROM, TO, STEP, ...) __non_stpfor(TY, i, FROM, TO, (STEP), __VA_ARGS__)
 
@@ -33,9 +32,9 @@
                 for (auto &__t_##IX: __thr_q_##IX) __t_##IX.join(); \
             };
 #endif
-#define __pxt_spfor(IX, FROM, TO, STEP, ...) __pxt_stpfor(TYPEOF(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define __pxt_spfor(IX, FROM, TO, STEP, ...) __pxt_stpfor(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define __pxt_tpfor(TYPE, IX, FROM, TO, ...) __pxt_stpfor(TYPE, IX, FROM, TO, ++IX, __VA_ARGS__)
-#define __pxt_pfor(IX, FROM, TO, ...) __pxt_tpfor(TYPEOF(TO), IX, FROM, TO, __VA_ARGS__)
+#define __pxt_pfor(IX, FROM, TO, ...) __pxt_tpfor(dtype(TO), IX, FROM, TO, __VA_ARGS__)
 #define __pxt_pfor_i(FROM, TO, ...) __pxt_pfor(i, FROM, TO, __VA_ARGS__)
 
 
@@ -46,10 +45,10 @@
     for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; } // CilkPLUS is replaced with OpenMP // cilk_for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; };
 #endif
 #define __omp_tpfor(TY, IX, FROM, TO, ...) __omp_stpfor(TY, IX, FROM, TO, ++IX, __VA_ARGS__)
-#define __omp_pfor(IX, FROM, TO, ...) __omp_stpfor(TYPEOF(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
+#define __omp_pfor(IX, FROM, TO, ...) __omp_stpfor(dtype(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
 #define __omp_pfor_i(FROM, TO, ...) __omp_pfor(i, FROM, TO, __VA_ARGS__)
 #define __omp_tpfor_i(TY, FROM, TO, ...) __omp_stpfor(TY, i, FROM, TO,  ++i, __VA_ARGS__)
-#define __omp_spfor(IX, FROM, TO, STEP, ...) __omp_stpfor(TYPEOF(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define __omp_spfor(IX, FROM, TO, STEP, ...) __omp_stpfor(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define __omp_spfor_i(FROM, TO, STEP, ...) __omp_spfor(i, FROM, TO, (STEP), __VA_ARGS__)
 #define __omp_stpfor_i(TY, FROM, TO, STEP, ...) __omp_stpfor(TY, i, FROM, TO, (STEP), __VA_ARGS__)
 
@@ -62,20 +61,20 @@
             { __VA_ARGS__; }} ); // Custom stepping is impossible with random starts
 #endif
 #define __tbb_tpfor(TY, IX, FROM, TO, ...) __tbb_stpfor(TY, IX, FROM, TO, 1, __VA_ARGS__)
-#define __tbb_pfor(IX, FROM, TO, ...) __tbb_tpfor(TYPEOF(TO), IX, FROM, TO, __VA_ARGS__)
+#define __tbb_pfor(IX, FROM, TO, ...) __tbb_tpfor(dtype(TO), IX, FROM, TO, __VA_ARGS__)
 #define __tbb_pfor_i(FROM, TO, ...) __tbb_pfor(i, FROM, TO, __VA_ARGS__)
 #define __tbb_tpfor_i(TY, FROM, TO, ...) __tbb_stpfor(TY, i, FROM, TO, 1, __VA_ARGS__)
-#define __tbb_spfor(IX, FROM, TO, STEP, ...) __tbb_stpfor(TYPEOF(TO), IX, FROM, TO, STEP, __VA_ARGS__)
-#define __tbb_spfor_i(FROM, TO, STEP, ...) __tbb_stpfor(TYPEOF(TO), i, FROM, TO, STEP, __VA_ARGS__)
+#define __tbb_spfor(IX, FROM, TO, STEP, ...) __tbb_stpfor(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define __tbb_spfor_i(FROM, TO, STEP, ...) __tbb_stpfor(dtype(TO), i, FROM, TO, STEP, __VA_ARGS__)
 #define __tbb_stpfor_i(TY, FROM, TO, STEP, ...) __tbb_stpfor(TY, i, FROM, TO, STEP, __VA_ARGS__)
 
 
 // TBB Parallel plus reductor
 #define __tbb_stppred(RESULT, INIT_RESULT, TYPE, IX, FROM, TO, STEP, ...) \
-    RESULT = tbb::parallel_reduce(tbb::blocked_range<TYPE>(FROM, TO, STEP), INIT_RESULT, [&](const tbb::blocked_range<TYPE> &__bprange_##IX, TYPEOF(INIT_RESULT) RESULT) { \
-        for (auto IX = __bprange_##IX.begin(); IX < __bprange_##IX.end(); IX += STEP) { __VA_ARGS__; } return RESULT; }, std::plus<TYPEOF(INIT_RESULT)>() );
+    RESULT = tbb::parallel_reduce(tbb::blocked_range<TYPE>(FROM, TO, STEP), INIT_RESULT, [&](const tbb::blocked_range<TYPE> &__bprange_##IX, dtype(INIT_RESULT) RESULT) { \
+        for (auto IX = __bprange_##IX.begin(); IX < __bprange_##IX.end(); IX += STEP) { __VA_ARGS__; } return RESULT; }, std::plus<dtype(INIT_RESULT)>() );
 
-#define __tbb_sppred(RESULT, INIT_RESULT, IX, FROM, TO, STEP, ...) __tbb_stppred(RESULT, INIT_RESULT, TYPEOF(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define __tbb_sppred(RESULT, INIT_RESULT, IX, FROM, TO, STEP, ...) __tbb_stppred(RESULT, INIT_RESULT, dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define __tbb_ppred(RESULT, INIT_RESULT, IX, FROM, TO, ...) __tbb_sppred(RESULT, INIT_RESULT, IX, FROM, TO, 1, __VA_ARGS__)
 #define __tbb_ppred_i(RESULT, INIT_RESULT, FROM, TO, ...) __tbb_ppred(RESULT, INIT_RESULT, i, FROM, TO, __VA_ARGS__)
 #define __tbb_rpred_i(RESULT, FROM, TO, ...) __tbb_ppred(RESULT, RESULT, i, FROM, TO, __VA_ARGS__)

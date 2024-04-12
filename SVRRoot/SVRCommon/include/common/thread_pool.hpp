@@ -59,16 +59,16 @@ protected:
 
 
 template<typename function, class... function_args>
-class task_w_result : public task_result<typename std::result_of<function(function_args...)>::type>
+class task_w_result : public task_result<std::result_of_t<function(function_args...)>>
 {
-    typename std::decay<function>::type func;
-    std::tuple<typename std::decay<function_args>::type...> arguments;
-    using task_result<typename std::result_of<function(function_args...)>::type>::result;
+    std::decay_t<function> func;
+    std::tuple<std::decay_t<function_args>...> arguments;
+    using task_result<std::result_of_t<function(function_args...)>>::result;
     template<int ...S> void execute_helper(detail::index_sequence<S...>);
 public:
     task_w_result(function f, function_args... args);
     void execute();
-    using task_result<typename std::result_of<function(function_args...)>::type>::get_result;
+    using task_result<std::result_of_t<function(function_args...)>>::get_result;
 };
 
 
@@ -135,13 +135,13 @@ private:
     cpu_thread_pool(cpu_thread_pool const &)=delete;
     void operator=(cpu_thread_pool)=delete;
 
-    class Impl;
+    struct Impl;
     Impl & pImpl;
 };
 
 
 template<typename function, class... function_args>
-future<typename std::result_of<function(function_args...)>::type> async( function&& f, function_args&&... args );
+future<std::result_of_t<function(function_args...)>> async( function&& f, function_args&&... args );
 
 
 /******************************************************************************/
@@ -316,7 +316,7 @@ task_base_ptr future<Result>::get_task() const
 template <class Function, class... Args>
 inline task_base_ptr make_task(Function && func, Args && ... args)
 {
-    return detail::task_result_helper<std::is_void<typename std::result_of<Function(Args...)>::type>::value>
+    return detail::task_result_helper<std::is_void_v<std::result_of_t<Function(Args...)>>>
             ::make_task(std::forward<Function>(func), std::forward<Args>(args)...);
 }
 
@@ -325,7 +325,7 @@ inline task_base_ptr make_task(Function && func, Args && ... args)
 
 
 template< class Function, class... Args>
-future<typename std::result_of<Function(Args...)>::type> async( Function&& f, Args&&... args )
+future<std::result_of_t<Function(Args...)>> async( Function&& f, Args&&... args )
 {
     return cpu_thread_pool::get_instance().execute(make_task(std::forward<Function>(f), std::forward<Args>(args)...));
 }

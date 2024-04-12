@@ -9,7 +9,7 @@
 
 
 namespace svr {
-namespace nm {
+namespace optimizer {
 
 std::pair<double, std::vector<double>>
 nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &initial_values, const NM_parameters &nm_parameters)

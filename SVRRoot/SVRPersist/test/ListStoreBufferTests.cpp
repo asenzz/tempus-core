@@ -61,7 +61,7 @@ auto first_letter_equal = [](std::string const & s1, std::string const & s2)
 
 TEST(ListStoreBufferTests, MergeWithLastValue)
 {
-    svr::dao::ListStoreBuffer<std::string, decltype(first_letter_equal)> dq(10, first_letter_equal);
+    svr::dao::ListStoreBuffer<std::string, dtype(first_letter_equal)> dq(10, first_letter_equal);
 
     dq.push("a---");
     dq.push("a===");

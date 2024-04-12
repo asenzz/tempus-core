@@ -3,7 +3,7 @@
 
 #include <model/InputQueue.hpp>
 #include <DAO/RequestDAO.hpp>
-#include <util/ValidationUtils.hpp>
+#include <util/validation_utils.hpp>
 #include <model/Request.hpp>
 #include <model/Dataset.hpp>
 

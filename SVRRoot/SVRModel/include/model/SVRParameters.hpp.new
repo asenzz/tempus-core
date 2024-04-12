@@ -247,7 +247,7 @@ public:
         return dataset_id;
     }
 
-    void set_dataset_id(const bigint &value)
+    void set_model_id(const bigint &value)
     {
         dataset_id = value;
     }
@@ -421,7 +421,7 @@ public:
             return false;
         }
         set_id(atoll(tokens[0].c_str()));
-        set_dataset_id(atoll(tokens[1].c_str()));
+        set_model_id(atoll(tokens[1].c_str()));
         set_input_queue_table_name(tokens[2]);
         set_input_queue_column_name(tokens[3]);
         set_decon_level(atoll(tokens[4].c_str()));

@@ -19,9 +19,10 @@
 
 using namespace svr;
 
+#if 0
+
 constexpr size_t lag = DEFAULT_LAG;
 
-#if 0
 static const std::pair<arma::mat, arma::mat>
 generate_features_labels(const arma::mat &data)
 {
@@ -35,11 +36,10 @@ generate_features_labels(const arma::mat &data)
     //LOG4_DEBUG("Generated " << arma::size(features) << " features, first row " << features.row(0));
     return {features, labels};
 }
-#endif
 
-static const svr::matrix_ptr load_file(const std::string &file_name)
+static const svr::mat_ptr load_file(const std::string &file_name)
 {
-    svr::matrix_ptr res_arma;
+    svr::mat_ptr res_arma;
     res_arma->load(file_name);
     return res_arma;
 }
@@ -49,10 +49,10 @@ run_file(
         const std::string &level_file,
         std::mutex &printout_mutex, std::atomic<size_t> &running_ct)
 {
-    const svr::matrix_ptr p_features = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << 0 << "_" << 0 << ".out");
-    const svr::matrix_ptr p_labels = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << 0 << "_" << 0 << ".out");
+    const svr::mat_ptr p_features = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/features_" << 0 << "_" << 0 << ".out");
+    const svr::mat_ptr p_labels = load_file(svr::common::formatter() << "/mnt/slowstore/var/tmp/labels_" << 0 << "_" << 0 << ".out");
     auto best_parameters = std::make_shared<datamodel::SVRParameters>(
-            0, 0, "test path 2", "test path 2", 0, 0, 0, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
+            0, 0, "test path 2", "test path 2", 1, 0, 0, 0, 0, 0, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, DEFAULT_KERNEL,
             DEFAULT_LAG);
     {
 #ifdef DO_TEST_PSO
@@ -62,43 +62,6 @@ run_file(
         best_parameters.set_svr_kernel_param2(1.2209334891491921);
 #endif
     }
-#if 0
-    std::atomic<double> best_mae = std::numeric_limits<double>::max();
-    double best_mape = 0;
-    double best_lin_mape = 0;
-    const auto start_parameters = best_parameters;
-    std::mutex printout_mutex;
-    //for (const auto &err_args: errors_args) {
-    {
-        SVRParameters kernel_svr_parameters(start_parameters);
-        LOG4_DEBUG("Kernel gamma " << start_parameters.get_svr_kernel_param() << ", lambda " << start_parameters.get_svr_kernel_param2());
-        std::vector<matrices_ptr> kernel_matrices(PROPS.get_slide_count());
-        /* cilk_ */ for (size_t slide_ix = 0; slide_ix < PROPS.get_slide_count(); ++slide_ix) {
-            const auto slide_start_pos = kernel_svr_parameters.get_svr_decremental_distance() + slide_ix * PROPS.get_future_predict_count() / PROPS.get_slide_count();
-            const auto slide_features = p_features_data->rows(slide_start_pos - kernel_svr_parameters.get_svr_decremental_distance(), slide_start_pos - 1);
-            // PROFILE_EXEC_TIME(kernel_matrices[slide_ix] = svr::OnlineMIMOSVR::produce_kernel_matrices(kernel_svr_parameters, slide_features), "Produce kernel matrices");
-        }
-        /* cilk_ */ for (size_t cost_exp = MIN_COST_EXP; cost_exp < MAX_COST_EXP; ++cost_exp) {
-            const double cost = std::pow(10, 4 * cost_exp);
-            auto cost_svr_parameters = kernel_svr_parameters;
-            cost_svr_parameters.set_svr_C(cost);
-            cycle_returns_t cycle_returns;
-            PROFILE_EXEC_TIME(cycle_returns = train_predict_cycle(cost_svr_parameters.get_svr_decremental_distance(), p_labels_data, p_features_data, cost_svr_parameters, kernel_matrices), "Train predict cycle");
-            const auto mae = std::get<0>(cycle_returns);
-            const auto mape = std::get<1>(cycle_returns);
-            const auto lin_mape = std::get<4>(cycle_returns);
-            std::scoped_lock printout_guard(printout_mutex);
-            if (best_mae > mae) {
-                best_mae = mae;
-                best_parameters = cost_svr_parameters;
-                best_mape = mape;
-                best_lin_mape = lin_mape;
-                LOG4_INFO("Best cost found MAE: " << best_mae << " Parameters: " << best_parameters.to_sql_string() << ", MAPE " << mape << ", Lin MAPE " << lin_mape);
-            }
-        }
-    }
-#endif
- //   svr::business::ModelService::final_cycle(best_parameters, best_parameters->get_svr_decremental_distance(), p_labels, p_features);
 
     return {};
 }
@@ -106,9 +69,7 @@ run_file(
 TEST(path_tune_train_predict2, basic_integration)
 {
     //svr::IKernel<double>::IKernelInit();
-    std::mutex printout_mutex;
-    std::atomic<size_t> running_ct = 0;
-    std::vector<std::vector<double>> predicted_mx(file_name_pairs.size());
+   std::vector<std::vector<double>> predicted_mx(file_name_pairs.size());
     std::vector<double> predicted_prices;
 #if 0 // All levels?
     for (size_t level_ix = 0; level_ix < file_name_pairs.size(); ++level_ix) {
@@ -121,3 +82,5 @@ TEST(path_tune_train_predict2, basic_integration)
     // run_file("../SVRRoot/SVRBusiness-tests/test/test_data/input_queue_eurusd_4h_avg.csv", printout_mutex, running_ct);
 #endif
 }
+
+#endif

@@ -30,7 +30,7 @@ protected:
     void do_write(bid_ask_spread const & spread);
 
 private:
-    class Impl;
+    struct Impl;
     Impl & pImpl;
 };
 

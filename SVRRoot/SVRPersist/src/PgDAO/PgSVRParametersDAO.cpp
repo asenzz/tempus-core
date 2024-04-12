@@ -19,45 +19,45 @@ bool PgSVRParametersDAO::exists(const bigint id)
     return data_source.query_for_type<int>(get_sql("exists_by_id"), id);
 }
 
-int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &svr_parameters)
+int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameters)
 {
-    if (svr_parameters->get_id() == 0)
-        svr_parameters->set_id(get_next_id());
+    if (!p_svr_parameters->get_id()) p_svr_parameters->set_id(get_next_id());
 
-    if(!exists(svr_parameters->get_id()))
+    if(!exists(p_svr_parameters->get_id()))
         return data_source.update(get_sql("save"),
-                              svr_parameters->get_id(),
-                              svr_parameters->get_dataset_id(),
-                              svr_parameters->get_input_queue_table_name(),
-                              svr_parameters->get_input_queue_column_name(),
-                              svr_parameters->get_decon_level(),
-                              svr_parameters->get_chunk_ix(),
-                              svr_parameters->get_grad_level(),
-                              svr_parameters->get_svr_C(),
-                              svr_parameters->get_svr_epsilon(),
-                              svr_parameters->get_svr_kernel_param(),
-                              svr_parameters->get_svr_kernel_param2(),
-                              svr_parameters->get_svr_decremental_distance(),
-                              svr_parameters->get_svr_adjacent_levels_ratio(),
-                              static_cast<int>(svr_parameters->get_kernel_type()),
-                              svr_parameters->get_lag_count());
+                                  p_svr_parameters->get_id(),
+                                  p_svr_parameters->get_dataset_id(),
+                                  p_svr_parameters->get_input_queue_table_name(),
+                                  p_svr_parameters->get_input_queue_column_name(),
+                                  p_svr_parameters->get_level_count(),
+                                  p_svr_parameters->get_decon_level(),
+                                  p_svr_parameters->get_chunk_ix(),
+                                  p_svr_parameters->get_grad_level(),
+                                  p_svr_parameters->get_svr_C(),
+                                  p_svr_parameters->get_svr_epsilon(),
+                                  p_svr_parameters->get_svr_kernel_param(),
+                                  p_svr_parameters->get_svr_kernel_param2(),
+                                  p_svr_parameters->get_svr_decremental_distance(),
+                                  p_svr_parameters->get_svr_adjacent_levels_ratio(),
+                                  static_cast<int>(p_svr_parameters->get_kernel_type()),
+                                  p_svr_parameters->get_lag_count());
     else
         return data_source.update(get_sql("update"),
-                              svr_parameters->get_dataset_id(),
-                              svr_parameters->get_input_queue_table_name(),
-                              svr_parameters->get_input_queue_column_name(),
-                              svr_parameters->get_decon_level(),
-                              svr_parameters->get_chunk_ix(),
-                              svr_parameters->get_grad_level(),
-                              svr_parameters->get_svr_C(),
-                              svr_parameters->get_svr_epsilon(),
-                              svr_parameters->get_svr_kernel_param(),
-                              svr_parameters->get_svr_kernel_param2(),
-                              svr_parameters->get_svr_decremental_distance(),
-                              svr_parameters->get_svr_adjacent_levels_ratio(),
-                              static_cast<int>(svr_parameters->get_kernel_type()),
-                              svr_parameters->get_lag_count(),
-                              svr_parameters->get_id());
+                                  p_svr_parameters->get_dataset_id(),
+                                  p_svr_parameters->get_input_queue_table_name(),
+                                  p_svr_parameters->get_input_queue_column_name(),
+                                  p_svr_parameters->get_decon_level(),
+                                  p_svr_parameters->get_chunk_ix(),
+                                  p_svr_parameters->get_grad_level(),
+                                  p_svr_parameters->get_svr_C(),
+                                  p_svr_parameters->get_svr_epsilon(),
+                                  p_svr_parameters->get_svr_kernel_param(),
+                                  p_svr_parameters->get_svr_kernel_param2(),
+                                  p_svr_parameters->get_svr_decremental_distance(),
+                                  p_svr_parameters->get_svr_adjacent_levels_ratio(),
+                                  static_cast<int>(p_svr_parameters->get_kernel_type()),
+                                  p_svr_parameters->get_lag_count(),
+                                  p_svr_parameters->get_id());
 }
 
 int PgSVRParametersDAO::remove(const datamodel::SVRParameters_ptr& svr_parameters)

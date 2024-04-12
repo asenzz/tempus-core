@@ -1,5 +1,5 @@
 #include "PgDeconQueueDAO.hpp"
-#include "util/ValidationUtils.hpp"
+#include "util/validation_utils.hpp"
 #include "common/constants.hpp"
 #include "util/string_utils.hpp"
 #include "appcontext.hpp"
@@ -70,21 +70,12 @@ void PgDeconQueueDAO::save(datamodel::DeconQueue_ptr const &p_decon_queue, const
     save_data(p_decon_queue, res == 100 ? bpt::min_date_time : start_time);
 }
 
-namespace {
-
-    size_t const na = size_t(-1);
-
-} // namespace
-
-
-
 bool PgDeconQueueDAO::decon_table_needs_recreation(datamodel::DeconQueue_ptr const & existing_queue, datamodel::DeconQueue_ptr const & new_queue)
 {
     return existing_queue->get_input_queue_column_name() != new_queue->get_input_queue_column_name()
            || (existing_queue->get_dataset_id() != 0 && new_queue->get_dataset_id() != 0 && (existing_queue->get_dataset_id() != new_queue->get_dataset_id()))
            || get_level_count(existing_queue) != get_level_count(new_queue);
 }
-
 
 int PgDeconQueueDAO::save_metadata(datamodel::DeconQueue_ptr const &p_decon_queue) {
 

@@ -2,7 +2,7 @@
 #include "AsyncImplBase.hpp"
 
 #include <model/DeconQueue.hpp>
-#include "util/ValidationUtils.hpp"
+#include "util/validation_utils.hpp"
 
 #include "../PgDAO/PgDeconQueueDAO.hpp"
 
@@ -26,11 +26,11 @@ bool cmp_whole_value(datamodel::DeconQueue_ptr const & lhs, datamodel::DeconQueu
 }
 
 struct AsyncDeconQueueDAO::AsyncImpl
-    : public AsyncImplBase<datamodel::DeconQueue_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), class PgDeconQueueDAO>
+    : public AsyncImplBase<datamodel::DeconQueue_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), class PgDeconQueueDAO>
 {
 
     AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 100)
+    :AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 100)
     {}
 
 };

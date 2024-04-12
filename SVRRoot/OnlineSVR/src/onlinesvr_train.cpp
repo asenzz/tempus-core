@@ -1,18 +1,19 @@
 #include "onlinesvr.hpp"
-
 #include "common/parallelism.hpp"
 #include "model/Model.hpp"
-#include "SVRParametersService.hpp"
 #include "DQScalingFactorService.hpp"
 #include "appcontext.hpp"
+#include "util/math_utils.hpp"
+#include <cstddef>
+#include <omp.h>
 
 namespace svr {
 namespace datamodel {
 
 void
 OnlineMIMOSVR::batch_train(
-        const matrix_ptr &p_xtrain,
-        const matrix_ptr &p_ytrain,
+        const mat_ptr &p_xtrain,
+        const mat_ptr &p_ytrain,
         const vec_ptr &p_ylastknown,
         const bpt::ptime &last_value_time,
         const matrices_ptr &precalc_kernel_matrices)
@@ -22,53 +23,73 @@ OnlineMIMOSVR::batch_train(
                     ", last knowns " << arma::size(*p_ylastknown) << ", level " << decon_level);
 
     LOG4_DEBUG(
-            "Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last knowns " << common::present(*p_ylastknown)
+            "Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown)
             << ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin());
     reset();
+
     p_features = p_xtrain;
     p_labels = p_ytrain;
     p_last_knowns = p_ylastknown;
+
+    {
+        datamodel::SVRParameters_ptr p;
+        if ((p = is_manifold())) {
+            init_manifold(p, last_value_time);
+            samples_trained = std::min<size_t>(p->get_svr_decremental_distance(), p_xtrain->n_rows);
+            return;
+        }
+    }
+
     const auto num_chunks = get_num_chunks();
+    if (num_chunks < 2 && is_gradient()) LOG4_THROW("At least two chunks are needed to train a gradient.");
+    if (ixs.size() != num_chunks) ixs = generate_indexes();
+    train_feature_chunks_t.resize(num_chunks);
+    train_label_chunks.resize(num_chunks);
+    OMP_LOCK(param_set_l)
+#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_chunks))
+    for (size_t i = 0; i < num_chunks; ++i) {
+        train_feature_chunks_t[i] = p_features->rows(ixs[i]).t();
+        train_label_chunks[i] = p_labels->rows(ixs[i]);
+        SVRParameters_ptr p;
+        if (!(p = get_params_ptr(i))) {
+            p = otr(**param_set.cbegin());
+            p->set_chunk_ix(i);
+            omp_set_lock(&param_set_l);
+            param_set.emplace(p);
+            omp_unset_lock(&param_set_l);
+        }
+    }
+
     bool tuned = false;
     if (needs_tuning() && !is_manifold()) {
-        if (precalc_kernel_matrices && precalc_kernel_matrices->size()) LOG4_WARN("Kernel matrices provided will be ignored because SVR parameters are not initialized!");
-        PROFILE_EXEC_TIME(tune(), "Tune kernel parameters for model " << decon_level);
-        param_set = ccache().get_best_parameters(
-                get_params_ptr()->get_input_queue_column_name(), get_params_ptr()->get_decon_level(), get_params_ptr()->get_grad_level(), num_chunks);
+        if (precalc_kernel_matrices && precalc_kernel_matrices->size())
+            LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
+        PROFILE_EXEC_TIME(tune(), "Tune kernel parameters for level " << decon_level << ", gradient " << (**param_set.cbegin()).get_grad_level() << " of " << num_chunks << " chunks");
+        const auto p = *param_set.cbegin();
+        param_set = ccache().get_best_parameters(p->get_input_queue_column_name(), p->get_decon_level(), p->get_grad_level(), num_chunks);
+#if 0
         // Recombine parameters works only on the first gradient and with same number of chunks (decrement distance) across all models
         if (p_dataset->get_gradient_count() == 1)
 #pragma omp parallel for schedule(static, 1) num_threads(num_chunks)
             for (size_t i = 0; i < num_chunks; ++i)
                 recombine_params(i);
+#endif
 #if 0
-        for (const auto &p: param_set) {
-            if (APP.svr_parameters_service.exists(p))
-                APP.svr_parameters_service.remove(p);
-            APP.svr_parameters_service.save(p);
+        if (model_id) {
+            for (const auto &p: param_set) {
+                if (APP.svr_parameters_service.exists(p))
+                    APP.svr_parameters_service.remove(p);
+                APP.svr_parameters_service.save(p);
+            }
+            for (const auto &sf: scaling_factors) {
+                if (APP.dq_scaling_factor_service.exists(sf))
+                    APP.dq_scaling_factor_service.remove(sf);
+                APP.dq_scaling_factor_service.save(sf);
+            }
         }
 #endif
         tuned = true;
     }
-
-    const auto decrement = get_params_ptr()->get_svr_decremental_distance();
-    {
-        datamodel::SVRParameters_ptr p;
-        if ((p = is_manifold())) {
-            init_manifold(p, last_value_time);
-            samples_trained = std::min<size_t>(decrement, p_xtrain->n_rows);
-            return;
-        }
-    }
-#pragma omp critical(feature_shed_rows)
-    {
-        if (p_features->n_rows > decrement) p_features->shed_rows(0, p_features->n_rows - decrement - 1);
-    }
-
-    if (p_labels->n_rows > decrement) p_labels->shed_rows(0, p_labels->n_rows - decrement - 1);
-    if (p_last_knowns->n_rows > decrement) p_last_knowns->shed_rows(0, p_last_knowns->n_rows - decrement - 1);
-
-    if (is_gradient() && labels_scaling_factor != 1)
-        labels_scaling_factor = business::DQScalingFactorService::calc_scaling_factor(*p_labels);
 
     if (!tuned && precalc_kernel_matrices && precalc_kernel_matrices->size() == num_chunks) {
         p_kernel_matrices = precalc_kernel_matrices;
@@ -79,29 +100,33 @@ OnlineMIMOSVR::batch_train(
         LOG4_DEBUG("Initializing kernel matrices from scratch.");
     }
 
-    if (ixs.size() != num_chunks) ixs = get_indexes();
-    if (chunk_weights.size() != num_chunks) chunk_weights.resize(num_chunks);
-    if (chunks_weight.size() != num_chunks) chunks_weight.resize(num_chunks);
-    if (chunk_bias.size() != num_chunks) chunk_bias.resize(num_chunks);
-    if (chunk_mae.size() != num_chunks) chunk_mae.resize(num_chunks);
-
+    if (weight_chunks.size() != num_chunks) weight_chunks.resize(num_chunks);
     if (p_kernel_matrices->size() != ixs.size()) p_kernel_matrices->resize(ixs.size());
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_chunks))
     for (size_t i = 0; i < num_chunks; ++i) {
+        if (!tuned) {
+            const auto p_params = get_params_ptr(i);
+            const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, i, gradient);
+            business::DQScalingFactorService::scale_features(i, gradient, p_params->get_lag_count(), chunk_sf, train_feature_chunks_t[i]);
+            const auto p_sf = business::DQScalingFactorService::find(chunk_sf, model_id, i, gradient, decon_level, false, true);
+            business::DQScalingFactorService::scale_labels(*p_sf, train_label_chunks[i]);
+        }
+
         if (p_kernel_matrices->at(i).empty())
-            PROFILE_EXEC_TIME(p_kernel_matrices->at(i) = prepare_K(*get_params_ptr(i), p_features->rows(ixs[i]), last_value_time), "Init kernel matrix for chunk " << i)
+            PROFILE_EXEC_TIME(p_kernel_matrices->at(i) = prepare_K(*get_params_ptr(i), train_feature_chunks_t[i], last_value_time), "Init kernel matrix for chunk " << i)
         else
             LOG4_DEBUG("Using pre-calculated kernel matrix for " << i);
 
         calc_weights(i, PROPS.get_stabilize_iterations_count());
     }
-    update_total_weights();
+    update_all_weights();
     samples_trained = p_features->n_rows;
 }
 
 
-void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const bpt::ptime &last_value_time,
-                          const bool temp_learn, const std::deque<size_t> &forget_ixs)
+void OnlineMIMOSVR::learn(
+    const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const bpt::ptime &last_value_time,
+    const bool temp_learn, const std::deque<size_t> &forget_ixs)
 {
     if (new_x.empty() || new_y.empty() || new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols || new_ylk.n_rows != new_y.n_rows || new_x.n_rows != new_y.n_rows)
         LOG4_THROW("New data dimensions labels " << arma::size(new_y) << ", last-knowns " << arma::size(new_ylk) << ", features " << arma::size(new_x) <<
@@ -122,16 +147,16 @@ void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const 
         arma::mat new_x_manifold(new_manifold_rows_ct, new_x.n_cols + p_features->n_cols);
         arma::mat new_y_manifold(new_manifold_rows_ct, new_y.n_cols);
         arma::mat new_ylk_manifold(new_manifold_rows_ct, 1);
-#pragma omp parallel for collapse(2) num_threads(adj_threads(p_features->n_rows * new_x.n_rows))
+#pragma omp parallel for num_threads(adj_threads(p_features->n_rows * new_x.n_rows)) collapse(2)
         for (size_t i = 0; i < p_features->n_rows; ++i)
             for (size_t j = 0; j < new_x.n_rows; ++j) {
                 const auto r = i * new_x.n_rows + j;
-                if (r % C_interlace_manifold_factor) continue;
-                const size_t r_i = std::min<size_t>(new_x.n_rows - 1, i + rand_int(gen));
-                const size_t r_j = std::min<size_t>(p_features->n_rows - 1, j + rand_int(gen));
-                MANIFOLD_SET(new_x_manifold.row(r / C_interlace_manifold_factor), new_y_manifold.row(r / C_interlace_manifold_factor),
-                             new_x.row(r_j), new_y.row(r_j),
-                             p_features->row(r_i), p_labels->row(r_i));
+                if (r % C_interlace_manifold_factor == 0) {
+                    const auto r_i = common::bounce<size_t>(new_x.n_rows - 1, i + rand_int(gen));
+                    const auto r_j = common::bounce<size_t>(p_features->n_rows - 1, j + rand_int(gen));
+                    MANIFOLD_SET(new_x_manifold.row(r / C_interlace_manifold_factor), new_y_manifold.row(r / C_interlace_manifold_factor),
+                                 new_x.row(r_j), new_y.row(r_j), p_features->row(r_i), p_labels->row(r_i));
+                }
             }
         samples_trained += new_rows_ct;
         p_manifold->learn(new_x_manifold, new_y_manifold, new_ylk_manifold, last_value_time);
@@ -190,7 +215,7 @@ void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const 
         LOG4_DEBUG("Forgetting temporary rows " << shed_ixs.rows(shed_ixs.n_rows - i, shed_ixs.n_rows - 1));
     }
     if (shed_ixs.n_rows < new_rows_ct) {
-        arma::vec abs_total_weights = arma::sum(arma::abs(total_weights.rows(active_rows)), 1);
+        arma::vec abs_total_weights = arma::sum(arma::abs(all_weights.rows(active_rows)), 1);
         const auto mean_abs_total_weights = arma::mean(abs_total_weights);
         while (shed_ixs.n_rows < new_rows_ct) {
 #ifdef FORGET_MIN_WEIGHT // Forgetting min weight works the best
@@ -223,13 +248,15 @@ void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const 
             size_t ct = 0;
             for (auto shed_ix: shed_ixs) { // Bump indexes down for rows above the shedded
                 shed_ix -= ct++;
-                chunk_ixs.rows(arma::find(chunk_ixs >= shed_ix)) -= 1;
+                const auto find_res2 = arma::find(chunk_ixs >= shed_ix);
+                if (find_res.empty()) continue;
+                chunk_ixs.rows(find_res2) -= 1;
             }
             continue;
         }
 
         size_t ct = 0;
-        for (auto &shed_ix: find_res) {
+        for (auto shed_ix: find_res) {
             shed_ix -= ct++;
             chunk_ixs.shed_row(shed_ix);
             chunk_ixs.rows(arma::find(chunk_ixs >= shed_ix)) -= 1;
@@ -237,7 +264,9 @@ void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const 
 #ifdef KEEP_PREV_WEIGHTS
             chunk_shedded_weights[chunk_ix][shed_ix] = chunk_weights[chunk_ix].row(shed_ix);
 #endif
-            chunk_weights[chunk_ix].shed_row(shed_ix);
+            weight_chunks[chunk_ix].shed_row(shed_ix);
+            train_label_chunks[chunk_ix].shed_row(shed_ix);
+            train_feature_chunks_t[chunk_ix].shed_col(shed_ix);
 
             if (p_kernel_matrices->at(chunk_ix).n_rows > shed_ix && p_kernel_matrices->at(chunk_ix).n_cols > shed_ix) {
                 p_kernel_matrices->at(chunk_ix).shed_row(shed_ix);
@@ -258,34 +287,41 @@ void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const 
         const auto chunk_ix = affected_chunks % i;
         const auto chunk_new_rows = affected_chunks ^ i;
         auto &params = *get_params_ptr(chunk_ix);
-        arma::mat &K_chunk = p_kernel_matrices->at(chunk_ix);
-        arma::mat chunk_ft(chunk_new_rows, new_x.n_cols);
-        for (size_t r = 0; r < chunk_ft.n_rows; ++r) chunk_ft.row(r) = new_x.row(add_new_row_ix++ % new_x.n_rows);
+        auto &K_chunk = p_kernel_matrices->at(chunk_ix);
+        arma::uvec new_ixs(chunk_new_rows);
+        for (size_t r = 0; r < new_ixs.n_rows; ++r)
+            new_ixs[r] = add_new_row_ix++ % new_x.n_rows;
+        arma::mat new_chunk_features_t = new_x.rows(new_ixs).t();
+        business::DQScalingFactorService::scale_features(chunk_ix, *this, new_chunk_features_t);
         K_chunk.resize(K_chunk.n_rows + chunk_new_rows, K_chunk.n_cols + chunk_new_rows);
 #pragma omp parallel num_threads(adj_threads(2))
 #pragma omp single
         {
 #pragma omp task
-            K_chunk.submat(K_chunk.n_rows - chunk_new_rows, K_chunk.n_cols - chunk_new_rows, K_chunk.n_rows - 1, K_chunk.n_cols - 1) = prepare_K(params, chunk_ft);
+            K_chunk.submat(K_chunk.n_rows - chunk_new_rows, K_chunk.n_cols - chunk_new_rows, K_chunk.n_rows - 1, K_chunk.n_cols - 1) = prepare_K(params, new_chunk_features_t);
 #pragma omp task
             {
                 arma::mat newold_K;
-                PROFILE_EXEC_TIME(newold_K = prepare_Ky(params, p_features->rows(ixs[chunk_ix]), chunk_ft), "Init predict kernel matrix for chunk " << chunk_ix);
+                PROFILE_EXEC_TIME(newold_K = prepare_Ky(params, train_feature_chunks_t[chunk_ix], new_chunk_features_t), "Init predict kernel matrix for chunk " << chunk_ix);
                 K_chunk.submat(0, K_chunk.n_cols - chunk_new_rows, K_chunk.n_rows - chunk_new_rows - 1, K_chunk.n_cols - 1) = newold_K.t();
                 K_chunk.submat(K_chunk.n_rows - chunk_new_rows, 0, K_chunk.n_rows - 1, K_chunk.n_cols - chunk_new_rows - 1) = newold_K;
             }
         }
         const auto epsco = calc_epsco(K_chunk);
         params.set_svr_C(1. / (2. * epsco));
-        K_chunk.diag().fill(epsco);
+        K_chunk.diag() += epsco;
 
-        ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, arma::regspace<arma::uvec>(ixs[chunk_ix].n_rows, ixs[chunk_ix].n_rows + chunk_new_rows - 1));
+        ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, p_labels->n_rows + new_ixs);
+        train_feature_chunks_t[chunk_ix].insert_cols(train_feature_chunks_t[chunk_ix].n_cols, new_chunk_features_t);
+        arma::mat new_chunk_labels = new_y.rows(new_ixs);
+        business::DQScalingFactorService::scale_labels(chunk_ix, *this, new_chunk_labels);
+        train_label_chunks[chunk_ix].insert_rows(train_label_chunks[chunk_ix].n_rows, new_chunk_labels);
 #ifdef KEEP_PREV_WEIGHTS
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(main_components.size()))
             for (const auto &w: chunk_shedded_weights[chunk_ix])
                 chunk_weights[chunk_ix].insert_rows(chunk_weights[chunk_ix].n_rows, w.second);
 #else
-        auto &w = chunk_weights[chunk_ix];
+        auto &w = weight_chunks[chunk_ix];
         w.insert_rows(w.n_rows, arma::mat(chunk_new_rows, w.n_cols, arma::fill::value(arma::mean(arma::vectorise(w)))));
 #endif
     }
@@ -299,42 +335,34 @@ void OnlineMIMOSVR::learn(const arma::mat &new_x, const arma::mat &new_y, const 
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(affected_chunks.size()))
     for (size_t i = 0; i < affected_chunks.size(); ++i)
         calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit());
-    update_total_weights();
+    update_all_weights();
     samples_trained += new_rows_ct;
 }
 
 
 void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const size_t iters)
 {
-    const auto y = p_labels->rows(ixs[chunk_ix]);
-    const auto p_params = get_params_ptr(chunk_ix);
-    auto K_epsco = p_kernel_matrices->at(chunk_ix);
-    K_epsco.diag() += 1. / (2. * p_params->get_svr_C());
-    solve_dispatch(K_epsco, p_kernel_matrices->at(chunk_ix), y, chunk_weights[chunk_ix], iters, false); /* cuz DPOSV always fails! */
-    const auto diff = y + p_params->get_svr_epsilon() - p_kernel_matrices->at(chunk_ix) * chunk_weights[chunk_ix];
-    chunk_bias[chunk_ix] = arma::mean(arma::vectorise(diff));
-    chunk_mae[chunk_ix] = arma::mean(arma::vectorise(arma::abs(diff)));
-    LOG4_DEBUG("Chunk MAE " << chunk_mae[chunk_ix] << ", bias " << chunk_bias[chunk_ix] << " for chunk " << chunk_ix);
+    auto p_params = get_params_ptr(chunk_ix);
+    const auto epsco = 1. / (2. * p_params->get_svr_C());
+    arma::mat K_epsco = p_kernel_matrices->at(chunk_ix);
+    K_epsco.diag() += epsco;
+    solve_dispatch(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters, false); /* cuz DPOSV always fails! */
+    LOG4_TRACE("Chunk " << chunk_ix << ", level " << decon_level << ", gradient " << gradient << ", MAE " <<
+                            common::meanabs<double>(p_kernel_matrices->at(chunk_ix) * weight_chunks[chunk_ix] - train_label_chunks[chunk_ix]));
 }
 
 
-void OnlineMIMOSVR::update_total_weights()
+void OnlineMIMOSVR::update_all_weights()
 {
-    total_weights.set_size(arma::size(*p_labels));
-    total_weights.fill(0);
-    total_weights.rows(ixs.front()) = chunk_weights.front();
+    all_weights.zeros(arma::size(*p_labels));
+    all_weights.rows(ixs.front()) = weight_chunks.front();
     arma::mat divisors(arma::size(*p_labels), arma::fill::ones);
     for (size_t i = 1; i < ixs.size(); ++i) {
-        total_weights.rows(ixs[i]) += chunk_weights[i];
+        all_weights.rows(ixs[i]) += weight_chunks[i];
         divisors.rows(ixs[i]) += 1;
     }
-    total_weights /= divisors;
-    LOG4_TRACE("Total weights for level " << decon_level << " " << arma::size(total_weights));
-
-    const auto chunk_avg_mae = common::meanabs(chunk_mae);
-#pragma omp parallel for num_threads(adj_threads(ixs.size()))
-    for (size_t i = 0; i < ixs.size(); ++i)
-        chunks_weight[i] = chunk_avg_mae / chunk_mae[i];
+    all_weights /= divisors;
+    LOG4_TRACE("Total weights for level " << decon_level << " " << arma::size(all_weights));
 }
 
 } // datamodel

@@ -23,10 +23,10 @@ namespace
 }
 
 struct AsyncDQScalingFactorDAO::AsyncImpl
-    : AsyncImplBase<datamodel::DQScalingFactor_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgDQScalingFactorDAO>
+    : AsyncImplBase<datamodel::DQScalingFactor_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgDQScalingFactorDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    :AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
@@ -63,10 +63,10 @@ int AsyncDQScalingFactorDAO::remove(const datamodel::DQScalingFactor_ptr& dq_sca
     return pImpl.pgDao.remove(dq_scaling_factor);
 }
 
-svr::datamodel::dq_scaling_factor_container_t AsyncDQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
+svr::datamodel::dq_scaling_factor_container_t AsyncDQScalingFactorDAO::find_all_by_model_id(const bigint model_id)
 {
     std::scoped_lock lg(pImpl.pgMutex);
-    return pImpl.pgDao.find_all_by_dataset_id(dataset_id);
+    return pImpl.pgDao.find_all_by_model_id(model_id);
 }
 
 

@@ -1,7 +1,7 @@
+#include <fftw3.h>
 #include "short_term_fourier_transform.hpp"
 #include "common/thread_pool.hpp"
 #include "short_term_fourier_transform_ocl_impl.hpp"
-#include <fftw3.h>
 
 namespace svr
 {
@@ -11,7 +11,7 @@ short_term_fourier_transform_cpu::short_term_fourier_transform_cpu(const size_t 
     // It's a "feature". Otherwise, go through all the project code to use (Levels) models, and give (Levels+1) number to wavelet_transform.
     auto l = levels + 1;
     while (l > 1) {
-        if (l % 2) throw std::logic_error("Invalid number of levels.");
+        if (l % 2) THROW_EX_FS(std::logic_error, "Invalid number of levels " << l);
         l /= 2;
     }
 }
@@ -74,7 +74,6 @@ short_term_fourier_transform_cpu::transform(
     fftw_free(out);
 
     LOG4_DEBUG("Deconstruction yielded " << decon.size() << "x" << decon[0].size() << " matrix.");
-
     LOG4_END();
 }
 
@@ -83,7 +82,6 @@ void short_term_fourier_transform_cpu::inverse_transform(
         const size_t padding = 0) const
 {
     LOG4_BEGIN();
-
     const auto signal_length = static_cast<size_t>(decon.size()) / frame_size;
     if (signal_length < 2) throw std::runtime_error("Transform of invalid number of elements.");
 

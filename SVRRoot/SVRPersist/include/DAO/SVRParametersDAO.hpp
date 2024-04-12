@@ -19,7 +19,7 @@ public:
 
     virtual bigint get_next_id() = 0;
     virtual bool exists(const bigint id) = 0;
-    virtual int save(const datamodel::SVRParameters_ptr& svr_parameters) = 0;
+    virtual int save(const datamodel::SVRParameters_ptr &p_svr_parameters) = 0;
     virtual int remove(const datamodel::SVRParameters_ptr& svr_parameters) = 0;
     virtual int remove_by_dataset_id(const bigint dataset_id) = 0;
 

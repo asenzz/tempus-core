@@ -86,16 +86,16 @@ public:
 
     datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr &queue);
 
-    static size_t get_value_column_index(const datamodel::InputQueue_ptr &p_input_queue, const std::string &column_name);
+    static size_t get_value_column_index(const datamodel::InputQueue &input_queue, const std::string &column_name);
 
     datamodel::InputQueue_ptr clone_with_data(const datamodel::InputQueue_ptr &p_input_queue, const bpt::time_period &time_range,
                                    const size_t minimum_rows_count = std::numeric_limits<size_t>::min());
 
     static svr::datamodel::DataRow::container
-    get_column_data(const datamodel::InputQueue_ptr &p_input_queue, const std::string &column_name);
+    get_column_data(const datamodel::InputQueue &input_queue, const std::string &column_name);
 
     static data_row_container
-    get_column_data(const datamodel::InputQueue_ptr &queue, const size_t column_index);
+    get_column_data(const datamodel::InputQueue &input_queue, const size_t column_index);
 
     std::deque<std::string> get_db_table_column_names(const datamodel::InputQueue_ptr &queue);
 
@@ -103,12 +103,12 @@ public:
 
     void purge_missing_hours(datamodel::InputQueue_ptr const &);
 
-    static void prepare_queues(datamodel::Dataset_ptr &p_dataset, const bool trim = false);
+    static void prepare_queues(datamodel::Dataset &dataset);
 
     static boost::posix_time::ptime
     compare_to_decon_queue(
-            const datamodel::InputQueue_ptr &p_input_queue,
-            const datamodel::DeconQueue_ptr &p_decon_queue);
+            const datamodel::InputQueue &input_queue,
+            const datamodel::DeconQueue &decon_queue);
 
     size_t get_count_from_start(const datamodel::InputQueue_ptr &p_input_queue, const boost::posix_time::ptime &time);
 

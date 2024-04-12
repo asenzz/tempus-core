@@ -10,7 +10,7 @@
 
 #include "../util/MemoryManager.hpp"
 #include "../util/string_utils.hpp"
-#include "../util/ValidationUtils.hpp"
+#include "../util/validation_utils.hpp"
 
 namespace bpt = boost::posix_time;
 

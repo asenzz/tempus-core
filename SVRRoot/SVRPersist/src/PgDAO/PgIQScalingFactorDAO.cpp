@@ -50,7 +50,7 @@ int PgIQScalingFactorDAO::remove(const datamodel::IQScalingFactor_ptr &p_iq_scal
 std::deque<datamodel::IQScalingFactor_ptr> PgIQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
 {
     IQScalingFactorRowMapper row_mapper;
-    return data_source.query_for_deque(row_mapper, AbstractDAO::get_sql("find_all_by_dataset_id"), dataset_id);
+    return data_source.query_for_deque(row_mapper, AbstractDAO::get_sql("find_all_by_model_id"), dataset_id);
 }
 
 }

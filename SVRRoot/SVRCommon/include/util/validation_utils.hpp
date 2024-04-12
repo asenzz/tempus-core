@@ -3,11 +3,9 @@
 #include <stdexcept>
 #include <string>
 #include <memory>
-
 #include <boost/date_time.hpp>
-#include <boost/format.hpp>
+#include "common/compatibility.hpp"
 
-namespace bpt = boost::posix_time;
 
 namespace svr {
 namespace common {
@@ -20,7 +18,7 @@ class has_size
     typedef long two;
 
     template<typename C>
-    static one test(decltype(&C::size));
+    static one test(dtype(&C::size));
 
     template<typename C>
     static two test(...);

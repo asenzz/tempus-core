@@ -8,12 +8,11 @@
 #include <set>
 #include <armadillo>
 #include <deque>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
+#include "common/compatibility.hpp"
 #include "common/constants.hpp"
 #include "common/defines.h"
+#include "model/DQScalingFactor.hpp"
 #include "model/SVRParameters.hpp"
-#include "model/Entity.hpp"
-
 
 namespace svr {
 namespace business {
@@ -22,16 +21,18 @@ class calc_cache;
 
 namespace datamodel {
 
-constexpr unsigned C_interlace_manifold_factor = 1000; // Every Nth row is used from a manifold dataset to train the produced model
+constexpr unsigned C_interlace_manifold_factor = 750; // Every Nth row is used from a manifold dataset to train the produced model
 constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
-constexpr size_t C_grid_depth = 2; // Tune
-constexpr double C_grid_range_div = 8;
+constexpr unsigned C_grid_depth = 6; // Tune
+constexpr double C_grid_range_div = 10;
 constexpr double C_tune_range_min_lambda = 0;
 constexpr double C_tune_range_max_lambda = 1e2;
-const std::deque<double> C_tune_extra_lambdas {};//{1e1, 1e2};
-constexpr double C_tune_range_min_gammamulti = 1;
-constexpr double C_tune_range_max_gammamulti = 1e2;
+constexpr double C_chunk_overlap = 0; // Chunk rows overlap ratio, higher generates more chunks
+constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
+constexpr double C_chunk_tail = .1;
+constexpr double C_chunk_header = 1. - C_chunk_tail;
+constexpr double C_predict_chunks = 1; // Ratio of best chunks used for predictions
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -50,8 +51,10 @@ constexpr double C_tune_range_max_gammamulti = 1e2;
 
 struct t_gradient_data
 {
-    matrix_ptr p_features, p_labels;
+    mat_ptr p_features, p_labels;
     vec_ptr p_last_knowns;
+    t_gradient_data(const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_last_knowns)
+            : p_features(p_features), p_labels(p_labels), p_last_knowns(p_last_knowns) {}
 };
 
 class Dataset;
@@ -62,27 +65,25 @@ class OnlineMIMOSVR;
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
-class OnlineMIMOSVR : public Entity
+class OnlineMIMOSVR final : public Entity
 {
     bigint model_id = 0;
     Dataset_ptr p_dataset;
     std::string column_name;
     std::set<size_t> tmp_ixs;
     size_t samples_trained = 0;
-    matrix_ptr p_features, p_labels;
+    mat_ptr p_features, p_labels;
     vec_ptr p_last_knowns;
     t_param_set param_set;
     OnlineMIMOSVR_ptr p_manifold;
-    double labels_scaling_factor = 1;
     matrices_ptr p_kernel_matrices;
-    std::deque<arma::mat> chunk_weights;
-    std::deque<double> chunks_weight;
-    arma::mat total_weights;
-    std::deque<double> chunk_bias;
-    std::deque<double> chunk_mae;
+    datamodel::dq_scaling_factor_container_t scaling_factors;
+    std::deque<arma::mat> weight_chunks, train_feature_chunks_t, train_label_chunks;
     std::deque<arma::uvec> ixs;
+    std::deque<double> chunks_score;
+    arma::mat all_weights;
     size_t multistep_len = svr::common::C_default_multistep_len;
-    size_t max_chunk_size = common::C_kernel_default_max_chunk_size;
+    size_t max_chunk_size = common::C_default_kernel_max_chunk_size;
     size_t gradient = DEFAULT_SVRPARAM_GRAD_LEVEL;
     size_t decon_level = DEFAULT_SVRPARAM_DECON_LEVEL;
 
@@ -90,14 +91,14 @@ class OnlineMIMOSVR : public Entity
 
     virtual std::string to_string() const override;
 
-    virtual std::basic_ostream<char> &operator << (std::basic_ostream<char> &os) const override;
+    void parse_params();
 
 public:
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
     OnlineMIMOSVR(
             const bigint id, const bigint model_id, const t_param_set &param_set,
-            const matrix_ptr &p_xtrain, const matrix_ptr &p_ytrain, const vec_ptr &p_ylastknown,
+            const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown,
             const bpt::ptime &last_value_time, const matrices_ptr &p_kernel_matrices = nullptr,
             const Dataset_ptr &p_dataset = nullptr);
 
@@ -128,6 +129,12 @@ public:
     Dataset_ptr get_dataset() const;
 
     Dataset_ptr &get_dataset();
+
+    const dq_scaling_factor_container_t &get_scaling_factors() const;
+
+    void set_scaling_factor(const DQScalingFactor_ptr &p_sf);
+
+    void set_scaling_factors(const dq_scaling_factor_container_t &new_scaling_factors);
 
     void set_dataset(const Dataset_ptr &p_dataset);
 
@@ -182,15 +189,19 @@ public:
     double produce_kernel_inverse_order(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &y_train);
 #endif
 
+    static double get_gamma_range_variance(const size_t train_len);
+
+    static std::deque<double> get_gamma_base_multipliers(const double gamma_range_variance);
+
     size_t get_num_chunks();
 
     static size_t get_num_chunks(const size_t n_rows, const size_t chunk_size_);
 
-    static std::deque<arma::uvec> get_indexes(const size_t n_rows, const SVRParameters &svr_parameters, const size_t max_chunk_size);
+    static std::deque<arma::uvec> generate_indexes(const size_t n_rows, const size_t decrement, const size_t max_chunk_size);
 
     arma::uvec get_other_ixs(const size_t i) const;
 
-    std::deque<arma::uvec> get_indexes() const;
+    std::deque<arma::uvec> generate_indexes() const;
 
     arma::mat predict(const arma::mat &x_predict);
 
@@ -201,7 +212,7 @@ public:
     void learn(const arma::mat &new_x_train, const arma::mat &new_y_train, const arma::vec &new_y_last_knowns, const bpt::ptime &last_value_time,
                  const bool temp_learn = false, const std::deque<size_t> &forget_ixs = {});
 
-    void batch_train(const matrix_ptr &p_xtrain, const matrix_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time, const matrices_ptr &precalc_kernel_matrices = nullptr);
+    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time, const matrices_ptr &precalc_kernel_matrices = nullptr);
 
     arma::mat &get_features();
 
@@ -213,19 +224,19 @@ public:
 
     arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &x_predict, const bpt::ptime &time);
 
-    arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &x_predict);
+    arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
 
-    arma::mat prepare_K(const SVRParameters &params, const arma::mat &x, const bpt::ptime &time);
+    arma::mat prepare_K(const SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
 
-    static arma::mat prepare_K(const SVRParameters &params, const arma::mat &x);
+    static arma::mat prepare_K(const SVRParameters &params, const arma::mat &x_t);
 
-    static matrix_ptr prepare_Z(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    static mat_ptr prepare_Z(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
-    static matrix_ptr prepare_Z(const SVRParameters &params, const arma::mat &features_t);
+    static mat_ptr prepare_Z(const SVRParameters &params, const arma::mat &features_t);
 
-    static matrix_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
+    static mat_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
 
-    static matrix_ptr prepare_Zy(const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t);
+    static mat_ptr prepare_Zy(const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t);
 
     static std::shared_ptr<std::deque<arma::mat>> prepare_cumulatives(const SVRParameters &params, const arma::mat &features_t);
 
@@ -235,7 +246,7 @@ public:
 
     void calc_weights(const size_t chunk_ix, const size_t iters);
 
-    void update_total_weights();
+    void update_all_weights();
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;

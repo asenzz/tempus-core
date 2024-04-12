@@ -6,6 +6,7 @@
 #include "model/Ensemble.hpp"
 #include "model/Model.hpp"
 #include "model/User.hpp"
+#include "EnsembleService.hpp"
 #include </opt/intel/oneapi/tbb/latest/include/oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/date_time/posix_time/time_period.hpp>
 
@@ -28,14 +29,6 @@ class SVRParametersService;
 namespace svr {
 namespace business {
 
-struct t_training_data
-{
-    std::unordered_map<size_t /* level */, matrix_ptr> features, labels;
-    std::unordered_map<size_t /* level */, vec_ptr> last_knowns;
-    bpt::ptime last_row_time;
-};
-
-
 class DatasetService
 {
     dao::DatasetDAO &dataset_dao;
@@ -45,7 +38,7 @@ class DatasetService
 public:
     struct DatasetUsers
     {
-        datamodel::Dataset_ptr dataset;
+        datamodel::Dataset_ptr p_dataset;
         std::deque<User_ptr> users;
 
         DatasetUsers(datamodel::Dataset_ptr const &dataset, std::deque<User_ptr> &&users);
@@ -83,20 +76,13 @@ public:
 
     void update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs);
 
-    static std::unordered_map<size_t, matrix_ptr> join_features(
-            std::unordered_map<std::string, t_training_data> &train_data, const size_t levct, const std::deque<datamodel::Ensemble_ptr> &ensembles);
+    static datamodel::t_training_data prepare_training_data(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
 
-    static bool prepare_training_data(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble, t_training_data &train_data);
+    static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &predict_times);
 
-    static auto prepare_request_features(const datamodel::Dataset_ptr &p_dataset, const std::set<bpt::ptime> &predict_times);
+    static void process(datamodel::Dataset &dataset);
 
-    static void process(datamodel::Dataset_ptr &p_dataset);
-
-    static void process_dataset_test_tune(datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble);
-
-    static boost::posix_time::time_period get_training_range(const datamodel::Dataset_ptr &p_dataset);
-
-    static void process_requests(const User_ptr &p_user, datamodel::Dataset_ptr &p_dataset);
+    static void process_requests(const datamodel::User &user, datamodel::Dataset &dataset);
 };
 
 } /* namespace business */

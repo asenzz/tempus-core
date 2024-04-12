@@ -44,6 +44,12 @@ namespace svr {
 namespace optimizer {
 
 
+std::basic_ostream<char> &operator<<(std::basic_ostream<char> &s, const ffa_particle &p)
+{
+    return s << "Particle " << p.Index << ", I " << p.I << ", f " << p.f;
+}
+
+
 firefly::firefly(
         const size_t D,
         const size_t n,
@@ -65,19 +71,23 @@ firefly::firefly(
     // Firefly algorithm optimization loop
     // determine the starting point of random generator
     do_sobol_init();
-#pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
+#pragma omp parallel for num_threads(adj_threads(n * D)) collapse(2)
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < D; ++j) {
-            if (D < n / 2) { // Produce equispaced grid
+            if (D <= n / 2) { // Produce equispaced grid
                 const double dim_range = double(n) / std::pow<double>(2, j);
                 ffa(j, i) = std::pow(std::fmod<double>(i + 1, dim_range) / dim_range, pows[j]);
                 LOG4_TRACE("Particle " << i << ", argument " << j << ", parameter " << ffa(j, i) << ", ub " << ub[j] << ", lb " << lb[j] << ", dim range " << dim_range);
             } else // Use Sobol pseudo-random number
                 ffa(j, i) = std::pow(sobolnum(j, sobol_ctr + i), pows[j]);
         }
+    }
+
+#pragma omp parallel for num_threads(adj_threads(n))
+    for (size_t i = 0; i < n; ++i) {
         ffa.col(i) = ffa.col(i) % range + lb;
-        particles[i].I = particles[i].f = 1;            // initialize attractiveness
-        if (D < 5) LOG4_DEBUG("Particle " << i << ", parameters " << ffa.col(i));
+        particles[i].I = particles[i].f = 1;  // initialize attractiveness
+        if (D < 5 && i < 5) LOG4_DEBUG("Particle " << i << ", parameters " << ffa.col(i));
     }
 
     PROFILE_EXEC_TIME(
@@ -137,15 +147,21 @@ void firefly::move_ffa_adaptive(const double rate)
 #else
     const auto ffa_prev = ffa;
     const auto beta0_betamin = beta0 - betamin;
-#pragma omp parallel for num_threads(adj_threads(n)) collapse(2)
+    levy_random = common::levy(D);
+#ifdef __INTEL_LLVM_COMPILER
+    #pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
+#else
+    #pragma omp parallel for num_threads(adj_threads(n * n)) schedule(static, 1) collapse(2)
+#endif
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
-            if (i == j || particles[i].I <= particles[j].I) continue;    // brighter and more attractive
+            if (i == j || particles[i].I <= particles[j].I) continue;
+            // brighter and more attractive
             const double r = arma::accu(arma::abs(ffa.col(i) - ffa_prev.col(j)));
             const double beta = beta0_betamin * std::exp(-gamma * r * r) + betamin;
             const double l = -1. + 2. * drand48();
             if (drand48() > rate)
-                ffa.col(i) = ffa.col(i) * (1. - beta) + ffa_prev.col(j) * beta + alpha * std::copysign(1., (drand48() - .5)) * levy_random * range;
+                ffa.col(i) = ffa.col(i) * (1. - beta) + ffa_prev.col(j) * beta + alpha * std::copysign(1., (drand48() - .5)) * levy_random % range;
             else
                 ffa.col(i) = (ffa_prev.col(j) - ffa.col(i)) * beta * std::exp(l * b_1) * std::cos(2. * M_PI * -1. + 2. * drand48());
         }
@@ -203,11 +219,12 @@ void firefly::ffa_main()
             }
             rate = 1. / (1. + std::exp(-a / b));
         }
-        if (t > 1 && this_fbest < best_score) {
+        if (this_fbest < best_score) {
             LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << this_fbest << ", previous best score " << best_score << ", improvement "
-                                            << 100. * (1. - this_fbest / best_score) << " pct."); // << ", parameters " << common::deep_to_string(nbest));
+                                            << 100. * (1. - this_fbest / best_score) << " pct.");
             best_parameters = nbest;
             best_score = this_fbest;
+            if (D < 10) LOG4_TRACE("Best parameters " << best_parameters);
         }
         move_ffa_adaptive(rate);
         ++t;

@@ -22,7 +22,7 @@ TEST_F(DaoTestFixture, DeconQueueWorkflow)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>
-            (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+            (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -102,7 +102,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     aci.input_queue_service.save(p_all_data_inputqueue_1h);
     auto p_inputq = p_all_data_inputqueue->clone_empty();
     datamodel::Dataset_ptr p_dataset = std::make_shared<svr::datamodel::Dataset>(
-            bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal, "dsDescription", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
+            bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal, "dsDescription", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
     APP.ensemble_service.init_ensembles(p_dataset);
     p_dataset->set_is_active(true);
     aci.dataset_service.save(p_dataset);
@@ -126,10 +126,10 @@ TEST_F(DaoTestFixture, testDeconRecon)
             LOG4_DEBUG("Row not found in hires data for " << row_1h->get_value_time());
             continue;
         }
-        const auto twap_1h = svr::calc_twap(
+        const auto twap_1h = 0.; /* TODO Port svr::generate_twap(
                 it_row_1s, p_all_data_inputqueue->end(),
                 row_1h->get_value_time(), row_1h->get_value_time() + p_all_data_inputqueue_1h->get_resolution(),
-                p_all_data_inputqueue->get_resolution(), 0);
+                p_all_data_inputqueue->get_resolution(), 0); */
         if (std::isnan(twap_1h)) continue;
         const auto diff_twap = std::abs(twap_1h - row_1h.get()->get_value(0));
         total_input_diff += diff_twap;
@@ -277,7 +277,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
             "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -323,7 +323,7 @@ TEST_F(DaoTestFixture, TestDQUpdates)
             bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_kernel_default_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 

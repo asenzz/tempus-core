@@ -70,18 +70,14 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
 
 bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns)
 {
-    std::deque<bool> present(value_columns.size(), false);
-    OMP_LOCK(present_l);
+    tbb::concurrent_vector<bool> present(value_columns.size(), false);
 #pragma omp parallel for num_threads(adj_threads(value_columns.size() * iqsf.size())) collapse(2)
     for (const auto &sf: iqsf)
         for (size_t i = 0; i < value_columns.size(); ++i)
             if (sf->get_input_queue_column_name() == value_columns[i]
                 && std::isnormal(sf->get_scaling_factor())
-                && common::isnormalz(sf->get_dc_offset())) {
-                omp_set_lock(&present_l);
+                && common::isnormalz(sf->get_dc_offset()))
                 present[i] = true;
-                omp_unset_lock(&present_l);
-            }
     return std::all_of(std::execution::par_unseq, present.begin(), present.end(), [](const auto &el) { return el; });
 }
 
@@ -95,7 +91,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     const auto resolution_ratio = dataset.get_input_queue()->get_resolution() / input_queue.get_resolution();
 #ifdef INTEGRATION_TEST
     auto test_input_queue = input_queue;
-    test_input_queue.get_data().erase(test_input_queue.end() - (INTEGRATION_TEST_VALIDATION_WINDOW - 1) * resolution_ratio, test_input_queue.end());
+    test_input_queue.get_data().erase(test_input_queue.end() - (common::INTEGRATION_TEST_VALIDATION_WINDOW - 1) * resolution_ratio, test_input_queue.end());
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
             test_input_queue, dataset.get_id(), dataset.get_max_possible_residuals_length() + dataset.get_max_decrement() * resolution_ratio), true),
                       "Calculate input queue scaling factors for " << input_queue.get_table_name());
@@ -123,7 +119,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool sav
 }
 
 t_iqscaler
-IQScalingFactorService::get_scaler(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name)
+IQScalingFactorService::get_scaler(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name)
 {
     const auto p_iq_scaling_factor = dataset.get_iq_scaling_factor(input_queue.get_table_name(), column_name);
     if (!p_iq_scaling_factor) LOG4_THROW("Couldn't find scaling factors for " << input_queue.get_table_name() << ", " << column_name);

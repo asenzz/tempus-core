@@ -1,3 +1,4 @@
+#include "model/SVRParameters.hpp"
 #include "TsSVRParametersDAO.hpp"
 
 namespace svr{
@@ -18,9 +19,9 @@ bool TsSVRParametersDAO::exists(const bigint id)
 }
 
 
-int TsSVRParametersDAO::save(const datamodel::SVRParameters_ptr& svr_parameters)
+int TsSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameters)
 {
-    return ts_call<int>(&SVRParametersDAO::save, svr_parameters);
+    return ts_call<int>(&SVRParametersDAO::save, p_svr_parameters);
 }
 
 

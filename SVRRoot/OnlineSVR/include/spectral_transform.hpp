@@ -13,7 +13,6 @@
 #include <vector>
 #include <string>
 #include <memory>
-#include "model/DataRow.hpp"
 
 namespace svr {
 
@@ -37,8 +36,6 @@ class spectral_transform {
 
 
 public:
-    static void mirror_tail(const datamodel::datarow_range &input, const size_t needed_data_ct, std::vector<double> &tail);
-
     static size_t modwt_levels_to_frame_length(const size_t modwt_levels, const size_t wavelet_order);
 
     static size_t modwt_residuals_length(const size_t modwt_levels);

@@ -100,7 +100,7 @@ inline void serialize(Ar& ar, tbb::concurrent_vector<Ts...>& t, unsigned version
 template<typename A, typename... Ts> void
 save(A &ar, const tbb::concurrent_set<Ts...> &t, const unsigned ver)
 {
-    std::deque<typename std::remove_const<typename tbb::concurrent_set<Ts...>::value_type>::type> tmp;
+    std::deque<std::decay_t<typename tbb::concurrent_set<Ts...>::value_type>> tmp;
     for (const auto &e: t) tmp.emplace_back(e);
     ar & tmp;
 }
@@ -108,7 +108,7 @@ save(A &ar, const tbb::concurrent_set<Ts...> &t, const unsigned ver)
 template<typename A, typename... Ts>
 void load(A &ar, tbb::concurrent_set<Ts...> &t, const unsigned ver)
 {
-    std::deque<typename std::remove_const<typename tbb::concurrent_set<Ts...>::value_type>::type> tmp;
+    std::deque<std::decay_t<typename tbb::concurrent_set<Ts...>::value_type>> tmp;
     ar & tmp;
     for (auto &e: tmp) t.emplace(e);
 }
@@ -123,7 +123,7 @@ template<typename A, typename... Ts> void
 save(A &ar, const tbb::concurrent_map<Ts...> &t, const unsigned ver)
 {
     std::deque<std::pair<
-            typename std::remove_const<typename tbb::concurrent_map<Ts...>::key_type>::type,
+            typename std::decay_t<typename tbb::concurrent_map<Ts...>::key_type>,
             typename tbb::concurrent_map<Ts...>::mapped_type>> tmp;
     for (const auto &e: t) tmp.emplace_back(e);
     ar & tmp;
@@ -133,7 +133,7 @@ template<typename A, typename... Ts>
 void load(A &ar, tbb::concurrent_map<Ts...> &t, const unsigned ver)
 {
     std::deque<std::pair<
-            typename std::remove_const<typename tbb::concurrent_map<Ts...>::key_type>::type,
+            std::decay_t<typename tbb::concurrent_map<Ts...>::key_type>,
             typename tbb::concurrent_map<Ts...>::mapped_type>> tmp;
     ar & tmp;
     for (auto &e: tmp) t.emplace(e);

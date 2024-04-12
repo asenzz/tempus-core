@@ -21,6 +21,10 @@
 #include "types.hpp"
 #include "defines.h"
 
+namespace bpt = boost::posix_time;
+
+#define dtype(T) std::decay_t<decltype(T)>
+
 namespace boost {
 #include "hashing.tpp"
 }
@@ -33,44 +37,39 @@ namespace std {
 //{
 //    return std::unique_ptr<T>( new T( std::forward<Args>(args)... ) );
 //}
-
-#ifdef __CYGWIN__
-template<typename T>
-string to_string(const T& obj){
-    stringstream ss;
-    ss << obj;
-    return ss.str();
-}
-#endif
 } // namespace std
 
-namespace std {
-std::string to_string(const long double v);
-
-std::string to_string(const double v);
-
-std::string to_string(const float v);
-
-template<typename T, typename C, typename Tr>
-std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
-{
-    if (aset.size() < 2) return s << *aset.begin();
-
-    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << el << ", "; });
-    return s << *std::prev(aset.end());
-}
-
-template<typename C, typename Tr, typename T>
-std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
-{
-    if (aset.size() < 2) return s << *aset.begin();
-    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << *el << ", "; });
-    return s << **std::prev(aset.end());
-}
-
-}
 
 namespace svr {
+
+template<typename T, typename Enable = void>
+struct is_smart_pointer
+{
+    enum { value = false };
+};
+
+template<typename T>
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::shared_ptr<typename T::element_type>>::value>::type>
+{
+    enum { value = true };
+};
+
+template<typename T>
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::unique_ptr<typename T::element_type>>::value>::type>
+{
+    enum { value = true };
+};
+
+template<typename T>
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::weak_ptr<typename T::element_type>>::value>::type>
+{
+    enum { value = true };
+};
+
+
+typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
+typedef std::shared_ptr<arma::mat> mat_ptr;
+typedef std::shared_ptr<arma::vec> vec_ptr;
 
 using mutex_ptr = std::shared_ptr<std::mutex>;
 
@@ -110,17 +109,20 @@ struct equal_to
 
 #define ALIAS_TEMPLATE_FUNCTION(highLevelF, lowLevelF) \
 template<typename... Args> \
-inline auto highLevelF(Args&&... args) -> decltype(lowLevelF(std::forward<Args>(args)...)) \
+inline auto highLevelF(Args&&... args) -> dtype(lowLevelF(std::forward<Args>(args)...)) \
 { \
     return lowLevelF(std::forward<Args>(args)...); \
 }
 
-unsigned adj_threads(const ssize_t iterations);
+template<typename T> unsigned adj_threads(const T iterations)
+{
+    return static_cast<unsigned>(std::min<T>(iterations < 0 ? 0 : iterations, std::thread::hardware_concurrency()));
+}
 
 template<typename ContainerT, typename PredicateT>
 void remove_if(ContainerT &items, const PredicateT &predicate)
 {
-    typename std::remove_reference_t<std::remove_const_t<ContainerT>>::iterator it = items.begin();
+    typename std::decay_t<ContainerT>::iterator it = items.begin();
     while (items.size() && it != items.end())
         if (predicate(*it)) {
             if (items.size() < 2) {
@@ -241,10 +243,6 @@ template<typename V, typename L> V back(const std::set<V, L> &s)
 {
     return *s.end();
 }
-
-typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
-typedef std::shared_ptr<arma::mat> matrix_ptr;
-typedef std::shared_ptr<arma::vec> vec_ptr;
 
 
 template<typename T> auto
@@ -609,7 +607,7 @@ struct copyatomic
 
 };
 
-size_t hash_param(const double param_val);
+size_t hash_lambda(const double param_val);
 
 #if 0 // ArrayFire related routines, deprecated
 af::array armat_to_af_2d(const arma::mat &input)

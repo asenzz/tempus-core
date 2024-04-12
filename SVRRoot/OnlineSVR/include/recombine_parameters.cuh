@@ -11,9 +11,9 @@ namespace svr {
 
 struct t_param_preds_cu
 {
-    double predictions[EMO_MAX_J][EMO_TEST_LEN];
-    double labels[EMO_MAX_J][EMO_TEST_LEN];
-    double last_knowns[EMO_MAX_J][EMO_TEST_LEN];
+    double predictions[C_emo_max_j][C_emo_test_len];
+    double labels[C_emo_max_j][C_emo_test_len];
+    double last_knowns[C_emo_max_j][C_emo_test_len];
     uint8_t params_ix;
 };
 typedef t_param_preds_cu *t_param_preds_cu_ptr;

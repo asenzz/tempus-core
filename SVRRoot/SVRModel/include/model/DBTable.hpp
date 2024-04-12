@@ -92,7 +92,7 @@ public:
             const boost::posix_time::ptime end_time = boost::posix_time::max_date_time) const;
 
     std::deque<double> get_column_values(
-            const size_t &column_index,
+            const size_t column_index,
             const size_t start_pos = 0,
             const size_t count = std::numeric_limits<size_t>::max()) const;
 

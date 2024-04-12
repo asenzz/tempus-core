@@ -13,7 +13,7 @@ TEST_F(DaoTestFixture, ModelWorkflow)
     size_t decon_level = 2;
     auto paramset = std::make_shared<datamodel::t_param_set>();
     paramset->emplace(std::make_shared<datamodel::SVRParameters>(
-            0, 100, "q_svrwave_xauusd_60", "open", 2, 0, 0, 0.1, 0.5, 1, 10, 1, 0.5, kernel_type::RBF, 35));
+            0, 100, "q_svrwave_xauusd_60", "open", 3, 2, 0, 0, 0.1, 0.5, 1, 10, 1, 0.5, kernel_type::RBF, 35));
     datamodel::OnlineMIMOSVR_ptr svr_model = otr<datamodel::OnlineMIMOSVR>(0, 0, *paramset);
     bpt::ptime last_modified = bpt::time_from_string("2015-05-20 10:45:00");
     bpt::ptime last_modeled_value_time = bpt::time_from_string("2015-05-20 10:47:00");
@@ -54,11 +54,11 @@ TEST_F(DaoTestFixture, ModelWorkflow)
     aci.ensemble_service.save(ensemble);
 
     auto test_model = std::make_shared<Model>(
-            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, common::C_kernel_default_max_chunk_size,
+            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, common::C_default_kernel_max_chunk_size,
             std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     datamodel::Model_ptr test_model_0 = std::make_shared<Model>(
-            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, common::C_kernel_default_max_chunk_size,
+            bigint(0), ensemble->get_id(), decon_level, PROPS.get_multistep_len(), 1, common::C_default_kernel_max_chunk_size,
             std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     ASSERT_FALSE(aci.model_service.exists(test_model));

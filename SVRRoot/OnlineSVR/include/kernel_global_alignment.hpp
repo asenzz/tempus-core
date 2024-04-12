@@ -144,9 +144,9 @@ kernel_global_alignment<scalar_type>::logGAK_t_noexp(const vektor<scalar_type> &
     if (triangular > 0) {
         /* initialize */
         auto limit = trimax < triangular ? trimax + 1 : triangular;
-        for (decltype(limit) i = 0; i < limit; ++i)log_triangular_coefficients[i] = log(
+        for (dtype(limit) i = 0; i < limit; ++i)log_triangular_coefficients[i] = log(
                     1. - (double) i / (double) triangular);
-        for (decltype(limit) i = limit; i <= trimax; ++i)
+        for (dtype(limit) i = limit; i <= trimax; ++i)
             log_triangular_coefficients[i] = LOG0; /* Set all to zero */
     } else
         for (int i = 0; i <= trimax; ++i)
@@ -220,7 +220,7 @@ kernel_global_alignment<scalar_type>::logGAK_t(
     const int dimvect = va.size() / lag_count;
     if (dimvect <= 0)
         throw std::invalid_argument(svr::common::formatter() << "GA dimvect <= 0 !" << dimvect);
-    if (va.size() != decltype(va.size())(lag_count * dimvect))
+    if (va.size() != dtype(va.size())(lag_count * dimvect))
         throw std::invalid_argument(
                 svr::common::formatter() << "We don't know what is happening!" << va.size() << " " << lag_count
                                          << " " << dimvect);
@@ -264,9 +264,9 @@ kernel_global_alignment<scalar_type>::logGAK_t(
     if (triangular > 0) {
         /* initialize */
         auto limit = trimax < triangular ? trimax + 1 : triangular;
-        for (decltype(limit) i = 0; i < limit; ++i)
+        for (dtype(limit) i = 0; i < limit; ++i)
             log_triangular_coefficients[i] = log(1. - (double) i / (double) triangular);
-        for (decltype(limit) i = limit; i <= trimax; ++i)
+        for (dtype(limit) i = limit; i <= trimax; ++i)
             log_triangular_coefficients[i] = LOG0; /* Set all to zero */
     } else
         for (int i = 0; i <= trimax; ++i)
@@ -426,7 +426,7 @@ kernel_global_alignment<scalar_type>::operator()(
         throw std::invalid_argument(
                 svr::common::formatter() << "Lag count <= 0 !" << this->parameters.get_lag_count());
     const int dimvect = va.size() / lag_count;
-    if (dimvect < 1 || decltype(va.size())(dimvect * lag_count) != va.size())
+    if (dimvect < 1 || dtype(va.size())(dimvect * lag_count) != va.size())
         throw std::invalid_argument(
                 svr::common::formatter() << "GA dimvect <= 0 or otherwise BAD!   dimvect is " << dimvect
                                          << " va.size() is " << va.size() << " and lag_count is " << lag_count);

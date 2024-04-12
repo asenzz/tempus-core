@@ -3,13 +3,36 @@
 #include <iterator>
 #include <sstream>
 #include <boost/algorithm/string.hpp>
-#include <openssl/md5.h>
+#include <openssl/evp.h>
 
 #include "util/string_utils.hpp"
 #include "common/Logging.hpp"
 #include <common/constants.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
+namespace std {
+
+std::string to_string(const long double v)
+{
+    std::ostringstream out;
+    out.precision(std::numeric_limits<double>::max_digits10);
+    return out.str();
+}
+
+std::string to_string(const double v)
+{
+    std::ostringstream out;
+    out.precision(std::numeric_limits<double>::max_digits10);
+    return out.str();
+}
+
+std::string to_string(const float v)
+{
+    std::ostringstream out;
+    out.precision(std::numeric_limits<float>::max_digits10);
+    return out.str();
+}
+}
 
 namespace svr {
 
@@ -123,15 +146,23 @@ std::string sanitize_db_table_name(std::string where, char replace_char)
 
 std::string make_md5_hash(const std::string &in)
 {
-    unsigned char digest[MD5_DIGEST_LENGTH];
+    auto md5_digest_len = EVP_MD_size(EVP_md5());
 
-    MD5((const unsigned char *) in.c_str(), in.length(), (unsigned char *) &digest);
+    // MD5_Init
+    auto mdctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(mdctx, EVP_md5(), NULL);
 
-    char mdString[33];
-    for (int i = 0; i < 16; i++)
-        sprintf(&mdString[i * 2], "%02x", (unsigned int) digest[i]);
+    // MD5_Update
+    EVP_DigestUpdate(mdctx, in.c_str(), in.length());
 
-    return std::string(mdString);
+    // MD5_Final
+    auto md5_digest = (unsigned char *) OPENSSL_malloc(md5_digest_len);
+    EVP_DigestFinal_ex(mdctx, md5_digest, (unsigned int *) &md5_digest_len);
+    EVP_MD_CTX_free(mdctx);
+    std::stringstream mds;
+    for (dtype(md5_digest_len) i = 0; i < md5_digest_len; ++i)
+        mds << std::hex << std::setfill('0') << std::setw(sizeof(*md5_digest) * 2) << unsigned(md5_digest[i]);
+    return mds.str();
 }
 
 // const std::string C_mt4_date_time_format {"%Y.%m.%d %H:%M:%S"};

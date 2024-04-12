@@ -153,8 +153,7 @@ DataRow::DataRow(const std::string &csv)
 {
     const auto p_row = load(csv);
     if (p_row) *this = *p_row;
-    else
-        LOG4_FATAL("Failed constructing data row from string " << csv);
+    else LOG4_FATAL("Failed constructing data row from string " << csv);
 }
 
 DataRow::container
@@ -162,12 +161,8 @@ DataRow::construct(const std::deque<datamodel::MultivalResponse_ptr> &responses)
 {
     container result;
     for (auto iter_res = responses.begin(); iter_res != responses.end(); ++iter_res) {
-        const auto &response = **iter_res;
-        (void) result.emplace_back(ptr<DataRow>(
-                response.value_time,
-                bpt::second_clock::local_time(),
-                common::C_default_value_tick_volume,
-                std::vector{response.value}));
+        const auto p_response = *iter_res;
+        result.emplace_back(otr<DataRow>(p_response->value_time, bpt::second_clock::local_time(), common::C_default_value_tick_volume, std::vector{p_response->value}));
     }
     return result;
 }
@@ -180,69 +175,66 @@ void DataRow::set_value(const size_t column_index, const double value)
 
 std::string DataRow::to_string() const
 {
-    std::stringstream st;
-    st.precision(std::numeric_limits<long double>::max_digits10);
-    st << "Value time " << value_time_ << ", update time " << update_time_ <<
-       ", volume " << tick_volume_ << ", values ";
-    for (size_t i = 0; i < values_.size() - 1; ++i) st << values_[i] << ", ";
-    st << values_.back();
-    return st.str();
+    std::stringstream s;
+    s.precision(std::numeric_limits<long double>::max_digits10);
+    s << "Value time " << value_time_ << ", update time " << update_time_ << ", volume " << tick_volume_ << ", values ";
+    for (size_t i = 0; i < values_.size() - 1; ++i) s << values_[i] << ", ";
+    s << values_.back();
+    return s.str();
 }
 
 std::vector<std::string> DataRow::to_tuple() const
 {
     std::vector<std::string> result;
 
-    result.push_back(bpt::to_simple_string(value_time_));
-    result.push_back(bpt::to_simple_string(update_time_));
-    result.push_back(common::to_string_with_precision(tick_volume_));
-
-    for (const double v: values_) result.push_back(common::to_string_with_precision(v));
+    result.emplace_back(bpt::to_simple_string(value_time_));
+    result.emplace_back(bpt::to_simple_string(update_time_));
+    result.emplace_back(common::to_string_with_precision(tick_volume_));
+    for (const double v: values_) result.emplace_back(common::to_string_with_precision(v));
 
     return result;
 }
 
 bool DataRow::operator==(const DataRow &other) const
 {
-    return this->value_time_ == other.value_time_
-           && this->tick_volume_ == other.tick_volume_
-           && this->values_.size() == other.values_.size()
-           && std::equal(values_.begin(), values_.end(), other.values_.begin());
+    return value_time_ == other.value_time_
+           && tick_volume_ == other.tick_volume_
+           && values_.size() == other.values_.size()
+           && std::equal(std::execution::par_unseq, values_.begin(), values_.end(), other.values_.begin());
 }
 
 bool DataRow::fast_compare(const DataRow::container &lhs, const DataRow::container &rhs)
 {
     return lhs.size() == rhs.size()
-           && lhs.begin()->get()->get_values().size() == rhs.begin()->get()->get_values().size()
-           && lhs.begin()->get()->get_value_time() == rhs.begin()->get()->get_value_time()
-           && lhs.rbegin()->get()->get_value_time() == rhs.rbegin()->get()->get_value_time();
+           && (**lhs.begin()).size() == (**rhs.begin()).size()
+           && (**lhs.begin()).get_value_time() == (**rhs.begin()).get_value_time()
+           && (**lhs.rbegin()).get_value_time() == (**rhs.rbegin()).get_value_time();
 }
 
 std::shared_ptr<DataRow> DataRow::load(const std::string &s, const char delim)
 {
     std::istringstream is(s);
-    char fld[common::C_max_csv_token_size];
+    char field[common::C_max_csv_token_size];
     size_t tix = 0;
     auto r = ptr<DataRow>();
-    while (is.getline(fld, common::C_max_csv_token_size, delim)) {
+    while (is.getline(field, common::C_max_csv_token_size, delim)) {
         switch (tix) {
             case 0:
-                r->value_time_ = bpt::time_from_string(fld);
+                r->value_time_ = bpt::time_from_string(field);
                 break;
             case 1:
-                r->update_time_ = bpt::time_from_string(fld);
+                r->update_time_ = bpt::time_from_string(field);
                 break;
             case 2: {
-                const auto v = std::strtod(fld, nullptr);
-                if (!common::isnormalz(v))
-                    LOG4_ERROR("Reading tick volume " << v << " is not znormal.");
+                const auto v = std::strtod(field, nullptr);
+                if (!common::isnormalz(v)) LOG4_ERROR("Reading tick volume " << v << " from field " << field << " is not znormal.");
                 r->tick_volume_ = v;
                 break;
             }
             default: {
-                const auto v = std::strtod(fld, nullptr);
+                const auto v = std::strtod(field, nullptr);
                 if (!common::isnormalz(v))
-                    LOG4_ERROR("Reading price column " << tix - 3 << " " << v << " is not znormal.");
+                    LOG4_ERROR("Reading price column " << tix - 3 << " " << v << " from field " << field << " is not znormal.");
                 r->values_.emplace_back(v);
                 break;
             }
@@ -257,17 +249,15 @@ std::shared_ptr<DataRow> DataRow::load(const std::string &s, const char delim)
 data_row_container
 clone_datarows(data_row_container::const_iterator it, const data_row_container::const_iterator &end)
 {
-    const size_t res_size = std::distance(it, end);
+    const auto res_size = std::distance(it, end);
     data_row_container res(res_size);
 #pragma omp parallel for schedule(static, 1 + std::thread::hardware_concurrency() / res_size) num_threads(adj_threads(res_size))
-    for (size_t i = 0; i < res_size; ++i) res[i] = ptr<datamodel::DataRow>(**(it + i));
+    for (std::decay_t<dtype(res_size)> i = 0; i < res_size; ++i) res[i] = ptr<datamodel::DataRow>(**(it + i));
     return res;
 }
 
-static const auto comp_lb = [](const datamodel::DataRow_ptr &el, const bpt::ptime &tt) -> bool {
-    return el->get_value_time() < tt;
-};
-
+static const auto comp_lb = [] (const datamodel::DataRow_ptr &el, const bpt::ptime &tt) { return el->get_value_time() < tt; };
+static const auto comp_ub = [] (const bpt::ptime &tt, const datamodel::DataRow_ptr &el) { return tt < el->get_value_time(); };
 
 datamodel::DataRow::container::const_iterator
 lower_bound(const datamodel::DataRow::container &c, const bpt::ptime &t)
@@ -283,15 +273,25 @@ lower_bound(datamodel::DataRow::container &c, const bpt::ptime &t)
 }
 
 
-static const auto comp_ub = [](const bpt::ptime &tt, const datamodel::DataRow_ptr &el) {
-    return tt < el->get_value_time();
-};
+datamodel::DataRow::container::const_iterator
+find(
+        const datamodel::DataRow::container &data,
+        const boost::posix_time::ptime &vtime,
+        const boost::posix_time::time_duration &deviation)
+{
+    auto iter = lower_bound(data, vtime);
+    if ((**iter).get_value_time() == vtime) return iter;
+    if (vtime - (**std::prev(iter)).get_value_time() < (**iter).get_value_time() - vtime) --iter;
+    if ((**iter).get_value_time() - vtime > deviation) return data.cend();
+    return iter;
+}
+
 
 datamodel::DataRow::container::iterator find(datamodel::DataRow::container &data, const bpt::ptime &value_time)
 {
     auto res = lower_bound(data, value_time);
-    if (res == data.end()) return res;
-    else if (res->get()->get_value_time() == value_time) return res;
+    if (res == data.cend()) return res;
+    else if ((**res).get_value_time() == value_time) return res;
     else return data.end();
 }
 
@@ -300,7 +300,7 @@ datamodel::DataRow::container::const_iterator find(const datamodel::DataRow::con
 {
     auto res = lower_bound(data, value_time);
     if (res == data.end()) return res;
-    else if (res->get()->get_value_time() == value_time) return res;
+    else if ((**res).get_value_time() == value_time) return res;
     else return data.end();
 }
 
@@ -319,7 +319,7 @@ find_nearest(
         LOG4_ERROR("Row for time " << time << " not found.");
         return --iter;
     }
-    if (iter != data.begin() && time - (**(iter - 1)).get_value_time() < (**iter).get_value_time() - time) --iter;
+    if (iter != data.cbegin() && time - (**(iter - 1)).get_value_time() < (**iter).get_value_time() - time) --iter;
     return iter;
 }
 
@@ -342,6 +342,7 @@ find_nearest(
     return iter;
 }
 
+
 datamodel::DataRow::container::const_iterator
 find_nearest_back(
         const datamodel::DataRow::container &data,
@@ -352,9 +353,7 @@ find_nearest_back(
         LOG4_ERROR("Data is empty");
         return data.cend();
     }
-    auto iter = hint;
-    if (iter == data.cend()) --iter;
-    while (iter != data.cbegin() && (**iter).get_value_time() > time) --iter;
+    auto iter = lower_bound(data, hint, time);
     if (iter != data.cbegin() && time - (**(iter - 1)).get_value_time() < (**iter).get_value_time() - time) --iter;
     return iter;
 }
@@ -368,21 +367,20 @@ find_nearest(
         const size_t lag_count)
 {
     auto iter = find_nearest(data, time);
-    if (ABSDIF(iter->get()->get_value_time(), time) > max_gap)
-        THROW_EX_FS(common::insufficient_data, "Difference between " << time << " and " << iter->get()->get_value_time()
-                                                                     << " is greater than max gap time "
-                                                                     << max_gap <<
+    if (ABSDIF((**iter).get_value_time(), time) > max_gap)
+        THROW_EX_FS(common::insufficient_data, "Difference between " << time << " and " << (**iter).get_value_time()
+                                                                     << " is greater than max gap time " << max_gap <<
                                                                      ", data available is from "
-                                                                     << data.begin()->get()->get_value_time()
+                                                                     << data.front()->get_value_time()
                                                                      << " until "
-                                                                     << data.rbegin()->get()->get_value_time());
+                                                                     << data.back()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
     auto dist = std::distance(data.begin(), iter);
-    if (dist < decltype(dist)(lag_count))
+    if (dist < dtype(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                                               ", data available is from " << data.begin()->get()->get_value_time() << " until "
-                                               << data.rbegin()->get()->get_value_time());
+                                               ", data available is from " << data.front()->get_value_time() << " until "
+                                               << data.back()->get_value_time());
     return iter;
 }
 
@@ -395,15 +393,15 @@ find_nearest(
         const size_t lag_count)
 {
     auto iter = find_nearest(data, time);
-    if (iter->get()->get_value_time() - time > max_gap)
+    if ((**iter).get_value_time() - time > max_gap)
         THROW_EX_FS(common::insufficient_data,
-                    "Difference between " << time << " and " << iter->get()->get_value_time()
+                    "Difference between " << time << " and " << (**iter).get_value_time()
                                           << " is greater than max gap time " << max_gap <<
                                           ", data available is from " << data.front()->get_value_time() << " until "
                                           << data.back()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
-    auto dist = std::distance(data.begin(), iter);
-    if (dist < decltype(dist)(lag_count))
+    auto dist = std::distance(data.cbegin(), iter);
+    if (dist < dtype(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
                                                ", data available is from " << data.front()->get_value_time() << " until "
@@ -420,19 +418,19 @@ find_nearest_after(
         const size_t lag_count)
 {
     auto iter = lower_bound(data, time);
-    if (iter->get()->get_value_time() - time > max_gap)
+    if ((**iter).get_value_time() - time > max_gap)
         THROW_EX_FS(common::insufficient_data,
-                    "Difference between " << time << " and " << iter->get()->get_value_time()
+                    "Difference between " << time << " and " << (**iter).get_value_time()
                                           << " is greater than max gap time " << max_gap <<
-                                          ", data available is from " << data.begin()->get()->get_value_time()
-                                          << " until " << data.rbegin()->get()->get_value_time());
+                                          ", data available is from " << data.front()->get_value_time()
+                                          << " until " << data.back()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
-    auto dist = std::distance(data.begin(), iter);
-    if (dist < decltype(dist)(lag_count))
+    auto dist = std::distance(data.cbegin(), iter);
+    if (dist < dtype(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                                               ", data available is from " << data.begin()->get()->get_value_time() << " until "
-                                               << data.rbegin()->get()->get_value_time());
+                                               ", data available is from " << data.front()->get_value_time() << " until "
+                                               << data.back()->get_value_time());
     return iter;
 }
 
@@ -445,31 +443,27 @@ find_nearest_before(
         const size_t lag_count)
 {
     auto iter = lower_bound(data, time);
-    if (iter == data.begin())
+    if (iter == data.cbegin())
         THROW_EX_FS(common::insufficient_data,
-                    "No value before or at " << time << ", data available is from " << data.begin()->get()->get_value_time() << " until "
-                                             << data.rbegin()->get()->get_value_time());
+                    "No value before or at " << time << ", data available is from " << data.front()->get_value_time() << " until "
+                                             << data.back()->get_value_time());
 
     --iter;
     if (ABSDIF((**iter).get_value_time(), time) > max_gap)
         THROW_EX_FS(common::insufficient_data,
-                    "Difference between " << time << " and "
-                                          << iter->get()->get_value_time()
-                                          << " is greater than max gap time "
-                                          << max_gap <<
-                                          ", data available is from "
-                                          << data.begin()->get()->get_value_time()
-                                          << " until "
-                                          << data.rbegin()->get()->get_value_time());
+                    "Difference between " << time << " and " << (**iter).get_value_time()
+                                          << " is greater than max gap time " << max_gap <<
+                                          ", data available is from " << data.front()->get_value_time()
+                                          << " until " << data.back()->get_value_time());
 
     if (!lag_count) return iter;
 
-    off_t dist = std::distance(data.begin(), iter);
-    if (dist < off_t(lag_count))
+    const auto dist = std::distance(data.begin(), iter);
+    if (dist < dtype(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
-                                               ", data available is from " << data.begin()->get()->get_value_time() << " until "
-                                               << data.rbegin()->get()->get_value_time());
+                                               ", data available is from " << data.front()->get_value_time() << " until "
+                                               << data.back()->get_value_time());
 
     return iter;
 }
@@ -482,19 +476,19 @@ find_nearest_before(
         const size_t lag_count)
 {
     auto iter = lower_bound(data, time);
-    if (iter == data.begin())
+    if (iter == data.cbegin())
         THROW_EX_FS(common::insufficient_data,
-                    "No value before or at " << time << ", data available is from " << data.begin()->get()->get_value_time() << " until "
-                                             << data.rbegin()->get()->get_value_time());
+                    "No value before or at " << time << ", data available is from " << data.front()->get_value_time() << " until "
+                                             << data.back()->get_value_time());
     --iter;
 
     if (!lag_count) return iter;
 
-    off_t dist = std::distance(data.begin(), iter);
-    if (dist < off_t(lag_count))
+    const auto dist = std::distance(data.begin(), iter);
+    if (dist < dtype(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count << ", data available is from "
-                                               << data.begin()->get()->get_value_time() << " until " << data.rbegin()->get()->get_value_time());
+                                               << data.front()->get_value_time() << " until " << data.back()->get_value_time());
 
     return iter;
 }
@@ -503,46 +497,32 @@ find_nearest_before(
 data_row_container::const_iterator
 lower_bound(const data_row_container &data, const data_row_container::const_iterator &hint_start, const bpt::ptime &key)
 {
-    return std::lower_bound(hint_start, data.end(), key, comp_lb);
+    return std::lower_bound(hint_start, data.cend(), key, comp_lb);
 }
 
 // TODO Unify the functions below using templates and macros
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
 {
-    if (data.empty()) {
-        LOG4_ERROR("Data is empty!");
-        return data.end();
-    }
-    data_row_container::const_iterator row_iter = hint_end == data.cend() ? std::prev(hint_end) : hint_end;
-    while (row_iter != data.cbegin() && (**row_iter).get_value_time() > time_key) --row_iter;
-    if ((**row_iter).get_value_time() < time_key) {
-        do { ++row_iter; }
-        while (row_iter != data.cend() && (**row_iter).get_value_time() < time_key);
-    }
-    return row_iter;
+    return std::lower_bound(data.cbegin(), hint_end, time_key, comp_lb);
+}
+
+data_row_container::iterator
+lower_bound_back(const data_row_container::iterator &begin, const data_row_container::iterator &end, const bpt::ptime &time_key)
+{
+    return std::lower_bound(begin, end, time_key, comp_lb);
 }
 
 data_row_container::iterator
 lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
 {
-    if (data.empty()) {
-        LOG4_ERROR("Data is empty!");
-        return data.end();
-    }
-    data_row_container::iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
-    while (row_iter != data.begin() && row_iter->get()->get_value_time() > time_key) --row_iter;
-    if (row_iter->get()->get_value_time() < time_key) {
-        do { ++row_iter; }
-        while (row_iter != data.end() && row_iter->get()->get_value_time() < time_key);
-    }
-    return row_iter;
+    return std::lower_bound(data.begin(), hint_end, time_key, comp_lb);
 }
 
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const bpt::ptime &time_key)
 {
-    return lower_bound_back(data, data.end(), time_key);
+    return lower_bound_back(data, data.cend(), time_key);
 }
 
 data_row_container::iterator
@@ -557,11 +537,11 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
 {
     if (data.empty()) {
         LOG4_ERROR("Data is empty!");
-        return data.end();
+        return data.cend();
     }
-    data_row_container::const_iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
-    while (row_iter != data.begin() && (**row_iter).get_value_time() >= time_key) --row_iter;
-    if ((**row_iter).get_value_time() > time_key || row_iter == data.end())
+    data_row_container::const_iterator row_iter = std::lower_bound(data.cbegin(), hint_end, time_key, comp_lb);
+    while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
+    if ((**row_iter).get_value_time() > time_key)
         LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
 }
@@ -571,10 +551,10 @@ lower_bound_or_before_back(const data_row_container &data, const data_row_contai
 {
     if (data.empty()) {
         LOG4_ERROR("Data is empty!");
-        return data.end();
+        return data.cend();
     }
-    data_row_container::const_iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
-    while (row_iter != data.begin() && (**row_iter).get_value_time() > time_key) --row_iter;
+    data_row_container::const_iterator row_iter = std::lower_bound(data.cbegin(), hint_end, time_key, comp_lb);
+    while (row_iter != data.cbegin() && (**row_iter).get_value_time() > time_key) --row_iter;
     if ((**row_iter).get_value_time() > time_key)
         LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
@@ -584,7 +564,7 @@ lower_bound_or_before_back(const data_row_container &data, const data_row_contai
 data_row_container::const_iterator
 lower_bound_back_before(const data_row_container &data, const bpt::ptime &time_key)
 {
-    return lower_bound_back_before(data, data.end(), time_key);
+    return lower_bound_back_before(data, data.cend(), time_key);
 }
 
 // Find equal or before
@@ -592,15 +572,14 @@ data_row_container::const_iterator
 lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
 {
     auto found = lower_bound(data, time_key);
-    if (found->get()->get_value_time() == time_key) return found;
-    if (found == data.begin()) {
-        LOG4_ERROR("Couldn't find equal or before " << time_key << ", found " << found->get()->get_value_time());
+    if ((**found).get_value_time() == time_key) return found;
+    if (found == data.cbegin()) {
+        LOG4_ERROR("Couldn't find equal or before " << time_key << ", found " << (**found).get_value_time());
         return found;
     }
     --found;
-    if (found->get()->get_value_time() > time_key)
-        LOG4_ERROR(
-                "Couldn't find " << time_key << " lower bound or before, nearest found is " << found->get()->get_value_time());
+    if ((**found).get_value_time() > time_key)
+        LOG4_ERROR("Couldn't find " << time_key << " lower bound or before, nearest found is " << (**found).get_value_time());
     return found;
 }
 
@@ -608,41 +587,13 @@ lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
 data_row_container::iterator
 upper_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
 {
-    if (data.empty()) {
-        LOG4_ERROR("Data is empty!");
-        return data.end();
-    }
-    data_row_container::iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
-    while (row_iter != data.begin() and row_iter->get()->get_value_time() > time_key) --row_iter;
-    if (row_iter->get()->get_value_time() <= time_key) {
-        if (row_iter == data.end()) {
-            LOG4_ERROR("Couldn't find later then " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
-        } else {
-            do { ++row_iter; }
-            while (row_iter != data.end() && row_iter->get()->get_value_time() <= time_key);
-        }
-    }
-    return row_iter;
+    return std::upper_bound(data.begin(), hint_end, time_key, comp_ub);
 }
 
 data_row_container::const_iterator
 upper_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
 {
-    if (data.empty()) {
-        LOG4_ERROR("Data is empty!");
-        return data.end();
-    }
-    data_row_container::const_iterator row_iter = hint_end == data.end() ? std::prev(hint_end) : hint_end;
-    while (row_iter != data.begin() and row_iter->get()->get_value_time() > time_key) --row_iter;
-    if (row_iter->get()->get_value_time() <= time_key) {
-        if (row_iter == data.end()) {
-            LOG4_ERROR("Couldn't find later then " << time_key << ", but found nearest match " << row_iter->get()->get_value_time());
-        } else {
-            do { ++row_iter; }
-            while (row_iter != data.end() && row_iter->get()->get_value_time() <= time_key);
-        }
-    }
-    return row_iter;
+    return std::upper_bound(data.cbegin(), hint_end, time_key, comp_ub);
 }
 
 data_row_container::iterator
@@ -681,16 +632,14 @@ generate_twap(
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
         const size_t colix,
-        arma::rowvec &row)
+        arma::subview<double> out)
 {
-    row.zeros();
-    const auto outlen = row.size();
     auto valit = start_it;
     const ssize_t inlen = (end_time - start_time) / hf_resolution;
-    arma::rowvec ct_prices(outlen);
+    arma::rowvec ct_prices(out.n_elem);
     auto time_iter = start_time;
     ssize_t inctr = 0;
-    const auto inout_ratio = double(outlen) / double(inlen);
+    const auto inout_ratio = double(out.n_elem) / double(inlen);
     auto last_price = (**start_it)[colix];
     while (time_iter < end_time) {
         while (valit != it_end && (**valit).get_value_time() <= time_iter) {
@@ -698,7 +647,7 @@ generate_twap(
             ++valit;
         }
         const auto outctr = inctr * inout_ratio;
-        row[outctr] += last_price;
+        out[outctr] += last_price;
         ct_prices[outctr] += 1;
         time_iter += hf_resolution;
         ++inctr;
@@ -709,24 +658,10 @@ generate_twap(
         return false;
     }
     if (dist_it != inlen) LOG4_TRACE("HF price rows " << dist_it << " different than expected " << inlen);
-    row /= ct_prices;
+    out /= ct_prices;
     return true;
 }
 
-
-double
-calc_twap(
-        const datamodel::DataRow::container::const_iterator &start_iter, // At start time or before
-        const datamodel::DataRow::container::const_iterator &it_end,
-        const bpt::ptime &start_time,
-        const boost::posix_time::ptime &end_time,
-        const bpt::time_duration &hf_resolution,
-        const size_t col_ix)
-{
-    arma::rowvec labels_row(1);
-    generate_twap(start_iter, it_end, start_time, end_time, hf_resolution, col_ix, labels_row);
-    return labels_row[0];
-}
 
 
 bpt::ptime // Returns last inserted row value time // TODO Add phases
@@ -739,9 +674,9 @@ datamodel::DataRow::insert_rows(
         const size_t level_ct,
         const bool merge)
 {
-    std::set<bpt::ptime> times;
+    std::deque<bpt::ptime> times;
     for (size_t i = 0; i < data.n_rows; ++i)
-        times.emplace(start_time + double(i) * resolution);
+        times.emplace_back(start_time + double(i) * resolution);
     insert_rows(rows_container, data, times, level, level_ct, merge);
     return *times.rbegin();
 }
@@ -749,7 +684,7 @@ datamodel::DataRow::insert_rows(
 data_row_container
 datamodel::DataRow::insert_rows(
         const arma::mat &data,
-        const std::set<bpt::ptime> &times,
+        const std::deque<bpt::ptime> &times,
         const size_t level,
         const size_t level_ct,
         const bool merge)
@@ -763,51 +698,31 @@ void
 datamodel::DataRow::insert_rows(
         data_row_container &rows_container,
         const arma::mat &data,
-        const std::set<bpt::ptime> &times,
+        const std::deque<bpt::ptime> &times,
         const size_t level,
         const size_t level_ct,
         const bool merge)
 {
-    if (times.size() != data.n_rows)
-        LOG4_THROW("Times " << times.size() << " and data rows " << data.n_rows << " do not match.");
+    if (times.size() != data.n_rows) LOG4_THROW("Times " << times.size() << " and data rows " << data.n_rows << " do not match.");
 
-    LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << *times.begin());
+    if (rows_container.size() && (data.n_cols != (**rows_container.cbegin()).size() || (**rows_container.cbegin()).size() != level_ct))
+        LOG4_WARN("Data columns " << data.n_cols << " does not equal existing data columns " << (**rows_container.cbegin()).size() << " or level count " << level_ct);
 
-    if (!rows_container.empty() && data.n_cols != rows_container.begin()->get()->get_values().size())
-        LOG4_WARN("Data columns " << data.n_cols << " does not equal existing data columns " << rows_container.begin()->get()->get_values().size());
-    if (!merge) {
-        auto ins_it = lower_bound_back(rows_container, *times.begin());
-        if (ins_it != rows_container.end()) rows_container.erase(ins_it, rows_container.end());
-    }
+    if (!merge) rows_container.erase(lower_bound_back(rows_container, *times.cbegin()), rows_container.end());
+
+    LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << *times.cbegin());
 
     const auto time_now = bpt::second_clock::local_time();
     const auto prev_size = rows_container.size();
     rows_container.resize(prev_size + data.n_rows);
 #pragma omp parallel for num_threads(adj_threads(data.n_rows))
     for (size_t row_ix = 0; row_ix < data.n_rows; ++row_ix) {
-        const auto row_time = times ^ row_ix;
-        data_row_container::iterator it_row;
-#pragma omp critical (DataRow_insert_rows)
-        {
-            if ((it_row = lower_bound_back(rows_container, row_time)) == rows_container.end())
-                it_row = rows_container.insert(it_row, ptr<datamodel::DataRow>(row_time, time_now, common::C_default_value_tick_volume, level_ct, 0.));
-        }
-        (**it_row).set_value(level, arma::mean(arma::vectorise(data.row(row_ix))));
+        const auto row_time = times[row_ix];
+        auto row_iter = rows_container.begin() + prev_size + row_ix;
+        if (!*row_iter) *row_iter = ptr<datamodel::DataRow>(row_time, time_now, common::C_default_value_tick_volume, level_ct, 0.);
+        (**row_iter)[level] = arma::mean(data.row(row_ix));
     }
     LOG4_END();
-}
-
-[[maybe_unused]] datamodel::DataRow::container::const_iterator static
-find(
-        const datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &row_time,
-        const boost::posix_time::time_duration &deviation)
-{
-    auto it_row = lower_bound(data, row_time);
-    if (it_row->get()->get_value_time() == row_time) return it_row;
-    if (std::prev(it_row)->get()->get_value_time() - row_time > it_row->get()->get_value_time() - row_time) std::advance(it_row, -1);
-    if (it_row->get()->get_value_time() - row_time > deviation) return data.end();
-    return it_row;
 }
 
 }

@@ -254,7 +254,7 @@ kernel_helper::enqueue(
         const ::cl::NDRange &offset,
         const ::cl::NDRange &global,
         const ::cl::NDRange &local,
-        const VECTOR_CLASS<::cl::Event> *events,
+        const ::cl::vector<::cl::Event> *events,
         ::cl::Event *event)
 {
     const cl_int code = queue.enqueueNDRangeKernel(*this, offset, global, local, events, event);

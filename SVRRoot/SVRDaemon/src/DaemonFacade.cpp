@@ -112,14 +112,14 @@ void DaemonFacade::start_loop()
         for (svr::business::DatasetService::DatasetUsers &dsu: datasets) {
             di.wait();
             try {
-                PROFILE_EXEC_TIME(DatasetService::process(dsu.dataset), "Process dataset");
-                for (const auto &user: dsu.users)
-                    PROFILE_EXEC_TIME(DatasetService::process_requests(user, dsu.dataset), "MIMO Process multival requests " << user->get_user_name());
+                PROFILE_EXEC_TIME(DatasetService::process(*dsu.p_dataset), "Process dataset");
+                for (const auto &p_user: dsu.users)
+                    PROFILE_EXEC_TIME(DatasetService::process_requests(*p_user, *dsu.p_dataset), "MIMO Process multival requests " << p_user->get_user_name());
             } catch (const svr::common::bad_model &ex) {
-                LOG4_ERROR("Bad model while processing dataset " << dsu.dataset->get_id() << " " << dsu.dataset->get_dataset_name()
-                            << ". Level " << ex.get_decon_level() << ", column " << ex.get_column_name() << ". Error " << ex.what());
+                LOG4_ERROR("Bad model while processing dataset " << dsu.p_dataset->get_id() << " " << dsu.p_dataset->get_dataset_name()
+                                     << ". Level " << ex.get_decon_level() << ", column " << ex.get_column_name() << ". Error " << ex.what());
             } catch (const std::exception &ex) {
-                LOG4_ERROR("Failed processing dataset " << dsu.dataset->get_id() << " " << dsu.dataset->get_dataset_name() << " " << ex.what());
+                LOG4_ERROR("Failed processing dataset " << dsu.p_dataset->get_id() << " " << dsu.p_dataset->get_dataset_name() << " " << ex.what());
             }
         }
     }
@@ -139,14 +139,14 @@ bool DaemonFacade::continue_loop()
  * SVRDaemon-whitebox-test related logic follows below.
  */
 
-struct diagnostic_interface_zwei::diagnostic_interface_impl
+struct diagnostic_interface_zwei::diagnostic_interface_impl final
 {
     static const std::string their_pipe_name, mine_pipe_name;
 
     std::ifstream their_pipe;
     std::ofstream mine_pipe;
 
-    diagnostic_interface_impl(std::ifstream &&their_pipe, std::ofstream &&mine_pipe)
+    diagnostic_interface_impl(std::ifstream &their_pipe, std::ofstream &mine_pipe)
             : their_pipe(std::move(their_pipe)), mine_pipe(std::move(mine_pipe))
     {}
 
@@ -209,8 +209,7 @@ diagnostic_interface_zwei::diagnostic_interface_zwei()
 
     if (command != "M: start session") return;
 
-    pimpl = std::shared_ptr<diagnostic_interface_impl>(
-            new diagnostic_interface_impl(std::move(pipe), diagnostic_interface_impl::get_mine_stream()));
+    pimpl = ptr<diagnostic_interface_impl>(pipe, diagnostic_interface_impl::get_mine_stream());
 }
 
 

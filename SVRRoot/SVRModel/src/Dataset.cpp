@@ -25,9 +25,9 @@ void Dataset::init_transform()
 
 Dataset::Dataset() :
         Entity(),
-        ccache(*this),
+        ccache(),
         gradients_(common::C_default_gradient_count),
-        max_chunk_size_(common::C_kernel_default_max_chunk_size),
+        max_chunk_size_(common::C_default_kernel_max_chunk_size),
         multiout_(common::C_default_multistep_len),
         transformation_levels_(common::C_default_level_count),
         is_active_(false)
@@ -54,11 +54,10 @@ Dataset::Dataset(
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
         bool is_active,
-        const std::deque<datamodel::IQScalingFactor_ptr> iq_scaling_factors,
-        const dq_scaling_factor_container_t dq_scaling_factors
+        const std::deque<datamodel::IQScalingFactor_ptr> iq_scaling_factors
 )
         : Entity(id),
-          ccache(*this),
+          ccache(),
           dataset_name_(dataset_name),
           user_name_(user_name),
           priority_(priority),
@@ -71,8 +70,7 @@ Dataset::Dataset(
           max_lookback_time_gap_(max_lookback_time_gap),
           ensembles_(svr::common::clone_shared_ptr_elements(ensembles)),
           is_active_(is_active),
-          iq_scaling_factors_(svr::common::clone_shared_ptr_elements(iq_scaling_factors)),
-          dq_scaling_factors_(svr::common::clone_shared_ptr_elements(dq_scaling_factors))
+          iq_scaling_factors_(svr::common::clone_shared_ptr_elements(iq_scaling_factors))
 {
     if (!p_input_queue) THROW_EX_FS(std::logic_error, "Input queue cannot be null.");
 
@@ -82,24 +80,10 @@ Dataset::Dataset(
         aux_input_queues_.emplace_back(p_aux_input_queue);
 
     init_transform();
+
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
-}
-
-void Dataset::init_id()
-{
-    if (!id) {
-        if (input_queue_.get_obj() && input_queue_.get_obj()->get_table_name().size()) boost::hash_combine(id, input_queue_.get_obj()->get_table_name());
-        else if (dataset_name_.size()) boost::hash_combine(id, dataset_name_);
-        else if (description_.size()) boost::hash_combine(id, description_);
-        else if (user_name_.size()) boost::hash_combine(id, user_name_);
-        else {
-            LOG4_WARN("Dataset id is nil!");
-            return;
-        }
-        on_set_id();
-    }
 }
 
 Dataset::Dataset(
@@ -109,7 +93,7 @@ Dataset::Dataset(
         const std::string &input_queue_table_name,
         const std::deque<std::string> &aux_input_queue_table_names,
         const Priority &priority,
-        const std::string &description, /* This is description */
+        const std::string &description,
         const size_t gradients,
         const size_t chunk_size,
         const size_t multiout,
@@ -118,11 +102,9 @@ Dataset::Dataset(
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
         bool is_active,
-        const std::deque<datamodel::IQScalingFactor_ptr> iq_scaling_factors,
-        const dq_scaling_factor_container_t dq_scaling_factors
-)
+        const std::deque<datamodel::IQScalingFactor_ptr> iq_scaling_factors)
         : Entity(id),
-          ccache(*this),
+          ccache(),
           dataset_name_(dataset_name),
           user_name_(user_name),
           priority_(priority),
@@ -135,8 +117,7 @@ Dataset::Dataset(
           max_lookback_time_gap_(max_lookback_time_gap),
           ensembles_(ensembles),
           is_active_(is_active),
-          iq_scaling_factors_(iq_scaling_factors),
-          dq_scaling_factors_(dq_scaling_factors)
+          iq_scaling_factors_(iq_scaling_factors)
 {
     if (input_queue_table_name.empty()) THROW_EX_FS(std::logic_error, "Input queue table name cannot be empty");
 
@@ -167,14 +148,28 @@ Dataset::Dataset(Dataset const &dataset) :
                 dataset.max_lookback_time_gap_,
                 dataset.ensembles_,
                 dataset.is_active_,
-                dataset.iq_scaling_factors_,
-                dataset.dq_scaling_factors_)
+                dataset.iq_scaling_factors_)
 {
     p_cvmd_transformer = std::make_unique<vmd::fast_cvmd>(*dataset.p_cvmd_transformer);
     p_oemd_transformer_fat = std::make_unique<oemd::online_emd>(*dataset.p_oemd_transformer_fat);
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
+}
+
+void Dataset::init_id()
+{
+    if (!id) {
+        if (input_queue_.get_obj() && input_queue_.get_obj()->get_table_name().size()) boost::hash_combine(id, input_queue_.get_obj()->get_table_name());
+        else if (dataset_name_.size()) boost::hash_combine(id, dataset_name_);
+        else if (description_.size()) boost::hash_combine(id, description_);
+        else if (user_name_.size()) boost::hash_combine(id, user_name_);
+        else {
+            LOG4_WARN("Dataset id is nil!");
+            return;
+        }
+        on_set_id();
+    }
 }
 
 
@@ -187,7 +182,7 @@ bool Dataset::operator==(const Dataset &o) const
 
 bool Dataset::operator^=(const Dataset &o) const
 {
-    bool res = id == o.id
+    std::atomic<bool> res = id == o.id
                && dataset_name_ == o.dataset_name_
                && user_name_ == o.user_name_
                && input_queue_.get_id() == o.input_queue_.get_id()
@@ -200,17 +195,10 @@ bool Dataset::operator^=(const Dataset &o) const
                && max_lookback_time_gap_ == o.max_lookback_time_gap_
                && is_active_ == o.is_active_;
 
+#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(aux_input_queues_.size()))
+    for (const auto &iq: aux_input_queues_)
+        res &= std::any_of(o.aux_input_queues_.begin(), o.aux_input_queues_.end(), [&] (const auto &oiq) { return iq.get_id() == oiq.get_id(); });
 
-    for (const auto &iq: aux_input_queues_) {
-        bool found = false;
-        for (const auto &oiq: o.aux_input_queues_) {
-            if (iq.get_id() == oiq.get_id()) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) res = false;
-    }
     return res;
 }
 
@@ -370,6 +358,8 @@ void Dataset::set_max_lookback_time_gap(const bpt::time_duration &max_lookback_t
 std::deque<datamodel::Ensemble_ptr> &Dataset::get_ensembles()
 { return ensembles_; }
 
+std::deque<datamodel::Ensemble_ptr> Dataset::get_ensembles() const
+{ return ensembles_; }
 
 datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &column_name)
 {
@@ -458,18 +448,21 @@ size_t Dataset::get_ensemble_count() const
 void Dataset::set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensembles, const bool overwrite)
 {
     const auto prev_size = ensembles_.size();
+
+#pragma omp parallel for num_threads(adj_threads(new_ensembles.size())) schedule(static, 1)
     for (const auto &e: new_ensembles) {
         std::atomic<bool> found = false;
-#pragma omp parallel for num_threads(adj_threads(prev_size))
+#pragma omp parallel for num_threads(adj_threads(prev_size)) schedule(static, 1)
         for (size_t i = 0; i < prev_size; ++i)
             if (e->get_column_name() == ensembles_[i]->get_column_name()) {
                 found.store(true, std::memory_order_relaxed);
-                if (overwrite) {
-                    ensembles_[i] = e;
-                    ensembles_[i]->set_dataset_id(id);
-                }
+                if (!overwrite) continue;
+                const std::scoped_lock lk(ensembles_mx);
+                ensembles_[i] = e;
+                ensembles_[i]->set_dataset_id(id);
             }
         if (found) continue;
+        const std::scoped_lock lk(ensembles_mx);
         ensembles_.emplace_back(e);
         ensembles_.back()->set_dataset_id(id);
     }
@@ -521,51 +514,19 @@ void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor
     }
 }
 
-svr::datamodel::dq_scaling_factor_container_t Dataset::get_dq_scaling_factors() const
+size_t Dataset::get_max_lag_count() const
 {
-    return dq_scaling_factors_;
-}
-
-svr::datamodel::dq_scaling_factor_container_t &Dataset::get_dq_scaling_factors()
-{
-    return dq_scaling_factors_;
-}
-
-void Dataset::set_dq_scaling_factors(const dq_scaling_factor_container_t &new_dq_scaling_factors)
-{
-    const std::scoped_lock l(dq_scaling_factors_mutex);
-    business::DQScalingFactorService::add(dq_scaling_factors_, new_dq_scaling_factors);
-}
-
-std::shared_ptr<DQScalingFactor> Dataset::get_dq_scaling_factor(
-        const std::string &input_queue_table_name, const std::string &input_queue_column_name, const size_t level)
-{
-    const std::scoped_lock l(dq_scaling_factors_mutex);
-    const auto res = business::DQScalingFactorService::slice(dq_scaling_factors_, id, input_queue_column_name, std::set{level});
-    if (res.empty()) LOG4_ERROR("Could not find scaling factor for " << input_queue_table_name << ", column " << input_queue_column_name << ", level " << level);
-    return *res.begin();
-}
-
-
-size_t Dataset::get_max_lag_count()
-{
-    if (max_lag_count_cache_) return max_lag_count_cache_;
-
-    max_lag_count_cache_ = 0;
-    OMP_LOCK(max_lag_l)
+    std::atomic<size_t> max_lag_count = 0;
 #pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
     for (const auto &e: ensembles_)
 #pragma omp parallel for num_threads(adj_threads(e->get_models().size()))
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
                 for (const auto &p: svr->get_param_set())
-                    if (p) {
-                        omp_set_lock(&max_lag_l);
-                        max_lag_count_cache_ = std::max(max_lag_count_cache_, p->get_lag_count());
-                        omp_unset_lock(&max_lag_l);
-                    }
-    LOG4_DEBUG("Returning non-cached value " << max_lag_count_cache_);
-    return max_lag_count_cache_;
+                    if (p && p->get_lag_count() > max_lag_count)
+                        max_lag_count = p->get_lag_count();
+
+    return max_lag_count;
 }
 
 size_t Dataset::get_max_decrement()

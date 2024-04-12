@@ -28,8 +28,6 @@ public:
 
     virtual std::string to_string() const = 0;
 
-    virtual std::basic_ostream<char> &operator<<(std::basic_ostream<char> &os) const;
-
 protected:
     bigint id = 0;
 
@@ -40,7 +38,10 @@ private:
 
 using Entity_ptr = std::shared_ptr<Entity>;
 
-std::basic_ostream<char> &operator<<(std::basic_ostream<char> &os, Entity &e);
+template<typename T> std::basic_ostream<char> &operator<<(std::basic_ostream<T> &os, const datamodel::Entity &e)
+{
+    return os << e.to_string();
+}
 
 }
 

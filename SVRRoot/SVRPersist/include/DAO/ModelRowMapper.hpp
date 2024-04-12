@@ -26,7 +26,7 @@ public:
                 row_set["decon_level"].as<size_t>(DEFAULT_SVRPARAM_DECON_LEVEL),
                 PROPS.get_multistep_len(),
                 row_set["gradients"].as<size_t>(DEFAULT_SVRPARAM_GRAD_LEVEL + 1),
-                common::C_kernel_default_max_chunk_size,
+                common::C_default_kernel_max_chunk_size,
                 std::deque<datamodel::OnlineMIMOSVR_ptr>{},
                 row_set["last_modified_time"].is_null() ? bpt::not_a_date_time : bpt::time_from_string(
                         row_set["last_modified_time"].as<std::string>("")),

@@ -40,22 +40,6 @@ inplace_validate(
         const svr::datamodel::vmatrix<double> &features_data,
         const svr::datamodel::vmatrix<double> &labels_data);
 
-double
-future_validate(
-        const int n_total_samples,
-        const int current_index,
-        const svr::OnlineSVR &online_svr,
-        const arma::mat &features_data,
-        const arma::mat &labels_data);
-
-std::tuple<double, double, std::vector<double>, std::vector<double>, double, std::vector<double>>
-future_validate(
-        const size_t from_idx,
-        const svr::OnlineMIMOSVR &online_svr,
-        const arma::mat &features,
-        const arma::mat &labels,
-        const bool single_pred = false);
-
 std::tuple<double, double, std::vector<double>, std::vector<double>, double, std::vector<double>>
 train_predict_cycle_online(
         const int validate_start_pos,

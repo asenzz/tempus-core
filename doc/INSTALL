@@ -4,30 +4,29 @@
 # these modules are included in the default apache2 ation
 # mod_auth_digest
 # mod_authn_dbd
-
 # Apache2 modules for authentication and authorization (from postgresql table)
 
-libpq5	
-libpq-dev		
-libpqxx-3.1		
-libpqxx3-dev		
-libaprutil1-dbd-pgsql	
-postgresql 9.1
-postgresql-contrib	
-postgresql-server-dev-9.1\
-pgadmin3		
-libboost-all-dev	
-apache2	2.4
-apache2-dev		
-binutils		
-build-essential		
-make			
-libfftw3-3		
-libfftw3-dev	
-liblog4cxx10	
-liblog4cxx10-dev
-libapr1			
-lib32z1-dev
-libwavelet2d	
-	
+Dependencies:
 
+libpq	
+libpqxx		
+postgresql
+libboost	
+cppcms
+quickfix
+jemalloc
+nvidia cuda toolkit
+armadillo
+mkl
+tbb
+openmp
+opencl
+googletest
+viennacl
+prima
+gcc
+cmake
+liblz4
+libfftw
+magma
+openssl

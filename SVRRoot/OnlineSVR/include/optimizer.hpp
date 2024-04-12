@@ -34,9 +34,6 @@ struct NM_parameters
 };
 
 
-std::pair<double, std::vector<double>>
-nm(const loss_callback_t &loss_fun, const std::vector<double>& initial_values, const NM_parameters& nm_parameters);
-
 pso_returns_t
 pso(const loss_callback_t &f, const PSO_parameters& pso_parameters, const size_t& level_idx, const std::string& column_name);
 

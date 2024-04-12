@@ -25,6 +25,7 @@ class DatasetService;
 }
 
 namespace datamodel {
+
 class Ensemble;
 
 using Ensemble_ptr = std::shared_ptr<Ensemble>;
@@ -37,7 +38,6 @@ class Dataset : public Entity
     void init_transform();
 
     bool initialized = false;
-    size_t max_lag_count_cache_ = 0;
     size_t max_decremental_distance_cache_ = 0;
 
 
@@ -48,7 +48,7 @@ class Dataset : public Entity
     Priority priority_ = Priority::Normal;
     std::string description_; // Textual description of the dataset
     size_t gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
-    size_t max_chunk_size_ = common::C_kernel_default_max_chunk_size; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
+    size_t max_chunk_size_ = common::C_default_kernel_max_chunk_size; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
     size_t multiout_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<svr::oemd::online_emd> p_oemd_transformer_fat;
@@ -58,11 +58,10 @@ class Dataset : public Entity
     bpt::time_duration max_lookback_time_gap_ = DEFAULT_FEATURES_MAX_TIME_GAP; // Maximum time gap between feature points after which the whole row is discarded from the learning process
 
     std::deque<datamodel::Ensemble_ptr> ensembles_; // Number of ensembles equals number of columns in the main input queue
+    std::mutex ensembles_mx;
     bool is_active_ = false; // Enable or disable processing of the dataset
 
     std::deque<IQScalingFactor_ptr> iq_scaling_factors_;
-    dq_scaling_factor_container_t dq_scaling_factors_; // Scaling factors of the auxilliary deconstruction queues used to generate labels and features
-    std::mutex dq_scaling_factors_mutex;
 
     virtual void on_set_id() override;
 
@@ -78,16 +77,14 @@ public:
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
             const size_t gradients = common::C_default_gradient_count,
-            const size_t chunk_size = common::C_kernel_default_max_chunk_size,
+            const size_t chunk_size = common::C_default_kernel_max_chunk_size,
             const size_t multiout = common::C_default_multistep_len,
             const size_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
             const bpt::time_duration &max_lookback_time_gap = DEFAULT_FEATURES_MAX_TIME_GAP,
             const std::deque<datamodel::Ensemble_ptr> &ensembles = {},
             bool is_active = false,
-            const std::deque<IQScalingFactor_ptr> iq_scaling_factors = {},
-            const dq_scaling_factor_container_t dq_scaling_factors = {}
-    );
+            const std::deque<IQScalingFactor_ptr> iq_scaling_factors = {});
 
     Dataset(
             bigint id,
@@ -98,16 +95,14 @@ public:
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
             const size_t gradients = common::C_default_gradient_count,
-            const size_t chunk_size = common::C_kernel_default_max_chunk_size,
+            const size_t chunk_size = common::C_default_kernel_max_chunk_size,
             const size_t multiout = common::C_default_multistep_len,
             const size_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
             const bpt::time_duration &max_lookback_time_gap_ = DEFAULT_FEATURES_MAX_TIME_GAP,
             const std::deque<datamodel::Ensemble_ptr> &ensembles_ = {},
             bool is_active_ = false,
-            const std::deque<IQScalingFactor_ptr> iq_scaling_factors = {},
-            const dq_scaling_factor_container_t dq_scaling_factors = {}
-    );
+            const std::deque<IQScalingFactor_ptr> iq_scaling_factors = {});
 
     Dataset(Dataset const &dataset);
 
@@ -177,6 +172,8 @@ public:
 
     std::deque<datamodel::Ensemble_ptr> &get_ensembles();
 
+    std::deque<datamodel::Ensemble_ptr> get_ensembles() const;
+
     datamodel::Ensemble_ptr get_ensemble(const std::string &column_name);
 
     datamodel::Ensemble_ptr get_ensemble(const std::string &table_name, const std::string &column_name);
@@ -209,14 +206,6 @@ public:
 
     void set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor_ptr> &new_iq_scaling_factors, const bool overwrite);
 
-    dq_scaling_factor_container_t get_dq_scaling_factors() const;
-
-    dq_scaling_factor_container_t &get_dq_scaling_factors();
-
-    void set_dq_scaling_factors(const dq_scaling_factor_container_t &dq_scaling_factors);
-
-    DQScalingFactor_ptr get_dq_scaling_factor(const std::string &input_queue_table_name, const std::string &input_queue_column_name, const size_t level);
-
     std::deque<datamodel::InputQueue_ptr> get_aux_input_queues() const;
 
     datamodel::InputQueue_ptr get_aux_input_queue(const size_t idx = 0) const;
@@ -225,7 +214,7 @@ public:
 
     virtual std::string to_string() const override;
 
-    size_t get_max_lag_count();
+    size_t get_max_lag_count() const;
 
     size_t get_max_decrement();
 

@@ -52,7 +52,6 @@ std::string OnlineMIMOSVR::to_string() const
     s << " Samples trained " << samples_trained <<
     ", features " << p_features->rows(0, 10) <<
     ", labels " << p_labels->rows(0, 10) <<
-    ", labels scaling factor " << labels_scaling_factor <<
     ", kernel matrices " << (p_kernel_matrices ? p_kernel_matrices->size() : 0) <<
     ", indexes " << ixs.size() <<
     ", multiout " << multistep_len <<
@@ -61,11 +60,6 @@ std::string OnlineMIMOSVR::to_string() const
     ", decon level " << decon_level <<
     ", manifold " << p_manifold ? p_manifold->to_string() : "nil";
     return s.str();
-}
-
-std::basic_ostream<char> &OnlineMIMOSVR::operator<<(std::basic_ostream<char> &os) const
-{
-    return os << to_string();
 }
 
 } // datamodel

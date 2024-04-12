@@ -1,4 +1,5 @@
 #include "PgModelDAO.hpp"
+#include "PgDQScalingFactorDAO.hpp"
 #include <DAO/ModelRowMapper.hpp>
 #include <DAO/DataSource.hpp>
 #include <appcontext.hpp>
@@ -59,7 +60,14 @@ int PgModelDAO::save(const datamodel::Model_ptr &model)
                     p_svr->get_id(),
                     p_svr->get_model_id(),
                     p_svr->save());
+        const auto p_saved_svr = p_svr->is_manifold() ? p_svr->get_manifold() : p_svr;
+        if (!p_saved_svr) continue;
+        std::for_each(std::execution::par_unseq, p_saved_svr->get_scaling_factors().cbegin(), p_saved_svr->get_scaling_factors().cend(),
+                 [&](const auto &s) { if (APP.dq_scaling_factor_service.exists(s)) APP.dq_scaling_factor_service.remove(s); APP.dq_scaling_factor_service.save(s); });
+        std::for_each(std::execution::par_unseq, p_saved_svr->get_param_set().cbegin(), p_saved_svr->get_param_set().cend(),
+              [&](const auto &s) { if (APP.svr_parameters_service.exists(s)) APP.svr_parameters_service.remove(s); APP.svr_parameters_service.save(s); });
     }
+
     return res;
 }
 

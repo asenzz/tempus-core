@@ -2,13 +2,13 @@
 
 #include <map>
 #include <boost/date_time.hpp>
-
+#include "common/compatibility.hpp"
 #include "command_text.hpp"
 
 namespace {
     struct Exposure
     {
-        typedef std::map<decltype(CommandText::command), Command *> my_cont_t;
+        typedef std::map<dtype(CommandText::command), Command *> my_cont_t;
         my_cont_t commands;
 
         ~Exposure()

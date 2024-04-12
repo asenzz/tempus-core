@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <common/types.hpp>
-#include "model/DataRow.hpp"
 #include "model/InputQueue.hpp"
 #include "DatasetService.hpp"
 
@@ -30,12 +29,8 @@ class ModelService;
 
 class DeconQueueService;
 
-using t_predict_features = std::unordered_map<size_t /* level */, std::pair<std::set<bpt::ptime /* feature row times */>, arma::mat /* features matrix */>>;
-
 class EnsembleService
 {
-    friend struct pdtm_task;
-
     svr::dao::EnsembleDAO &ensemble_dao_;
     svr::business::ModelService &model_service_;
     svr::business::DeconQueueService &decon_queue_service_;
@@ -77,17 +72,17 @@ public:
             const datamodel::InputQueue &input_queue,
             std::deque<datamodel::DeconQueue_ptr> &decon_queues);
 
-    static void train(datamodel::Ensemble &ensemble, const std::unordered_map<size_t, matrix_ptr> &dataset_features, const t_training_data &ensemble_training_data);
+    static void train(datamodel::Ensemble &ensemble, const datamodel::t_training_data &ensemble_training_data);
 
     static datamodel::DeconQueue_ptr predict(
-            const datamodel::Dataset_ptr &p_dataset,
-            const datamodel::Ensemble_ptr &p_ensemble,
-            const t_predict_features &dataset_features);
+            const datamodel::Dataset &dataset,
+            const datamodel::Ensemble &ensemble,
+            const std::unordered_map<size_t, datamodel::t_level_predict_features> &features);
 
     static datamodel::DeconQueue_ptr predict_noexcept(
-            const datamodel::Dataset_ptr &p_dataset,
-            const datamodel::Ensemble_ptr &p_ensemble,
-            const t_predict_features &dataset_features) noexcept;
+            const datamodel::Dataset &dataset,
+            const datamodel::Ensemble &ensemble,
+            const std::unordered_map<size_t, datamodel::t_level_predict_features> &features) noexcept;
 
     static bool
     is_ensemble_input_queue(const datamodel::Ensemble_ptr &p_ensemble, const datamodel::InputQueue_ptr &p_input_queue);

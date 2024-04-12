@@ -12,62 +12,61 @@ void DQScalingFactor::init_id()
 {
     if (!id) {
         boost::hash_combine(id, decon_level_);
-        boost::hash_combine(id, dataset_id_);
-        boost::hash_combine(id, input_queue_table_name_);
-        boost::hash_combine(id, input_queue_column_name_);
+        boost::hash_combine(id, grad_depth_);
+        boost::hash_combine(id, chunk_ix_);
+        boost::hash_combine(id, model_id_);
     }
 }
 
 std::string DQScalingFactor::to_string() const
 {
     std::stringstream str;
-    str << std::setprecision(std::numeric_limits<double>::max_digits10) << "Decon queue scaling factor ID " << id << 
-        ", dataset ID " << dataset_id_ <<
-        ", input queue table name " << input_queue_table_name_ << 
-        ", input queue column name " << input_queue_column_name_ << 
-        ", level " << decon_level_ << 
-        ", labels factor " << scaling_factor_labels << 
-        ", features factor " << scaling_factor_features << 
-        ", labels dc offset " << dc_offset_labels << 
+    str << std::setprecision(std::numeric_limits<double>::max_digits10) << "Decon queue scaling factor ID " << id <<
+        ", model ID " << model_id_ <<
+        ", level " << decon_level_ <<
+        ", gradient " << grad_depth_ <<
+        ", chunk " << chunk_ix_ <<
+        ", labels factor " << scaling_factor_labels <<
+        ", features factor " << scaling_factor_features <<
+        ", labels dc offset " << dc_offset_labels <<
         ", features dc offset " << dc_offset_features;
     return str.str();
 }
 
-bool DQScalingFactor::operator==(const DQScalingFactor &other) const
+bool DQScalingFactor::operator==(const DQScalingFactor &o) const
 {
-    return other.id == id &&
-           other.dataset_id_ == dataset_id_ &&
-           other.input_queue_table_name_ == input_queue_table_name_ &&
-           other.input_queue_column_name_ == input_queue_column_name_ &&
-           other.decon_level_ == decon_level_ &&
-           other.scaling_factor_labels == scaling_factor_labels &&
-           other.scaling_factor_features == scaling_factor_features &&
-           other.dc_offset_labels == dc_offset_labels &&
-           other.dc_offset_labels == dc_offset_labels;
+    return (o ^= *this)
+           && o.scaling_factor_labels == scaling_factor_labels
+           && o.scaling_factor_features == scaling_factor_features
+           && o.dc_offset_labels == dc_offset_labels
+           && o.dc_offset_features == dc_offset_features;
+}
+
+bool DQScalingFactor::operator^=(const DQScalingFactor &o) const
+{
+    return (!o.model_id_ || !model_id_ || o.model_id_ == model_id_)
+           && o.decon_level_ == decon_level_
+           && o.grad_depth_ == grad_depth_
+           && o.chunk_ix_ == chunk_ix_;
 }
 
 bool DQScalingFactor::operator<(const DQScalingFactor &o) const
 {
-    if (dataset_id_ < o.dataset_id_) return true;
-    if (dataset_id_ > o.dataset_id_) return false;
+    if (model_id_ < o.model_id_) return true;
+    if (model_id_ > o.model_id_) return false;
 
-    if (input_queue_table_name_ < o.input_queue_table_name_) return true;
-    if (input_queue_table_name_ > o.input_queue_table_name_) return false;
+    if (chunk_ix_ < o.chunk_ix_) return true;
+    if (chunk_ix_ > o.chunk_ix_) return false;
 
-    if (input_queue_column_name_ < o.input_queue_column_name_) return true;
-    if (input_queue_column_name_ > o.input_queue_column_name_) return false;
+    if (grad_depth_ < o.grad_depth_) return true;
+    if (grad_depth_ > o.grad_depth_) return false;
 
     return decon_level_ < o.decon_level_;
 }
 
 bool DQScalingFactor::in(const dq_scaling_factor_container_t &c)
 {
-    return std::any_of(std::execution::par_unseq, c.begin(), c.end(), [&](const auto &p) {
-        return decon_level_ == p->decon_level_ &&
-               dataset_id_ == p->dataset_id_ &&
-               input_queue_column_name_ == p->input_queue_column_name_ &&
-               input_queue_table_name_ == p->input_queue_table_name_;
-    });
+    return std::any_of(std::execution::par_unseq, c.begin(), c.end(), [&](const auto &p) { return *p ^= *this; });
 }
 
 
@@ -77,17 +76,14 @@ bool operator<(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs)
 }
 
 DQScalingFactor::DQScalingFactor(
-        const bigint id, const bigint dataset_id, const std::string &input_queue_table_name, const std::string &input_queue_column_name,
-        const size_t decon_level,
-        const double scale_feat,
-        const double scale_labels,
-        const double dc_offset_feat,
-        const double dc_offset_labels) :
+        const bigint id, const bigint model_id,
+        const size_t decon_level, const size_t grad_depth, const size_t chunk_index,
+        const double scale_feat, const double scale_labels, const double dc_offset_feat, const double dc_offset_labels) :
         Entity(id),
-        dataset_id_(dataset_id),
-        input_queue_table_name_(input_queue_table_name),
-        input_queue_column_name_(input_queue_column_name),
+        model_id_(model_id),
         decon_level_(decon_level),
+        grad_depth_(grad_depth),
+        chunk_ix_(chunk_index),
         scaling_factor_features(scale_feat),
         scaling_factor_labels(scale_labels),
         dc_offset_features(dc_offset_feat),
@@ -98,34 +94,14 @@ DQScalingFactor::DQScalingFactor(
 #endif
 }
 
-bigint DQScalingFactor::get_dataset_id() const
+bigint DQScalingFactor::get_model_id() const
 {
-    return dataset_id_;
+    return model_id_;
 }
 
-void DQScalingFactor::set_dataset_id(const bigint dataset_id)
+void DQScalingFactor::set_model_id(const bigint model_id)
 {
-    dataset_id_ = dataset_id;
-}
-
-std::string DQScalingFactor::get_input_queue_table_name() const
-{
-    return input_queue_table_name_;
-}
-
-void DQScalingFactor::set_input_queue_table_name(const std::string &input_queue_table_name)
-{
-    input_queue_table_name_ = input_queue_table_name;
-}
-
-std::string DQScalingFactor::get_input_queue_column_name() const
-{
-    return input_queue_column_name_;
-}
-
-void DQScalingFactor::set_input_queue_column_name(const std::string &input_queue_column_name)
-{
-    input_queue_column_name_ = input_queue_column_name;
+    model_id_ = model_id;
 }
 
 size_t DQScalingFactor::get_decon_level() const
@@ -136,6 +112,26 @@ size_t DQScalingFactor::get_decon_level() const
 void DQScalingFactor::set_decon_level(const size_t decon_level)
 {
     decon_level_ = decon_level;
+}
+
+size_t DQScalingFactor::get_grad_depth() const
+{
+    return grad_depth_;
+}
+
+void DQScalingFactor::set_grad_depth(const size_t grad_level)
+{
+    grad_depth_ = grad_level;
+}
+
+size_t DQScalingFactor::get_chunk_index() const
+{
+    return chunk_ix_;
+}
+
+void DQScalingFactor::set_chunk_index(const size_t chunk_index)
+{
+    chunk_ix_ = chunk_index;
 }
 
 double DQScalingFactor::get_features_factor() const

@@ -3,7 +3,6 @@
 #include <armadillo>
 #include <boost/date_time/posix_time/posix_time_config.hpp>
 #include <vector>
-#include <tsl/ordered_map.h>
 
 #include "common/compatibility.hpp"
 #include "common/Logging.hpp"
@@ -54,7 +53,7 @@ public:
     insert_rows(
             container &rows_container,
             const arma::mat &data,
-            const std::set<bpt::ptime> &times,
+            const std::deque<bpt::ptime> &times,
             const size_t level,
             const size_t level_ct,
             const bool merge);
@@ -62,7 +61,7 @@ public:
     static container
     insert_rows(
             const arma::mat &data,
-            const std::set<bpt::ptime> &times,
+            const std::deque<bpt::ptime> &times,
             const size_t level,
             const size_t level_ct,
             const bool merge);
@@ -149,7 +148,7 @@ public:
     static std::shared_ptr<DataRow> load(const std::string &s, const char delim = ',');
 };
 
-template<typename T> std::basic_ostream<T> &operator <<(std::basic_ostream<T> &o, const DataRow& r)
+template<typename T> std::basic_ostream<T> &operator <<(std::basic_ostream<T> &o, const datamodel::DataRow &r)
 {
     return o << r.to_string();
 }
@@ -273,6 +272,9 @@ lower_bound(const data_row_container &data, const data_row_container::const_iter
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint, const bpt::ptime &time_key);
 
+data_row_container::iterator
+lower_bound_back(const data_row_container::iterator &begin, const data_row_container::iterator &end, const bpt::ptime &time_key);
+
 data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
@@ -299,10 +301,15 @@ data_row_container::const_iterator lower_bound_before(const data_row_container &
 
 data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
 
+datamodel::DataRow::container::const_iterator
+find(
+        const datamodel::DataRow::container &data,
+        const boost::posix_time::ptime &vtime,
+        const boost::posix_time::time_duration &deviation);
+
 data_row_container::iterator find(data_row_container &data, const bpt::ptime &value_time);
 
 data_row_container::const_iterator find(const data_row_container &data, const bpt::ptime &value_time);
-
 
 data_row_container::const_iterator
 find_nearest_before(
@@ -363,15 +370,7 @@ generate_twap(
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
         const size_t colix,
-        arma::rowvec &row);
-
-double calc_twap(
-        const data_row_container::const_iterator &start_iter, // At start time or before
-        const data_row_container::const_iterator &it_end,
-        const boost::posix_time::ptime &start_time,
-        const boost::posix_time::ptime &end_time,
-        const bpt::time_duration &hf_resolution,
-        const size_t col_ix);
+        arma::subview<double> out);
 
 }
 

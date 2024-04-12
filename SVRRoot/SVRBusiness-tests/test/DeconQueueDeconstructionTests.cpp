@@ -62,7 +62,7 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
     size_t transformation_levels = 4;
 //    bpt::time_duration max_lookback_time_gap = bpt::hours(23);
 
-    const auto adjacent_levels = svr::common::get_adjacent_indexes(model_number, adjacent_levels_ratio, transformation_levels + 1);
+    const auto adjacent_levels = business::SVRParametersService::get_adjacent_indexes(model_number, adjacent_levels_ratio, transformation_levels + 1);
 
     /* TODO add auxilliary decon queue tests */
     arma::mat features, labels;
@@ -88,7 +88,7 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             dataset_100->get_id(),
             test_iq_name,
             "eurusd",
-            0, 0, 0,
+            1, 0, 0, 0,
             DEFAULT_SVRPARAM_SVR_COST,
             DEFAULT_SVRPARAM_SVR_EPSILON,
             DEFAULT_SVRPARAM_KERNEL_PARAM_1,

@@ -42,7 +42,7 @@ public:
 
     void prepare(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const bool save);
 
-    static t_iqscaler get_scaler(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name);
+    static t_iqscaler get_scaler(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name);
 
     static t_iqscaler get_unscaler(const datamodel::Dataset &dataset, const std::string &table_name, const std::string &column_name);
 

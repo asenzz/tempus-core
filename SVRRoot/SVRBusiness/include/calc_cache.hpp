@@ -51,18 +51,18 @@ typedef std::tuple<
         std::string /* column */, size_t /* gradient */, size_t /* chunk */, size_t /* lambda */,
         size_t /* lag */, size_t /* decrement */, std::set<size_t> /* feature levels */, arma::SizeMat /* feature matrix size */, bpt::ptime>
         Z_cache_key_t;
-typedef std::unordered_map<Z_cache_key_t, matrix_ptr> Z_cache_t;
+typedef std::unordered_map<Z_cache_key_t, mat_ptr> Z_cache_t;
 
 
 typedef std::tuple<
         std::string /* column */, size_t /* level */, size_t /* gradient */, size_t /* chunk */, size_t /* lambda */,
         size_t /* lag */, size_t /* decrement */, std::set<size_t> /* feature levels */, arma::SizeMat /* feature matrix size */, arma::SizeMat /* predict matrix size */, bpt::ptime>
         Zy_cache_key_t;
-typedef std::unordered_map<Zy_cache_key_t, matrix_ptr> Zy_cache_t;
+typedef std::unordered_map<Zy_cache_key_t, mat_ptr> Zy_cache_t;
 
 
 typedef std::tuple<size_t, std::set<size_t>, bpt::time_duration, bpt::ptime, bpt::time_duration, bpt::ptime, size_t> features_cache_key_t;
-typedef std::unordered_map<features_cache_key_t, matrix_ptr> features_cache_t;
+typedef std::unordered_map<features_cache_key_t, mat_ptr> features_cache_t;
 
 
 struct tune_data
@@ -95,10 +95,9 @@ class calc_cache
     tbb::concurrent_unordered_map<features_cache_key_t, std::mutex> features_mx;
 
     std::unordered_map<std::string /* ensemble */, tune_data, std::hash<std::string>> tune_predictions;
-    const datamodel::Dataset &dataset; // owner
 
 public:
-    explicit calc_cache(const datamodel::Dataset &dataset);
+    explicit calc_cache();
 
     double get_cached_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const double meanabs_labels);
 
@@ -108,7 +107,7 @@ public:
 
     arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
 
-    matrix_ptr get_cached_features(
+    mat_ptr get_cached_features(
         const std::deque<bpt::ptime> &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux, const size_t lag, const std::set<size_t> &adjacent_levels,
         const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
 

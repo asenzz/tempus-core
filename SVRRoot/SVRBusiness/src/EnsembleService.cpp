@@ -55,50 +55,38 @@ void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::E
 }
 
 
-void EnsembleService::train(datamodel::Ensemble &ensemble, const std::unordered_map<size_t, matrix_ptr> &dataset_features, const t_training_data &training_data)
+void EnsembleService::train(datamodel::Ensemble &ensemble, const datamodel::t_training_data &training_data)
 {
 #pragma omp parallel for num_threads(adj_threads(ensemble.get_models().size())) schedule(static, 1)
     for (auto p_model: ensemble.get_models())
         ModelService::train(
                 *p_model,
-                dataset_features.at(p_model->get_decon_level()),
+                training_data.features.at(p_model->get_decon_level()),
                 training_data.labels.at(p_model->get_decon_level()),
                 training_data.last_knowns.at(p_model->get_decon_level()),
                 training_data.last_row_time);
 }
 
 datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(
-        const datamodel::Dataset_ptr &p_dataset,
-        const datamodel::Ensemble_ptr &p_ensemble,
-        const t_predict_features &dataset_features) noexcept
+        const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::t_predict_features &features) noexcept
 {
     try {
-        return predict(p_dataset, p_ensemble, dataset_features);
+        return predict(dataset, ensemble, features);
     } catch (const std::exception &ex) {
-        LOG4_ERROR("Failed predicting " << p_ensemble->get_column_name() << ", " << ex.what());
+        LOG4_ERROR("Failed predicting " << ensemble.get_column_name() << ", " << ex.what());
         return nullptr;
     }
 }
 
-datamodel::DeconQueue_ptr EnsembleService::predict(
-        const datamodel::Dataset_ptr &p_dataset,
-        const datamodel::Ensemble_ptr &p_ensemble,
-        const t_predict_features &dataset_features)
+datamodel::DeconQueue_ptr EnsembleService::predict(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::t_predict_features &features)
 {
     LOG4_BEGIN();
 
-    auto p_aux_decon = p_ensemble->get_aux_decon_queue(p_ensemble->get_column_name())->clone_empty();
-    if (!p_aux_decon) LOG4_THROW("Auxiliary decon queue for column " << p_ensemble->get_column_name() << " not found.");
-    const auto aux_dq_scaling_factors = APP.dq_scaling_factor_service.slice(p_dataset->get_dq_scaling_factors(), p_dataset->get_id(), p_ensemble->get_column_name(), {});
-
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_models().size())) schedule(static, 1)
-    for (auto &p_model: p_ensemble->get_models()) {
-        const auto it_level_feats = dataset_features.find(p_model->get_decon_level());
-        if (it_level_feats == dataset_features.end())
-            LOG4_THROW("Features for level " << p_model->get_decon_level() << " are missing.");
-
-        ModelService::predict(p_ensemble, p_model, aux_dq_scaling_factors, it_level_feats->second, p_dataset->get_input_queue()->get_resolution(), *p_aux_decon);
-    }
+    auto p_aux_decon = ensemble.get_label_aux_decon()->clone_empty();
+    if (!p_aux_decon) LOG4_THROW("Auxiliary decon queue for column " << ensemble.get_column_name() << " not found.");
+#pragma omp parallel for num_threads(adj_threads(ensemble.get_models().size())) schedule(static, 1)
+    for (auto &p_model: ensemble.get_models())
+        ModelService::predict(ensemble, *p_model, features.at(p_model->get_decon_level()), dataset.get_input_queue()->get_resolution(), *p_aux_decon);
 
     LOG4_END();
 
@@ -229,7 +217,7 @@ int EnsembleService::remove(const datamodel::Ensemble_ptr &p_ensemble)
 bool EnsembleService::check(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<std::string> &value_columns)
 {
     tbb::concurrent_vector<bool> present(value_columns.size(), false);
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) num_threads(adj_threads(ensembles.size() * value_columns.size())) schedule(static, 1)
     for (const auto &e: ensembles)
         for (size_t i = 0; i < value_columns.size(); ++i)
             if (e->get_column_name() == value_columns[i])
@@ -267,7 +255,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
 #pragma omp parallel for num_threads(adj_threads(main_decon_queues.size())) schedule(static, 1)
     for (size_t i = 0; i < main_decon_queues.size(); ++i) {
         const auto &p_main_decon = main_decon_queues[i];
-        std::remove_reference_t<decltype(ensembles)>::iterator ens_iter;
+        std::decay_t<dtype(ensembles)>::iterator ens_iter;
         datamodel::Ensemble_ptr p_ensemble;
         omp_set_lock(&ens_emplace_l);
         if ((ens_iter = std::find_if(std::execution::par_unseq, ensembles.begin(), ensembles.end(),
@@ -289,19 +277,25 @@ void EnsembleService::get_decon_queues_from_input_queue(
         const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
 {
     const auto prev_size = decon_queues.size();
-    for (size_t i = 0; i < input_queue.get_value_columns().size(); ++i) {
-        const std::string column_name = input_queue.get_value_column(i);
+#pragma omp parallel for num_threads(adj_threads(input_queue.get_value_columns().size())) schedule(static, 1)
+    for (const auto &column_name: input_queue.get_value_columns()) {
         std::atomic<bool> skip = false;
-#pragma omp parallel for num_threads(adj_threads(decon_queues.size()))
-        for (size_t i = 0; i < prev_size; ++i) {
-            const auto &dq = decon_queues[i];
+#pragma omp parallel for num_threads(adj_threads(decon_queues.size())) schedule(static, 1)
+        for (size_t j = 0; j < prev_size; ++j) {
+            const auto &dq = decon_queues[j];
             if (dq->get_input_queue_table_name() == input_queue.get_table_name() && dq->get_input_queue_column_name() == column_name)
                 skip.store(true, std::memory_order_relaxed);
         }
         if (skip) continue;
-        decon_queues.emplace_back(dtr<datamodel::DeconQueue>(
-                DeconQueueService::make_queue_table_name(input_queue.get_table_name(), dataset.get_id(), column_name),
-                input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_transformation_levels()));
+        datamodel::DeconQueue_ptr p_decon_queue;
+        if (dataset.get_id())
+            p_decon_queue = APP.decon_queue_service.get_by_table_name(input_queue.get_table_name(), dataset.get_id(), column_name);
+        if (!p_decon_queue)
+            p_decon_queue = dtr<datamodel::DeconQueue>(
+                    DeconQueueService::make_queue_table_name(input_queue.get_table_name(), dataset.get_id(), column_name),
+                    input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_transformation_levels());
+#pragma omp critical
+        decon_queues.emplace_back(p_decon_queue);
     }
 }
 

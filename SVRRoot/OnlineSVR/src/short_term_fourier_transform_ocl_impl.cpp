@@ -8,7 +8,6 @@ short_term_fourier_transform_ocl_impl::short_term_fourier_transform_ocl_impl(siz
 : frame_size(levels+1)
 , gpu_frame_size(frame_size * 2)
 , gpu_frame_buffer_size(gpu_frame_size * sizeof(double))
-, gpu_effective_frame_size(frame_size + 2)
 , gpu_kernel("mostft")
 , ctx(gpu_kernel.ctx())
 , context(ctx.handle())

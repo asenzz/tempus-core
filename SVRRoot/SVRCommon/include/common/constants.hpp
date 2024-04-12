@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <cstdlib>
 #include <string>
 #include <array>
@@ -11,36 +10,27 @@
 #include "defines.h"
 #include "util/math_utils.hpp"
 
-#ifdef INTEGRATION_TEST
-const unsigned INTEGRATION_TEST_VALIDATION_WINDOW = getenv("SVRWAVE_TEST_WINDOW") ? strtoul(getenv("SVRWAVE_TEST_WINDOW"), nullptr, 10) : TEST_OFFSET_DEFAULT;
-#else
-constexpr unsigned INTEGRATION_TEST_VALIDATION_WINDOW = 0;
-#endif
-
 namespace svr {
 
-#ifndef TUNE_HYBRID_IDEAL
-constexpr unsigned EMO_SLIDE_SKIP = 6;
-constexpr unsigned EMO_MAX_J = 17;
-constexpr unsigned DEFAULT_EMO_TEST_LEN = 270;
-constexpr unsigned EMO_TEST_LEN = DEFAULT_EMO_TEST_LEN; // = EMO_TUNE_TEST_SIZE
-constexpr unsigned EMO_TUNE_MIN_VALIDATION_WINDOW = EMO_TEST_LEN - EMO_SLIDE_SKIP * (EMO_MAX_J - 1); // 200 seems to be the best validation window for predicting the next 120 hours, setting the window to 120 gives worse results for predicting the next 120 hours
-constexpr unsigned EMO_SLIDES_LEN = [](){
-    unsigned r = 0;
-    for (unsigned j = 0; j < EMO_MAX_J; ++j)
-        r += EMO_TEST_LEN - EMO_SLIDE_SKIP * (EMO_MAX_J - j - 1);
+constexpr unsigned C_emo_slide_skip = 5;
+constexpr unsigned C_emo_max_j = 20;
+constexpr unsigned C_emo_test_len = 17 * 17; // Must be square-rootable
+constexpr unsigned C_emo_tune_min_validation_window = C_emo_test_len - C_emo_slide_skip * (C_emo_max_j - 1);
+constexpr double C_emo_slides_len = [](){
+    double r = 0;
+    for (unsigned j = 0; j < C_emo_max_j; ++j)
+        r += C_emo_test_len - C_emo_slide_skip * (C_emo_max_j - j - 1);
     return r;
 } ();
-// constexpr unsigned EMO_TUNE_TEST_SIZE = EMO_SLIDE_SKIP * EMO_MAX_J + EMO_TUNE_VALIDATION_WINDOW; // = EMO_TEST_LEN
-#endif
+
 
 namespace common {
 
 constexpr unsigned C_min_cursor_rows = 1e4;
 constexpr unsigned C_cursors_per_query = 8;
 
-constexpr double C_input_obseg_labels = 1;
-constexpr double C_input_obseg_features = C_input_obseg_labels;
+const double C_input_obseg_labels = 1;
+constexpr double C_input_obseg_features = 1;
 
 constexpr unsigned C_forecast_focus = 115;
 
@@ -57,12 +47,11 @@ const std::string C_mt4_date_time_format{"%Y.%m.%d %H:%M:%S"};
 const unsigned C_default_online_learn_iter_limit = atol(DEFAULT_ONLINE_ITER_LIMIT);
 const unsigned C_default_stabilize_iterations_count = atol(DEFAULT_STABILIZE_ITERATIONS_COUNT);
 constexpr unsigned C_max_csv_token_size = 0xFF;
-constexpr unsigned C_kernel_default_max_chunk_size = 6000;
+constexpr unsigned C_default_kernel_max_chunk_size = 3000;
 const unsigned C_default_multistep_len = atol(DEFAULT_MULTISTEP_LEN);
 constexpr unsigned C_default_gradient_count = DEFAULT_SVRPARAM_GRAD_LEVEL + 1;
 constexpr unsigned C_default_level_count = DEFAULT_SVRPARAM_DECON_LEVEL + 1;
-constexpr unsigned C_max_predict_chunk_size = C_kernel_default_max_chunk_size / 10;
-
+constexpr double C_kernel_path_tau = .25;
 
 const unsigned C_omp_max_active_levels = []() {
     const auto p_env_max_active_levels = getenv("MAX_ACTIVE_LEVELS");
@@ -73,6 +62,13 @@ const unsigned C_omp_teams_thread_limit = []() {
     return p_env_teams_thread_limit ? strtoul(p_env_teams_thread_limit, nullptr, 10) : 100 * std::thread::hardware_concurrency();
 } ();
 
+#ifdef INTEGRATION_TEST
+const unsigned INTEGRATION_TEST_VALIDATION_WINDOW = []() {
+    constexpr unsigned TEST_OFFSET_DEFAULT = 345;
+    const auto p = getenv("SVRWAVE_TEST_WINDOW");
+    return p ? strtoul(p, nullptr, 10) : TEST_OFFSET_DEFAULT;
+}();
+#endif
 
 }
 }

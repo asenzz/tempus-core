@@ -50,7 +50,7 @@ public:
     {}; // Dummy
 
     void transform(
-            datamodel::DeconQueue_ptr &p_decon_queue,
+            datamodel::DeconQueue &decon_queue,
             const size_t decon_start_ix = 0,
             const size_t test_offset = 0,
             const size_t custom_residuals_ct = std::numeric_limits<size_t>::max());

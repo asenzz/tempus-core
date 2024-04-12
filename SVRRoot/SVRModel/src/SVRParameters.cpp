@@ -3,6 +3,8 @@
 //
 
 #include "model/SVRParameters.hpp"
+#include "SVRParametersService.hpp"
+#include <set>
 
 namespace svr {
 namespace datamodel {
@@ -32,6 +34,7 @@ SVRParameters::SVRParameters(
         const bigint dataset_id,
         const std::string &input_queue_table_name,
         const std::string &input_queue_column_name,
+        const size_t level_ct,
         const size_t decon_level,
         const size_t chunk_ix,
         const size_t grad_level,
@@ -47,6 +50,7 @@ SVRParameters::SVRParameters(
           dataset_id(dataset_id),
           input_queue_table_name(input_queue_table_name),
           input_queue_column_name(input_queue_column_name),
+          levels_ct(level_ct),
           decon_level_(decon_level),
           chunk_ix_(chunk_ix),
           grad_level_(grad_level),
@@ -59,6 +63,7 @@ SVRParameters::SVRParameters(
           kernel_type(kernel_type),
           lag_count(lag_count)
 {
+    (void) get_adjacent_levels();
     set_kernel_type(kernel_type);
 #ifdef ENTITY_INIT_ID
     init_id();
@@ -71,6 +76,7 @@ SVRParameters::SVRParameters(const SVRParameters &params) :
                 params.get_dataset_id(),
                 params.get_input_queue_table_name(),
                 params.get_input_queue_column_name(),
+                params.get_level_count(),
                 params.get_decon_level(),
                 params.get_chunk_ix(),
                 params.get_grad_level(),
@@ -95,6 +101,7 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &v)
     dataset_id = v.dataset_id;
     input_queue_table_name = v.input_queue_table_name;
     input_queue_column_name = v.input_queue_column_name;
+    levels_ct = v.levels_ct;
     decon_level_ = v.decon_level_;
     chunk_ix_ = v.chunk_ix_;
     grad_level_ = v.grad_level_;
@@ -104,6 +111,7 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &v)
     svr_kernel_param2 = v.svr_kernel_param2;
     svr_decremental_distance = v.svr_decremental_distance;
     svr_adjacent_levels_ratio = v.svr_adjacent_levels_ratio;
+    adjacent_levels = v.adjacent_levels;
     kernel_type = v.kernel_type;
     lag_count = v.lag_count;
 #ifdef ENTITY_INIT_ID
@@ -128,6 +136,7 @@ bool SVRParameters::operator==(const SVRParameters &o) const
     return dataset_id == o.dataset_id
            && input_queue_table_name == o.input_queue_table_name
            && input_queue_column_name == o.input_queue_column_name
+           && levels_ct == o.levels_ct
            && decon_level_ == o.decon_level_
            && chunk_ix_ == o.chunk_ix_
            && grad_level_ == o.grad_level_
@@ -201,6 +210,20 @@ size_t SVRParameters::get_decon_level() const
 void SVRParameters::set_decon_level(const size_t _decon_level)
 {
     decon_level_ = _decon_level;
+    adjacent_levels.clear();
+    (void) get_adjacent_levels();
+}
+
+size_t SVRParameters::get_level_count() const
+{
+    return levels_ct;
+}
+
+void SVRParameters::set_level_count(const size_t levels)
+{
+    levels_ct = levels;
+    adjacent_levels.clear();
+    (void) get_adjacent_levels();
 }
 
 size_t SVRParameters::get_chunk_ix() const
@@ -246,7 +269,6 @@ double SVRParameters::get_svr_epsilon() const
 
 void SVRParameters::set_svr_epsilon(const double _svr_epsilon)
 {
-    if (_svr_epsilon < 0) THROW_EX_FS(std::invalid_argument, "Epsilon parameter " << _svr_epsilon << " is less than zero.");
     svr_epsilon = _svr_epsilon;
 }
 
@@ -290,11 +312,25 @@ double SVRParameters::get_svr_adjacent_levels_ratio() const
 
 void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio)
 {
-    if (_svr_adjacent_levels_ratio < 0. || _svr_adjacent_levels_ratio > 1.)
+    if (_svr_adjacent_levels_ratio < 0 || _svr_adjacent_levels_ratio > 1)
         THROW_EX_FS(std::range_error, "Adjacent levels ratio " << _svr_adjacent_levels_ratio << " is out of 0..1 range.");
     svr_adjacent_levels_ratio = _svr_adjacent_levels_ratio;
+    adjacent_levels.clear();
+    (void) get_adjacent_levels();
 }
 
+std::set<size_t> SVRParameters::get_adjacent_levels()
+{
+    return adjacent_levels.empty()
+           ? adjacent_levels = business::SVRParametersService::get_adjacent_indexes(decon_level_, svr_adjacent_levels_ratio, levels_ct)
+           : adjacent_levels;
+}
+
+std::set<size_t> SVRParameters::get_adjacent_levels() const
+{
+    if (adjacent_levels.empty()) LOG4_THROW("Adjacent levels not initialized.");
+    return adjacent_levels;
+}
 
 kernel_type_e SVRParameters::get_kernel_type() const
 {
@@ -303,7 +339,7 @@ kernel_type_e SVRParameters::get_kernel_type() const
 
 bool SVRParameters::is_manifold() const
 {
-    return kernel_type == kernel_type_e::DEEP_PATH || kernel_type == kernel_type_e::DEEP_PATH2;
+    return kernel_type == kernel_type_e::DEEP_PATH;
 }
 
 void SVRParameters::set_kernel_type(const kernel_type_e _kernel_type)
@@ -386,17 +422,18 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
     set_dataset_id(atoll(tokens[1].c_str()));
     set_input_queue_table_name(tokens[2]);
     set_input_queue_column_name(tokens[3]);
-    set_decon_level(atol(tokens[4].c_str()));
-    set_chunk_ix(atol(tokens[5].c_str()));
-    set_grad_level(atol(tokens[6].c_str()));
-    set_svr_C(atof(tokens[7].c_str()));
-    set_svr_epsilon(atof(tokens[8].c_str()));
-    set_svr_kernel_param(atof(tokens[9].c_str()));
-    set_svr_kernel_param2(atof(tokens[10].c_str()));
-    set_svr_decremental_distance(atoll(tokens[11].c_str()));
-    set_svr_adjacent_levels_ratio(atof(tokens[12].c_str()));
-    set_kernel_type(kernel_type_e(atol(tokens[13].c_str())));
-    set_lag_count(atoll(tokens[14].c_str()));
+    set_level_count(atol(tokens[4].c_str()));
+    set_decon_level(atol(tokens[5].c_str()));
+    set_chunk_ix(atol(tokens[6].c_str()));
+    set_grad_level(atol(tokens[7].c_str()));
+    set_svr_C(atof(tokens[8].c_str()));
+    set_svr_epsilon(atof(tokens[9].c_str()));
+    set_svr_kernel_param(atof(tokens[10].c_str()));
+    set_svr_kernel_param2(atof(tokens[11].c_str()));
+    set_svr_decremental_distance(atoll(tokens[12].c_str()));
+    set_svr_adjacent_levels_ratio(atof(tokens[13].c_str()));
+    set_kernel_type(kernel_type_e(atol(tokens[14].c_str())));
+    set_lag_count(atoll(tokens[15].c_str()));
 
     LOG4_DEBUG("Successfully loaded parameters " << to_sql_string());
 

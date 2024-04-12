@@ -7,13 +7,13 @@
 
 namespace svr::kernel::path {
 
-void cu_distances_xx(const size_t total_len_features, const size_t dim, const size_t size_X, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const double *X,
-                     const double lambda, const double tau, const double w_sum_sym, double *Z);
+void
+cu_distances_xx(const unsigned long lag, const unsigned long cols, const unsigned long end_col, const unsigned long end_row, const double *X, const double lambda,
+                double *Z);
 
-void cu_distances_xy(const size_t total_len_features, const size_t dim, const size_t size_X, const size_t size_Y, const size_t startX, const size_t startY, const size_t numX, const size_t numY,
-                     const double *X, const double *Y, const double lambda, const double tau, const double w_sum_sym, double *Z);
-
-double score_distance_kernel(const size_t sizeX, double *Z_distances, double *Y);
+void
+cu_distances_xy(const unsigned long lag, const unsigned long X_cols, const unsigned long Xy_cols, const unsigned long end_col, const unsigned long end_row,
+                const double *X, const double *Xy, const double lambda, double *Z);
 
 }
 

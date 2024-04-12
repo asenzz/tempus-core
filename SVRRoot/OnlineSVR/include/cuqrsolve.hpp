@@ -8,6 +8,7 @@
 namespace svr::solvers {
 
 void kernel_from_distances(double *K, const double *Z, const size_t m, const size_t n, const double gamma);
+void kernel_from_distances_symm(double *K, const double *Z, const size_t m, const double gamma);
 
 //double score_kernel(const double *ref_kernel /* colmaj order */, const double norm_ref, const double *Z /* colmaj order */, const size_t M, const double gamma); // TODO  Test
 

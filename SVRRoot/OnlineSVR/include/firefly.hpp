@@ -31,7 +31,7 @@ class firefly {
     static constexpr double b_1 = 1;
     static constexpr double beta0 = 1;
 
-    const arma::vec levy_random;
+    arma::vec levy_random;
 
     const size_t D = 2;	    		        // dimension of the problem
     const size_t n = OPT_PARTICLES;			// number of fireflies
@@ -61,14 +61,13 @@ class firefly {
     double alpha_new(const double alpha, const double NGen);
     void sort_ffa();
     void replace_ffa();
-    void move_ffa(); // Old not used
     void move_ffa_adaptive(const double rate);
     void findlimits(const size_t k);
     void ffa_main();
     void run_iteration();
 
 public:
-    operator std::pair<double, std::vector<double>>() { return {best_score, common::wrap_vector(best_parameters.memptr(), best_parameters.n_elem)}; }
+    operator std::pair<double, std::vector<double>>() { return {best_score, arma::conv_to<std::vector<double>>::from(best_parameters)}; }
 
     firefly(const size_t D, const size_t n, const size_t MaxGeneration, const double alpha, const double betamin, const double gamma,
             const arma::vec &lb, const arma::vec &ub, const arma::vec &pows, const loss_callback_t function);

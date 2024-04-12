@@ -10,7 +10,7 @@
 namespace svr {
 namespace common {
 
-#define FREE_RAM_THRESHOLD .1
+#define FREE_RAM_THRESHOLD .2
 #define GB_RAM_UNIT_DIVIDER (1024*1024) // As current meminfo report is in KB
 #define THREADS_CORES_MULTIPLIER 1
 #define SLEEP_ITERATIONS 160

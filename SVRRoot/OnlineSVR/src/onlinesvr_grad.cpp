@@ -62,7 +62,7 @@ OnlineMIMOSVR::batch_train(
 
     if (!p_manifold) init_manifold(*p_xtrain, *p_ytrain);
 
-    ixs = get_indexes();
+    ixs = generate_indexes();
     if (kernel_matrices && kernel_matrices->size() == ixs.size()) {
         p_kernel_matrices = kernel_matrices;
         LOG4_DEBUG("Using " << ixs.size() << " pre-calculated matrices.");

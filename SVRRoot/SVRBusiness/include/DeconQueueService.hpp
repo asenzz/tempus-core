@@ -14,14 +14,19 @@
 
 namespace svr { namespace dao { class DeconQueueDAO; }}
 
-namespace svr { namespace datamodel {
+namespace svr {
+namespace datamodel {
 class DeconQueue;
+
 class InputQueue;
+
 class Dataset;
+
 using DeconQueue_Ptr = std::shared_ptr<DeconQueue>;
 using InputQueue_ptr = std::shared_ptr<InputQueue>;
 using Dataset_ptr = std::shared_ptr<Dataset>;
-}}
+}
+}
 
 namespace svr { namespace business { class InputQueueService; }}
 
@@ -42,18 +47,13 @@ typedef enum class recon_type : uint
 class DeconQueueService
 {
     svr::dao::DeconQueueDAO &decon_queue_dao;
-    svr::business::InputQueueService &input_queue_service;
 
 public:
-    DeconQueueService(svr::dao::DeconQueueDAO &deconQueueDao,
-                      svr::business::InputQueueService &input_queue_service) :
-            decon_queue_dao(deconQueueDao),
-            input_queue_service(input_queue_service)
-    {}
+    DeconQueueService(svr::dao::DeconQueueDAO &deconQueueDao);
 
     datamodel::DeconQueue_ptr get_by_table_name(const std::string &table_name);
 
-    datamodel::DeconQueue_ptr get_queue_metadata(const std::string &table_name);
+    datamodel::DeconQueue_ptr get_by_table_name(const std::string &input_queue_table_name, const bigint dataset_id, const std::string &input_queue_column_name);
 
     void load_latest(
             const datamodel::DeconQueue_ptr &p_decon_queue,
@@ -95,9 +95,9 @@ public:
             const std::string &column_name);
 
     static void deconstruct(
-            const datamodel::Dataset_ptr &p_dataset,
-            const datamodel::InputQueue_ptr &p_input_queue,
-            datamodel::DeconQueue_ptr &p_decon_queue);
+            datamodel::Dataset &dataset,
+            const datamodel::InputQueue &input_queue,
+            datamodel::DeconQueue &decon_queue);
 
     static void reconstruct(
             const datamodel::datarow_range &decon,
@@ -116,15 +116,15 @@ public:
             const data_row_container &data,
             const data_row_container::const_iterator &target_iter);
 
-    static void prepare_decon(const datamodel::Dataset_ptr &p_dataset, const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue);
+    static void prepare_decon(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue);
 
-    static void dummy_decon(const datamodel::InputQueue_ptr &p_input_queue, datamodel::DeconQueue_ptr &p_decon_queue, const size_t levix, const size_t levct, const t_iqscaler &iq_scaler);
+    static void dummy_decon(
+            const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const size_t levix, const size_t levct, const t_iqscaler &iq_scaler);
 
     static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
+
+    static void mirror_tail(const datamodel::datarow_range &input, const size_t needed_data_ct, std::vector<double> &tail);
 };
 
 } /* namespace business */
 } /* namespace svr */
-
-using DeconQueueService_ptr = std::shared_ptr<svr::business::DeconQueueService>;
-

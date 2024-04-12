@@ -28,6 +28,16 @@ private:
     void fromAdmin( const FIX::Message&, const FIX::SessionID& ) noexcept(false){}
     void fromApp( const FIX::Message& message, const FIX::SessionID& sessionID ) noexcept(false);
 
+    using FIX40::MessageCracker::onMessage;
+    using FIX41::MessageCracker::onMessage;
+    using FIX42::MessageCracker::onMessage;
+    using FIX43::MessageCracker::onMessage;
+    using FIX44::MessageCracker::onMessage;
+    using FIX50::MessageCracker::onMessage;
+    using FIX50SP1::MessageCracker::onMessage;
+    using FIX50SP2::MessageCracker::onMessage;
+    using FIXT11::MessageCracker::onMessage;
+
     void onMessage( const FIX44::MarketDataSnapshotFullRefresh&, const FIX::SessionID& );
     void onMessage( const FIX44::MarketDataIncrementalRefresh&, const FIX::SessionID& );
 

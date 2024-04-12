@@ -8,23 +8,23 @@ namespace dao {
 
 namespace
 {
-    static bool cmp_primary_key(ScalingFactorsTask_ptr const & lhs, ScalingFactorsTask_ptr const & rhs)
+    static const auto cmp_primary_key = [] (ScalingFactorsTask_ptr const & lhs, ScalingFactorsTask_ptr const & rhs)
     {
         return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
                 && lhs->get_id() == rhs->get_id();
-    }
-    static bool cmp_whole_value(ScalingFactorsTask_ptr const & lhs, ScalingFactorsTask_ptr const & rhs)
+    };
+    static const auto cmp_whole_value = [] (ScalingFactorsTask_ptr const & lhs, ScalingFactorsTask_ptr const & rhs)
     {
         return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
                 && *lhs == *rhs;
-    }
+    };
 }
 
 struct AsyncScalingFactorsTaskDAO::AsyncImpl
-    : AsyncImplBase<ScalingFactorsTask_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgScalingFactorsTaskDAO>
+    : AsyncImplBase<ScalingFactorsTask_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgScalingFactorsTaskDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    :AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 

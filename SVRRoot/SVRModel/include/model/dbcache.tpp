@@ -18,7 +18,7 @@ namespace datamodel {
 template<typename T>
 class dbcache
 {
-#define actual_T typename std::remove_const_t<std::remove_reference_t<T>>
+#define actual_T std::decay_t<T>
 #define actual_T_id typeid(actual_T).hash_code()
 #define __MAKE_SHARED_OBJ(__ID) std::make_shared<actual_T>(__ID, args...)
 
@@ -32,7 +32,7 @@ public:
     {
         if (!id) return std::make_shared<T>(id, args...);
 
-        typename decltype(cached_db_entities)::iterator search_obj;
+        typename dtype(cached_db_entities)::iterator search_obj;
         std::unique_lock ul(mx_obj);
         if ((search_obj = cached_db_entities.find(id)) != cached_db_entities.end()) {
             ul.unlock();
@@ -53,7 +53,7 @@ public:
         const auto new_obj_id = new_obj_ptr->get_id();
         if (!new_obj_id) return new_obj_ptr;
 
-        typename decltype(cached_db_entities)::iterator search_obj;
+        typename dtype(cached_db_entities)::iterator search_obj;
         std::unique_lock ul(mx_obj);
         if ((search_obj = cached_db_entities.find(new_obj_id)) != cached_db_entities.end()) {
             ul.unlock();
@@ -73,7 +73,7 @@ public:
         const auto new_obj_id = arg.get_id();
         if (!new_obj_id) return std::make_shared<actual_T>(arg);
 
-        typename decltype(cached_db_entities)::iterator search_obj;
+        typename dtype(cached_db_entities)::iterator search_obj;
         std::unique_lock ul(mx_obj);
         if ((search_obj = cached_db_entities.find(new_obj_id)) != cached_db_entities.end()) {
             ul.unlock();

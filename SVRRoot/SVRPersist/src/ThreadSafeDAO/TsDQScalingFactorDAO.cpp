@@ -30,9 +30,9 @@ int TsDQScalingFactorDAO::remove(const datamodel::DQScalingFactor_ptr& scaling_t
 }
 
 
-svr::datamodel::dq_scaling_factor_container_t TsDQScalingFactorDAO::find_all_by_dataset_id(const bigint dataset_id)
+svr::datamodel::dq_scaling_factor_container_t TsDQScalingFactorDAO::find_all_by_model_id(const bigint model_id)
 {
-    return ts_call<svr::datamodel::dq_scaling_factor_container_t>(&DQScalingFactorDAO::find_all_by_dataset_id, dataset_id);
+    return ts_call<svr::datamodel::dq_scaling_factor_container_t>(&DQScalingFactorDAO::find_all_by_model_id, model_id);
 }
 
 

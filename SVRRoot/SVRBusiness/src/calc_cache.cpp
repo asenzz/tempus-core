@@ -14,12 +14,8 @@ namespace svr {
 namespace business {
 
 
-calc_cache::calc_cache(const datamodel::Dataset &owning_dataset) : dataset(owning_dataset)
+calc_cache::calc_cache()
 {}
-
-
-#define ADJACENT_LEVELS \
-    common::get_adjacent_indexes(params.get_decon_level(), params.get_svr_adjacent_levels_ratio(), dataset.get_transformation_levels())
 
 
 double calc_cache::get_cached_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const double meanabs_labels)
@@ -29,13 +25,13 @@ double calc_cache::get_cached_gamma(const datamodel::SVRParameters &params, cons
             params.get_decon_level(),
             params.get_grad_level(),
             params.get_chunk_ix(),
-            params.get_svr_kernel_param2(),
+            common::hash_lambda(params.get_svr_kernel_param2()),
             params.get_lag_count(),
             params.get_svr_decremental_distance(),
-            ADJACENT_LEVELS,
+            params.get_adjacent_levels(),
             arma::size(Z)};
 
-    const auto prepare_f = [&Z, &meanabs_labels]() { return datamodel::OnlineMIMOSVR::calc_gamma(Z, meanabs_labels); };
+    auto prepare_f = [&Z, &meanabs_labels]() { return datamodel::OnlineMIMOSVR::calc_gamma(Z, meanabs_labels); };
     return cached(gamma_cache, gamma_mx, params_key, prepare_f);
 }
 
@@ -48,11 +44,11 @@ std::deque<arma::mat> &calc_cache::get_cached_cumulatives(const datamodel::SVRPa
             params.get_chunk_ix(),
             params.get_lag_count(),
             params.get_svr_decremental_distance(),
-            ADJACENT_LEVELS,
+            params.get_adjacent_levels(),
             arma::size(features_t),
             time};
 
-    const auto prepare_f = [&params, &features_t]() { return datamodel::OnlineMIMOSVR::prepare_cumulatives(params, features_t); };
+    auto prepare_f = [&params, &features_t]() { return datamodel::OnlineMIMOSVR::prepare_cumulatives(params, features_t); };
     return *cached(cml_cache, cml_mx, params_key, prepare_f);
 }
 
@@ -63,14 +59,14 @@ arma::mat &calc_cache::get_cached_Z(const datamodel::SVRParameters &params, cons
             params.get_input_queue_column_name(),
             params.get_grad_level(),
             params.get_chunk_ix(),
-            common::hash_param(params.get_svr_kernel_param2()),
+            common::hash_lambda(params.get_svr_kernel_param2()),
             params.get_lag_count(),
             params.get_svr_decremental_distance(),
-            ADJACENT_LEVELS,
+            params.get_adjacent_levels(),
             arma::size(features_t),
             time};
 
-    const auto prepare_f = [&params, &features_t, &time, this](){ return datamodel::OnlineMIMOSVR::prepare_Z(*this, params, features_t, time); };
+    auto prepare_f = [&params, &features_t, &time, this](){ return datamodel::OnlineMIMOSVR::prepare_Z(*this, params, features_t, time); };
     return *cached(Z_cache, Z_mx, params_key, prepare_f);
 }
 
@@ -81,31 +77,33 @@ arma::mat &calc_cache::get_cached_Zy(
     const Zy_cache_key_t params_key{
             params.get_input_queue_column_name(),
             params.get_decon_level(),
-            common::hash_param(params.get_grad_level()),
+            params.get_grad_level(),
             params.get_chunk_ix(),
-            params.get_svr_kernel_param2(),
+            common::hash_lambda(params.get_svr_kernel_param2()),
             params.get_lag_count(),
             params.get_svr_decremental_distance(),
-            ADJACENT_LEVELS,
+            params.get_adjacent_levels(),
             arma::size(features_t),
             arma::size(predict_features_t),
             time};
 
-    const auto prepare_f = [&params, &features_t, &predict_features_t, &time, this]() {
+    auto prepare_f = [&params, &features_t, &predict_features_t, &time, this]() {
         return datamodel::OnlineMIMOSVR::prepare_Zy(*this, params, features_t, predict_features_t, time);
     };
     return *cached(Zy_cache, Zy_mx, params_key, prepare_f);
 }
 
-matrix_ptr calc_cache::get_cached_features(
+mat_ptr calc_cache::get_cached_features(
     const std::deque<bpt::ptime> &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux, const size_t lag, const std::set<size_t> &adjacent_levels,
     const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution)
 {
     const features_cache_key_t features_key {lag, adjacent_levels, aux_queue_res, label_times.front(), main_queue_resolution, label_times.back(), label_times.size()};
 
-    const auto prepare_f = [&label_times, &features_aux, &lag, &adjacent_levels, &max_gap, &aux_queue_res, &main_queue_resolution] () {
-        auto p_features = otr<arma::mat>();
-        business::ModelService::get_features_data(*p_features, label_times, features_aux, lag, adjacent_levels, max_gap, aux_queue_res, main_queue_resolution);
+    auto prepare_f = [&label_times, &features_aux, &lag, &adjacent_levels, &max_gap, &aux_queue_res, &main_queue_resolution] () {
+        auto p_features = ptr<arma::mat>();
+        PROFILE_EXEC_TIME(
+                business::ModelService::prepare_features(*p_features, label_times, features_aux, lag, adjacent_levels, max_gap, aux_queue_res, main_queue_resolution)
+        , "Get " << label_times.size() << " features, on levels " << adjacent_levels << ", starting " << label_times.front() << ", until " << label_times.back());
         return p_features;
     };
     return cached(features_cache, features_mx, features_key, prepare_f);
@@ -154,7 +152,7 @@ bool calc_cache::recombine_go(const datamodel::OnlineMIMOSVR &svr)
     bool res = false;
     if (!tune_iter->second.recombining) {
         res = tune_iter->second.recombining = true;
-        // clear(); clear_tune_cache(p_params->get_input_queue_column_name());
+        clear_tune_cache(p_params->get_input_queue_column_name());
     }
     ul.unlock();
     return res;
@@ -184,35 +182,17 @@ datamodel::t_param_set calc_cache::get_best_parameters(const std::string &column
 void calc_cache::clear_tune_cache(const std::string &column_name)
 {
     const auto tune_column_name = "TUNE_" + column_name;
-    const auto find_tune = [&tune_column_name](auto &e) { return std::get<0>(e.first).find(tune_column_name) != std::string::npos; };
+    auto find_tune = [&tune_column_name](auto &e) { return std::get<0>(e.first).find(tune_column_name) != std::string::npos; };
 #pragma omp parallel num_threads(adj_threads(4))
     {
 #pragma omp task
-        { // Gamma calc cache
-            remove_if(gamma_cache, find_tune);
-        }
+        remove_if(gamma_cache, find_tune);
 #pragma omp task
-        { // Cumulatives cache
-            remove_if(cml_cache, find_tune);
-        }
-
-        { // Distance kernel matrix
-            if (!Z_cache.empty()) {
-                auto it = Z_cache.begin();
-                while (Z_cache.size() && it != Z_cache.end())
-                    if (find_tune(*it)) {
-                        if (Z_cache.size() < 2) {
-                            Z_cache.clear();
-                            break;
-                        } else it = Z_cache.erase(it);
-                    } else
-                        ++it;
-            }
-        }
+        remove_if(cml_cache, find_tune);
 #pragma omp task
-        { // Distance predict matrix
-            remove_if(Zy_cache, find_tune);
-        }
+        remove_if(Zy_cache, find_tune);
+#pragma omp task
+        remove_if(Z_cache, find_tune);
     }
 }
 
@@ -221,21 +201,15 @@ void calc_cache::clear()
 #pragma omp parallel num_threads(adj_threads(4))
     {
 #pragma omp task
-        { // Gamma calc cache
-            gamma_cache.clear();
-        }
+        gamma_cache.clear();
 #pragma omp task
-        { // Cumulatives cache
-            cml_cache.clear();
-        }
+        cml_cache.clear();
 #pragma omp task
-        { // Distance kernel matrix
-            Z_cache.clear();
-        }
+        Z_cache.clear();
 #pragma omp task
-        { // Distance predict matrix
-            Zy_cache.clear();
-        }
+        Zy_cache.clear();
+#pragma omp task
+        features_cache.clear();
     }
 }
 

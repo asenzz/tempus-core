@@ -143,7 +143,7 @@ AppContext::AppContext(const std::string &config_path, bool use_threadsafe_dao)
           model_service(
                   *new svr::business::ModelService(p_impl.modelDao)),
           decon_queue_service(
-                  *new svr::business::DeconQueueService(p_impl.deconQueueDao, input_queue_service)),
+                  *new svr::business::DeconQueueService(p_impl.deconQueueDao)),
           ensemble_service(
                   *new svr::business::EnsembleService(
                           p_impl.ensembleDao, model_service, decon_queue_service)),

@@ -3,34 +3,36 @@
 #include "AsyncImplBase.hpp"
 #include "model/SVRParameters.hpp"
 
-namespace svr { namespace dao {
+namespace svr {
+namespace dao {
 
 using svr::datamodel::SVRParameters;
 
 namespace {
-    static bool cmp_primary_key(datamodel::SVRParameters_ptr const & lhs, datamodel::SVRParameters_ptr const & rhs)
-    {
-        return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
-                && lhs->get_id() == rhs->get_id();
-    }
-    static bool cmp_whole_value(datamodel::SVRParameters_ptr const & lhs, datamodel::SVRParameters_ptr const & rhs)
-    {
-        return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
-                && *lhs == *rhs;
-    }
+static const auto cmp_primary_key = [] (datamodel::SVRParameters_ptr const &lhs, datamodel::SVRParameters_ptr const &rhs)
+{
+    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+           && lhs->get_id() == rhs->get_id();
+};
+
+static const auto cmp_whole_value = [] (datamodel::SVRParameters_ptr const &lhs, datamodel::SVRParameters_ptr const &rhs)
+{
+    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+           && *lhs == *rhs;
+};
 }
 
 struct AsyncSVRParametersDAO::AsyncImpl
-    : AsyncImplBase<datamodel::SVRParameters_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgSVRParametersDAO>
+        : AsyncImplBase<datamodel::SVRParameters_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgSVRParametersDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+            : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
 
-AsyncSVRParametersDAO::AsyncSVRParametersDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-: SVRParametersDAO(tempus_config, data_source), pImpl( *new AsyncSVRParametersDAO::AsyncImpl(tempus_config, data_source))
+AsyncSVRParametersDAO::AsyncSVRParametersDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+        : SVRParametersDAO(tempus_config, data_source), pImpl(*new AsyncSVRParametersDAO::AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncSVRParametersDAO::~AsyncSVRParametersDAO()
@@ -55,13 +57,13 @@ bool AsyncSVRParametersDAO::exists(const bigint id)
     return pImpl.pgDao.exists(id);
 }
 
-int AsyncSVRParametersDAO::save(const datamodel::SVRParameters_ptr &svr_parameters)
+int AsyncSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameters)
 {
-    pImpl.cache(svr_parameters);
+    pImpl.cache(p_svr_parameters); // TODO Hack, review!
     return 1;
 }
 
-int AsyncSVRParametersDAO::remove(const datamodel::SVRParameters_ptr& svr_parameters)
+int AsyncSVRParametersDAO::remove(const datamodel::SVRParameters_ptr &svr_parameters)
 {
     return pImpl.remove(svr_parameters);
 }
@@ -86,17 +88,18 @@ std::deque<datamodel::SVRParameters_ptr> AsyncSVRParametersDAO::get_all_svrparam
     const std::scoped_lock lg(pImpl.pgMutex);
     std::deque<datamodel::SVRParameters_ptr> params = pImpl.pgDao.get_all_svrparams_by_dataset_id(dataset_id);
 
-    for(const auto &p: params) pImpl.cache_no_store(p);
+    for (const auto &p: params) pImpl.cache_no_store(p);
 
     return params;
 }
 
-std::deque<datamodel::SVRParameters_ptr> AsyncSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
+std::deque<datamodel::SVRParameters_ptr>
+AsyncSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
 {
     pImpl.flush();
     const std::scoped_lock lg(pImpl.pgMutex);
     std::deque<datamodel::SVRParameters_ptr> params = pImpl.pgDao.get_svrparams(dataset_id, input_queue_column_name, decon_level);
-    for(const auto &p: params) pImpl.cache_no_store(p);
+    for (const auto &p: params) pImpl.cache_no_store(p);
     return params;
 }
 
@@ -107,4 +110,5 @@ size_t AsyncSVRParametersDAO::get_dataset_levels(const bigint dataset_id)
     return pImpl.pgDao.get_dataset_levels(dataset_id);;
 }
 
-} }
+}
+}

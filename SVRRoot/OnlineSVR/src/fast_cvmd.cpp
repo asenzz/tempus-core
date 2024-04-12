@@ -28,8 +28,8 @@ compute_cos_sin(
     const auto step_omega = 2. * M_PI * step * omega;
     const arma::vec phase_cos = arma::cos(step_omega);
     const arma::vec phase_sin = arma::sin(step_omega);
-    LOG4_DEBUG("Omega " << omega << ", phase cos " << phase_cos << ", phase sin " << phase_sin << ", step " << step << ", alpha bins " << ALPHA_BINS << ", tau fidelity "
-                << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL << ", omega divisor " << OMEGA_DIVISOR);
+    LOG4_DEBUG("Omega " << omega << ", phase cos " << phase_cos << ", phase sin " << phase_sin << ", step " << step << ", alpha bins " << C_default_alpha_bins << ", tau fidelity "
+                        << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL);
     return std::tuple{phase_cos, phase_sin};
 }
 
@@ -107,14 +107,11 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         f_init[T / 2 + i] = scaler(input[i]->at(input_column_index));
     }
     T = 2 * T;
-
-    const arma::vec Alpha(K, arma::fill::value(ALPHA_BINS)); //provision to use different alpha for the different frequences, at a later stage
+    const arma::vec Alpha(K, arma::fill::value(save_T * C_default_alpha_bins * 1e-5)); //provision to use different alpha for the different frequences, at a later stage
     const double fs = 1. / double(save_T); //step
 
     /* outputs */
     arma::mat u(T, K);
-    constexpr double eps = 2.220446049250313e-16;
-    //this may or may not work instead. double eps=std::numeric_limits<T>::epsilon();
     // Spectral Domain discretization
     const arma::vec freqs = arma::regspace(1, T) / double(T) - .5 - 1. / double(T);
     arma::vec omega(K);
@@ -150,7 +147,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::cx_vec lambda_hat(freqs.n_elem); // keeping track of the evolution of lambda_hat with the iterations
     arma::cx_mat u_hat_plus(T, K);
     arma::cx_mat u_hat_plus_old(arma::size(u_hat_plus));
-    double uDiff = CVMD_TOL + eps; //tol + eps must be different from just tol, that is why eps should not be too small
+    double uDiff = CVMD_TOL + std::numeric_limits<double>::epsilon(); //tol + eps must be different from just tol, that is why eps should not be too small
     arma::cx_vec sum_uk(T);
     size_t n_iter = 0;
     while (n_iter < MAX_VMD_ITERATIONS && uDiff > CVMD_TOL) {
@@ -183,6 +180,8 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         uDiff = arma::accu(arma::sum(common::norm<double>(u_hat_plus - u_hat_plus_old)) / arma::sum(common::norm(u_hat_plus_old)));
         u_hat_plus_old = u_hat_plus;
     }
+
+#ifdef FAST_CVMD_POSTPROCESSING_AND_CLEANUP
     //%------ Postprocessing and cleanup
     //% discard empty space if converged early - this step is not used here
     //N = min(N,n);
@@ -215,9 +214,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     u_hat = arma::cx_mat(K, T / 2);
 #pragma omp parallel for num_threads(adj_threads(K)) schedule(static, 1)
     for (size_t k = 0; k < K; ++k) u_hat.row(k) = common::fftshift(common::matlab_fft(u.row(k)));
-
-    omega /= OMEGA_DIVISOR;
-
+#endif
     const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
     vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
 }
@@ -284,7 +281,8 @@ fast_cvmd::transform(
 #pragma omp single
     for (size_t t = prev_decon_ct; t < decon.size() && iterin != input.end(); ++iterin, ++t)
     {
-        soln = arma::solve(H, -A.t() * (-arma::solve(A * arma::solve(H, A.t()), A * arma::solve(H, f) + scaler((**iterin)[in_colix]))) - f);
+#define ASOLVE(M, N) arma::solve(M, (N), C_arma_solver_opts)
+        soln = ASOLVE(H, -A.t() * (-ASOLVE(A * ASOLVE(H, A.t()), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
 #pragma omp task
         memcpy(decon[t]->get_values().data() + levels, soln.mem, levels * sizeof(double));
 #pragma omp task

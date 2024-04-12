@@ -20,7 +20,7 @@ std::string exec(const char *cmd)
 {
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    std::unique_ptr<FILE, dtype(&pclose)> pipe(popen(cmd, "r"), pclose);
     if (!pipe) {
         throw std::runtime_error("popen() failed!");
     }
@@ -107,7 +107,7 @@ void memory_manager::check_memory()
 
 void memory_manager::barrier()
 {
-    std::unique_lock<std::mutex> wl(mx_);
+    std::unique_lock wl(mx_);
     while (!mem_available_) cv_.wait(wl);
     mem_available_ = false;
     trigger = true;
@@ -217,7 +217,7 @@ memory_manager::read_threads()
 {
     if (read_threads_running) {
         LOG4_ERROR("Memory manager thread hit collision!");
-        return 1;// std::numeric_limits<decltype(num_of_threads)>::max();
+        return 1;// std::numeric_limits<dtype(num_of_threads)>::max();
     }
     read_threads_running = true;
     const auto proc_pid = getpid();
@@ -228,7 +228,7 @@ memory_manager::read_threads()
     if (nftw(proc_tasks_path, read_contents, 10000, ftw_flags) == -1) {
         perror("nftw");
         read_threads_running = false;
-        return errno == ENOENT ? std::numeric_limits<decltype(num_of_threads)>::max() : num_of_threads;
+        return errno == ENOENT ? std::numeric_limits<dtype(num_of_threads)>::max() : num_of_threads;
     }
     read_threads_running = false;
     return num_of_threads;

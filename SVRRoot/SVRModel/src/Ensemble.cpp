@@ -14,6 +14,7 @@
 namespace svr {
 namespace datamodel {
 
+
 bool Ensemble::operator==(const Ensemble &o)
 {
     return dataset_id == o.dataset_id && models == o.models && p_decon_queue == o.p_decon_queue && aux_decon_queues == o.aux_decon_queues;
@@ -98,7 +99,7 @@ void Ensemble::set_dataset_id(const bigint dataset_id_)
     }
 }
 
-datamodel::Model_ptr Ensemble::get_model(const size_t levix)
+datamodel::Model_ptr Ensemble::get_model(const size_t levix) const
 {
     return business::ModelService::find(models, levix);
 }
@@ -177,19 +178,20 @@ std::deque<datamodel::DeconQueue_ptr> &Ensemble::get_aux_decon_queues()
     return aux_decon_queues;
 }
 
-datamodel::DeconQueue_ptr &Ensemble::get_aux_decon_queue(const size_t i)
+datamodel::DeconQueue_ptr Ensemble::get_aux_decon_queue(const size_t i) const
 {
-    if (i >= aux_decon_queues.size()) LOG4_THROW("Illegal i " << i);
+    if (i >= aux_decon_queues.size()) LOG4_THROW("Illegal index " << i);
     return aux_decon_queues[i];
 }
 
-datamodel::DeconQueue_ptr Ensemble::get_aux_decon_queue(const std::string &column_name)
+datamodel::DeconQueue_ptr Ensemble::get_aux_decon_queue(const std::string &column_name) const
 {
-    const auto res = std::find_if(std::execution::par_unseq,
-                                  aux_decon_queues.begin(), aux_decon_queues.end(),
+    const auto res = std::find_if(std::execution::par_unseq, aux_decon_queues.begin(), aux_decon_queues.end(),
                                   [&column_name](const datamodel::DeconQueue_ptr &d) { return d->get_input_queue_column_name() == column_name; });
-    if (res == aux_decon_queues.end())
+    if (res == aux_decon_queues.end()) {
+        LOG4_ERROR("Invalid column name " << column_name);
         return nullptr;
+    }
     return *res;
 }
 

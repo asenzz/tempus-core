@@ -23,9 +23,8 @@ typedef enum class kernel_type : int
     GA = 6, // global alignment
     PATH = 7, // path kernel
     DEEP_PATH = 8,
-    DEEP_PATH2 = 9,
-    number_of_kernel_types = 10 // end of enum = invalid type
-} kernel_type_e, *kernel_type_e_ptr;
+    number_of_kernel_types = 9 // end of enum = invalid type
+} kernel_type_e;
 
 template<typename ST>
 ST tostring(const datamodel::kernel_type_e kt)
@@ -47,8 +46,6 @@ ST tostring(const datamodel::kernel_type_e kt)
             return "PATH";
         case kernel_type_e::DEEP_PATH:
             return "DEEP_PATH";
-        case kernel_type_e::DEEP_PATH2:
-            return "DEEP_PATH2";
         default:
             return "UNKNOWN";
     }
@@ -85,11 +82,11 @@ typedef std::tuple<
 
 class SVRParameters : public Entity
 {
-private:
     bigint dataset_id = 0; /* TODO Replace with pointer to dataset id */
 
     std::string input_queue_table_name; // TODO Replace with pointer to Input Queue
     std::string input_queue_column_name; // TODO Replace with pointer to Input Queue
+    size_t levels_ct = DEFAULT_SVRPARAM_DECON_LEVEL + 1;
     size_t decon_level_ = DEFAULT_SVRPARAM_DECON_LEVEL;
     size_t chunk_ix_ = DEFAULT_SVRPARAM_CHUNK_IX;
     size_t grad_level_ = DEFAULT_SVRPARAM_GRAD_LEVEL;
@@ -100,6 +97,7 @@ private:
     double svr_kernel_param2 = DEFAULT_SVRPARAM_KERNEL_PARAM_2;
     u_int64_t svr_decremental_distance = DEFAULT_SVRPARAM_DECREMENT_DISTANCE;
     double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO;
+    std::set<size_t> adjacent_levels;
     kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE;
     size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT;
 
@@ -111,6 +109,7 @@ public:
             const bigint dataset_id,
             const std::string &input_queue_table_name,
             const std::string &input_queue_column_name,
+            const size_t level_ct,
             const size_t decon_level,
             const size_t chunk_ix = DEFAULT_SVRPARAM_CHUNK_IX,
             const size_t grad_level = DEFAULT_SVRPARAM_GRAD_LEVEL,
@@ -146,6 +145,10 @@ public:
     std::string get_input_queue_table_name() const;
 
     void set_input_queue_table_name(const std::string &value);
+
+    size_t get_level_count() const;
+
+    void set_level_count(const size_t levels);
 
     size_t get_decon_level() const;
 
@@ -186,6 +189,10 @@ public:
     double get_svr_adjacent_levels_ratio() const;
 
     void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio);
+
+    std::set<size_t> get_adjacent_levels();
+
+    std::set<size_t> get_adjacent_levels() const;
 
     kernel_type_e get_kernel_type() const;
 

@@ -126,7 +126,7 @@ struct fix_subscription_container::Impl {
         md_request_id += symbol;
 
         FIX::MDReqID mdReqID( md_request_id.c_str() );
-        FIX::SubscriptionRequestType subType( FIX::SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES );
+        FIX::SubscriptionRequestType subType( FIX::SubscriptionRequestType_SNAPSHOT_AND_UPDATES );
         FIX::MarketDepth marketDepth( 1 );
 
         FIX44::MarketDataRequest message( mdReqID, subType, marketDepth );

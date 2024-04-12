@@ -10,7 +10,7 @@
 #include <model/Request.hpp>
 #include <model/Dataset.hpp>
 
-#include <util/ValidationUtils.hpp>
+#include <util/validation_utils.hpp>
 
 using namespace svr::datamodel;
 using namespace svr::context;

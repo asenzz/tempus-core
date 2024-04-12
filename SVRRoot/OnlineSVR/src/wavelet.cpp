@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <sstream>
+#include <execution>
 
 #define NELEMS(x) (sizeof(x) / sizeof(*x))
 

@@ -10,23 +10,23 @@
 namespace svr { namespace dao {
 
 namespace {
-    static bool cmp_primary_key(User_ptr const & lhs, User_ptr const & rhs)
+    static const auto cmp_primary_key = [] (User_ptr const & lhs, User_ptr const & rhs) -> bool
     {
         return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
                 && lhs->get_user_name() == rhs->get_user_name();
-    }
-    static bool cmp_whole_value(User_ptr const & lhs, User_ptr const & rhs)
+    };
+    static const auto cmp_whole_value = [] (User_ptr const & lhs, User_ptr const & rhs) -> bool
     {
         return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
                 && *lhs == *rhs;
-    }
+    };
 }
 
 struct AsyncUserDAO::AsyncImpl
-    : AsyncImplBase<User_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgUserDAO>
+    : AsyncImplBase<User_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgUserDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source)
-    :AsyncImplBase(sql_properties, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    :AsyncImplBase(sql_properties, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 
     void store(User_ptr user)

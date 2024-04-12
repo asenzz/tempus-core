@@ -207,7 +207,7 @@ compare_by_value_mean_erroraux(
         const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * OFFSET_PRED_MUL);
         const double last_known = last_known_iter == etalon.end() ? BAD_VALIDATION : std::prev(last_known_iter)->get()->get_value(0);
         const auto last_known_time = std::prev(last_known_iter)->get()->get_value_time();
-        const auto etalon_val = calc_twap(std::prev(it_label_start), etalon.end(), forecast_time, forecast_time + forecast_resolution, onesec, 0);
+        const auto etalon_val = 0;// TODO Port generate_twap(std::prev(it_label_start), etalon.end(), forecast_time, forecast_time + forecast_resolution, onesec, 0);
         const auto forecast_val = forecast_row->get()->get_value(0);
         const auto abs_diff = std::abs(forecast_val - etalon_val);
         const auto last_known_diff = std::abs(last_known - etalon_val);

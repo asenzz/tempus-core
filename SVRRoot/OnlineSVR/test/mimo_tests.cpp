@@ -10,6 +10,7 @@
 #include "../include/onlinesvr.hpp"
 #include "test_harness.hpp"
 #include "onlinesvr_persist.tpp"
+#include "util/math_utils.hpp"
 
 #define DEFAULT_ITERS (2)
 #define TOLERANCE 0.001
@@ -18,6 +19,7 @@
 
 void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved)
 {
+#if 0
     MKL_INT n = a.n_rows;
     MKL_INT nrhs = b.n_cols;
     MKL_INT lda = n;
@@ -35,6 +37,7 @@ void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved)
                                                  << " is not positive definite; The solution could not be computed.");
         throw std::runtime_error("Matrix not positive semi-definite");
     }
+#endif
 }
 
 TEST(mimo_train_predict, batch_train)
@@ -626,17 +629,17 @@ TEST(mimo_online_train, multiple_forget_learn)
 
 
 TEST(mimo_common, fixed_shuffle_returns_the_same){
-    arma::mat i_full = arma::cumsum(arma::ones(1000, 1)) - 1;
-    arma::mat shuffled1 = svr::common::armd::fixed_shuffle(i_full);
-    arma::mat shuffled2 = svr::common::armd::fixed_shuffle(i_full);
+    arma::uvec i_full = arma::regspace<arma::uvec>(0, 999);
+    arma::uvec shuffled1 = svr::common::fixed_shuffle(i_full);
+    arma::uvec shuffled2 = svr::common::fixed_shuffle(i_full);
     EXPECT_TRUE(arma::approx_equal(shuffled1, shuffled2, "absdiff", 1));
 }
 
 TEST(mimo_common, random_shuffle_returns_different_values){
     arma::mat i_full = arma::cumsum(arma::ones(1000, 1)) - 1;
     const size_t DECON_LEVEL = 4;
-    arma::mat shuffled1 = svr::common::armd::shuffle_admat(i_full, DECON_LEVEL);
-    arma::mat shuffled2 = svr::common::armd::shuffle_admat(i_full, DECON_LEVEL+1);
+    arma::mat shuffled1 = svr::common::shuffle_admat(i_full, DECON_LEVEL);
+    arma::mat shuffled2 = svr::common::shuffle_admat(i_full, DECON_LEVEL + 1);
     EXPECT_FALSE(arma::approx_equal(shuffled1, shuffled2, "absdiff", 0.00001));
 }
 

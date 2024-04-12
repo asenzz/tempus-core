@@ -16,6 +16,7 @@
    <http://www.gnu.org/licenses/>.
  */
 
+#include <cfloat>
 #include "pso.hpp"
 
 #include <util/math_utils.hpp>
@@ -28,6 +29,19 @@
 #include "optimizer.hpp"
 #include "sobolvec.h"
 
+namespace svr {
+namespace optimizer {
+
+pso_state_io &pso_state_io::get_instance()
+{
+    static pso_state_io instance;
+    return instance;
+}
+
+pso_state_io::pso_state_io()
+{
+    dirty_state.store(false, std::memory_order_relaxed);
+};
 
 //==============================================================
 // calulate swarm size based on dimensionality
@@ -82,14 +96,14 @@ void inform(
 {
     // for each particle
     for (int j = 0; j < settings->size; j++) {
-         int b_n = j; // self is best
-         // who is the best informer??
-         for (int i = 0; i < settings->size; ++i)
-             // the i^th particle informs the j^th particle
-             if (comm[i * settings->size + j] && fit_b[i] < fit_b[b_n])
-                 // found a better informer for j^th particle
-                 b_n = i;
-         // copy pos_b of b_n^th particle to pos_nb[j]
+        int b_n = j; // self is best
+        // who is the best informer??
+        for (int i = 0; i < settings->size; ++i)
+            // the i^th particle informs the j^th particle
+            if (comm[i * settings->size + j] && fit_b[i] < fit_b[b_n])
+                // found a better informer for j^th particle
+                b_n = i;
+        // copy pos_b of b_n^th particle to pos_nb[j]
         memmove((void *) &pos_nb[j * settings->dim],
                 (void *) &pos_b[b_n * settings->dim],
                 sizeof(double) * settings->dim);
@@ -111,24 +125,24 @@ void init_comm_ring(int *comm, const pso_settings_t *settings)
 
     // choose informers
     for (int i = 0; i < settings->size; ++i) {
-    // set diagonal to 1
-          comm[i * settings->size + i] = 1;
-          if (i == 0) {
-              // look right
-              comm[i * settings->size + i + 1] = 1;
-              // look left
-              comm[(i + 1) * settings->size - 1] = 1;
-          } else if (i == settings->size - 1) {
-              // look right
-              comm[i * settings->size] = 1;
-              // look left
-              comm[i * settings->size + i - 1] = 1;
-          } else {
-              // look right
-              comm[i * settings->size + i + 1] = 1;
-              // look left
-              comm[i * settings->size + i - 1] = 1;
-          }
+        // set diagonal to 1
+        comm[i * settings->size + i] = 1;
+        if (i == 0) {
+            // look right
+            comm[i * settings->size + i + 1] = 1;
+            // look left
+            comm[(i + 1) * settings->size - 1] = 1;
+        } else if (i == settings->size - 1) {
+            // look right
+            comm[i * settings->size] = 1;
+            // look left
+            comm[i * settings->size + i - 1] = 1;
+        } else {
+            // look right
+            comm[i * settings->size + i + 1] = 1;
+            // look left
+            comm[i * settings->size + i - 1] = 1;
+        }
     }
 }
 
@@ -154,15 +168,15 @@ void init_comm_random(int *const comm, const pso_settings_t *settings)
 
     // choose informers
     for (int i = 0; i < settings->size; ++i) {
-    // each particle informs itself
-          comm[i * settings->size + i] = 1;
-          // choose kappa (on average) informers for each particle
-          for (int k = 0; k < settings->nhood_size; ++k) {
-              // generate a random index
-              const int j = floor(svr::common::get_uniform_random_value() * settings->size);
-              // particle i informs particle j
-              comm[i * settings->size + j] = 1;
-          }
+        // each particle informs itself
+        comm[i * settings->size + i] = 1;
+        // choose kappa (on average) informers for each particle
+        for (int k = 0; k < settings->nhood_size; ++k) {
+            // generate a random index
+            const int j = floor(svr::common::get_uniform_random_value() * settings->size);
+            // particle i informs particle j
+            comm[i * settings->size + j] = 1;
+        }
     }
 }
 
@@ -238,14 +252,12 @@ std::string pso_state::save_to_string()
 
 std::vector<std::vector<double>> pso_state::convert2vector2d(size_t dim1, size_t dim2, const void *input)
 {
-    const double (*arr)[dim2] = static_cast<const double (*)[dim2]>(input);
+    const double **arr = (const double **) input; // const double (*arr)[dim2] = static_cast<const double (*)[dim2]>(input);
     std::vector<std::vector<double>> result(dim1);
-// #pragma omp parallel for schedule(guided)
-    for (size_t i = 0; i < dim1; ++i) {
-        //result.emplace_back(std::vector<double>(&arr[i][0], &arr[i][dim2]));
-        result[i].resize(dim2);
-        for (size_t j = 0; j < dim2; ++j) result[i][j] = arr[i][j];
-    }
+#pragma omp parallel for num_threads(adj_threads(dim1)) schedule(static, 1)
+    for (size_t i = 0; i < dim1; ++i)
+        result[i] = common::wrap_vector<double>(const_cast<double *>(arr[i]), dim2);
+
     return result;
 }
 
@@ -253,11 +265,10 @@ void
 pso_state::convert_from_vector2d(const std::vector<std::vector<double>> &input, const size_t dim1, const size_t dim2,
                                  void *output)
 {
-    double (*arr)[dim2] = static_cast<double (*)[dim2]>(output);
-// #pragma omp parallel for schedule(guided)
+    double **arr = (double **) output; // double (*arr)[dim2] = static_cast<double (*)[dim2]>(output);
+#pragma omp parallel for num_threads(adj_threads(dim1)) schedule(static, 1)
     for (size_t i = 0; i < dim1; ++i)
-        for (size_t j = 0; j < dim2; ++j)
-            arr[i][j] = input[i][j];
+        memcpy(arr[i], input[i].data(), dim2 * sizeof(double));
 }
 
 pso_state::pso_state()
@@ -313,11 +324,11 @@ void pso_state_io::save_state_to_file(const std::string &filename)
         all_threads_finished = true;
         std::unique_lock finish_states_lock(finish_state_mutex);
         for (auto finish_state: finish_states) {
-                if (!finish_state.second) {
-                    all_threads_finished = false;
-                    break;
-                }
+            if (!finish_state.second) {
+                all_threads_finished = false;
+                break;
             }
+        }
         finish_states_lock.unlock();
         if (all_threads_finished) {
             LOG4_DEBUG("All threads have finished. Exiting save_state_to_file function");
@@ -443,7 +454,7 @@ update_particle(
 //==============================================================
 svr::optimizer::pso_returns_t
 pso_solve(
-        const std::function<double(std::vector<double>&)>& f, pso_settings_t *settings,
+        const std::function<double(std::vector<double> &)> &f, pso_settings_t *settings,
         const size_t decon_level, const std::string &column_name)
 {
     bool is_caller_thread = false;
@@ -542,10 +553,10 @@ pso_solve(
         //static thread_local unsigned long Sobol_counter = (unsigned long) mpi_rank * 78786876896ULL ;
         //Using different counters for different threads is desirable, but not required.
         unsigned long sobol_ctr = 78786876896ULL + (long) floor(svr::common::get_uniform_random_value() * (double) 4503599627370496ULL);
-        for (decltype(auto) i = 0; i < settings->size; ++i) {
+        for (dtype(settings->size) i = 0; i < settings->size; ++i) {
             // for each dimension
             std::vector<double> sobol_numbers(2 * settings->dim, 0.);
-            for (decltype(auto) d = 0; d < settings->dim; ++d) {
+            for (dtype(settings->dim) d = 0; d < settings->dim; ++d) {
                 // generate two numbers within the specified range
                 // Use Sobol numbers
                 sobol_numbers[d] = sobolnum(d, sobol_ctr + i);
@@ -565,30 +576,30 @@ pso_solve(
     if (step == 0) {
         __omp_pfor_i(0, settings->size,
                      if (!particles_ready[i]) {
-                auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
-                fit[i] = f(vpos);
-                memcpy(&pos[i], vpos.data(), settings->dim * sizeof(pos[i]));
-                fit_b[i] = fit[i]; // this is also the personal best
-                LOG4_DEBUG("Initial particle fitness " << fit[i]);
-                particles_ready[i] = true;
-                pso_state state_to_save(
-                        pso_state::convert2vector2d(settings->size, settings->dim, pos),
-                        pso_state::convert2vector2d(settings->size, settings->dim, vel),
-                        pso_state::convert2vector2d(settings->size, settings->dim, pos_b),
-                        pso_state::convert2vector2d(settings->size, settings->dim, pos_nb),
-                        std::vector<double>(fit, fit + settings->size),
-                        std::vector<double>(fit_b, fit + settings->size),
-                        particles_ready,
-                        std::vector<double>(solution.gbest, solution.gbest + settings->dim), step,
-                        solution.error);
-                LOG4_DEBUG(
-                        "Updating initial pso_state after fitness particle update for level and column " <<
-                        decon_level << " " << column_name);
-                pso_state_io_obj.update_state(current_level_column, state_to_save);
-            }
+                         auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
+                         fit[i] = f(vpos);
+                         memcpy(&pos[i], vpos.data(), settings->dim * sizeof(pos[i]));
+                         fit_b[i] = fit[i]; // this is also the personal best
+                         LOG4_DEBUG("Initial particle fitness " << fit[i]);
+                         particles_ready[i] = true;
+                         pso_state state_to_save(
+                                 pso_state::convert2vector2d(settings->size, settings->dim, pos),
+                                 pso_state::convert2vector2d(settings->size, settings->dim, vel),
+                                 pso_state::convert2vector2d(settings->size, settings->dim, pos_b),
+                                 pso_state::convert2vector2d(settings->size, settings->dim, pos_nb),
+                                 std::vector<double>(fit, fit + settings->size),
+                                 std::vector<double>(fit_b, fit + settings->size),
+                                 particles_ready,
+                                 std::vector<double>(solution.gbest, solution.gbest + settings->dim), step,
+                                 solution.error);
+                         LOG4_DEBUG(
+                                 "Updating initial pso_state after fitness particle update for level and column " <<
+                                                                                                                  decon_level << " " << column_name);
+                         pso_state_io_obj.update_state(current_level_column, state_to_save);
+                     }
         )
 
-        for (decltype(settings->size) i = 0; i < settings->size; ++i) {
+        for (dtype(settings->size) i = 0; i < settings->size; ++i) {
             // update gbest?
             if (fit[i] < solution.error) {
                 // update best fitness
@@ -629,46 +640,46 @@ pso_solve(
         if ((loaded_state && saved_state.step_ != step) || !loaded_state)
             std::fill(particles_ready.begin(), particles_ready.end(), false);
 
-        // Update all particles
+            // Update all particles
         __omp_pfor_i(0, settings->size,
                      if (!particles_ready[i]) {
-                // for each dimension
-                for (int d = 0; d < settings->dim; ++d) {
-                    double *curr_pos = &pos[i][d];
-                    double *curr_vel = &vel[i][d];
-                    double *curr_pos_b = &pos_b[i][d];
-                    double *curr_pos_nb = &pos_nb[i][d];
-                    int dd = update_particle(curr_pos, curr_vel, curr_pos_b, curr_pos_nb, settings, d, w);
-                    LOG4_DEBUG("PSO iteration " << step << ", particle " << i << ", dim " << dd << " finished. Model " << decon_level << "_" << column_name);
-                }
-                // Update particle fitness
-                auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
-                fit[i] = f(vpos);
-                memcpy(&pos[i], vpos.data(), settings->dim * sizeof(pos[i]));
+                         // for each dimension
+                         for (int d = 0; d < settings->dim; ++d) {
+                             double *curr_pos = &pos[i][d];
+                             double *curr_vel = &vel[i][d];
+                             double *curr_pos_b = &pos_b[i][d];
+                             double *curr_pos_nb = &pos_nb[i][d];
+                             int dd = update_particle(curr_pos, curr_vel, curr_pos_b, curr_pos_nb, settings, d, w);
+                             LOG4_DEBUG("PSO iteration " << step << ", particle " << i << ", dim " << dd << " finished. Model " << decon_level << "_" << column_name);
+                         }
+                         // Update particle fitness
+                         auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
+                         fit[i] = f(vpos);
+                         memcpy(&pos[i], vpos.data(), settings->dim * sizeof(pos[i]));
 
-                LOG4_DEBUG("Step " << step << " particle fitness " << fit[i] << " best fitness " << fit_b[i]);
-                // update personal best position?
-                if (fit[i] < fit_b[i]) {
-                    fit_b[i] = fit[i];
-                    // copy contents of pos[i] to pos_b[i]
-                    memmove((void *) &pos_b[i], (void *) &pos[i], sizeof(double) * settings->dim);
-                }
+                         LOG4_DEBUG("Step " << step << " particle fitness " << fit[i] << " best fitness " << fit_b[i]);
+                         // update personal best position?
+                         if (fit[i] < fit_b[i]) {
+                             fit_b[i] = fit[i];
+                             // copy contents of pos[i] to pos_b[i]
+                             memmove((void *) &pos_b[i], (void *) &pos[i], sizeof(double) * settings->dim);
+                         }
 
-                particles_ready[i] = true;
-                pso_state state_to_save(
-                        pso_state::convert2vector2d(settings->size, settings->dim, pos),
-                        pso_state::convert2vector2d(settings->size, settings->dim, vel),
-                        pso_state::convert2vector2d(settings->size, settings->dim, pos_b),
-                        pso_state::convert2vector2d(settings->size, settings->dim, pos_nb),
-                        std::vector<double>(fit, fit + settings->size),
-                        std::vector<double>(fit_b, fit + settings->size),
-                        particles_ready,
-                        std::vector<double>(solution.gbest, solution.gbest + settings->dim),
-                        step, solution.error);
+                         particles_ready[i] = true;
+                         pso_state state_to_save(
+                                 pso_state::convert2vector2d(settings->size, settings->dim, pos),
+                                 pso_state::convert2vector2d(settings->size, settings->dim, vel),
+                                 pso_state::convert2vector2d(settings->size, settings->dim, pos_b),
+                                 pso_state::convert2vector2d(settings->size, settings->dim, pos_nb),
+                                 std::vector<double>(fit, fit + settings->size),
+                                 std::vector<double>(fit_b, fit + settings->size),
+                                 particles_ready,
+                                 std::vector<double>(solution.gbest, solution.gbest + settings->dim),
+                                 step, solution.error);
 
-                LOG4_TRACE("Updating pso_state after fitness particle update!");
-                pso_state_io_obj.update_state(current_level_column, state_to_save);
-            }
+                         LOG4_TRACE("Updating pso_state after fitness particle update!");
+                         pso_state_io_obj.update_state(current_level_column, state_to_save);
+                     }
         )
         // check all particles
         for (int i = 0; i < settings->size; ++i) {
@@ -701,3 +712,6 @@ pso_solve(
 }
 
 #pragma GCC diagnostic pop
+
+}
+}

@@ -1,4 +1,5 @@
 MESSAGE("CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}")
+LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/local/libexec)
 
 FILE(GLOB SOURCE_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
@@ -6,7 +7,6 @@ FILE(GLOB SOURCE_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/*.tpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.cpp"
 )

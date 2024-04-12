@@ -21,7 +21,6 @@ private:
     const size_t frame_size;
     const size_t gpu_frame_size;
     const size_t gpu_frame_buffer_size;
-    const size_t gpu_effective_frame_size;
 
     common::gpu_kernel gpu_kernel;
     mutable viennacl::ocl::context ctx;

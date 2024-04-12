@@ -53,11 +53,11 @@ cu_recombine_parameters(
     for (uint32_t rowix = g_thr_ix; rowix < rowct; rowix += grid_size) {
         double score = 0;
         {
-            double recon_preds[EMO_TEST_LEN];
-            for (uint8_t j = 0; j < EMO_MAX_J; ++j) {
-                memset(&(recon_preds[0]), 0, EMO_TEST_LEN * sizeof(double));
-                const auto elto = EMO_TUNE_MIN_VALIDATION_WINDOW + (EMO_MAX_J - j - 1) * EMO_SLIDE_SKIP;
-                const auto j_EMO_TEST_LEN = j * EMO_TEST_LEN;
+            double recon_preds[C_emo_test_len];
+            for (uint8_t j = 0; j < C_emo_max_j; ++j) {
+                memset(&(recon_preds[0]), 0, C_emo_test_len * sizeof(double));
+                const auto elto = C_emo_tune_min_validation_window + (C_emo_max_j - j - 1) * C_emo_slide_skip;
+                const auto j_EMO_TEST_LEN = j * C_emo_test_len;
                 for (uint16_t colix = 0; colix < colct; ++colix)
                     for (uint16_t el = 0; el < elto; ++el)
                         recon_preds[el] += p_params_preds[colct * p_combinations[colix * rowct + rowix] + colix].predictions[j][el];
@@ -124,25 +124,25 @@ recombine_parameters(
         double *p_best_score,
         uint8_t *best_params_ixs)
 {
-    constexpr unsigned recon_test_size = sizeof(double) * EMO_MAX_J * EMO_TEST_LEN;
-    const decltype(rows_ct) adj_rows_ct = rows_ct - rows_ct % CUDA_BLOCK_SIZE;
+    constexpr unsigned recon_test_size = sizeof(double) * C_emo_max_j * C_emo_test_len;
+    const dtype(rows_ct) adj_rows_ct = rows_ct - rows_ct % CUDA_BLOCK_SIZE;
     if (rows_ct != adj_rows_ct) LOG4_ERROR("Input rows count " << rows_ct << ", differs from adjusted " << adj_rows_ct);
-    double recon_last_knowns[EMO_MAX_J * EMO_TEST_LEN], recon_signs[EMO_MAX_J * EMO_TEST_LEN];
+    double recon_last_knowns[C_emo_max_j * C_emo_test_len], recon_signs[C_emo_max_j * C_emo_test_len];
     memset(recon_last_knowns, 0, recon_test_size);
     memset(recon_signs, 0, recon_test_size);
 #pragma omp parallel for simd // collapse(2)
-    for (uint8_t j = 0; j < uint8_t(EMO_MAX_J); ++j) {
-        for (uint16_t el = 0; el < uint16_t(EMO_TUNE_MIN_VALIDATION_WINDOW + (EMO_MAX_J - j - 1) * EMO_SLIDE_SKIP); ++el) {
+    for (uint8_t j = 0; j < uint8_t(C_emo_max_j); ++j) {
+        for (uint16_t el = 0; el < uint16_t(C_emo_tune_min_validation_window + (C_emo_max_j - j - 1) * C_emo_slide_skip); ++el) {
             double recon_labels = 0;
             for (uint16_t colix = 0; colix < colct; ++colix) {
                 recon_labels += params_preds[colix].labels[j][el];
-                recon_last_knowns[EMO_TEST_LEN * j + el] += params_preds[colix].last_knowns[j][el];
+                recon_last_knowns[C_emo_test_len * j + el] += params_preds[colix].last_knowns[j][el];
             }
-            recon_signs[EMO_TEST_LEN * j + el] = _CUSIGN(recon_labels - recon_last_knowns[EMO_TEST_LEN * j + el]);
+            recon_signs[C_emo_test_len * j + el] = _CUSIGN(recon_labels - recon_last_knowns[C_emo_test_len * j + el]);
         }
     }
 
-    common::gpu_context ctx;
+    const common::gpu_context ctx;
     cudaSetDevice(ctx.phy_id());
     double *p_best_score_gpu = nullptr;
     cu_errchk(cudaMalloc(&p_best_score_gpu, sizeof(double)));

@@ -5,7 +5,7 @@
 #include <armadillo>
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
-#include "util/ValidationUtils.hpp"
+#include "util/validation_utils.hpp"
 #include "DAO/SVRParametersDAO.hpp"
 #include "model/SVRParameters.hpp"
 #include "DAO/DatasetDAO.hpp"
@@ -40,23 +40,20 @@ bool SVRParametersService::exists(const bigint svr_parameters_id)
 }
 
 
-int SVRParametersService::save(const datamodel::SVRParameters &svr_parameters)
+int SVRParametersService::save(datamodel::SVRParameters &svr_parameters)
 {
-    return svr_parameters_dao.save(ptr<datamodel::SVRParameters>(svr_parameters));
+    return svr_parameters_dao.save(ptr(svr_parameters));
 }
 
 
-int SVRParametersService::save(const datamodel::SVRParameters_ptr &svr_parameters)
+int SVRParametersService::save(const datamodel::SVRParameters_ptr &p_svr_parameters)
 {
-    if (!svr_parameters) {
+    if (!p_svr_parameters) {
         LOG4_ERROR("Parameters not initialized!");
         return 0;
     }
 
-    auto p_saved_svr_parameters = ptr<datamodel::SVRParameters>(*svr_parameters);
-    if (!p_saved_svr_parameters->get_id()) p_saved_svr_parameters->set_id(svr_parameters_dao.get_next_id());
-
-    return svr_parameters_dao.save(p_saved_svr_parameters);
+    return svr_parameters_dao.save(p_svr_parameters);
 }
 
 
@@ -130,6 +127,49 @@ bool SVRParametersService::check(const datamodel::t_param_set &params, const siz
     return std::all_of(std::execution::par_unseq, present.cbegin(), present.cend(), [](const auto p) { return p; });
 }
 
+std::set<size_t> SVRParametersService::get_adjacent_indexes(const size_t level, const double ratio, const size_t level_count)
+{
+    if (level_count < MIN_LEVEL_COUNT or ratio == 0) return {level};
+    //const size_t full_count = level_count * ratio - 1;
+    const size_t half_count = (double(level_count) * ratio - 1.) / 2.;
+    ssize_t min_index;
+    ssize_t max_index;
+    if (ratio == 1) { // TODO Hack, fix!
+        min_index = 0;
+        max_index = level_count - 1;
+    } else {
+        min_index = level - half_count;
+        max_index = level + half_count;
+    }
+    if (min_index < 0) {
+        max_index -= min_index;
+        min_index -= min_index;
+    }
+    if (max_index >= ssize_t(level_count)) {
+        min_index -= max_index - level_count + 1;
+        max_index -= max_index - level_count + 1;
+    }
+
+    std::set<size_t> res;
+    OMP_LOCK(level_indexes_l)
+#pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / std::thread::hardware_concurrency())
+    for (ssize_t level_index = min_index; level_index <= max_index; ++level_index) {
+        if (level_index >= 0
+            && level_index < ssize_t(level_count)
+            && (level_count < MIN_LEVEL_COUNT || (level_index != ssize_t(level_count) / 2 && level_index % 2 == 0)
+                    /*|| level_index > ssize_t(level_count) / 2*/))
+        {
+            omp_set_lock(&level_indexes_l);
+            res.emplace(level_index);
+            omp_unset_lock(&level_indexes_l);
+        } else
+            LOG4_TRACE("Skipping level " << level_index << " adjacent ratio " << ratio << " for level " << level);
+    }
+
+    LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << res);
+
+    return res;
+}
 
 }
 }

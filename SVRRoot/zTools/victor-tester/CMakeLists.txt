@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(victor-tester LANGUAGES CXX)
-
+LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/local/libexec)
 FIND_PACKAGE(LibPQXX REQUIRED)
 
 INCLUDE_DIRECTORIES(include ${PQXX_INCLUDE_DIRECTORIES})

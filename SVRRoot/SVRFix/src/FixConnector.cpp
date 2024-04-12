@@ -110,11 +110,11 @@ void read_bas(FIX44::MarketDataSnapshotFullRefresh::NoMDEntries const &mdEntries
     switch (mdEntryType.getValue()) {
         case '0':
             bas.bid_px = mdEntryPx.getValue();
-            bas.bid_qty = decltype(bas.bid_qty)(mdEntrySize.getValue());
+            bas.bid_qty = dtype(bas.bid_qty)(mdEntrySize.getValue());
             break;
         case '1':
             bas.ask_px = mdEntryPx.getValue();
-            bas.ask_qty = decltype(bas.ask_qty)(mdEntrySize.getValue());
+            bas.ask_qty = dtype(bas.ask_qty)(mdEntrySize.getValue());
             break;
         default:
             throw std::invalid_argument("FixConnector::read_bas: invalid MDEntryType value passed.");

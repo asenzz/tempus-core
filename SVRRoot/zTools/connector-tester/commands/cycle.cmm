@@ -25,7 +25,7 @@ struct Cycle : Command
 
         CommandText cmd;
         cmd.command = command.parameters[0];
-        cmd.parameters = decltype(command.parameters)(command.parameters.begin()+1, command.parameters.end());
+        cmd.parameters = dtype(command.parameters)(command.parameters.begin()+1, command.parameters.end());
 
         std::string msg;
 

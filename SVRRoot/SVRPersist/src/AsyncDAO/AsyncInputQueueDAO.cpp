@@ -13,24 +13,22 @@ namespace svr {
 namespace dao {
 
 namespace {
-bool cmp_primary_key(datamodel::InputQueue_ptr const &lhs, datamodel::InputQueue_ptr const &rhs)
-{
+static const auto cmp_primary_key = [](datamodel::InputQueue_ptr const &lhs, datamodel::InputQueue_ptr const &rhs) {
     return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
            && lhs->get_table_name() == rhs->get_table_name();
-}
+};
 
-bool cmp_whole_value(datamodel::InputQueue_ptr const &lhs, datamodel::InputQueue_ptr const &rhs)
-{
+static const auto cmp_whole_value = [](datamodel::InputQueue_ptr const &lhs, datamodel::InputQueue_ptr const &rhs) {
     return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
            && lhs->get_table_name() == rhs->get_table_name();
-}
+};
 }
 
 struct AsyncInputQueueDAO::AsyncImpl
-        : AsyncImplBase<datamodel::InputQueue_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgInputQueueDAO>
+        : AsyncImplBase<datamodel::InputQueue_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgInputQueueDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
-            : AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 100)
+            : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 100)
     {}
 
 };

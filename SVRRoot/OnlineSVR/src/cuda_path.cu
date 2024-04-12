@@ -1,334 +1,174 @@
-#include <cmath>
-
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <cufft.h>
-
-#include <unistd.h>
-
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
+#include <driver_types.h>
+#include "common/defines.h"
 #include "cuda_path.hpp"
 #include "common/cuda_util.cuh"
 #include "common/gpu_handler.hpp"
-
-
-#define MAX_LEN 1000
-
-#define XBLOCK 256
-#define YBLOCK 256
-
+#include "common/constants.hpp"
 
 namespace svr::kernel::path {
 
-
-#define blockX(i, j) (X[(startX + (i)) * total_len_features+(j)])
-#define blockY(i, j) (X[(startY + (i)) * total_len_features+(j)])
-#define blockYY(i, j) (Y[(startY + (i)) * total_len_features+(j)])
-
+#define blockX(i, j) (X[(i) * lag + (j)])
+#define blockYY(i, j) (Y[(i) * lag + (j)])
 
 __global__  void
-gpu_kernel_xx_compute(
-        const size_t sizeX, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const size_t len, const size_t dim, const double *X, double *Z,
-        const double lambda, const double tau, const double w_sum_sym)
+gpu_kernel_xx_compute(const size_t cols, const size_t end_col, const size_t end_row, const size_t lag, const double *X, double *Z, const double lambda)
 {
-    //double sigma = param1; - not used when only computing distance
-    const size_t total_len_features = len * dim;
+    if (blockIdx.x * blockDim.x >= end_col
+        || blockIdx.y * blockDim.y >= end_row
+        || blockIdx.x * blockDim.x > blockIdx.y * blockDim.y + blockDim.y - 1)
+        return;
 
     __shared__ double power_mult[TILE_WIDTH];
     __shared__ double ta[TILE_WIDTH][TILE_WIDTH];
-    __shared__ double tam1[TILE_WIDTH][TILE_WIDTH];//for index-1
+    __shared__ double tam1[TILE_WIDTH][TILE_WIDTH]; // for index-1
     __shared__ double tb[TILE_WIDTH][TILE_WIDTH];
-    __shared__ double tbm1[TILE_WIDTH][TILE_WIDTH];//for index-1
+    __shared__ double tbm1[TILE_WIDTH][TILE_WIDTH]; // for index-1
     const auto kk = threadIdx.x + blockIdx.x * blockDim.x;
     const auto mm = threadIdx.y + blockIdx.y * blockDim.y;
-
     const auto tx = threadIdx.x;
     const auto ty = threadIdx.y;
-    // __syncthreads();
-    if ((blockIdx.x * blockDim.x < numX) && (blockIdx.y * blockDim.y < numY) && ((startX + blockIdx.x * blockDim.x) <= (startY + blockIdx.y * blockDim.y + blockDim.y - 1))) {
-        size_t kk_internal = 0;
-        double matrix_prod_sum = 0;
-        for (size_t jA = 0; jA < dim; ++jA) {
-            double s_mm = 0;
-            for (size_t kk_internal_big = 0; kk_internal_big < len / TILE_WIDTH + (len % TILE_WIDTH == 0 ? 0 : 1); ++kk_internal_big) {
-                if (tx == 0) {
-                    if (ty + kk_internal_big * TILE_WIDTH < len) {
-                        power_mult[ty] = pow(1. / ((double) (len - (ty + kk_internal_big * TILE_WIDTH))), 2. * lambda) * w_sum_sym;
-                    }
-                }
-                if ((kk < numX) * (TILE_WIDTH * kk_internal_big + ty < len)) {
-                    ta[tx][ty] = blockX(kk, TILE_WIDTH * kk_internal_big + ty + jA * len);
-                    if (TILE_WIDTH * kk_internal_big + ty > 0) {
-                        tam1[tx][ty] = ta[tx][ty] - blockX(kk, TILE_WIDTH * kk_internal_big + ty - 1 + jA * len);
-                    }
-                }
-                if ((mm < numY) * (TILE_WIDTH * kk_internal_big + tx < len)) {
-                    tb[ty][tx] = blockY(mm, TILE_WIDTH * kk_internal_big + tx + jA * len);
-                    if (TILE_WIDTH * kk_internal_big + tx > 0) {
-                        tbm1[ty][tx] = tb[ty][tx] - blockY(mm, TILE_WIDTH * kk_internal_big + tx - 1 + jA * len);
-                    }
-                }
-
-                __syncthreads();
-
-                if ((kk < numX) && (mm < numY) && (startX + kk <= startY + mm)) {
-                    for (size_t kk_internal_small = 0; kk_internal_small < TILE_WIDTH; ++kk_internal_small) {
-                        kk_internal = kk_internal_small + kk_internal_big * TILE_WIDTH;
-                        if (kk_internal < len) {
-                            //mm_internal = kk_internal;
-                            double x_y = ta[tx][kk_internal_small] - tb[ty][kk_internal_small];
-
-                            double t_left = x_y * x_y;
-                            double t_right = 0;
-                            if (kk_internal > 0) {
-                                double diff_x_y = 0;
-                                diff_x_y = tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small];
-                                t_right = diff_x_y * diff_x_y;
-                            }
-/*
-                for (mm_internal = max(kk_internal - cut_len, 0);
-                     mm_internal < min(len, kk_internal + cut_len + 1); ++mm_internal) {
-                    if (mm_internal == kk_internal) continue;//already computed above
-                    double x_y = blockX(kk, (kk_internal + jA * len)) - blockY(mm, (mm_internal + jA * len));
-                    x_y = x_y * x_y / w_sum_sym + delta_right * delta_right * 4. * w(kk_internal - mm_internal);
-                    t_left = fmin(t_left, x_y);
-                    x_y = blockX(kk, (mm_internal + jA * len)) - blockY(mm, (kk_internal + jA * len));
-                    x_y = x_y * x_y / w_sum_sym + delta_left * delta_left * 4. * w(kk_internal - mm_internal);
-                    t_right = fmin(t_right, x_y);
-                }
-*/
-                            //if ((kk==0) && (mm==0)) printf("tau is %lf\n",tau);
-                            //s_mm += (t_left+tau*t_right) * power_mult[kk_internal_small];
-                            //s_mm += (t_left+tau*t_right) * power_mult[kk_internal_small];
-                            s_mm += (t_left + tau * t_right) * power_mult[kk_internal_small];
-                        }//end if kk_internal
-                    }//end cycle kk_internal_small
-                }//end if check kk and mm inside
-                __syncthreads();
+    const auto len_TILE_WIDTH = lag / TILE_WIDTH + (lag % TILE_WIDTH == 0 ? 0 : 1);
+    const auto do_matrix_product_sum = mm < end_row && kk < end_col && kk <= mm;
+    double matrix_prod_sum = 0;
+    for (size_t kk_internal_big = 0; kk_internal_big < len_TILE_WIDTH; ++kk_internal_big) {
+        const auto kk_internal_big_TILE_WIDTH = kk_internal_big * TILE_WIDTH;
+        const auto ty_kk_internal_big_TILE_WIDTH = ty + kk_internal_big_TILE_WIDTH;
+        if (ty_kk_internal_big_TILE_WIDTH < lag) {
+            if (!tx) power_mult[ty] = pow(1. / double(lag - ty_kk_internal_big_TILE_WIDTH), lambda);
+            if (kk < end_col) {
+                ta[tx][ty] = blockX(kk, ty_kk_internal_big_TILE_WIDTH);
+                if (ty_kk_internal_big_TILE_WIDTH)
+                    tam1[tx][ty] = ta[tx][ty] - blockX(kk, ty_kk_internal_big_TILE_WIDTH - 1);
             }
-            matrix_prod_sum += s_mm;
         }
-        if ((kk < numX) && (mm < numY) && (startX + kk <= startY + mm)) {
-#if 0
-            Z[(startX + kk) * sizeX + (startY + mm)] = (1. - matrix_prod_sum / (2. * sigma * sigma)+pow(matrix_prod_sum/(2*sigma*sigma),2)/2.);
-                if (startX + kk < startY + mm ) {
-                        Z[(startY + mm) * sizeX + (startX + kk)] = (1. - matrix_prod_sum / (2. * sigma * sigma)+pow(matrix_prod_sum/(2*sigma*sigma),2)/2.);
-                }
-#else
-            //Z[(startX + kk) * sizeX + (startY + mm)] = (1. - matrix_prod_sum / (2. * sigma * sigma));
-            Z[(startX + kk) * sizeX + (startY + mm)] = matrix_prod_sum;
-            if (startX + kk < startY + mm) {
-                Z[(startY + mm) * sizeX + (startX + kk)] = matrix_prod_sum;
+        const auto tx_kk_internal_big_TILE_WIDTH = tx + kk_internal_big_TILE_WIDTH;
+        if (mm < end_row && tx_kk_internal_big_TILE_WIDTH < lag) {
+            tb[ty][tx] = blockX(mm, tx_kk_internal_big_TILE_WIDTH);
+            if (tx_kk_internal_big_TILE_WIDTH)
+                tbm1[ty][tx] = tb[ty][tx] - blockX(mm, tx_kk_internal_big_TILE_WIDTH - 1);
+        }
+        __syncthreads();
+
+        if (do_matrix_product_sum)
+            for (size_t kk_internal_small = 0; kk_internal_small < TILE_WIDTH; ++kk_internal_small) {
+                const auto kk_internal = kk_internal_small + kk_internal_big_TILE_WIDTH;
+                if (kk_internal >= lag) continue;
+                matrix_prod_sum += (pow(ta[tx][kk_internal_small] - tb[ty][kk_internal_small], 2)
+                                    + (kk_internal ? common::C_kernel_path_tau * pow(tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small], 2) : 0.))
+                                   * power_mult[kk_internal_small];
             }
-#endif
-        }
-    } //end if  group_id
+        __syncthreads();
+    }
+
+    if (do_matrix_product_sum) {
+        Z[kk * cols + mm] = matrix_prod_sum;
+        if (kk < mm) Z[mm * cols + kk] = matrix_prod_sum;
+    }
 }
 
 
 __global__  void
-gpu_kernel_xy_compute(
-        const size_t sizeX, const size_t sizeY, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const size_t len, const size_t dim, const double *X, const double *Y,
-        double *Z, const size_t full_sizeZ, const double lambda, const double tau, const double w_sum_sym)
+gpu_kernel_xy_compute(const size_t Xy_cols, const size_t end_col, const size_t end_row, const size_t lag, const double *X, const double *Y, double *Z,
+                      const double lambda)
 {
-    const auto total_len_features = len * dim;
+    if (blockIdx.x * blockDim.x >= end_col || blockIdx.y * blockDim.y >= end_row) return;
 
     __shared__ double power_mult[TILE_WIDTH];
     __shared__ double ta[TILE_WIDTH][TILE_WIDTH];
-    __shared__ double tam1[TILE_WIDTH][TILE_WIDTH];//for index-1
+    __shared__ double tam1[TILE_WIDTH][TILE_WIDTH]; // for index-1
     __shared__ double tb[TILE_WIDTH][TILE_WIDTH];
-    __shared__ double tbm1[TILE_WIDTH][TILE_WIDTH];//for index-1
+    __shared__ double tbm1[TILE_WIDTH][TILE_WIDTH]; // for index-1
 
     const auto kk = threadIdx.x + blockIdx.x * blockDim.x;
     const auto mm = threadIdx.y + blockIdx.y * blockDim.y;
-
     const auto tx = threadIdx.x;
     const auto ty = threadIdx.y;
-    // __syncthreads();
-
-    if ((blockIdx.x * blockDim.x < numX) && (blockIdx.y * blockDim.y < numY)) {
-        size_t kk_internal = 0;
-        double matrix_prod_sum = 0;
-        for (size_t jA = 0; jA < dim; ++jA) {
-            double s_mm = 0;
-            for (size_t kk_internal_big = 0; kk_internal_big < len / TILE_WIDTH + (len % TILE_WIDTH == 0 ? 0 : 1); ++kk_internal_big) {
-                if (tx == 0) {
-                    if (ty + kk_internal_big * TILE_WIDTH < len) {
-                        power_mult[ty] = pow(1. / ((double) (len - (ty + kk_internal_big * TILE_WIDTH))), 2. * lambda) * w_sum_sym;
-                    }
-                }
-                if ((kk < numX) * (TILE_WIDTH * kk_internal_big + ty < len)) {
-                    ta[tx][ty] = blockX(kk, TILE_WIDTH * kk_internal_big + ty + jA * len);
-                    if (TILE_WIDTH * kk_internal_big + ty > 0) {
-                        tam1[tx][ty] = ta[tx][ty] - blockX(kk, TILE_WIDTH * kk_internal_big + ty - 1 + jA * len);
-                    }
-                }
-                if ((mm < numY) * (TILE_WIDTH * kk_internal_big + tx < len)) {
-                    tb[ty][tx] = blockYY(mm, TILE_WIDTH * kk_internal_big + tx + jA * len);
-                    if (TILE_WIDTH * kk_internal_big + tx > 0) {
-                        tbm1[ty][tx] = tb[ty][tx] - blockYY(mm, TILE_WIDTH * kk_internal_big + tx - 1 + jA * len);
-                    }
-                }
-                __syncthreads();
-                if ((kk < numX) && (mm < numY)) {
-                    for (int kk_internal_small = 0; kk_internal_small < TILE_WIDTH; ++kk_internal_small) {
-                        kk_internal = kk_internal_small + kk_internal_big * TILE_WIDTH;
-                        if (kk_internal < len) {
-                            //mm_internal = kk_internal;
-                            const double x_y = ta[tx][kk_internal_small] - tb[ty][kk_internal_small];
-                            const double t_left = x_y * x_y;
-                            double t_right = 0;
-                            if (kk_internal > 0) {
-                                double diff_x_y = 0;
-                                diff_x_y = tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small];
-                                t_right = diff_x_y * diff_x_y;
-                            }
-                            s_mm += (t_left + tau * t_right) * power_mult[kk_internal_small];
-                        }//end if kk_internal
-                    }//end for kk_internal_small
-                }//end if
-                __syncthreads();//DO NOT REMOVE!
-            }//end for kk_internal_big - tiles
-            matrix_prod_sum += s_mm;
-        }//end for jA
-        if ((kk < numX) && (mm < numY)) {
-            //Z[(startX + kk) * sizeY + (startY + mm)] = 1. - matrix_prod_sum / (2. * sigma * sigma)+pow(matrix_prod_sum/(2*sigma*sigma),2)/2.;
-            Z[(startX + kk) * sizeY + (startY + mm)] = matrix_prod_sum;
-        }
-    }//end if check get_global 0 and 1
-}
-
-
-void cu_distances_xx(const size_t total_len_features, const size_t dim, const size_t size_X, const size_t startX, const size_t startY, const size_t numX, const size_t numY, const double *X,
-                     const double lambda, const double tau, const double w_sum_sym, double *Z)
-{
-    const size_t len = total_len_features / dim;
-    const size_t full_sizeX = size_X * total_len_features;
-    const size_t full_sizeZ = size_X * size_X;
-    double *d_Zptr, *d_Xptr;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-
-    cu_errchk(cudaMalloc(&d_Xptr, full_sizeX * sizeof(double)))
-    cu_errchk(cudaMalloc(&d_Zptr, full_sizeZ * sizeof(double)));
-    cu_errchk(cudaMemcpy(d_Xptr, X, sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
-
-    const size_t tile_x = TILE_WIDTH;
-    const size_t tile_y = TILE_WIDTH;
-    const dim3 thread_dim(tile_x, tile_y);
-
-    const size_t block_x = (size_X / tile_x) + (size_X % tile_x == 0 ? 0 : 1);
-    const size_t block_y = (size_X / tile_y) + (size_X % tile_y == 0 ? 0 : 1);
-    const dim3 block_dim(block_x, block_y);
-
-    gpu_kernel_xx_compute<<<block_dim, thread_dim>>>(size_X, startX, startY, numX, numY, len, dim, d_Xptr, d_Zptr, lambda, tau, w_sum_sym);
-    cu_errchk(cudaMemcpy(Z, d_Zptr, full_sizeZ * sizeof(double), cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_Zptr));
-    cu_errchk(cudaFree(d_Xptr));
-    cu_errchk(cudaDeviceSynchronize());
-}
-
-
-void cu_distances_xy(
-        const size_t total_len_features, const size_t dim,
-        const size_t size_X, const size_t size_Y,
-        const size_t startX, const size_t startY,
-        const size_t numX, const size_t numY,
-        const double *X, const double *Y,
-        const double lambda, const double tau, const double w_sum_sym, double *Z)
-{
-    const size_t len = total_len_features / dim;
-
-    const auto full_sizeX = size_X * total_len_features;
-    const auto full_sizeY = size_Y * total_len_features;
-    const auto full_sizeZ = size_X * size_Y;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    double *d_Xptr, *d_Yptr, *d_Zptr;
-    cu_errchk(cudaMalloc(&d_Xptr, full_sizeX * sizeof(double)));
-    cu_errchk(cudaMalloc(&d_Yptr, full_sizeY * sizeof(double)));
-    cu_errchk(cudaMalloc(&d_Zptr, full_sizeZ * sizeof(double)));
-    cu_errchk(cudaMemcpy(d_Xptr, X, sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
-    cu_errchk(cudaMemcpy(d_Yptr, Y, sizeof(double) * full_sizeY, cudaMemcpyHostToDevice));
-
-    const size_t tile_x = TILE_WIDTH;
-    const size_t tile_y = TILE_WIDTH;
-    const dim3 thread_dim(tile_x, tile_y);
-    const size_t block_x = (size_X / tile_x) + (size_X % tile_x == 0 ? 0 : 1);
-    const size_t block_y = (size_X / tile_y) + (size_X % tile_y == 0 ? 0 : 1);
-    const dim3 block_dim(block_x, block_y);
-
-    gpu_kernel_xy_compute<<<block_dim, thread_dim>>>(size_X, size_Y, startX, startY, numX, numY, len, dim, d_Xptr, d_Yptr, d_Zptr, full_sizeZ, lambda, tau, w_sum_sym);
-    cu_errchk(cudaMemcpy(&Z[0], d_Zptr, full_sizeZ * sizeof(double), cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_Xptr));
-    cu_errchk(cudaFree(d_Yptr));
-    cu_errchk(cudaFree(d_Zptr));
-    cu_errchk(cudaDeviceSynchronize());
-}
-
-
-double
-score_distance_kernel(const size_t sizeX, double *Z_distances, double *Y)
-{
-    // labels = Y
-    // kernel matrix - Z
-    /* std::vector<double> Z_distances(sizeX*sizeX);
-    for(int i=0;i<sizeX;i++){
-            for(int j=0;j<sizeX;j++){
-                    Z_distances[i*sizeX+j]=2.*(1.-Z[i*sizeX+j]);
+    const auto len_TILE_WIDTH = lag / TILE_WIDTH + (lag % TILE_WIDTH == 0 ? 0 : 1);
+    const auto do_matrix_product_sum = mm < end_row && kk < end_col;
+    double matrix_prod_sum = 0;
+    for (size_t kk_internal_big = 0; kk_internal_big < len_TILE_WIDTH; ++kk_internal_big) {
+        const auto kk_internal_big_TILE_WIDTH = kk_internal_big * TILE_WIDTH;
+        const auto ty_kk_internal_big_TILE_WIDTH = ty + kk_internal_big_TILE_WIDTH;
+        if (ty_kk_internal_big_TILE_WIDTH < lag) {
+            if (!tx) power_mult[ty] = pow(1. / double(lag - ty_kk_internal_big_TILE_WIDTH), lambda);
+            if (kk < end_col) {
+                ta[tx][ty] = blockX(kk, ty_kk_internal_big_TILE_WIDTH);
+                if (ty_kk_internal_big_TILE_WIDTH) tam1[tx][ty] = ta[tx][ty] - blockX(kk, ty_kk_internal_big_TILE_WIDTH - 1);
             }
-    }
-    */
-    size_t N1 = 0;
-    size_t N2 = 0;
-    for (size_t i = 0; i < sizeX; i++) {
-        if (Y[i] < 0) N1++;
-        if (Y[i] > 0) N2++;
-    }
-    // std::cout << " N1,N2" << N1 << " " << N2 << std::endl;
-    size_t N = N1 + N2;
-    double E12 = 0.;
-    size_t i_ctr = 0;
-    for (size_t i = 0; i < N1; i++) {
-        while (!(Y[i_ctr] < 0)) i_ctr++;
-        size_t j_ctr = 0;
-        for (size_t j = 0; j < N2; j++) {
-            while (!(Y[j_ctr] > 0)) j_ctr++;
-            E12 += pow(Z_distances[i_ctr * sizeX + j_ctr], 2);
-            j_ctr++;
         }
-        i_ctr++;
-    }
-    E12 = E12 / (double) N1 / (double) N2;
-    double E11 = 0.;
-    i_ctr = 0;
-    for (size_t i = 0; i < N1; i++) {
-        while (!(Y[i_ctr] < 0)) i_ctr++;
-        size_t j_ctr = 0;
-        for (size_t j = 0; j < N1; j++) {
-            while (!(Y[j_ctr] < 0)) j_ctr++;
-            E11 += pow(Z_distances[i_ctr * sizeX + j_ctr], 2);
-            j_ctr++;
+
+        const auto tx_kk_internal_big_TILE_WIDTH = tx + kk_internal_big_TILE_WIDTH;
+        if (mm < end_row && tx_kk_internal_big_TILE_WIDTH < lag) {
+            tb[ty][tx] = blockYY(mm, tx_kk_internal_big_TILE_WIDTH);
+            if (tx_kk_internal_big_TILE_WIDTH)
+                tbm1[ty][tx] = tb[ty][tx] - blockYY(mm, tx_kk_internal_big_TILE_WIDTH - 1);
         }
-        i_ctr++;
+        __syncthreads();
+
+        if (do_matrix_product_sum)
+            for (size_t kk_internal_small = 0; kk_internal_small < TILE_WIDTH; ++kk_internal_small) {
+                const auto kk_internal = kk_internal_small + kk_internal_big_TILE_WIDTH;
+                if (kk_internal >= lag) continue;
+                matrix_prod_sum += (pow(ta[tx][kk_internal_small] - tb[ty][kk_internal_small], 2)
+                                    + (kk_internal ? common::C_kernel_path_tau * pow(tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small], 2) : 0.))
+                                   * power_mult[kk_internal_small];
+            }
+        __syncthreads();
     }
-    E11 = E11 / (double) N1 / (double) N1;
-    double E22 = 0.;
-    i_ctr = 0;
-    for (size_t i = 0; i < N2; i++) {
-        while (!(Y[i_ctr] > 0)) i_ctr++;
-        size_t j_ctr = 0;
-        for (size_t j = 0; j < N2; j++) {
-            while (!(Y[j_ctr] > 0)) j_ctr++;
-            E22 += pow(Z_distances[i_ctr * sizeX + j_ctr], 2);
-            j_ctr++;
-        }
-        i_ctr++;
-    }
-    E22 = E22 / (double) N2 / (double) N2;
-    // std::cout << E11 << " " << E12 << " " << E22 << std::endl;
-    return E12 / ((double) N1 / (double) N * E11 + (double) N2 / (double) N * E22);
-    //alternative?
-    //return E12 - (((double) N1 / (double) N * E11 + (double) N2 / (double) N * E22)) / 2.;
+
+    if (do_matrix_product_sum) Z[kk * Xy_cols + mm] = matrix_prod_sum;
+}
+
+
+void
+cu_distances_xx(const size_t lag, const size_t cols, const size_t end_col, const size_t end_row, const double *X, const double lambda, double *Z)
+{
+    const size_t X_size = cols * lag * sizeof(double);
+    const size_t Z_size = cols * cols * sizeof(double);
+    double *d_Z, *d_X;
+    const common::gpu_context ctx;
+    cu_errchk(cudaSetDevice(ctx.phy_id()));
+
+    cu_errchk(cudaMalloc(&d_X, X_size))
+    cu_errchk(cudaMalloc(&d_Z, Z_size));
+    cu_errchk(cudaMemcpy(d_X, X, X_size, cudaMemcpyHostToDevice));
+
+    const auto block_width = cols / TILE_WIDTH + (cols % TILE_WIDTH == 0 ? 0 : 1);
+    gpu_kernel_xx_compute<<<dim3(block_width, block_width), dim3(TILE_WIDTH, TILE_WIDTH)>>>(cols, end_col, end_row, lag, d_X, d_Z, lambda);
+
+    cu_errchk(cudaMemcpy(Z, d_Z, Z_size, cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(d_Z));
+    cu_errchk(cudaFree(d_X));
+    cu_errchk(cudaDeviceSynchronize());
+}
+
+
+void
+cu_distances_xy(const size_t lag, const size_t X_cols, const size_t Xy_cols, const size_t end_col, const size_t end_row, const double *X, const double *Xy,
+                const double lambda, double *Z)
+{
+    const auto X_size = X_cols * lag * sizeof(double);
+    const auto Xy_size = Xy_cols * lag * sizeof(double);
+    const auto Z_size = X_cols * Xy_cols * sizeof(double);
+    const common::gpu_context ctx;
+    cu_errchk(cudaSetDevice(ctx.phy_id()));
+    double *d_X, *d_Xy, *d_Z;
+    cu_errchk(cudaMalloc(&d_X, X_size));
+    cu_errchk(cudaMalloc(&d_Xy, Xy_size));
+    cu_errchk(cudaMalloc(&d_Z, Z_size));
+    cu_errchk(cudaMemcpy(d_X, X, X_size, cudaMemcpyHostToDevice));
+    cu_errchk(cudaMemcpy(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice));
+
+    const auto block_width = X_cols / TILE_WIDTH + (X_cols % TILE_WIDTH == 0 ? 0 : 1);
+    gpu_kernel_xy_compute<<<dim3(block_width, block_width), dim3(TILE_WIDTH, TILE_WIDTH)>>>(Xy_cols, end_col, end_row, lag, d_X, d_Xy, d_Z, lambda);
+    cu_errchk(cudaMemcpy(Z, d_Z, Z_size, cudaMemcpyDeviceToHost));
+    cu_errchk(cudaFree(d_X));
+    cu_errchk(cudaFree(d_Xy));
+    cu_errchk(cudaFree(d_Z));
+    cu_errchk(cudaDeviceSynchronize());
 }
 
 }

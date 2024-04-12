@@ -10,8 +10,6 @@ enum class ConcreteDaoType { PgDao, AsyncDao };
 
 class PropertiesFileReader
 {
-    bool is_autotune_running_ = false;
-
     MessageProperties property_files;
     char delimiter;
     std::string property_files_location;

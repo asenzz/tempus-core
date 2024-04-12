@@ -52,7 +52,7 @@ public:
     std::thread::id get_id();
 
 private:
-    friend struct thread_pool;
+    friend class thread_pool;
 
     thread_safe_queue_cannonical <std::shared_ptr<task>> local_tasks;
     thread_pool & tp;

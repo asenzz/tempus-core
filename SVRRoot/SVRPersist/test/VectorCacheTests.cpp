@@ -1,6 +1,6 @@
 #include <string>
 #include <gtest/gtest.h>
-
+#include "common/compatibility.hpp"
 #include "TestSuite.hpp"
 #include "../src/AsyncDAO/VectorMruCache.hpp"
 
@@ -12,13 +12,13 @@ struct User
     User(const long user_name, const std::string &email): user_name(user_name), email(email) {}
     static bool shallow(User const & one, User const & another) { return one.user_name == another.user_name; }
 };
-bool deep(User const & one, User const & another)  { return one.user_name == another.user_name && one.email == another.email; }
+const auto deep = [] (User const & one, User const & another)  { return one.user_name == another.user_name && one.email == another.email; };
 
 TEST(VectorCacheTests, BasicTests)
 {
     size_t const sz = 10;
-    svr::dao::VectorMruCache<User, decltype(std::ptr_fun(User::shallow)), decltype(std::ptr_fun(deep))>
-        mru(sz, std::ptr_fun(User::shallow),std::ptr_fun(deep) );
+    svr::dao::VectorMruCache<User, dtype(User::shallow), dtype(deep)>
+        mru(sz, User::shallow, deep );
 
     ASSERT_EQ(sz, mru.cont.size());
 
@@ -56,8 +56,8 @@ TEST(VectorCacheTests, BasicTests)
 TEST(VectorCacheTests, RandomTests)
 {
     size_t const sz = 10;
-    svr::dao::VectorMruCache<User, decltype(std::ptr_fun(User::shallow)), decltype(std::ptr_fun(deep))>
-        mru(sz, std::ptr_fun(User::shallow),std::ptr_fun(deep) );
+    svr::dao::VectorMruCache<User, dtype(User::shallow), dtype(deep)>
+        mru(sz, User::shallow, deep);
 
     for(int i = 0; i < 10; ++i)
     {
@@ -91,8 +91,8 @@ TEST(VectorCacheTests, PerformanceTests)
     const size_t iterations = 1e+5;
     for(auto cacheSize : std::vector<size_t>{10, 50, 100, 500, 1000})
     {
-        svr::dao::VectorMruCache<User, decltype(std::ptr_fun(User::shallow)), decltype(std::ptr_fun(deep))>
-            mru(cacheSize, std::ptr_fun(User::shallow),std::ptr_fun(deep) );
+        svr::dao::VectorMruCache<User, dtype(User::shallow), dtype(deep)>
+            mru(cacheSize, User::shallow,deep);
 
         std::default_random_engine generator;
         std::uniform_int_distribution<int> distribution(1, 1000);

@@ -24,6 +24,8 @@ public:
     calc_kernel_inversions(const double *Z, const arma::mat &Y);
 };
 
+double score_distance_kernel(const size_t sizeX, double *Z_distances, double *Y);
+
 }
 
 #endif //SVR_CALC_KERNEL_INVERSIONS_HPP

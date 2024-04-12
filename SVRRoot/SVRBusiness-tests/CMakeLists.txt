@@ -1,5 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(SVRBusiness-tests)
+LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/local/libexec)
 
 #Define project dependencies
 SET(DEPENDENCIES SVRPersist SVRBusiness)

@@ -14,6 +14,7 @@ public:
                 rowSet["dataset_id"].as<bigint>(0),
                 rowSet["input_queue_table_name"].as<std::string>(""),
                 rowSet["input_queue_column_name"].as<std::string>(""),
+                rowSet["levels"].as<size_t>(0),
                 rowSet["decon_level"].as<size_t>(0),
                 rowSet["chunk_ix"].as<size_t>(0),
                 rowSet["grad_level"].as<size_t>(0),

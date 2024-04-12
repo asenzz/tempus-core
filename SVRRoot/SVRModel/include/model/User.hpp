@@ -69,8 +69,8 @@ public:
     virtual std::string to_string() const override;
 
     virtual std::string to_json_string() const;
-
 };
+
 }
 }
 

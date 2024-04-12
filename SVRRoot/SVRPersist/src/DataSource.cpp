@@ -14,9 +14,9 @@ DataSource::~DataSource()
 }
 
 DataSource::DataSource(const std::string& connection_string, const bool commit_on_scope_exit) :
-        commit_on_scope_exit(commit_on_scope_exit), connection_string(connection_string)
+        connection_string(connection_string)
 {
-    LOG4_DEBUG("Opening connection using connection string: \"" << connection_string << "\"");
+    LOG4_DEBUG("Opening connection using connection string " << connection_string);
     try {
         statementPreparerTemplate = std::make_unique<StatementPreparerDBTemplate>(connection_string);
     } catch (const std::exception& e) {
@@ -51,7 +51,6 @@ void DataSource::reopen_connection()
 
 scoped_transaction_guard_ptr DataSource::open_transaction()
 {
-    //std::scoped_lock<std::recursive_mutex> l(mtx);
     return ptr<scoped_transaction_guard>(connection_string, *this);
 }
 
@@ -117,18 +116,6 @@ void DataSource::cleanup_queue_table(const std::string &table_name, const datamo
     }
 
     LOG4_END();
-}
-
-DataSource &DataSource::lock()
-{
-    //mtx.lock();
-    return *this;
-}
-
-DataSource &DataSource::unlock()
-{
-    //mtx.unlock();
-    return *this;
 }
 
 }

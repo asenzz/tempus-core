@@ -1,15 +1,13 @@
-#include "util/math_utils.hpp"
-#include "common/compatibility.hpp"
-#include "common/gpu_handler.hpp"
-
 #include <viennacl/vector_proxy.hpp>
 #include <common.hpp>
 #include <map>
-#include <cstdarg>
+#include "util/math_utils.hpp"
+#include "common/compatibility.hpp"
+#include "common/gpu_handler.hpp"
+#include "sobolvec.h"
+
 
 namespace svr {
-
-
 namespace common {
 
 arma::vec levy(const size_t d) // Return colvec of columns d
@@ -78,11 +76,6 @@ ifftshift(const arma::cx_mat &input)
 }
 
 
-arma::mat fmod(const arma::mat &a, const double n)
-{
-    return a - arma::floor(a / n) * n;
-}
-
 std::vector<std::vector<double>>
 transpose_matrix(const std::vector<std::vector<double>> &vvmat)
 {
@@ -95,50 +88,6 @@ transpose_matrix(const std::vector<std::vector<double>> &vvmat)
     )
 
     return result;
-}
-
-std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, const size_t level_count)
-{
-    std::set<size_t> level_indexes;
-    if (level_count == 0 or ratio == 0) return {level};
-    //const size_t full_count = level_count * ratio - 1;
-    const size_t half_count = (double(level_count) * ratio - 1.) / 2.;
-    ssize_t min_index;
-    ssize_t max_index;
-    if (ratio == 1) { // TODO Hack, fix!
-        min_index = 0;
-        max_index = level_count - 1;
-    } else {
-        min_index = level - half_count;
-        max_index = level + half_count;
-    }
-    if (min_index < 0) {
-        max_index -= min_index;
-        min_index -= min_index;
-    }
-    if (max_index >= ssize_t(level_count)) {
-        min_index -= max_index - level_count + 1;
-        max_index -= max_index - level_count + 1;
-    }
-
-    OMP_LOCK(level_indexes_l)
-#pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / std::thread::hardware_concurrency())
-    for (ssize_t level_index = min_index; level_index <= max_index; ++level_index) {
-        if (level_index >= 0
-            && level_index < ssize_t(level_count)
-            && (level_count < MIN_LEVEL_COUNT || (level_index != ssize_t(level_count) / 2 && level_index % 2 == 0)
-            || level_index > ssize_t(level_count) / 2))
-        {
-            omp_set_lock(&level_indexes_l);
-            level_indexes.emplace(level_index);
-            omp_unset_lock(&level_indexes_l);
-        } else
-            LOG4_TRACE("Skipping level " << level_index << " adjacent ratio " << ratio << " for level " << level);
-    }
-
-    LOG4_TRACE("Adjacent ratio " << ratio << " for level " << level << " includes levels " << level_indexes);
-
-    return level_indexes;
 }
 
 
@@ -317,130 +266,16 @@ double dot_product(double const *a, double const *b, const size_t length)
 
 #endif
 
-namespace armd {
-
-void check_mat(const arma::mat &input)
-{
-    for (size_t i = 0; i < input.n_rows; ++i) {
-        for (size_t j = 0; j < input.n_cols; ++j) {
-            if (fabs(input(i, j)) > 1000. || isinf(input(i, j))) {
-                LOG4_ERROR("bad input at " << i << ", " << j << " = " << input(i, j));
-                throw std::runtime_error("Error in check_mat");
-            }
-        }
-    }
-}
-
-std::stringstream arma_to_sstream(const arma::mat &input, const std::string mat_name = "")
-{
-    std::stringstream ss;
-    if (mat_name != "") ss << mat_name << std::endl;
-    ss << "Size: " << input.n_rows << " " << input.n_cols << std::endl;
-    for (size_t i = 0; i < input.n_rows; ++i) {
-        for (size_t j = 0; j < input.n_cols; ++j)
-            ss << input(i, j) << " ";
-        ss << "\n";
-    }
-    return ss;
-}
-
-void print_mat(const arma::mat &input, const std::string mat_name)
-{
-    LOG4_INFO(arma_to_sstream(input, mat_name).str());
-}
-
-
-void serialize_mat(const std::string &filename, const arma::mat &input, const std::string mat_name)
-{
-    const auto &ss = arma_to_sstream(input, mat_name);
-    LOG4_FILE(filename, ss.str());
-}
-
-void serialize_vec(const std::string &filename, const arma::uvec &input, const std::string vec_name)
-{
-    std::stringstream ss;
-    if (vec_name != "")
-        ss << vec_name << std::endl;
-    ss << "Size: " << input.n_elem << std::endl;
-    for (size_t i = 0; i < input.n_elem; ++i)
-        ss << input(i) << " ";
-    ss << "\n";
-    LOG4_FILE(filename, ss.str());
-}
-
-
-arma::uvec set_to_arma_uvec(const std::set<size_t> &input)
-{
-    return arma::conv_to<arma::uvec>::from(std::vector<size_t>{input.begin(), input.end()});
-}
-
 arma::uvec complement_vectors(const std::set<size_t> &svi, const arma::uvec &new_ixs)
 {
     //arma::uvec complement_ixs;
-    std::vector<long long unsigned int> complement_ixs;
-
-    for (size_t i = 0; i < new_ixs.n_elem; ++i) {
-        if (svi.find(new_ixs(i)) == svi.end()) {
-            complement_ixs.push_back(new_ixs(i));
-        }
-    }
+    std::vector<arma::uword> complement_ixs;
+    for (size_t i = 0; i < new_ixs.n_elem; ++i)
+        if (svi.find(new_ixs(i)) == svi.end())
+            complement_ixs.emplace_back(new_ixs(i));
     LOG4_DEBUG("complement_ixs size svi size  " << complement_ixs.size() << " " << svi.size());
     arma::uvec ret_values(complement_ixs);
     return ret_values;
-}
-
-void shuffle_matrix(
-        const arma::mat &x,
-        const arma::mat &y,
-        arma::uvec &shuffled_rows,
-        arma::uvec &shuffled_cols)
-{
-    size_t x_train_rows = x.n_rows;
-    size_t x_train_cols = x.n_cols;
-    arma::uvec cols = arma::linspace<arma::uvec>(0, x_train_cols - 1, x_train_cols);
-    {
-        static std::mutex shuffle_mutex;
-        std::scoped_lock shuffle_guard(shuffle_mutex);
-        shuffled_cols = arma::shuffle(cols);
-        shuffled_rows = arma::shuffle(arma::linspace<arma::uvec>(0, x_train_rows - 1, x_train_rows));
-    }
-}
-
-arma::mat pdist(const arma::mat &input)
-{
-    arma::mat foo(1, (input.n_rows * (input.n_rows - 1)) / 2);
-    size_t k = 0;
-    for (size_t i = 0; i < input.n_rows - 1; ++i) {
-        for (size_t j = i + 1; j < input.n_rows; ++j) {
-            foo(k) = norm((input.row(i) - input.row(j)), 2);
-            ++k;
-        }
-    }
-    return foo;
-}
-
-double mean_all(const arma::mat &input)
-{
-    return accu(input) / input.n_rows / input.n_cols;
-}
-
-arma::mat rows(arma::mat &input, arma::uvec &ixs)
-{
-    arma::mat selected_rows(ixs.n_elem, input.n_cols);
-    for (size_t i = 0; i < ixs.n_elem; ++i)
-        selected_rows.row(i) = input.row(ixs[i]);
-    return selected_rows;
-}
-
-arma::mat rows(const arma::mat &input, const std::set<size_t> &ixs)
-{
-    arma::mat selected_rows;
-    size_t i = 0;
-    for (auto ix : ixs) {
-        selected_rows.insert_rows(i++, input.row(ix));
-        //selected_rows.row(i++)  = input.row(ix);
-    }
-    return selected_rows;
 }
 
 arma::uvec subview_indexes(const arma::uvec &batch_ixs, const arma::uvec &ix_tracker)
@@ -456,31 +291,6 @@ arma::uvec subview_indexes(const arma::uvec &batch_ixs, const arma::uvec &ix_tra
     return real_ixs;
 }
 
-void print_arma_sizes(const arma::mat &input, const std::string input_name)
-{
-    LOG4_DEBUG("Rows and columns for " << input_name << " are " << input.n_rows << " " << input.n_cols);
-}
-
-arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level)
-{
-    constexpr int value = 9879871;
-    arma::arma_rng::set_seed(value + level);
-    static std::mutex mx;
-    std::scoped_lock l(mx);
-    return arma::shuffle(to_shuffle);
-}
-
-arma::mat fixed_shuffle(const arma::mat &to_shuffle)
-{
-    constexpr size_t prime_multiplier = 6700417;
-    constexpr size_t remainer = 42;
-    arma::mat result = to_shuffle;
-    __omp_pfor_i (0, to_shuffle.n_elem, result((i * prime_multiplier + remainer) % to_shuffle.n_elem) = to_shuffle(i) )
-    return result;
-}
-
-
-}//namespace armd
 
 double calc_quant_offset_mul(const double main_to_aux_period_ratio, const double level, const double levels_count)
 {
@@ -505,6 +315,57 @@ double get_quantization_max(const double main_to_aux_period_ratio)
 #else
     return (1. + (QUANTIZE_FEAT_MUL * main_to_aux_period_ratio - 1.) * 1.);
 #endif
+}
+
+void shuffle_matrix(
+        const arma::mat &x,
+        const arma::mat &y,
+        arma::uvec &shuffled_rows,
+        arma::uvec &shuffled_cols)
+{
+    static std::mutex shuffle_mutex;
+    arma::uvec cols = arma::linspace<arma::uvec>(0, x.n_cols - 1, x.n_rows);
+    const std::scoped_lock shuffle_guard(shuffle_mutex);
+    shuffled_cols = arma::shuffle(cols);
+    shuffled_rows = arma::shuffle(arma::linspace<arma::uvec>(0, x.n_rows - 1, x.n_rows));
+}
+
+arma::mat pdist(const arma::mat &input)
+{
+    arma::mat foo(1, (input.n_rows * (input.n_rows - 1)) / 2);
+    size_t k = 0;
+    for (size_t i = 0; i < input.n_rows - 1; ++i) {
+        for (size_t j = i + 1; j < input.n_rows; ++j) {
+            foo(k) = norm((input.row(i) - input.row(j)), 2);
+            ++k;
+        }
+    }
+    return foo;
+}
+
+double mean(const arma::mat &input)
+{
+    return accu(input) / double(input.n_elem);
+}
+
+arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level)
+{
+    constexpr int value = 9879871;
+    arma::arma_rng::set_seed(value + level);
+    static std::mutex mx;
+    std::scoped_lock l(mx);
+    return arma::shuffle(to_shuffle);
+}
+
+arma::uvec fixed_shuffle(const arma::uvec &to_shuffle)
+{
+    constexpr size_t prime_multiplier = 6700417;
+    constexpr size_t remainder = 42;
+    auto result = to_shuffle;
+// #pragma omp parallel for num_threads(adj_threads(to_shuffle.n_elem)) schedule(static, 1)
+    for (size_t i = 0; i < to_shuffle.size(); ++i)
+        result((i * prime_multiplier + remainder) % to_shuffle.n_elem) = to_shuffle(i);
+    return result;
 }
 
 } //namespace common

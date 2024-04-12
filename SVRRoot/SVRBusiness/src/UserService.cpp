@@ -1,4 +1,4 @@
-#include <util/ValidationUtils.hpp>
+#include <util/validation_utils.hpp>
 #include "UserService.hpp"
 #include <DAO/UserDAO.hpp>
 #include <model/User.hpp>

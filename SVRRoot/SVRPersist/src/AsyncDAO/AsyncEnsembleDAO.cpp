@@ -6,35 +6,32 @@
 namespace svr {
 namespace dao {
 
-namespace
-{
-    static bool cmp_primary_key(datamodel::Ensemble_ptr const & lhs, datamodel::Ensemble_ptr const & rhs)
-    {
-        return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
-                && lhs->get_id() == rhs->get_id();
-    }
-    static bool cmp_whole_value(datamodel::Ensemble_ptr const & lhs, datamodel::Ensemble_ptr const & rhs)
-    {
-        return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
-                && *lhs == *rhs;
-    }
+namespace {
+static const auto cmp_primary_key = [](datamodel::Ensemble_ptr const &lhs, datamodel::Ensemble_ptr const &rhs) {
+    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+           && lhs->get_id() == rhs->get_id();
+};
+static const auto cmp_whole_value = [](datamodel::Ensemble_ptr const &lhs, datamodel::Ensemble_ptr const &rhs) {
+    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+           && *lhs == *rhs;
+};
 }
 
 struct AsyncEnsembleDAO::AsyncImpl
-    : AsyncImplBase<datamodel::Ensemble_ptr, decltype(std::ptr_fun(cmp_primary_key)), decltype(std::ptr_fun(cmp_whole_value)), PgEnsembleDAO>
+        : AsyncImplBase<datamodel::Ensemble_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgEnsembleDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-    :AsyncImplBase(tempus_config, data_source, std::ptr_fun(cmp_primary_key), std::ptr_fun(cmp_whole_value), 10, 10)
+    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+            : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
-AsyncEnsembleDAO::AsyncEnsembleDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-:EnsembleDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
+AsyncEnsembleDAO::AsyncEnsembleDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+        : EnsembleDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 
 AsyncEnsembleDAO::~AsyncEnsembleDAO()
 {
-    delete & pImpl;
+    delete &pImpl;
 }
 
 
@@ -47,10 +44,10 @@ bigint AsyncEnsembleDAO::get_next_id()
 
 datamodel::Ensemble_ptr AsyncEnsembleDAO::get_by_id(const bigint id)
 {
-    AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
+    AsyncImpl::my_value_t value{new typename AsyncImpl::my_value_t::element_type()};
     value->set_id(id);
 
-    if(pImpl.cached(value))
+    if (pImpl.cached(value))
         return value;
 
     std::scoped_lock lg(pImpl.pgMutex);
@@ -62,7 +59,7 @@ datamodel::Ensemble_ptr AsyncEnsembleDAO::get_by_id(const bigint id)
 
 bool AsyncEnsembleDAO::exists(const bigint ensemble_id)
 {
-    AsyncImpl::my_value_t value {new typename AsyncImpl::my_value_t::element_type() };
+    AsyncImpl::my_value_t value{new typename AsyncImpl::my_value_t::element_type()};
     value->set_id(ensemble_id);
 
     return exists(value);
@@ -72,14 +69,14 @@ bool AsyncEnsembleDAO::exists(const datamodel::Ensemble_ptr &ensemble)
 {
     AsyncImpl::my_value_t value = ensemble;
 
-    if(pImpl.cached(value))
+    if (pImpl.cached(value))
         return true;
 
     std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.exists(ensemble->get_id());
 }
 
-datamodel::Ensemble_ptr AsyncEnsembleDAO::get_by_dataset_and_decon_queue(const datamodel::Dataset_ptr &dataset, const datamodel::DeconQueue_ptr& decon_queue)
+datamodel::Ensemble_ptr AsyncEnsembleDAO::get_by_dataset_and_decon_queue(const datamodel::Dataset_ptr &dataset, const datamodel::DeconQueue_ptr &decon_queue)
 {
     pImpl.flush();
     std::scoped_lock lg(pImpl.pgMutex);

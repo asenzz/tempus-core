@@ -38,83 +38,7 @@ inplace_validate(
 #define ADDED_ERROR 1000.
 #define VALIDATION_BAD_RESULTS {ADDED_ERROR, ADDED_ERROR, arma::conv_to<std::vector<double>>::from(ADDED_ERROR + arma::vectorise(labels_data.rows(current_index, to_row_idx))), arma::conv_to<std::vector<double>>::from(arma::vectorise(labels_data.rows(current_index, to_row_idx))), ADDED_ERROR}
 
-// Works only for one-step predictions
-std::tuple<double, double, std::vector<double>, std::vector<double>, double, std::vector<double>>
-future_validate(
-        const size_t from_idx,
-        const svr::OnlineMIMOSVR &online_svr,
-        const arma::mat &features,
-        const arma::mat &labels,
-        const bool single_pred)
-{
-    if (labels.n_rows == from_idx) {
-        LOG4_WARN("Calling future validate at the end of p_labels_data array. MAE = 1000");
-        return {ADDED_ERROR, ADDED_ERROR, {}, {}, 0, {}};
-    }
-
-    const size_t to_row_idx = std::min((size_t)labels.n_rows - 1, single_pred ? from_idx : (size_t)labels.n_rows - 1);
-    LOG4_DEBUG("Future predict start index " << from_idx << " and end index is " << to_row_idx);
-    const size_t num_preds = 1 + to_row_idx - from_idx;
-    arma::mat predicted_values;
-    try {
-        PROFILE_EXEC_TIME(predicted_values = online_svr.predict(features.rows(from_idx, to_row_idx)), "Chunk predict");
-    } catch (const std::exception &ex) {
-        LOG4_ERROR("Error predicting values: " << ex.what());
-        predicted_values.set_size(num_preds, 1);
-        predicted_values.fill(ADDED_ERROR);
-    }
-    if (predicted_values.n_rows != num_preds)
-        LOG4_ERROR("predicted_values.n_rows " << predicted_values.n_rows << " != num_preds " << num_preds);
-    std::vector<double> ret_predicted_values(num_preds), actual_values(num_preds), lin_pred_values(num_preds);
-    double red_mae{0};
-    for (size_t i_future = from_idx; i_future <= to_row_idx; ++i_future) {
-        const auto ix = i_future - from_idx;
-        const auto predicted_val = predicted_values(ix, 0);
-        const auto actual_val = labels.at(i_future, 0);
-        ret_predicted_values[ix] = predicted_val;
-        actual_values[ix] = actual_val;
-        lin_pred_values[ix] = labels.at(i_future - 1, 0);
-        LOG4_TRACE("Predicted " << predicted_val << " actual " << actual_val << " row " << ix << " col " << 0);
-        red_mae += std::abs(actual_val - predicted_val);
-    };
-    const double mae = red_mae / double(actual_values.size());
-    const double avg_label = arma::mean(arma::abs(arma::vectorise(labels)));
-    const double mape = 100. * mae / avg_label;
-    const double lin_mape = 100. * arma::mean(arma::abs(arma::rowvec(actual_values) - arma::rowvec(lin_pred_values))) / avg_label;
-    LOG4_DEBUG("Future predict from row " << from_idx << " until " << to_row_idx << " MAE " << mae << " MAPE " << mape << " Lin MAPE " << lin_mape);
-
-    return {mae, mape, ret_predicted_values, actual_values, lin_mape, lin_pred_values};
-}
-
-
 #include "OnlineSMOSVR.hpp"
-
-double
-future_validate(
-        const int n_total_samples,
-        const int current_index,
-        const svr::OnlineSVR &online_svr,
-        const arma::mat &features_data,
-        const arma::mat &labels_data)
-{
-    const auto to_row_idx = std::min(n_total_samples, current_index + TEST_FUTURE_PREDICT_COUNT);
-    LOG4_DEBUG("Future predict start index " << current_index << " and end index is " << to_row_idx);
-    if (n_total_samples == current_index) {
-        LOG4_WARN("Calling future validate at the end of labels_data array. MAE = 0");
-        return 0;
-    }
-    const auto predicted_values = online_svr.predict((arma::mat)features_data.rows(current_index, to_row_idx));
-
-    size_t counter = 0;
-    double mae = 0.;
-    for (int i_future = current_index; i_future < to_row_idx; ++i_future) {
-        mae += std::abs(labels_data(i_future, 0) - predicted_values[i_future - current_index]);
-        counter += 1;
-    }
-    mae = mae / double(counter);
-    LOG4_DEBUG("Future predict between sample " << current_index << " and " << to_row_idx << " MAE " << mae);
-    return mae;
-}
 
 
 void
@@ -217,7 +141,7 @@ comb_matrix(
 {
     vmatrix<double> res;
     size_t j = 0;
-    for (decltype(v.get_length_rows()) i = 0; i < v.get_length_rows(); ++i) {
+    for (dtype(v.get_length_rows()) i = 0; i < v.get_length_rows(); ++i) {
         if (j < step_in) res.add_row_copy(v.get_row_ref(i));
         ++j;
         j %= (step_in + step_out);

@@ -312,27 +312,27 @@ InputQueueService::clone_with_data(
 
 data_row_container
 InputQueueService::get_column_data(
-        const datamodel::InputQueue_ptr &queue,
+        const datamodel::InputQueue &input_queue,
         const std::string &column_name)
 {
-    return get_column_data(queue, get_value_column_index(queue, column_name));
+    return get_column_data(input_queue, get_value_column_index(input_queue, column_name));
 }
 
 
 data_row_container
-InputQueueService::get_column_data(const datamodel::InputQueue_ptr &queue, const size_t column_index)
+InputQueueService::get_column_data(const datamodel::InputQueue &input_queue, const size_t column_index)
 {
     LOG4_BEGIN();
 
-    const DataRow::container &column_data = queue->get_data();
+    const auto &column_data = input_queue.get_data();
     DataRow::container result(column_data.size());
 
     if (column_data.empty()) {
-        LOG4_ERROR("Column data in " << queue->get_table_name() << " is empty. Aborting.");
+        LOG4_ERROR("Column data in " << input_queue.get_table_name() << " is empty. Aborting.");
         return {};
     }
 
-    if (column_data.front()->get_values().size() <= column_index || column_index < 0) {
+    if (column_data.front()->size() <= column_index) {
         LOG4_ERROR("Column index out of bounds " << column_index << ", columns in input queue " << column_data.front()->get_values().size());
         return {};
     }
@@ -372,13 +372,13 @@ InputQueueService::get_db_table_column_names(const datamodel::InputQueue_ptr &qu
 
 size_t
 InputQueueService::get_value_column_index(
-        const datamodel::InputQueue_ptr &p_input_queue,
+        const datamodel::InputQueue &input_queue,
         const std::string &column_name)
 {
-    const auto &cols = p_input_queue->get_value_columns();
+    const auto &cols = input_queue.get_value_columns();
     const auto pos = find(cols.begin(), cols.end(), column_name);
     if (pos == cols.end())
-        THROW_EX_FS(std::invalid_argument, "Column " << column_name << " is not part of input queue " << p_input_queue->get_table_name());
+        THROW_EX_FS(std::invalid_argument, "Column " << column_name << " is not part of input queue " << input_queue.get_table_name());
 
     return (size_t) std::distance(cols.begin(), pos);
 }
@@ -428,80 +428,72 @@ void InputQueueService::purge_missing_hours(datamodel::InputQueue_ptr const &que
 
 
 boost::posix_time::ptime
-InputQueueService::compare_to_decon_queue(
-        const datamodel::InputQueue_ptr &p_input_queue,
-        const datamodel::DeconQueue_ptr &p_decon_queue)
+InputQueueService::compare_to_decon_queue(const datamodel::InputQueue &input_queue, const datamodel::DeconQueue &decon_queue)
 {
     // max_date_time means don't decompose anything, min_date_time means decompose all data from the input queue
     LOG4_BEGIN();
-    if (p_input_queue->get_data().empty())
+    if (input_queue.empty())
         return boost::posix_time::max_date_time;
 
-    if (p_decon_queue->get_data().empty())
+    if (decon_queue.empty())
         return boost::posix_time::min_date_time;
 
-    if (p_input_queue->front()->get_value_time() > p_decon_queue->front()->get_value_time()) {
-        LOG4_ERROR("Inconsistency between input queue " << *p_input_queue << " and decon queue " << *p_decon_queue << " detected.");
+    if (input_queue.front()->get_value_time() > decon_queue.front()->get_value_time()) {
+        LOG4_ERROR("Inconsistency between input queue " << input_queue << " and decon queue " << decon_queue << " detected.");
         return boost::posix_time::min_date_time;
     }
 
-    if (std::find(std::execution::par_unseq, p_input_queue->get_value_columns().begin(), p_input_queue->get_value_columns().end(),
-                  p_decon_queue->get_input_queue_column_name()) == p_input_queue->get_value_columns().end()) {
-        LOG4_ERROR("Input queue column " << p_decon_queue->get_input_queue_column_name() << " is missing in " << *p_input_queue);
+    if (std::find(std::execution::par_unseq, input_queue.get_value_columns().cbegin(), input_queue.get_value_columns().cend(),
+                  decon_queue.get_input_queue_column_name()) == input_queue.get_value_columns().cend()) {
+        LOG4_ERROR("Input queue column " << decon_queue.get_input_queue_column_name() << " is missing in " << input_queue);
         return boost::posix_time::max_date_time;
     }
 
-    boost::posix_time::ptime missing_time{boost::posix_time::max_date_time};
+    boost::posix_time::ptime missing_time = boost::posix_time::max_date_time;
     OMP_LOCK(missing_time_l)
-#pragma omp parallel for num_threads(adj_threads(p_decon_queue->size()))
-    for (auto range_iter = lower_bound(p_input_queue->get_data(), p_decon_queue->front()->get_value_time()); range_iter != p_input_queue->end(); ++range_iter) {
-        if (std::any_of(
-                std::execution::par_unseq, p_decon_queue->begin(), p_decon_queue->end(),
-                [&range_iter](const auto &item) { return item->get_value_time() == range_iter->get()->get_value_time(); }))
-            continue;
-        LOG4_DEBUG("Input row at " << range_iter->get()->get_value_time() << " not found in decon queue " << p_decon_queue->get_input_queue_table_name() <<
-                                   " " << p_decon_queue->get_input_queue_column_name());
+#pragma omp parallel for num_threads(adj_threads(decon_queue.size()))
+    for (auto range_iter = lower_bound(input_queue.get_data(), decon_queue.front()->get_value_time()); range_iter != input_queue.end(); ++range_iter) {
+        if (std::any_of(std::execution::par_unseq, decon_queue.begin(), decon_queue.end(), [&range_iter](const auto &item)
+            { return item->get_value_time() == (**range_iter).get_value_time(); }))
+                continue;
+        LOG4_DEBUG("Input row at " << (**range_iter).get_value_time() << " not found in decon queue " << decon_queue.get_input_queue_table_name() <<
+                                   " " << decon_queue.get_input_queue_column_name());
         omp_set_lock(&missing_time_l);
-        if (missing_time > range_iter->get()->get_value_time())
-            missing_time = range_iter->get()->get_value_time();
+        if (missing_time > (**range_iter).get_value_time()) missing_time = (**range_iter).get_value_time();
         omp_unset_lock(&missing_time_l);
     }
 
-    LOG4_DEBUG("Compared input queue " << p_input_queue->get_table_name() << " with data from " << p_input_queue->front()->get_value_time() << " to " <<
-               p_input_queue->back()->get_value_time() << " with decon queue with data from " << p_decon_queue->front()->get_value_time()
-                                       << " to " << p_decon_queue->back()->get_value_time());
+    LOG4_DEBUG("Compared input queue " << input_queue.get_table_name() << " with data from " << input_queue.front()->get_value_time() << " to " <<
+           input_queue.back()->get_value_time() << " with decon queue with data from " << decon_queue.front()->get_value_time() << " to " << decon_queue.back()->get_value_time());
 
     return missing_time;
 }
 
 
 void
-InputQueueService::prepare_queues(
-        datamodel::Dataset_ptr &p_dataset,
-        const bool trim /* false */)
+InputQueueService::prepare_queues(datamodel::Dataset &dataset)
 {
-    LOG4_DEBUG("Preparing input queue " << p_dataset->get_input_queue()->get_table_name());
+    LOG4_DEBUG("Preparing input queue " << dataset.get_input_queue()->get_table_name());
 
-    prepare_input_data(*p_dataset);
-    APP.iq_scaling_factor_service.prepare(*p_dataset, true);
+    prepare_input_data(dataset);
+    APP.iq_scaling_factor_service.prepare(dataset, true);
 
-#pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size())) schedule(static, 1)
-    for (const auto &p_ensemble: p_dataset->get_ensembles()) {
-        DeconQueueService::prepare_decon(p_dataset, p_dataset->get_input_queue(), p_ensemble->get_decon_queue());
-#pragma omp parallel for num_threads(adj_threads(p_dataset->get_aux_input_queues().size())) schedule(static, 1)
-        for (const auto &p_aux_input: p_dataset->get_aux_input_queues()) {
+#pragma omp parallel for num_threads(adj_threads(dataset.get_ensembles().size())) schedule(static, 1)
+    for (const auto &p_ensemble: dataset.get_ensembles()) {
+        DeconQueueService::prepare_decon(dataset, *dataset.get_input_queue(), *p_ensemble->get_decon_queue());
+#pragma omp parallel for num_threads(adj_threads(dataset.get_aux_input_queues().size())) schedule(static, 1)
+        for (const auto &p_aux_input: dataset.get_aux_input_queues())
 #pragma omp parallel for num_threads(adj_threads(p_aux_input->get_value_columns().size())) schedule(static, 1)
-            for (const auto &aux_input_column_name: p_aux_input->get_value_columns()) {
-                auto p_decon_queue = DeconQueueService::find_decon_queue(p_ensemble->get_aux_decon_queues(), p_aux_input->get_table_name(), aux_input_column_name);
-                DeconQueueService::prepare_decon(p_dataset, p_aux_input, p_decon_queue);
-            }
-        }
+            for (const auto &aux_input_column_name: p_aux_input->get_value_columns())
+                DeconQueueService::prepare_decon(
+                        dataset, *p_aux_input,
+                        *DeconQueueService::find_decon_queue(p_ensemble->get_aux_decon_queues(), p_aux_input->get_table_name(), aux_input_column_name));
     }
 
     if (false && getenv("BACKTEST")) {
-        const auto decon_queues = p_dataset->get_decon_queues();
-#pragma omp parallel for num_threads(adj_threads(p_dataset->get_ensembles().size())) schedule(static, 1)
-        for (const auto &p_ensemble: p_dataset->get_ensembles()) {
+        const auto decon_queues = dataset.get_decon_queues();
+#pragma omp parallel for num_threads(adj_threads(dataset.get_ensembles().size())) schedule(static, 1)
+        for (const auto &p_ensemble: dataset.get_ensembles()) {
             APP.decon_queue_service.save(p_ensemble->get_decon_queue());
 #pragma omp parallel for num_threads(adj_threads(p_ensemble->get_aux_decon_queues().size())) schedule(static, 1)
             for (const auto &p_aux_decon_decon_queue: p_ensemble->get_aux_decon_queues())

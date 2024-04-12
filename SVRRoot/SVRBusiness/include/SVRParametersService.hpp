@@ -26,8 +26,8 @@ public:
     explicit SVRParametersService(dao::SVRParametersDAO &svr_parameters_dao);
     bool exists(const datamodel::SVRParameters_ptr &svr_parameters);
     bool exists(const bigint svr_parameters_id);
-    int save(const datamodel::SVRParameters &svr_parameters);
-    int save(const datamodel::SVRParameters_ptr &svr_parameters);
+    int save(datamodel::SVRParameters &svr_parameters);
+    int save(const datamodel::SVRParameters_ptr &p_svr_parameters);
     int remove(const datamodel::SVRParameters_ptr &svr_parameters);
     int remove(const datamodel::SVRParameters &svr_parameters);
     int remove_by_dataset(const bigint dataset_id);
@@ -51,6 +51,8 @@ public:
     static bool check(const datamodel::t_param_set &params, const size_t num_chunks);
 
     static datamodel::SVRParameters_ptr is_manifold(const datamodel::t_param_set &param_set);
+
+    static std::set<size_t> get_adjacent_indexes(const size_t level, const double ratio, const size_t level_count);
 };
 
 }

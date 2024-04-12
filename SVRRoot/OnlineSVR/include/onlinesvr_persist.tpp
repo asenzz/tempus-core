@@ -15,12 +15,9 @@ OnlineMIMOSVR::serialize(A &ar, const unsigned version)
     ar & p_features;
     ar & p_labels;
     ar & p_manifold;
-    ar & labels_scaling_factor;
     ar & p_kernel_matrices;
-    ar & chunk_weights;
-    ar & chunks_weight;
-    ar & chunk_bias;
-    ar & chunk_mae;
+    ar & weight_chunks;
+    ar & chunks_score;
     ar & ixs;
     ar & multistep_len;
     ar & max_chunk_size;

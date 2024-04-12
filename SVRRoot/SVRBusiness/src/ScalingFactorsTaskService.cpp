@@ -1,5 +1,5 @@
 #include "ScalingFactorsTaskService.hpp"
-#include <util/ValidationUtils.hpp>
+#include <util/validation_utils.hpp>
 #include "appcontext.hpp"
 
 #include "model/ScalingFactorsTask.hpp"

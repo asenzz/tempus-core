@@ -15,9 +15,9 @@
 
 namespace svr {
 
-
 static const std::string C_dd_separator{".."};
 static const std::string C_cm_separator{","};
+
 
 std::ostream &operator<<(std::ostream &os, const std::vector<size_t> &v);
 
@@ -25,13 +25,10 @@ std::basic_ostream<char, std::char_traits<char>> &operator<<(std::basic_ostream<
 
 std::ostream &operator<<(std::ostream &os, const std::vector<double> &v);
 
-
 template<typename T, typename C> std::basic_ostream<C> &operator<<(std::basic_ostream<C> &r, const std::complex<T> &v)
 {
-    r << std::real<T>(v) << "+" << std::imag<T>(v) << "i ";
-    return r;
+    return r << std::real<T>(v) << "+" << std::imag<T>(v) << "i ";
 }
-
 
 namespace common {
 
@@ -124,15 +121,35 @@ to_binary_string(const std::set<T> &values)
     return res;
 }
 
-template<typename T>
-std::string to_string(const std::vector<T> &v)
+template<typename T> std::stringstream
+to_stringstream(const T *v, const size_t l)
+{
+    std::stringstream s;
+    if (l < 2) {
+        s << *v;
+        goto __bail;
+    }
+    for (size_t i = 0; i < l - 1; ++i) s << v[i] << ", ";
+    s << v[l - 1];
+__bail:
+    return s;
+}
+
+template<typename T> std::string
+to_string(const T *v, const size_t l)
+{
+    return to_stringstream(v, l).str();
+}
+
+template<typename T> std::string
+to_string(const std::vector<T> &v)
 {
     if (v.empty()) return "";
 
     std::stringstream ss;
     ss.precision(std::numeric_limits<double>::max_digits10);
-    for (size_t i = 0; i < v.size() - 1; ++i) ss << i << ":" << v[i] << ", ";
-    ss << (v.size() - 1) << ":" << v[v.size() - 1];
+    for (size_t i = 0; i < v.size() - 1; ++i) ss << i << ": " << v[i] << ", ";
+    ss << (v.size() - 1) << ": " << v.back();
 
     return ss.str();
 }
@@ -143,12 +160,12 @@ std::string to_string(const std::deque<T> &v)
 {
     if (v.empty()) return "";
 
-    std::stringstream ss;
-    ss.precision(std::numeric_limits<double>::max_digits10);
-    for (size_t i = 0; i < v.size() - 1; ++i) ss << i << ":" << v[i] << ", ";
-    ss << (v.size() - 1) << ":" << v[v.size() - 1];
+    std::stringstream s;
+    s.precision(std::numeric_limits<double>::max_digits10);
+    for (size_t i = 0; i < v.size() - 1; ++i) s << i << ": " << v[i] << ", ";
+    s << (v.size() - 1) << ": " << v.back();
 
-    return ss.str();
+    return s.str();
 }
 
 template<>
@@ -272,6 +289,19 @@ to_string(const tbb::concurrent_vector<T> &v)
 }
 
 template<typename T> inline std::string
+to_string(const std::deque<std::shared_ptr<T>> &v)
+{
+    if (v.empty()) return "empty";
+    std::stringstream s;
+    s.precision(std::numeric_limits<double>::max_digits10);
+    auto vit = v.begin();
+    for (size_t i = 0; i < v.size() - 1; ++i, ++vit)
+        s << **vit << ", ";
+    s << **vit;
+    return s.str();
+}
+
+template<typename T> inline std::string
 to_string(const T v)
 {
     return to_string_with_precision(v);
@@ -333,5 +363,43 @@ std::string to_string(const T &t)
 }
 
 
+} // namespace common
 } // namespace svr
+
+namespace std {
+
+std::string to_string(const long double v);
+
+std::string to_string(const double v);
+
+std::string to_string(const float v);
+
+template<typename T> std::basic_ostream<char> &
+operator<<(std::basic_ostream<char> &s, const std::deque<std::shared_ptr<T>> &v)
+{
+    return s << svr::common::to_string(v);
+}
+
+template<typename T, typename C, typename Tr>
+std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
+{
+    if (aset.size() < 2) return s << *aset.begin();
+    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << el << ", "; });
+    return s << *std::prev(aset.end());
+}
+
+template<typename C, typename Tr, typename T> std::basic_ostream<C, Tr> &
+operator <<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
+{
+    if (aset.size() < 2) return s << *aset.begin();
+    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << *el << ", "; });
+    return s << **std::prev(aset.end());
+}
+
+template<typename T, typename C, typename Ca> std::basic_ostream<C, Ca> &
+operator <<(std::basic_ostream<C, Ca> &s, const std::deque<T> &v)
+{
+    return s << svr::common::to_string(v);
+}
+
 }

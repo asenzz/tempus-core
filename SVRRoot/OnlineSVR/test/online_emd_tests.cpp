@@ -94,7 +94,7 @@ TEST_F(onlineEmdTransformTest, test_transform_correctness)
 {
     SetUp(transform_input_filename, transform_result_filename);
     std::vector<double> tail;
-    if (TEST_OEMD_PADDING) spectral_transform::mirror_tail(datamodel::datarow_range{input->get_data()}, input->size() + TEST_OEMD_PADDING, tail);
+    if (TEST_OEMD_PADDING) business::DeconQueueService::mirror_tail(datamodel::datarow_range{input->get_data()}, input->size() + TEST_OEMD_PADDING, tail);
     const auto residuals_len = transformer->get_residuals_length();
 
     const auto masks_siftings = transformer->get_masks(datamodel::datarow_range{input->get_data()}, tail, input->get_table_name());
@@ -105,11 +105,11 @@ TEST_F(onlineEmdTransformTest, test_transform_correctness)
         LOG4_DEBUG("Power level of mask " << i << " " << meanabs_mask);
     }
 
-    PROFILE_EXEC_TIME(transformer->transform(input), "OEMD transformation.");
+    PROFILE_EXEC_TIME(transformer->transform(*input), "OEMD transformation.");
 
     auto delayed_input = input->clone(DECON_OFFSET);
     LOG4_DEBUG("Input size " << input->size() << ", delayed input size " << delayed_input->size() << ", residuals " << residuals_len << ", tail " << tail.size());
-    PROFILE_EXEC_TIME(transformer->transform(delayed_input), "OEMD transformation " << DECON_OFFSET << " offset.");
+    PROFILE_EXEC_TIME(transformer->transform(*delayed_input), "OEMD transformation " << DECON_OFFSET << " offset.");
 
     const size_t start_t = residuals_len + DECON_OFFSET > input->size() ? 0 : residuals_len + DECON_OFFSET;
     std::deque<std::vector<double>> decon(TEST_LEVELS, std::vector<double>(input->size() - start_t));

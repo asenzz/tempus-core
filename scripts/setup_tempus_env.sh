@@ -32,7 +32,7 @@ NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Number of available threads is ${NUM_THREADS}.${NC}\n\n"
 
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"/opt/intel/oneapi/compiler/latest/lib":/opt/intel/oneapi/mkl/latest/lib/intel64:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8
-export LD_PRELOAD=`/usr/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`
+export LD_PRELOAD=`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`
 export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 
 export OMP_NESTED=true
