@@ -39,7 +39,7 @@
 #include "common/defines.h"
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "onlinesvr.hpp"
 #include "DQScalingFactorService.hpp"
 #include "ModelService.hpp"
@@ -90,7 +90,7 @@ ModelService::validate(
         const size_t start_ix,
         const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model,
         const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, const std::deque<bpt::ptime> &times,
-        const bool online_learn, const bool verbose)
+        const bool online, const bool verbose)
 {
     LOG4_BEGIN();
     if (labels.n_rows <= start_ix) {
@@ -145,7 +145,7 @@ ModelService::validate(
                        << 100. * (sum_absdiff_lk / sum_absdiff_batch - 1.) << " pct., current batch alpha " << cur_alpha_pct_batch << " pct., batch correct predictions "
                        << 100. * batch_correct_predictions / ix_div << " pct., batch correct directions " << 100. * batch_correct_directions / ix_div << " pct.";
 
-        if (online_learn) {
+        if (online) {
             PROFILE_EXEC_TIME(
                     ModelService::predict(
                             ensemble, model, datamodel::t_level_predict_features{{times[ix]}, ptr<arma::mat>(features.row(ix_future))},
@@ -174,7 +174,7 @@ ModelService::validate(
         if (row_report.str().size()) LOG4_DEBUG(row_report.str());
     }
     const auto mape_lk = 100. * sum_absdiff_lk / sum_abs_labels;
-    if (online_learn)
+    if (online)
         return {sum_absdiff_online / double(num_preds), 100. * sum_absdiff_online / sum_abs_labels, predicted_online, actual, mape_lk, lastknown};
     else
         return {sum_absdiff_batch / double(num_preds), 100. * sum_absdiff_batch / sum_abs_labels, predicted, actual, mape_lk, lastknown};

@@ -21,18 +21,16 @@ class calc_cache;
 
 namespace datamodel {
 
-constexpr unsigned C_interlace_manifold_factor = 750; // Every Nth row is used from a manifold dataset to train the produced model
+constexpr unsigned C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
 constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
-constexpr unsigned C_grid_depth = 6; // Tune
-constexpr double C_grid_range_div = 10;
 constexpr double C_tune_range_min_lambda = 0;
 constexpr double C_tune_range_max_lambda = 1e2;
 constexpr double C_chunk_overlap = 0; // Chunk rows overlap ratio, higher generates more chunks
 constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
 constexpr double C_chunk_tail = .1;
 constexpr double C_chunk_header = 1. - C_chunk_tail;
-constexpr double C_predict_chunks = 1; // Ratio of best chunks used for predictions
+constexpr double C_predict_chunks = .5; // Ratio of best chunks used for predictions
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -202,6 +200,8 @@ public:
     arma::uvec get_other_ixs(const size_t i) const;
 
     std::deque<arma::uvec> generate_indexes() const;
+
+    std::deque<size_t> get_predict_chunks() const;
 
     arma::mat predict(const arma::mat &x_predict);
 

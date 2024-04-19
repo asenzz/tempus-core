@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-export SVRWAVE_TEST_WINDOW=50
+export SVRWAVE_TEST_WINDOW=345
 export BIN=OnlineSVR-test
 source ../scripts/setup_tempus_env.sh
 cd "${DAEMON_DIR}" || exit

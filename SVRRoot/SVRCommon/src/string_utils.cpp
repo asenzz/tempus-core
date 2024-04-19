@@ -6,7 +6,7 @@
 #include <openssl/evp.h>
 
 #include "util/string_utils.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include <common/constants.hpp>
 #include <boost/property_tree/json_parser.hpp>
 

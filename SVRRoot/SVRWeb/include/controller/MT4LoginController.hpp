@@ -8,7 +8,7 @@
 #include <cppcms/url_dispatcher.h>
 #include <cppcms/url_mapper.h>
 #include <cppcms/session_interface.h>
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 
 namespace svr{
 namespace web{

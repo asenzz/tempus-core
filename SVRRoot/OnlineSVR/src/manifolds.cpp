@@ -162,58 +162,41 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
             LOG4_ERROR("Kernel type " << int(p->get_kernel_type()) << " not handled.");
             return;
     }
-    const auto n_learning_rows = std::min<size_t>(p_features->n_rows, p_manifold_parameters->get_svr_decremental_distance());
-    const auto n_manifold_samples = n_learning_rows * n_learning_rows / C_interlace_manifold_factor;
-
-    p_manifold_parameters->set_svr_decremental_distance(n_manifold_samples);
+    const auto n_rows = p_features->n_rows;
+    const auto n_learning_rows = std::min<size_t>(n_rows, p->get_svr_decremental_distance());
+    const auto n_manifold_samples = n_rows * n_rows / C_interlace_manifold_factor;
+    p_manifold_parameters->set_svr_decremental_distance(n_learning_rows * n_learning_rows / C_interlace_manifold_factor);
     p_manifold_parameters->set_chunk_ix(0);
     p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
 
-    auto p_manifold_features = ptr<arma::mat>(n_manifold_samples + C_emo_test_len, p_features->n_cols * 2);
+    auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, p_features->n_cols * 2);
     auto p_manifold_labels = ptr<arma::mat>(p_manifold_features->n_rows, p_labels->n_cols);
     auto p_manifold_lastknowns = ptr<arma::vec>(p_manifold_features->n_rows);
 
-    arma::cube L_diff(p_labels->n_rows, p_labels->n_rows, p_labels->n_cols);
-    const arma::mat L_t = p_labels->t();
-
-#pragma omp parallel for num_threads(adj_threads(p_labels->n_rows * p_labels->n_cols)) collapse(2)
-    for (size_t r = 0; r < p_labels->n_rows; ++r)
-        for (size_t c = 0; c < p_labels->n_cols; ++c)
-            L_diff.slice(c).row(r) = p_labels->at(r, c) - L_t.row(c); // Asymmetric distances cube
-
+    arma::cube L_diff(n_rows, n_rows, p_labels->n_cols);
+    {
+        const arma::mat L_t = p_labels->t();
+#pragma omp parallel for num_threads(adj_threads(n_rows * p_labels->n_cols)) collapse(2)
+        for (size_t r = 0; r < n_rows; ++r)
+            for (size_t c = 0; c < p_labels->n_cols; ++c)
+                L_diff.slice(c).row(r) = p_labels->at(r, c) - L_t.row(c); // Asymmetric distances cube
+    }
     std::random_device rd;  // a seed source for the random number engine
     std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> rand_int(0, C_interlace_manifold_factor);
-#pragma omp parallel for num_threads(adj_threads(p_labels->n_rows * p_labels->n_rows * p_labels->n_cols)) collapse(3)
-    for (size_t i = 0; i < n_learning_rows; ++i)
-        for (size_t j = 0; j < n_learning_rows; ++j)
+#pragma omp parallel for num_threads(adj_threads(n_rows * n_rows * p_labels->n_cols)) collapse(3)
+    for (size_t i = 0; i < n_rows; ++i)
+        for (size_t j = 0; j < n_rows; ++j)
             for (size_t k = 0; k < p_labels->n_cols; ++k) {
-                const auto r = i + j * n_learning_rows;
+                const auto r = i + j * n_rows;
                 const auto r_interlaced = r / C_interlace_manifold_factor;
                 if (r % C_interlace_manifold_factor == 0 && r_interlaced < n_manifold_samples) {
-                    const auto r_i = common::bounce<size_t>(i + rand_int(gen), n_learning_rows - 1);
-                    const auto r_j = common::bounce<size_t>(j + rand_int(gen), n_learning_rows - 1);
+                    const auto r_i = common::bounce<size_t>(i + rand_int(gen), n_rows - 1);
+                    const auto r_j = common::bounce<size_t>(j + rand_int(gen), n_rows - 1);
                     p_manifold_labels->at(r_interlaced, k) = L_diff(r_i, r_j, k);
                     p_manifold_features->row(r_interlaced) = arma::join_rows(p_features->row(r_i), p_features->row(r_j));
                 }
             }
-
-    static const auto C_emo_test_sqrt_len = (size_t) std::sqrt(C_emo_test_len);
-    std::uniform_int_distribution<size_t> rand_int_test(0, C_emo_test_sqrt_len);
-#pragma omp parallel for num_threads(adj_threads(C_emo_test_sqrt_len * C_emo_test_sqrt_len * p_labels->n_cols)) collapse(3)
-    for (size_t i = n_learning_rows; i < n_learning_rows + C_emo_test_sqrt_len; ++i) {
-        for (size_t j = n_learning_rows; j < n_learning_rows + C_emo_test_sqrt_len; ++j) {
-            for (size_t k = 0; k < p_labels->n_cols; ++k) {
-                const auto r = i + j * C_emo_test_sqrt_len;
-                if (r < n_manifold_samples + C_emo_test_len) {
-                    const auto r_i = common::bounce<size_t>(i + rand_int_test(gen), p_features->n_rows - 1);
-                    const auto r_j = common::bounce<size_t>(j + rand_int_test(gen), p_features->n_rows - 1);
-                    p_manifold_labels->at(r, k) = L_diff(r_i, r_j, k);
-                    p_manifold_features->row(r) = arma::join_rows(p_features->row(r_i), p_features->row(r_j));
-                }
-            }
-        }
-    }
 
     L_diff.clear();
     LOG4_DEBUG("Generated " << arma::size(*p_manifold_labels) << " manifold label matrix and " << arma::size(*p_manifold_features) <<

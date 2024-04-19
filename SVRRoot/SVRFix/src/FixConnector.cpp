@@ -5,7 +5,7 @@
 #include <quickfix/fix44/MarketDataRequest.h>
 #include <quickfix/fix44/MarketDataSnapshotFullRefresh.h>
 
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include <common/ScopeExit.hpp>
 #include <thread>
 

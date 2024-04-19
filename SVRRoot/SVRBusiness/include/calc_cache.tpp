@@ -6,7 +6,7 @@
 #define SVR_CALC_CACHE_TPP
 
 #include "calc_cache.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 namespace business {

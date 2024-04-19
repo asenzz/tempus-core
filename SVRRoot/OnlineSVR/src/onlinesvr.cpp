@@ -392,15 +392,9 @@ std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
 std::deque<arma::uvec> // TODO Remove n_rows_datasets
 OnlineMIMOSVR::generate_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size)
 {
-    size_t n_rows_train, start_offset;
     // Make sure we train on the latest data
-    if (n_rows_dataset && n_rows_dataset < decrement) {
-        n_rows_train = n_rows_dataset;
-        start_offset = 0;
-    } else {
-        n_rows_train = decrement;
-        start_offset = n_rows_dataset - decrement;
-    }
+    const auto n_rows_train = n_rows_dataset && n_rows_dataset < decrement ? n_rows_dataset - C_emo_test_len : decrement;
+    const auto start_offset = n_rows_dataset - n_rows_train;
     const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     std::deque<arma::uvec> indexes(num_chunks);
     if (num_chunks == 1) {

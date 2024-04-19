@@ -2,7 +2,7 @@
 
 #include <sys/resource.h>
 #include <sys/time.h>
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 class ResourceMeasure {
     struct timeval start_time = {0, 0};

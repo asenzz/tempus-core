@@ -1,6 +1,6 @@
 #include <DAO/UserRowMapper.hpp>
 #include <util/string_utils.hpp>
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 
 namespace svr {
 namespace dao {

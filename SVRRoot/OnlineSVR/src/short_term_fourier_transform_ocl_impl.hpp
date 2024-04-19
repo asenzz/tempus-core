@@ -2,7 +2,7 @@
 #define SHORT_TERM_FOURIER_TRANSFORM_OCL_IMPL_HPP
 
 
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include <common/gpu_handler.hpp>
 
 

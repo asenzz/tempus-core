@@ -3,17 +3,19 @@
 //
 
 #include <armadillo>
+#include <limits>
 #include <memory>
 #include <vector>
 #include "common/defines.h"
 #include "fast_cvmd.hpp"
 #include "util/math_utils.hpp"
 #include "common/compatibility.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "model/DeconQueue.hpp"
 #include "model/DataRow.hpp"
 
+// #define FAST_CVMD_SIMD
 
 namespace svr {
 namespace vmd {
@@ -78,7 +80,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     const auto freq_key = freq_key_t(decon_queue_table_name, levels);
     if (vmd_frequencies.find(freq_key) != vmd_frequencies.end()) return;
 
-#ifdef EMOS_OMEGAS
+#ifdef EMOS_OMEGAS_16
     {
         const arma::colvec omega = {
                 1.000000000000000e-12, 4.830917874396136e-08, 9.661835748792271e-08, 2.415458937198068e-07, 6.038647342995169e-07,
@@ -114,34 +116,28 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::mat u(T, K);
     // Spectral Domain discretization
     const arma::vec freqs = arma::regspace(1, T) / double(T) - .5 - 1. / double(T);
-    arma::vec omega(K);
     arma::cx_vec f_hat_plus = common::fftshift(common::matlab_fft(f_init));
     f_hat_plus.rows(0, T / 2 - 1).zeros();
 
+    arma::vec omega(K);
     switch (C_freq_init_type) {
         case 1:
             omega = arma::regspace(0, K - 1) * .5 / K;
             break;
 
         case 2: {
-            arma::colvec real_ran(K);
             const auto log_fs = std::log(fs);
-            const auto log_05_fs = std::log(0.5) - log_fs;
-#pragma omp parallel for num_threads(adj_threads(K / 2))
-            for (size_t i = 0; i < K; ++i) real_ran[i] = std::exp(log_fs + log_05_fs * common::randouble());
-            real_ran = arma::sort(real_ran);
-#pragma omp parallel for num_threads(adj_threads(K / 2))
-            for (size_t i = 0; i < K; ++i) omega[i] = real_ran[i];
+            omega = arma::sort(arma::exp(log_fs + (std::log(0.5) - log_fs) * arma::vec(K, arma::fill::randn)));
             break;
         }
         case 0:
-            omega.zeros(); // Was commented out originally!
+            // Leave omega zeros
             break;
 
         default:
             LOG4_THROW("Initialization type should be 0, 1 or 2!");
     }
-    if (HAS_DC == 1) omega[0] = 0; //if DC component, then first frequency is 0!
+    if (HAS_DC == 1) omega[0] = 0; // if DC component, then first frequency is 0!
     /* completed initialization of frequencies */
 
     arma::cx_vec lambda_hat(freqs.n_elem); // keeping track of the evolution of lambda_hat with the iterations
@@ -292,6 +288,71 @@ fast_cvmd::transform(
     }
 }
 
+#if 0
+    if (K != found_freqs->second.phase_sin.size() || K != found_freqs->second.phase_cos.size())
+        LOG4_THROW("Invalid phase cos size " << found_freqs->second.phase_cos.size() << " or phase sin size " << found_freqs->second.phase_sin.size() << ", should be " << K);
+
+    const size_t levels_size = levels * sizeof(double);
+    data_row_container::const_iterator iterin;
+    if (decon.empty()) {
+        iterin = input.cbegin();
+        soln[0] = scaler((**iterin)[in_colix]);
+    } else {
+        iterin = lower_bound_back(input, decon.back()->get_value_time());
+        while ((**iterin).get_value_time() <= decon.back()->get_value_time() && iterin != input.cend()) ++iterin;
+        if (iterin == input.cend()) {
+            LOG4_WARN("No input data newer than " << decon.back()->get_value_time() << " to deconstruct.");
+            return;
+        }
+        memcpy(soln.memptr(), decon.back()->p(levels), levels_size);
+    }
+
+    const auto in_ct = std::distance(iterin, input.cend());
+    const auto prev_decon_ct = decon.size();
+    decon.get_data().resize(prev_decon_ct + in_ct);
+#pragma omp parallel for num_threads(adj_threads(in_ct)) schedule(static, 1 + in_ct / std::thread::hardware_concurrency())
+    for (ssize_t t = 0; t < in_ct; ++t) {
+        const auto p_in_row = *(iterin + t - prev_decon_ct);
+        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels_size);
+    }
+
+    auto f_even = f.rows(even_ixs);
+    auto f_odd = f.rows(odd_ixs);
+    auto sl_even = soln.rows(even_ixs);
+    auto sl_odd = soln.rows(odd_ixs);
+    const arma::mat cos_K = found_freqs->second.phase_cos.rows(K_ixs);
+    const arma::mat sin_K = found_freqs->second.phase_sin.rows(K_ixs);
+    const arma::mat A_t = A.t();
+    f_even = -cos_K % sl_even + sin_K % sl_odd;
+    f_odd = -sin_K % sl_even - cos_K % sl_odd;
+
+#define ASOLVE(M, N) arma::solve(M, (N), C_arma_solver_opts)
+
+#ifdef FAST_CVMD_SIMD
+#pragma omp parallel for simd linear(t) firstprivate(iterin, A_t, A, H, f, soln, cos_K, sin_K, f_even, f_odd, in_colix) shared(decon)
+    for (size_t t = prev_decon_ct; t < decon.size(); ++t)
+    {
+        soln = ASOLVE(H, -A_t * (-ASOLVE(A * ASOLVE(H, A_t), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
+        memcpy(decon[t]->p(levels), soln.mem, levels_size);
+        f_even = -cos_K % sl_even + sin_K % sl_odd;
+        f_odd = -sin_K % sl_even - cos_K % sl_odd;
+        ++iterin;
+    }
+#else
+#pragma omp parallel num_threads(adj_threads(3))
+#pragma omp single
+    for (size_t t = prev_decon_ct; t < decon.size(); ++iterin, ++t)
+    {
+        soln = ASOLVE(H, -A_t * (-ASOLVE(A * ASOLVE(H, A_t), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
+#pragma omp task
+        memcpy(decon[t]->p(levels), soln.mem, levels_size);
+#pragma omp task
+        f_even = -cos_K % sl_even + sin_K % sl_odd;
+        f_odd = -sin_K % sl_even - cos_K % sl_odd;
+#pragma omp taskwait
+    }
+#endif
+#endif
 
 void
 fast_cvmd::inverse_transform(

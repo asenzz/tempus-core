@@ -1,6 +1,6 @@
 #include <thread>
 
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "DAO/ScopedTransaction.hpp"
 #include "DAO/DataSource.hpp"
 

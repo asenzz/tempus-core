@@ -11,7 +11,7 @@
 #include "EnsembleService.hpp"
 #include "IQScalingFactorService.hpp"
 #include "InputQueueService.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "common/compatibility.hpp"
 #include "model/DataRow.hpp"

@@ -17,7 +17,7 @@
 #include "../../SVRCommon/include/common/cuda_util.cuh"
 #include "util/time_utils.hpp"
 #include "firefly.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 
 namespace svr {

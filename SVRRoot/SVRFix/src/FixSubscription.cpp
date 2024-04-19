@@ -7,7 +7,7 @@
 #include <quickfix/Session.h>
 #include <ios>
 
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include <model/InputQueue.hpp>
 
 namespace svr {

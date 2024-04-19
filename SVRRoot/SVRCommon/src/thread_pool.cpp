@@ -1,7 +1,7 @@
 #include <functional>
 
 #include <common/thread_pool.hpp>
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 
 #include <list>
 //#include <cilk/cilk.h>

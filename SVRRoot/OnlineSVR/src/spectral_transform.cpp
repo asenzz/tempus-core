@@ -11,7 +11,7 @@
 
 #include <util/math_utils.hpp>
 
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 

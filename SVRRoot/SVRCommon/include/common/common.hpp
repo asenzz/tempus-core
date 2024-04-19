@@ -12,7 +12,7 @@
 
 // common internal dependencies
 #include "common/compatibility.hpp" // defines missing C++ features or replacement for another
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/defines.h"
 #include "common/constants.hpp"
 #include "common/types.hpp"

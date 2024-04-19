@@ -9,7 +9,7 @@
 #include <sstream>
 #include <cstdint>
 #include <thrust/device_vector.h>
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/defines.h"
 
 constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;

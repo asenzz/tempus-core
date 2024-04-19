@@ -11,21 +11,21 @@ namespace datamodel {
 
 kernel_type_e operator++(kernel_type_e &k_type)
 {
-    int tmp = static_cast<int>(k_type);
-    tmp++;
-    return k_type = static_cast<kernel_type_e >( tmp);
+    int *tmp = (int *) &k_type;
+    ++(*tmp);
+    return k_type;
 }
 
 kernel_type_e operator++(kernel_type_e &k_type, int)
 {
-    kernel_type_e tmp(k_type);
+    auto tmp = k_type;
     ++k_type;
     return tmp;
 }
 
 bool less_SVRParameters_ptr::operator()(const datamodel::SVRParameters_ptr &lhs, const datamodel::SVRParameters_ptr &rhs) const
 {
-    return lhs->operator < (*rhs);
+    return lhs->operator<(*rhs);
 }
 
 
@@ -45,7 +45,8 @@ SVRParameters::SVRParameters(
         const u_int64_t svr_decremental_distance,
         const double svr_adjacent_levels_ratio,
         const kernel_type_e kernel_type,
-        const size_t lag_count)
+        const size_t lag_count,
+        const std::set<size_t> &adjacent_levels)
         : Entity(id),
           dataset_id(dataset_id),
           input_queue_table_name(input_queue_table_name),
@@ -60,43 +61,41 @@ SVRParameters::SVRParameters(
           svr_kernel_param2(svr_kernel_param2),
           svr_decremental_distance(svr_decremental_distance),
           svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
+          adjacent_levels(adjacent_levels),
           kernel_type(kernel_type),
           lag_count(lag_count)
 {
-    (void) get_adjacent_levels();
-    set_kernel_type(kernel_type);
+    if (adjacent_levels.empty()) (void) get_adjacent_levels();
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
 }
 
-SVRParameters::SVRParameters(const SVRParameters &params) :
+SVRParameters::SVRParameters(const SVRParameters &o) :
         SVRParameters(
                 bigint(0),
-                params.get_dataset_id(),
-                params.get_input_queue_table_name(),
-                params.get_input_queue_column_name(),
-                params.get_level_count(),
-                params.get_decon_level(),
-                params.get_chunk_ix(),
-                params.get_grad_level(),
-                params.get_svr_C(),
-                params.get_svr_epsilon(),
-                params.get_svr_kernel_param(),
-                params.get_svr_kernel_param2(),
-                params.get_svr_decremental_distance(),
-                params.get_svr_adjacent_levels_ratio(),
-                params.get_kernel_type(),
-                params.get_lag_count())
-{
-    set_kernel_type(kernel_type);
-#ifdef ENTITY_INIT_ID
-    init_id();
-#endif
-}
+                o.dataset_id,
+                o.input_queue_table_name,
+                o.input_queue_column_name,
+                o.levels_ct,
+                o.decon_level_,
+                o.chunk_ix_,
+                o.grad_level_,
+                o.svr_C,
+                o.svr_epsilon,
+                o.svr_kernel_param,
+                o.svr_kernel_param2,
+                o.svr_decremental_distance,
+                o.svr_adjacent_levels_ratio,
+                o.kernel_type,
+                o.lag_count,
+                o.adjacent_levels)
+{}
 
 SVRParameters &SVRParameters::operator=(const SVRParameters &v)
 {
+    if (this == &v) return *this;
+
     set_id(v.get_id());
     dataset_id = v.dataset_id;
     input_queue_table_name = v.input_queue_table_name;

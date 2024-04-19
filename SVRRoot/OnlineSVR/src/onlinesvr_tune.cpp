@@ -7,7 +7,8 @@
 #include <execution>
 #include <vector>
 
-#define TUNE_THREADS (common::gpu_handler::get().get_gpu_devices_count())
+#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), 1 + common::gpu_handler::get().get_gpu_devices_count())))
+
 // #define TUNE_FIREFLY
 #define TUNE_PRIMA
 // #undef TUNE_ADAPTIVE_GRID
@@ -39,7 +40,7 @@
 #include "firefly.hpp"
 #include "model/SVRParameters.hpp"
 #include "onlinesvr.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/constants.hpp"
 #include "firefly.hpp"
 #include "appcontext.hpp"
@@ -72,15 +73,14 @@ eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arm
     arma::mat K_epsco = K;
     K_epsco.diag() += 1. / (2. * params.get_svr_C());
     double score = 0;
-#pragma omp parallel for reduction(+:score) schedule(static, 1) num_threads(adj_threads(std::min<size_t>(C_emo_max_j, TUNE_THREADS)))
+#pragma omp parallel for reduction(+:score) schedule(static, 1) TUNE_THREADS(C_emo_max_j)
     for (size_t j = 0; j < C_emo_max_j; ++j) {
         const size_t x_train_start = j * C_emo_slide_skip;
         const size_t x_train_final = x_train_start + train_len - 1;
         const size_t x_test_start = x_train_final + 1;
         LOG4_TRACE("Try " << j << ", K " << arma::size(K) << ", start point labels " << start_point_labels << ", start point K " << start_point_K << ", train start " <<
                           x_train_start << ", train final " << x_train_final << ", test start " << x_test_start << ", test final is mat end, train len " << train_len
-                          << ", labels " <<
-                          arma::size(labels) << ", current score " << score);
+                          << ", labels " << arma::size(labels) << ", current score " << score);
         try {
 #if 0
             const size_t x_test_final = x_test_start + EMO_TEST_LEN - j * EMO_SLIDE_SKIP - 1;
@@ -130,7 +130,7 @@ double validate_gammas(
     LOG4_DEBUG("Validating " << gamma_multis.size() << " gamma multipliers, starting from " << gamma_multis.front() << " to " << gamma_multis.back() <<
                              ", min gamma " << mingamma << ", Z " << arma::size(Z) << ", template parameters " << score_params);
     double call_score = std::numeric_limits<double>::infinity();
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(std::min<size_t>(gamma_multis.size(), TUNE_THREADS)))
+#pragma omp parallel for schedule(static, 1) TUNE_THREADS(gamma_multis.size())
     for (const double gamma_mult: gamma_multis) {
         auto p_gamma_params = otr(score_params);
         p_gamma_params->set_svr_kernel_param(gamma_mult * mingamma);
@@ -153,8 +153,8 @@ double validate_gammas(
         const auto [p_out_preds, p_out_labels, p_out_last_knowns, score] = eval_score(
                 *p_gamma_params, K, chunk_labels, chunk_lastknowns, train_len, all_labels_meanabs);
         K.clear();
-        if (!chunk_ix)
-            LOG4_FILE("/tmp/tune_score_gamma_lambda.csv", score << ',' << p_gamma_params->get_svr_kernel_param() << ',' << p_gamma_params->get_svr_kernel_param2());
+        if (!chunk_ix) LOG4_FILE("/tmp/tune_score_gamma_lambda.csv",
+                                 score << ',' << p_gamma_params->get_svr_kernel_param() << ',' << p_gamma_params->get_svr_kernel_param2());
         omp_set_lock(p_chunk_preds_l);
         if (chunk_preds.size() < size_t(common::C_tune_keep_preds) || score < (**chunk_preds.cbegin()).score) {
             p_gamma_params->set_svr_C(1. / (2. * epsco));
@@ -181,7 +181,6 @@ void OnlineMIMOSVR::tune()
 
     auto p_predictions = ccache().checkin_tuner(*this);
 
-    const auto ixs_tune = generate_indexes();
     const auto num_chunks = ixs_tune.size();
     const auto train_len = ixs_tune.front().n_rows;
     const auto meanabs_all_labels = common::meanabs(*p_labels);
@@ -343,12 +342,12 @@ void OnlineMIMOSVR::tune()
     if (chunks_score.size() != num_chunks) chunks_score.resize(num_chunks);
 
     LOG4_TRACE("Tuning labels " << common::present(*p_labels) << ", features " << common::present(*p_features) << ", last-knowns " << common::present(*p_last_knowns) <<
-                                ", emo slide skip " << C_emo_slide_skip << ", emo max j " << C_emo_max_j << ", emo tune min validation window "
+                                ", slide skip " << C_emo_slide_skip << ", max j " << C_emo_max_j << ", tune min validation window "
                                 << C_emo_tune_min_validation_window <<
-                                ", emo_test len " << C_emo_test_len << ", level " << decon_level << ", train len " << train_len << ", num chunks " << num_chunks);
+                                ", test len " << C_emo_test_len << ", level " << decon_level << ", train len " << train_len << ", num chunks " << num_chunks);
 
     OMP_LOCK(ins_chunk_results_l)
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(std::min<size_t>(num_chunks, TUNE_THREADS)))
+#pragma omp parallel for schedule(static, 1) TUNE_THREADS(num_chunks)
     for (size_t chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_template_chunk_params = get_params_ptr(chunk_ix);
         if (!p_template_chunk_params) {
@@ -362,14 +361,13 @@ void OnlineMIMOSVR::tune()
             if (!p_template_chunk_params) LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
         }
 
-
-            arma::uvec chunk_ixs_tune = ixs[chunk_ix] - C_emo_test_len;
-            arma::mat tune_features_t = arma::join_cols(
-                    p_features->rows(chunk_ixs_tune), p_features->rows(p_features->n_rows - C_emo_test_len, p_features->n_rows - 1)).t();
-            arma::mat tune_labels = arma::join_cols(
-                    p_labels->rows(chunk_ixs_tune), p_labels->rows(p_labels->n_rows - C_emo_test_len, p_labels->n_rows - 1));
-            arma::mat tune_lastknowns = arma::join_cols(
-                    p_last_knowns->rows(chunk_ixs_tune), p_last_knowns->rows(p_last_knowns->n_rows - C_emo_test_len, p_last_knowns->n_rows - 1));
+        arma::uvec chunk_ixs_tune = ixs[chunk_ix] - C_emo_test_len;
+        arma::mat tune_features_t = arma::join_cols(
+                p_features->rows(chunk_ixs_tune), p_features->rows(p_features->n_rows - C_emo_test_len, p_features->n_rows - 1)).t();
+        arma::mat tune_labels = arma::join_cols(
+                p_labels->rows(chunk_ixs_tune), p_labels->rows(p_labels->n_rows - C_emo_test_len, p_labels->n_rows - 1));
+        arma::mat tune_lastknowns = arma::join_cols(
+                p_last_knowns->rows(chunk_ixs_tune), p_last_knowns->rows(p_last_knowns->n_rows - C_emo_test_len, p_last_knowns->n_rows - 1));
         chunk_ixs_tune.clear();
         auto p_sf = business::DQScalingFactorService::find(scaling_factors, model_id, chunk_ix, gradient, decon_level, false, true);
         auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient);
@@ -452,6 +450,8 @@ void OnlineMIMOSVR::tune()
         bounds.clear();
 
 #else // Adaptive grid
+        constexpr unsigned C_grid_depth = 6; // Tune
+        constexpr double C_grid_range_div = 10;
         double range_min_lambda = C_tune_range_min_lambda, range_max_lambda = C_tune_range_max_lambda;
         for (size_t grid_level_lambda = 0; grid_level_lambda < C_grid_depth; ++grid_level_lambda) {
             const double range_lambda = range_max_lambda - range_min_lambda;

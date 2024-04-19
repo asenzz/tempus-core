@@ -1,6 +1,6 @@
 #include <util/MemoryManager.hpp>
 #include "common/gpu_handler.hpp"
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include <chrono>
 #include <thread>
 #include <stdio.h>

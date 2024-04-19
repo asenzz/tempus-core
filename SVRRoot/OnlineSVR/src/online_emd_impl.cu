@@ -13,6 +13,9 @@
 #include "common/gpu_handler.hpp"
 #include "online_emd.hpp"
 
+#ifdef OEMDFFT
+#define CUFFT_INPUT_LIMIT // 64e5 // TODO Implement chunking and multi GPU support
+#endif
 
 namespace svr {
 namespace oemd {

@@ -7,7 +7,7 @@
 #include <stdexcept>
 
 
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "util/time_utils.hpp"
 #include "appcontext.hpp"
 #include "DaemonFacade.hpp"

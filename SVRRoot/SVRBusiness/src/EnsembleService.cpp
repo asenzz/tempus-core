@@ -57,7 +57,7 @@ void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::E
 
 void EnsembleService::train(datamodel::Ensemble &ensemble, const datamodel::t_training_data &training_data)
 {
-#pragma omp parallel for num_threads(adj_threads(ensemble.get_models().size())) schedule(static, 1)
+#pragma omp parallel for num_threads(adj_threads(std::min<size_t>(C_parallel_train_models, ensemble.get_models().size()))) schedule(static, 1)
     for (auto p_model: ensemble.get_models())
         ModelService::train(
                 *p_model,

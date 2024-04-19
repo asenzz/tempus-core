@@ -1,5 +1,5 @@
 #include "util/PropertiesFileReader.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include "util/string_utils.hpp"
 #include <common/constants.hpp>

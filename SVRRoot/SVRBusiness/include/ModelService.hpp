@@ -162,7 +162,7 @@ public:
             const size_t start_ix,
             const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model,
             const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, const std::deque<bpt::ptime> &times,
-            const bool online_learn, const bool verbose);
+            const bool online, const bool verbose);
 
 };
 

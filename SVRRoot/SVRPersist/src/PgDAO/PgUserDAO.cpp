@@ -1,5 +1,5 @@
 #include "PgUserDAO.hpp"
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include <DAO/UserRowMapper.hpp>
 #include <DAO/DataSource.hpp>
 

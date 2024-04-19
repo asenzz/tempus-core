@@ -21,25 +21,25 @@
 
 using namespace svr;
 
-#define TEST_MANIFOLD
+// #define TEST_MANIFOLD
 #define TEST_ACTUAL_DATA
 
 namespace {
 
-constexpr unsigned C_test_decrement = DEFAULT_SVRPARAM_DECREMENT_DISTANCE;
+constexpr unsigned C_test_decrement = 2 * DEFAULT_SVRPARAM_DECREMENT_DISTANCE;
 constexpr unsigned C_test_lag = DEFAULT_SVRPARAM_LAG_COUNT;
 const unsigned C_test_length = C_test_decrement + C_emo_test_len + common::INTEGRATION_TEST_VALIDATION_WINDOW;
 const std::string C_test_input_table_name = "q_svrwave_test_xauusd_avg_3600";
 const std::string C_test_aux_input_table_name = "q_svrwave_test_xauusd_avg_1";
-constexpr unsigned C_test_levels = 1;
+constexpr unsigned C_test_levels = 3 * MIN_LEVEL_COUNT;
 constexpr unsigned C_test_gradient_count = common::C_default_gradient_count;
 
 }
 
 TEST(manifold_tune_train_predict, basic_integration)
 {
-    omp_set_nested(true);
-    omp_set_max_active_levels(10 * std::thread::hardware_concurrency());
+    // omp_set_nested(true);
+    // omp_set_max_active_levels(10 * std::thread::hardware_concurrency());
     svr::context::AppContext::init_instance("../config/app.config");
     auto p_dataset = ptr<datamodel::Dataset>(
             0xDeadBeef, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
@@ -70,7 +70,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     std::deque<bpt::ptime> times;
     arma::mat recon_predicted, recon_last_knowns, recon_actual;
     OMP_LOCK(recon_l)
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(p_dataset->get_transformation_levels()))
+#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(std::min<size_t>(C_parallel_train_models, p_dataset->get_transformation_levels())))
     for (size_t l = 0; l < p_dataset->get_transformation_levels(); l += 2) {
         if (l == p_dataset->get_half_levct()) continue;
         auto p_ensemble = p_dataset->get_ensemble();

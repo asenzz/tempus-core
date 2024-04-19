@@ -4,7 +4,7 @@
 
 #include <common/thread_pool.hpp>
 
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 
 #include "TestSuite.hpp"
 

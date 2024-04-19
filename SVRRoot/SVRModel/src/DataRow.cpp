@@ -114,6 +114,11 @@ double &DataRow::at(const size_t column_index)
     return values_[column_index];
 }
 
+double *DataRow::p(const size_t column_index)
+{
+    return values_.data() + column_index;
+}
+
 size_t DataRow::size() const
 {
     return values_.size();

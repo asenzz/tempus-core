@@ -7,7 +7,7 @@
 #include "DAO/StatementPreparerDBTemplate.hpp"
 #include "DAO/ScopedTransaction.hpp"
 #include "DAO/DummyRowMapper.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 
 namespace svr::dao {

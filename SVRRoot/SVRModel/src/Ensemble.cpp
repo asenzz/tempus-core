@@ -4,7 +4,7 @@
 
 #include "appcontext.hpp"
 #include "model/Ensemble.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "model/Model.hpp"
 #include "onlinesvr.hpp"
 #include "ModelService.hpp"

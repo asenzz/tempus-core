@@ -1,4 +1,4 @@
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/constants.hpp"
 #include "CpuThread.hpp"
 

@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <string>
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 namespace datamodel{

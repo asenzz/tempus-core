@@ -13,7 +13,7 @@
 #include "controller/UserController.hpp"
 #include "controller/RequestController.hpp"
 #include <fstream>
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include <view/MainView.hpp>
 
 using namespace cppcms;

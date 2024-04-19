@@ -3,7 +3,7 @@
 #include "common/defines.h"
 #include "common/types.hpp"
 #include "model/Entity.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "util/string_utils.hpp"
 #include "common/constants.hpp"
 #include <cstdlib>

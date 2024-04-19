@@ -10,12 +10,7 @@
 
 // Algorithm to use FIR OEMD is default (slower and higher quality) or FFT OEMD faster but loss of precision on reconstruction
 // #define OEMDFFT
-#ifdef OEMDFFT
-#define CUFFT_INPUT_LIMIT // 64e5 // TODO Implement chunking and multi GPU support
-#endif
-
 #define OEMD_CUDA
-
 
 namespace svr {
 namespace oemd {

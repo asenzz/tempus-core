@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "common/compatibility.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/constants.hpp"
 #include "common/exceptions.hpp"
 #include "model/Request.hpp"
@@ -111,15 +111,17 @@ public:
 
     double operator()(const size_t column_index) const;
 
-    double at(const size_t column_index) const;
-
     double &operator[](const size_t column_index);
 
     double operator[](const size_t column_index) const;
 
     double &operator()(const size_t column_index);
 
+    double at(const size_t column_index) const;
+
     double &at(const size_t column_index);
+
+    double *p(const size_t column_index);
 
     void set_value(const size_t column_index, const double value);
 

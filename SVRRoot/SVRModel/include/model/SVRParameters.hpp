@@ -4,7 +4,7 @@
 #include <string>
 #include "common/defines.h"
 #include "common/constants.hpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "model/Entity.hpp"
 
 //#define SMO_EPSILON 1e-3
@@ -120,9 +120,10 @@ public:
             const u_int64_t svr_decremental_distance = DEFAULT_SVRPARAM_DECREMENT_DISTANCE,
             const double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO,
             const kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE,
-            const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT);
+            const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT,
+            const std::set<size_t> &adjacent_levels = {});
 
-    SVRParameters(const SVRParameters &params);
+    SVRParameters(const SVRParameters &o);
 
     SVRParameters &operator=(const SVRParameters &v);
 

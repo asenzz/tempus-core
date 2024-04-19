@@ -4,7 +4,7 @@
 #include "AsyncImplBase.hpp"
 
 #include "model/User.hpp"
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 #include "common/ScopeExit.hpp"
 
 namespace svr { namespace dao {

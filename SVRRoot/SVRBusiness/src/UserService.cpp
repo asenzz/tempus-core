@@ -2,7 +2,7 @@
 #include "UserService.hpp"
 #include <DAO/UserDAO.hpp>
 #include <model/User.hpp>
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 
 using namespace svr::common;
 

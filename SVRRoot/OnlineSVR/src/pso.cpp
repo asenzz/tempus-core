@@ -23,7 +23,7 @@
 #include <util/string_utils.hpp>
 #include <common/thread_pool.hpp>
 
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
 #include "optimizer.hpp"

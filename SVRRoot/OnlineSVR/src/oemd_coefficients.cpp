@@ -3,7 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <atomic>
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include "common/compatibility.hpp"
 #include "common/constants.hpp"
 #include "util/math_utils.hpp"

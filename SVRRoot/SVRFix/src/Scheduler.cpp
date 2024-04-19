@@ -1,7 +1,7 @@
 #include "Scheduler.hpp"
 #include "MeanCalculator.hpp"
 
-#include <common/Logging.hpp>
+#include <common/logging.hpp>
 
 #include <boost/date_time/c_local_time_adjustor.hpp>
 

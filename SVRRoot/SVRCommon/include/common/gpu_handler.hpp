@@ -9,7 +9,7 @@
 #include "viennacl/ocl/platform.hpp"
 #include "viennacl/ocl/backend.hpp"
 #endif // VIENNACL_WITH_OPENCL
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 #include <stack>
 #include <mutex>
 #include <thread>
