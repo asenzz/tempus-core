@@ -452,8 +452,8 @@ InputQueueService::compare_to_decon_queue(const datamodel::InputQueue &input_que
     boost::posix_time::ptime missing_time = boost::posix_time::max_date_time;
     OMP_LOCK(missing_time_l)
 #pragma omp parallel for num_threads(adj_threads(decon_queue.size()))
-    for (auto range_iter = lower_bound(input_queue.get_data(), decon_queue.front()->get_value_time()); range_iter != input_queue.end(); ++range_iter) {
-        if (std::any_of(std::execution::par_unseq, decon_queue.begin(), decon_queue.end(), [&range_iter](const auto &item)
+    for (auto range_iter = lower_bound(input_queue.get_data(), decon_queue.front()->get_value_time()); range_iter != input_queue.cend(); ++range_iter) {
+        if (std::any_of(std::execution::par_unseq, decon_queue.cbegin(), decon_queue.cend(), [&range_iter](const auto &item)
             { return item->get_value_time() == (**range_iter).get_value_time(); }))
                 continue;
         LOG4_DEBUG("Input row at " << (**range_iter).get_value_time() << " not found in decon queue " << decon_queue.get_input_queue_table_name() <<

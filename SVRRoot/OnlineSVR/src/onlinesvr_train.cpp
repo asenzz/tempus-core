@@ -41,7 +41,6 @@ OnlineMIMOSVR::batch_train(
     }
 
     const auto num_chunks = get_num_chunks();
-//    if (num_chunks < 2 && is_gradient()) LOG4_THROW("At least two chunks are needed to train a gradient.");
     if (ixs.size() != num_chunks) ixs = generate_indexes();
     train_feature_chunks_t.resize(num_chunks);
     train_label_chunks.resize(num_chunks);

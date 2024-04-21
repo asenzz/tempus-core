@@ -62,7 +62,7 @@ private:
 
     void init_devices(const int device_type);
 
-    std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_ = nullptr;
+    std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_;
     std::size_t max_running_gpu_threads_number_;
     std::size_t m_max_gpu_kernels_;
     std::size_t max_gpu_data_chunk_size_;

@@ -4,13 +4,21 @@ LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/loc
 FILE(GLOB SOURCE_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.tpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.cpp"
 )
+
+FILE(GLOB HEADERS
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.tpp"
+)
+
 IF(USE_CUDA)
-    FILE(GLOB SOURCE_FILES_CUDA "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu" "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cuh")
+    FILE(GLOB SOURCE_FILES_CUDA "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu")
+    FILE(GLOB HEADERS_CUDA "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cuh")
     LIST(APPEND SOURCE_FILES ${SOURCE_FILES_CUDA})
+    LIST(APPEND HEADERS ${HEADERS_CUDA})
 ENDIF()
+
+LIST(APPEND SOURCE_FILES ${HEADERS})

@@ -103,7 +103,7 @@ public:
             const datamodel::datarow_range &decon,
             const recon_type_e type,
             data_row_container &recon,
-            const t_iqscaler &unscaler);
+            const t_iqscaler &iq_unscaler);
 
     static data_row_container
     reconstruct(

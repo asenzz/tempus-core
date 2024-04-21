@@ -34,10 +34,12 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
             if (init_type) { // Produce equispaced grid
                 const double dim_range = double(n) / std::pow<double>(2, j);
                 x0(j, i) = std::pow(std::fmod<double>(i + 1, dim_range) / dim_range, pow_j);
-                LOG4_TRACE("Equispaced particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", dim range " << dim_range);
+                LOG4_TRACE("Equispaced particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0)
+                                                  << ", dim range " << dim_range);
             } else { // Use Sobol pseudo-random number
                 x0(j, i) = std::pow(sobolnum(j, sobol_ctr + i), pow_j);
-                LOG4_TRACE("Random particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow " << pow_j);
+                LOG4_TRACE("Random particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow "
+                                              << pow_j);
             }
         }
         x0.col(i) = x0.col(i) % range + bounds.col(0);
@@ -49,11 +51,11 @@ void pprima::prima_progress_callback(
         const int n, const double x[], const double f, const int nf,
         const int tr, const double cstrv, const int m_nlcon, const double nlconstr[], bool *const terminate)
 {
-    (void)n;
-    (void)m_nlcon;
-    (void)nlconstr;
+    (void) n;
+    (void) m_nlcon;
+    (void) nlconstr;
     LOG4_DEBUG("Prima best point parameters " << common::to_string(x, n) << ", score " << f << ", cstrv " << cstrv <<
-                ", iterations " << nf << ", of which in trust regions " << tr);
+                                              ", iterations " << nf << ", of which in trust regions " << tr);
     *terminate = false;
 };
 
@@ -85,16 +87,18 @@ pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arm
 #pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
     for (size_t i = 0; i < n; ++i) {
         prima_problem_t problem;
+        prima_options_t prima_options;
+        prima_result_t prima_result;
+        int rc;
         prima_init_problem(&problem, D);
         problem.calfun = [](const double x[], double *const f, const void *data) {
-            PROFILE_EXEC_TIME((*(dtype(cost_f) *)data)(x, f), "Cost, score " << *f);
+            PROFILE_EXEC_TIME((*(dtype(cost_f) * )data)(x, f), "Cost, score " << *f);
         };
         problem.x0 = const_cast<double *>(x0.col(i).colmem);
         problem.xl = const_cast<double *>(bounds.col(0).colmem);
         problem.xu = const_cast<double *>(bounds.col(1).colmem);
 
         // Set up the options
-        prima_options_t prima_options;
         prima_init_options(&prima_options);
         prima_options.npt = (D + 2. + .5 * (D + 1.) * (D + 2.)) / 2.;
         prima_options.iprint = PRIMA_MSG_EXIT;
@@ -105,12 +109,11 @@ pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arm
         prima_options.callback = prima_progress_callback;
 
         // Call the solver
-        prima_result_t prima_result;
-        const auto rc = prima_minimize(type, problem, prima_options, &prima_result);
-
+        rc = prima_minimize(type, problem, prima_options, &prima_result);
         // Print the result
         LOG4_DEBUG("Prima particle " << i << " final parameters " << common::to_string(prima_result.x, D) << ", score " << prima_result.f << ", cstrv " <<
-             prima_result.cstrv << ", return code " << rc << ", " << prima_get_rc_string(static_cast<const prima_rc_t>(rc)) << ", message '" << prima_result.message << "', iterations " << prima_result.nf);
+                                     prima_result.cstrv << ", return code " << rc << ", " << prima_get_rc_string(static_cast<const prima_rc_t>(rc)) << ", message '"
+                                     << prima_result.message << "', iterations " << prima_result.nf);
 
         omp_set_lock(&res_l);
         if (prima_result.f < result.best_score) {
@@ -126,8 +129,9 @@ pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arm
     }
     LOG4_DEBUG(
             "Prima type " << type << ", score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n <<
-            ", parameters " << D << ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", bounds " << bounds <<
-            ", ranges " << ranges << ", starting parameters " << x0);
+                          ", parameters " << D << ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", bounds "
+                          << bounds <<
+                          ", ranges " << ranges << ", starting parameters " << x0);
 }
 
 pprima::operator t_pprima_res()

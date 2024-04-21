@@ -71,11 +71,11 @@ public:
 
     datamodel::DataRow_ptr &back();
 
-    DataRow::container::const_iterator begin() const;
+    DataRow::container::const_iterator cbegin() const;
 
     DataRow::container::iterator begin();
 
-    DataRow::container::const_iterator end() const;
+    DataRow::container::const_iterator cend() const;
 
     DataRow::container::iterator end();
 

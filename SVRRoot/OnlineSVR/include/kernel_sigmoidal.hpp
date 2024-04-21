@@ -16,7 +16,7 @@ class kernel_sigmoidal : public kernel_base<scalar_type>
 {
 private:
 public:
-    explicit kernel_sigmoidal(const SVRParameters &p): kernel_base<scalar_type> (p) {}
+    explicit kernel_sigmoidal(const datamodel::SVRParameters &p): kernel_base<scalar_type> (p) {}
 #if 0 // TODO port to Armadillo
     scalar_type operator()(
             const svr::datamodel::vektor<scalar_type> &a,

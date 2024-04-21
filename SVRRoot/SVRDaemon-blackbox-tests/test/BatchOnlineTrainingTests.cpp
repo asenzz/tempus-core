@@ -78,7 +78,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
         double mae = 0, mae_ohlc = 0, last_known_mae = 0, last_known_ohlc = 0;
         std::tie( mae, mae_ohlc, last_known_mae, last_known_ohlc) = svr::verify_results(pred_time, new_iq, new_iq_aux);
 
-        if (mae != BAD_VALIDATION and mae_ohlc != BAD_VALIDATION) {
+        if (mae != C_bad_validation and mae_ohlc != C_bad_validation) {
             total_mae += mae;
             total_mae_ohlc += mae_ohlc;
             total_last_known_mae += last_known_mae;
@@ -180,7 +180,7 @@ compare_by_value_mean_error(
         ++n_items;
     }
     if (n_items > 0) res /= double(n_items);
-    else res = BAD_VALIDATION;
+    else res = C_bad_validation;
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << res << " column " << etalon_col);
     return {res, 0};
@@ -205,7 +205,7 @@ compare_by_value_mean_erroraux(
 
         const auto it_label_start = lower_bound_back(etalon, forecast_time);
         const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * OFFSET_PRED_MUL);
-        const double last_known = last_known_iter == etalon.end() ? BAD_VALIDATION : std::prev(last_known_iter)->get()->get_value(0);
+        const double last_known = last_known_iter == etalon.end() ? C_bad_validation : std::prev(last_known_iter)->get()->get_value(0);
         const auto last_known_time = std::prev(last_known_iter)->get()->get_value_time();
         const auto etalon_val = 0;// TODO Port generate_twap(std::prev(it_label_start), etalon.end(), forecast_time, forecast_time + forecast_resolution, onesec, 0);
         const auto forecast_val = forecast_row->get()->get_value(0);
@@ -221,8 +221,8 @@ compare_by_value_mean_erroraux(
         mae /= double(n_items);
         last_known_mae /= double(n_items);
     } else {
-        mae = BAD_VALIDATION;
-        last_known_mae = BAD_VALIDATION;
+        mae = C_bad_validation;
+        last_known_mae = C_bad_validation;
     }
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << mae << " last known mean absolute error is " << last_known_mae);
@@ -258,7 +258,7 @@ compare_by_value_error_ohlc(
         LOG4_INFO("Time " << forecast_row->get()->get_value_time() << ", position " << n_items << ", error " << err << ", predicted " << forecast_val << ", etalon high " << etalon_max << ", etalon low " << etalon_min);
         ++n_items;
     }
-    if (n_items > 0) mae /= double(n_items); else mae = BAD_VALIDATION;
+    if (n_items > 0) mae /= double(n_items); else mae = C_bad_validation;
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << mae);
     return {mae, 0};
@@ -295,7 +295,7 @@ compare_by_value_error_ohlcaux(
 
         const auto last_known_time = forecast_row->get()->get_value_time() - forecast_resolution * OFFSET_PRED_MUL;
         const auto last_known_iter = lower_bound_back_before(etalon, etalon_iter, last_known_time);
-        const double last_known = last_known_iter == etalon.end() ? BAD_VALIDATION : last_known_iter->get()->get_value(0);
+        const double last_known = last_known_iter == etalon.end() ? C_bad_validation : last_known_iter->get()->get_value(0);
 
         const auto forecast_val = forecast_row->get()->get_value(0);
         double err = 0, last_known_err = 0;
@@ -316,8 +316,8 @@ compare_by_value_error_ohlcaux(
         last_known_mae /= double(n_items);
     }
     else {
-        mae = BAD_VALIDATION;
-        last_known_mae = BAD_VALIDATION;
+        mae = C_bad_validation;
+        last_known_mae = C_bad_validation;
     }
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << mae);
@@ -334,7 +334,7 @@ verify_results(
     const auto forecasts = get_results(forecast_start_time, new_iq, PRIMARY_COLUMN);
     if (forecasts.empty()) {
         LOG4_ERROR("Forecasted data for column xauusd_avg_bid is zero!");
-        return {BAD_VALIDATION, BAD_VALIDATION, BAD_VALIDATION, BAD_VALIDATION};
+        return {C_bad_validation, C_bad_validation, C_bad_validation, C_bad_validation};
     }
     LOG4_TRACE("Forecasted data is of size " << forecasts.size());
     double mae, mae_ohlc, last_known_mae, last_known_ohlc;

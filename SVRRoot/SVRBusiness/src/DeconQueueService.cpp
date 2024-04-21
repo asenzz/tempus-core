@@ -332,7 +332,7 @@ void DeconQueueService::reconstruct(
         const datamodel::datarow_range &decon,
         const recon_type_e type,
         data_row_container &recon,
-        const t_iqscaler &unscaler)
+        const t_iqscaler &iq_unscaler)
 {
     LOG4_BEGIN();
     if (decon.distance() < 1) LOG4_THROW("No deconstructed data to reconstruct.");
@@ -365,7 +365,7 @@ void DeconQueueService::reconstruct(
         for (size_t l = 0; l < levct; l += 2)
             if (l != half_levct)
                 op(v, d.get_value(l));
-        recon[startout + i] = ptr<datamodel::DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{unscaler(v)});
+        recon[startout + i] = ptr<datamodel::DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{iq_unscaler(v)});
     }
 
     LOG4_END();

@@ -12,7 +12,7 @@ class kernel_radial_basis_gaussian: public kernel_base<scalar_type>
 {
 private:
 public:
-    explicit kernel_radial_basis_gaussian(const SVRParameters &p): kernel_base<scalar_type> (p) {}
+    explicit kernel_radial_basis_gaussian(const datamodel::SVRParameters &p): kernel_base<scalar_type> (p) {}
 
 #if 0
     scalar_type operator()

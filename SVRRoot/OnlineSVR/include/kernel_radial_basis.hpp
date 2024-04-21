@@ -12,7 +12,7 @@ template<typename scalar_type>
 class kernel_radial_basis: public kernel_base<scalar_type> {
 private:
 public:
-    explicit kernel_radial_basis(const SVRParameters &p): kernel_base<scalar_type> (p) {}
+    explicit kernel_radial_basis(const datamodel::SVRParameters &p): kernel_base<scalar_type> (p) {}
 
 #if 0
     scalar_type operator()(const svr::datamodel::vektor<scalar_type> &a, const vektor<scalar_type> &b)

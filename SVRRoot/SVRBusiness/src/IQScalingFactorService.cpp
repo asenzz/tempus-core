@@ -33,16 +33,16 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::find_all_by_d
     return iq_scaling_factor_dao_.find_all_by_dataset_id(dataset_id);
 }
 
-std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(const datamodel::InputQueue &input_queue, const size_t dataset_id, const size_t tail)
+std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(const datamodel::InputQueue &input_queue, const size_t dataset_id, const size_t use_tail)
 {
     if (input_queue.get_data().empty() || input_queue.get_value_columns().empty()) {
         LOG4_ERROR("Input queue " << input_queue << " is empty.");
         return std::deque<datamodel::IQScalingFactor_ptr>();
     }
 
-    const auto iter_start = tail > input_queue.size() ? input_queue.begin() : (input_queue.get_data().rbegin() + tail).base();
+    const auto iter_start = use_tail > input_queue.size() ? input_queue.cbegin() : input_queue.cend() - use_tail;
     const auto columns_ct = input_queue.get_value_columns().size();
-    const size_t row_ct = std::distance(iter_start, input_queue.end());
+    const size_t row_ct = std::distance(iter_start, input_queue.cend());
 
     LOG4_DEBUG("Calculating input queue " << input_queue.get_table_name() << ", dataset " << dataset_id << " scaling factors on last " << row_ct << " values.");
 
@@ -93,7 +93,8 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     auto test_input_queue = input_queue;
     test_input_queue.get_data().erase(test_input_queue.end() - (common::INTEGRATION_TEST_VALIDATION_WINDOW - 1) * resolution_ratio, test_input_queue.end());
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
-            test_input_queue, dataset.get_id(), dataset.get_max_possible_residuals_length() + dataset.get_max_decrement() * resolution_ratio), true),
+            test_input_queue, dataset.get_id(),
+            dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * QUANTIZE_FIXED / resolution_ratio + dataset.get_max_decrement() * resolution_ratio), true),
                       "Calculate input queue scaling factors for " << input_queue.get_table_name());
 #else
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
@@ -118,6 +119,17 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool sav
     for (const auto &p_aux_input: dataset.get_aux_input_queues()) prepare(dataset, *p_aux_input, save);
 }
 
+t_iqscaler IQScalingFactorService::get_scaler(const datamodel::IQScalingFactor &sf)
+{
+    const double scaling_factor = sf.get_scaling_factor(), dc_offset = sf.get_dc_offset();
+    return [scaling_factor, dc_offset](const double v) -> double { return common::scale(v, scaling_factor, dc_offset); };
+}
+
+t_iqscaler IQScalingFactorService::get_scaler(const double scaling_factor, const double dc_offset)
+{
+    return [scaling_factor, dc_offset](const double v) -> double { return common::scale(v, scaling_factor, dc_offset); };
+}
+
 t_iqscaler
 IQScalingFactorService::get_scaler(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name)
 {
@@ -126,7 +138,18 @@ IQScalingFactorService::get_scaler(const datamodel::Dataset &dataset, const data
     const auto scaling_factor = p_iq_scaling_factor->get_scaling_factor();
     const auto dc_offset = p_iq_scaling_factor->get_dc_offset();
     LOG4_TRACE("Scaler for " << input_queue.get_table_name() << ", column " << column_name << ", factor " << scaling_factor << ", offset " << dc_offset);
-    return [scaling_factor, dc_offset](const double v) -> double { return (v - dc_offset) / scaling_factor; };
+    return get_scaler(scaling_factor, dc_offset);
+}
+
+t_iqscaler IQScalingFactorService::get_unscaler(const datamodel::IQScalingFactor &sf)
+{
+    const double scaling_factor = sf.get_scaling_factor(), dc_offset = sf.get_dc_offset();
+    return [scaling_factor, dc_offset](const double v) -> double { return common::unscale(v, scaling_factor, dc_offset); };
+}
+
+t_iqscaler IQScalingFactorService::get_unscaler(const double scaling_factor, const double dc_offset)
+{
+    return [scaling_factor, dc_offset](const double v) -> double { return common::unscale(v, scaling_factor, dc_offset); };
 }
 
 t_iqscaler

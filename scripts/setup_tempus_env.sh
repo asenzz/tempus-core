@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-export DBG="/usr/bin/gdb"
+if [[ -z "${SETVARS_COMPLETED}" ]]; then
+  source /opt/intel/oneapi/setvars.sh intel64 lp64
+fi
+
+# export DBG=gdb-oneapi
+export DBG=/usr/bin/gdb
 # export DBG=/usr/local/cuda/bin/cuda-gdb
 
 
@@ -31,7 +36,7 @@ if [ ! -d "../libs/oemd_fir_masks_xauusd_1s/" ]; then mkdir "../libs/oemd_fir_ma
 NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Default thread pool size is ${NUM_THREADS} threads.${NC}\n\n"
 
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"/opt/intel/oneapi/compiler/latest/lib":/opt/intel/oneapi/mkl/latest/lib/intel64:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8
+# export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/mkl/latest/lib/intel64:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8"
 export LD_PRELOAD=`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`
 export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 
@@ -42,9 +47,10 @@ export OMP_WAIT_POLICY=PASSIVE                            # Sets spincount to ze
 # export OMP_SCHEDULE=dynamic,1                           # May disable nesting (bug in OMP?)
 export MAX_ACTIVE_LEVELS=$(( 10 * $NUM_THREADS ))         # Nested depth
 export OMP_THREAD_LIMIT=$(( 20 * $MAX_ACTIVE_LEVELS ))    # Increase with RAM size
-# export OMP_NUM_THREADS=${NUM_THREADS}
-export CILK_NWORKERS=${NUM_THREADS}
+export OMP_NUM_THREADS=${NUM_THREADS}
+# export CILK_NWORKERS=${NUM_THREADS}
 export MKL_NUM_THREADS=${NUM_THREADS}
+export MAGMA_NUM_THREADS=${NUM_THREADS}
 export MKL_DYNAMIC="FALSE"
 # export VISIBLE_GPUS="0" # Disable GPUs
 # export CUDA_VISIBLE_DEVICES=VISIBLE_GPUS

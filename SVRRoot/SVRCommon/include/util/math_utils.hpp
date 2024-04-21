@@ -290,6 +290,16 @@ join_rows(const size_t arg_ct...)
     return res;
 }
 
+template<typename T> T scale(const T v, const double sf, const double dc)
+{
+    return (v - dc) / sf;
+}
+
+template<typename T> T unscale(const T v, const double sf, const double dc)
+{
+    return v * sf + dc;
+}
+
 template<typename T> arma::Mat<T>
 norm(const arma::subview<std::complex<T>> &cxm)
 {

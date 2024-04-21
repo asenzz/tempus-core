@@ -31,9 +31,14 @@ void strum_solve(const size_t Nrows, const size_t Nright, double *h_Ainput, doub
 std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaFloat_ptr, magmaInt_ptr>
 init_magma_solver(const size_t m, const size_t b_n, const bool psd, const size_t gpu_id = 0);
 
+std::tuple<magma_queue_t, std::vector<magmaDouble_ptr>, std::vector<magmaDouble_ptr>>
+init_magma_batch_solver(const size_t batch_size, const size_t m, const size_t b_n, const size_t gpu_id);
+
 void uninit_magma_solver(
         const magma_queue_t &magma_queue,
         const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_wd, const magmaFloat_ptr d_ws, const magmaInt_ptr piv, const size_t gpu_id = 0);
+
+void uninit_magma_batch_solver(const magma_queue_t &magma_queue, std::vector<magmaDouble_ptr> &d_a, std::vector<magmaDouble_ptr> &d_b, const size_t gpu_id);
 
 void dyn_magma_solve(
         const int m, const int b_n, const double *a, const double *b, double *output, magma_queue_t magma_queue = nullptr, const magmaInt_ptr piv = nullptr,
@@ -44,5 +49,8 @@ void iter_magma_solve(
         const magmaDouble_ptr d_a = nullptr, const magmaDouble_ptr d_b = nullptr, const magmaDouble_ptr d_x = nullptr, const magmaDouble_ptr d_wd = nullptr,
         const magmaFloat_ptr d_ws = nullptr, const bool psd = false, const size_t gpu_id = 0);
 
+void iter_magma_batch_solve(
+        const int m, const int b_n, const std::vector<arma::mat> &a, const std::vector<arma::mat> &b, std::vector<arma::mat> &output,
+        const magma_queue_t magma_queue, std::vector<magmaDouble_ptr> &d_a, std::vector<magmaDouble_ptr> &d_b, const size_t gpu_id);
 
 }

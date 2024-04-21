@@ -7,7 +7,7 @@
 #include <execution>
 #include <vector>
 
-#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), 1 + common::gpu_handler::get().get_gpu_devices_count())))
+#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), common::gpu_handler::get().get_max_running_gpu_threads_number())))
 
 // #define TUNE_FIREFLY
 #define TUNE_PRIMA
@@ -73,15 +73,16 @@ eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arm
     arma::mat K_epsco = K;
     K_epsco.diag() += 1. / (2. * params.get_svr_C());
     double score = 0;
-#pragma omp parallel for reduction(+:score) schedule(static, 1) TUNE_THREADS(C_emo_max_j)
-    for (size_t j = 0; j < C_emo_max_j; ++j) {
-        const size_t x_train_start = j * C_emo_slide_skip;
-        const size_t x_train_final = x_train_start + train_len - 1;
-        const size_t x_test_start = x_train_final + 1;
-        LOG4_TRACE("Try " << j << ", K " << arma::size(K) << ", start point labels " << start_point_labels << ", start point K " << start_point_K << ", train start " <<
-                          x_train_start << ", train final " << x_train_final << ", test start " << x_test_start << ", test final is mat end, train len " << train_len
-                          << ", labels " << arma::size(labels) << ", current score " << score);
-        try {
+    try {
+#pragma omp parallel for simd reduction(+:score) schedule(static, 1) TUNE_THREADS(C_emo_max_j)
+        for (size_t j = 0; j < C_emo_max_j; ++j) {
+            const size_t x_train_start = j * C_emo_slide_skip;
+            const size_t x_train_final = x_train_start + train_len - 1;
+            const size_t x_test_start = x_train_final + 1;
+            LOG4_TRACE(
+                    "Try " << j << ", K " << arma::size(K) << ", start point labels " << start_point_labels << ", start point K " << start_point_K << ", train start " <<
+                           x_train_start << ", train final " << x_train_final << ", test start " << x_test_start << ", test final is mat end, train len " << train_len
+                           << ", labels " << arma::size(labels) << ", current score " << score);
 #if 0
             const size_t x_test_final = x_test_start + EMO_TEST_LEN - j * EMO_SLIDE_SKIP - 1;
             double this_score = arma::mean(arma::abs(arma::vectorise(K.submat(K.n_rows - 1 - start_point_K - x_test_final, K.n_rows - 1 - start_point_K - x_train_final,
@@ -109,16 +110,85 @@ eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arm
             const auto this_score = common::meanabs<double>(p_out_labels->at(j) - p_out_preds->at(j)) / meanabs_labels;
             if (!std::isnormal(this_score)) LOG4_THROW("Score not normal for " << params);
             score += this_score;
-        } catch (const std::exception &ex) {
-            LOG4_ERROR(
-                    "Error solving matrix, try " << j << ", K " << arma::size(K) << ", " << x_train_start << ", " << x_train_final << ", " << x_test_start << ", error "
-                                                 << ex.what());
-            p_out_preds->at(j) = arma::mat(p_out_preds->at(j).n_rows - x_test_start, labels.n_cols, arma::fill::value(BAD_VALIDATION));
+        }
+    } catch (const std::exception &ex) {
+        LOG4_ERROR(
+                "Error solving matrix, K " << arma::size(K) << ", " << start_point_K << ", " << start_point_labels << ", " << train_len << ", error "
+                                             << ex.what());
+#pragma omp parallel for simd schedule(static, 1) num_threads(adj_threads(C_emo_max_j))
+        for (size_t j = 0; j < C_emo_max_j; ++j) {
+            p_out_preds->at(j) = arma::mat(p_out_preds->at(j).n_rows - j * C_emo_slide_skip + train_len, labels.n_cols, arma::fill::value(C_bad_validation));
             p_out_labels->at(j) = p_out_preds->at(j);
             p_out_last_knowns->at(j) = p_out_preds->at(j);
-            score += BAD_VALIDATION;
         }
+        score = C_bad_validation;
     }
+    return std::tuple(p_out_preds, p_out_labels, p_out_last_knowns, score);
+}
+
+auto
+batched_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arma::mat &labels, const arma::mat &last_knowns, const size_t train_len,
+           const double meanabs_labels)
+{
+    const ssize_t start_point_K = K.n_rows - C_emo_test_len - train_len;
+    const ssize_t start_point_labels = labels.n_rows - C_emo_test_len - train_len;
+    if (start_point_K < 0 || start_point_labels < 0 || labels.n_rows != K.n_rows || labels.n_rows != last_knowns.n_rows)
+        LOG4_THROW("Shorter K " << start_point_K << " or labels " << start_point_labels << " for K " << arma::size(K) << ", labels " << arma::size(labels)
+                                << ", last-knowns " << arma::size(last_knowns));
+    auto p_out_preds = ptr<std::deque<arma::mat>>(C_emo_max_j);
+    auto p_out_labels = ptr<std::deque<arma::mat>>(C_emo_max_j);
+    auto p_out_last_knowns = ptr<std::deque<arma::mat>>(C_emo_max_j);
+    std::vector<arma::mat> K_epsco_batch(C_emo_max_j), K_train_batch(C_emo_max_j), solutions(C_emo_max_j), labels_train_batch(C_emo_max_j);
+    arma::mat K_epsco = K;
+    K_epsco.diag() += 1. / (2. * params.get_svr_C());
+    double score = 0;
+    const size_t x_test_len = labels.n_rows - start_point_labels - (C_emo_max_j - 1) * C_emo_slide_skip - train_len;
+#pragma omp parallel for num_threads(adj_threads(C_emo_max_j)) schedule(static, 1)
+    for (size_t j = 0; j < C_emo_max_j; ++j) {
+        const size_t x_train_start = j * C_emo_slide_skip;
+        const size_t x_train_final = x_train_start + train_len - 1;
+        const size_t x_test_start = x_train_final + 1;
+        const size_t x_test_final = x_test_start + x_test_len - 1;
+        p_out_labels->at(j) = labels.rows(start_point_labels + x_test_start, start_point_labels + x_test_final);
+        p_out_last_knowns->at(j) = last_knowns.rows(start_point_labels + x_test_start, start_point_labels + x_test_final);
+        K_epsco_batch[j] = K_epsco.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final);
+        K_train_batch[j] = K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final);
+        labels_train_batch[j] = labels.rows(start_point_labels + x_train_start, start_point_labels + x_train_final);
+        solutions[j] = labels_train_batch[j];
+    }
+    try {
+        OnlineMIMOSVR::solve_batched_irwls(K_epsco_batch, K_train_batch, labels_train_batch, solutions, PROPS.get_online_learn_iter_limit());
+        K_epsco_batch.clear();
+        K_train_batch.clear();
+        labels_train_batch.clear();
+    } catch (const std::exception &ex) {
+        LOG4_ERROR(
+                "Error solving matrix, K " << arma::size(K) << ", " << start_point_K << ", " << start_point_labels << ", " << train_len << ", error "
+                                           << ex.what());
+#pragma omp parallel for reduction(+:score) schedule(static, 1) num_threads(adj_threads(C_emo_max_j))
+        for (size_t j = 0; j < C_emo_max_j; ++j) {
+            p_out_preds->at(j) = arma::mat(x_test_len, labels.n_cols, arma::fill::value(C_bad_validation));
+            p_out_labels->at(j) = p_out_preds->at(j);
+            p_out_last_knowns->at(j) = p_out_preds->at(j);
+        }
+        score = C_bad_validation;
+        goto __bail;
+    }
+#pragma omp parallel for num_threads(adj_threads(C_emo_max_j)) reduction(+:score) schedule(static, 1)
+    for (size_t j = 0; j < C_emo_max_j; ++j) {
+        const size_t x_train_start = j * C_emo_slide_skip;
+        const size_t x_train_final = x_train_start + train_len - 1;
+        const size_t x_test_start = x_train_final + 1;
+        const size_t x_test_final = x_test_start + x_test_len - 1;
+        p_out_preds->at(j) =
+                K.submat(start_point_K + x_test_start, start_point_K + x_train_start, start_point_K + x_test_final, start_point_K + x_train_final)
+                * solutions[j] - params.get_svr_epsilon();
+        solutions[j].clear();
+        const auto this_score = common::meanabs<double>(p_out_labels->at(j) - p_out_preds->at(j)) / meanabs_labels;
+        if (!std::isnormal(this_score)) LOG4_THROW("Score not normal for " << params);
+        score += this_score;
+    }
+__bail:
     return std::tuple(p_out_preds, p_out_labels, p_out_last_knowns, score);
 }
 

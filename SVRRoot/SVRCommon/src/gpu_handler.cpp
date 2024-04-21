@@ -1,5 +1,6 @@
 #include <common/gpu_handler.hpp>
 #include <common/common.hpp>
+#include <mutex>
 
 
 namespace svr {
@@ -70,7 +71,7 @@ gpu_handler &gpu_handler::get()
 
 void gpu_handler::init_devices(const int device_type)
 {
-    std::scoped_lock wl(devices_mutex_);
+    const std::scoped_lock wl(devices_mutex_);
     devices_.clear();
     max_running_gpu_threads_number_ = 0;
     max_gpu_data_chunk_size_ = std::numeric_limits<size_t>::max();
@@ -79,12 +80,12 @@ void gpu_handler::init_devices(const int device_type)
     auto ocl_platforms = viennacl::ocl::get_platforms();
     LOG4_INFO("Found " << ocl_platforms.size() << " platforms.");
     for (auto &pf: ocl_platforms) {
-        LOG4_INFO("Platform info " << pf.info());
+        LOG4_INFO("Platform " << pf.info());
         try {
             const auto new_devices = pf.devices(device_type);
             const auto prev_dev_size = devices_.size();
-            for (ushort mult = 0; mult < ushort(CTX_PER_GPU); ++mult)
-                devices_.insert(devices_.begin(), new_devices.begin(), new_devices.end());
+            for (unsigned mult = 0; mult < CTX_PER_GPU; ++mult)
+                devices_.insert(devices_.begin(), new_devices.cbegin(), new_devices.cend());
 
             max_running_gpu_threads_number_ += new_devices.size() * CTX_PER_GPU;
             for (const auto &device: new_devices) {
@@ -92,16 +93,18 @@ void gpu_handler::init_devices(const int device_type)
                     max_gpu_data_chunk_size_ = device.max_mem_alloc_size();
                 size_t prod = 1;
                 std::vector<size_t> item_sizes = device.max_work_item_sizes();
-                for (const size_t i: item_sizes) prod *= i;
+                for (const auto i: item_sizes) prod *= i;
                 if (prod < m_max_gpu_kernels_) m_max_gpu_kernels_ = prod;
             }
-            LOG4_INFO("Devices available " << max_running_gpu_threads_number_ << ", device max allocate size is " << max_gpu_data_chunk_size_ << " bytes, max GPU kernels " << m_max_gpu_kernels_);
+            LOG4_INFO("Devices available " << max_running_gpu_threads_number_ << ", device max allocate size is " << max_gpu_data_chunk_size_ <<
+                        " bytes, max GPU kernels " << m_max_gpu_kernels_);
             for (size_t i = 0; i < devices_.size(); ++i) {
-                setup_context(prev_dev_size + i, devices_[prev_dev_size + i]);
-                free_gpus_.push(prev_dev_size + i);
+                const auto devix = prev_dev_size + i;
+                setup_context(devix, devices_[devix]);
+                free_gpus_.push(devix);
             }
-        } catch (...) {
-            LOG4_ERROR("Failed enumerating platform " << pf.info() << " for devices!");
+        } catch (const std::exception &ex) {
+            LOG4_ERROR("Failed enumerating platform " << pf.info() << " for devices, error " << ex.what());
         }
     }
 #else
@@ -133,7 +136,7 @@ size_t gpu_handler::get_free_gpu()
 
 void gpu_handler::return_gpu(const size_t gpu_index)
 {
-    std::scoped_lock l(free_gpu_mutex_);
+    const std::scoped_lock l(free_gpu_mutex_);
     free_gpus_.push(gpu_index);
 }
 

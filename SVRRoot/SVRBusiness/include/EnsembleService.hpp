@@ -5,7 +5,7 @@
 #include "model/InputQueue.hpp"
 #include "DatasetService.hpp"
 
-constexpr size_t C_parallel_train_models = 5;
+constexpr size_t C_parallel_train_models = 4;
 
 namespace svr {
 namespace dao { class EnsembleDAO; }

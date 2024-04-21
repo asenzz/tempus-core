@@ -14,7 +14,7 @@ template<typename scalar_type>
 class kernel_radial_basis_exponential: public kernel_base<scalar_type> {
 private:
 public:
-    explicit kernel_radial_basis_exponential(const SVRParameters &p): kernel_base<scalar_type> (p) {}
+    explicit kernel_radial_basis_exponential(const datamodel::SVRParameters &p): kernel_base<scalar_type> (p) {}
 
 #if 0
     scalar_type operator()

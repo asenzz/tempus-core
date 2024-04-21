@@ -139,6 +139,9 @@ public:
     // Move to solver module
     static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
 
+    static void solve_batched_irwls(
+            const std::vector<arma::mat> &K_epsco, const std::vector<arma::mat> &K, const std::vector<arma::mat> &rhs, std::vector<arma::mat> &solved, const size_t iters);
+
     static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
 
     static void solve_dispatch(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
@@ -190,6 +193,8 @@ public:
     static double get_gamma_range_variance(const size_t train_len);
 
     static std::deque<double> get_gamma_base_multipliers(const double gamma_range_variance);
+
+    static size_t get_full_train_len(const size_t n_rows, const size_t decrement);
 
     size_t get_num_chunks();
 

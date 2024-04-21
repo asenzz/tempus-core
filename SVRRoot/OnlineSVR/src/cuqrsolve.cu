@@ -240,6 +240,32 @@ init_magma_solver(const size_t m, const size_t b_n, const bool psd, const size_t
     return {magma_queue, d_a, d_b, d_x, d_wd, d_ws, piv};
 }
 
+std::tuple<magma_queue_t, std::vector<magmaDouble_ptr>, std::vector<magmaDouble_ptr>>
+init_magma_batch_solver(const size_t batch_size, const size_t m, const size_t b_n, const size_t gpu_id)
+{
+    cu_errchk(cudaSetDevice(gpu_id));
+    magma_queue_t magma_queue = nullptr;
+    {
+        magma_int_t err;
+        if ((err = magma_init()) < MAGMA_SUCCESS)
+            LOG4_THROW("Magma init failed with error code " << err);
+    }
+    magma_queue_create(gpu_id, &magma_queue);
+    if (!magma_queue) LOG4_THROW("Failed creating MAGMA queue.");
+
+    std::vector<magmaDouble_ptr> d_a(batch_size, nullptr), d_b(batch_size, nullptr);
+//#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(batch_size))
+    for (size_t i = 0; i < batch_size; ++i) {
+        magma_int_t err;
+//        cu_errchk(cudaSetDevice(gpu_id));
+        if ((err = magma_dmalloc(&d_a[i], m * m)) < MAGMA_SUCCESS) // device memory for a
+            LOG4_THROW("Failed " << i << " calling magma_dmalloc d_a with error code " << err);
+        if ((err = magma_dmalloc(&d_b[i], m * b_n)) < MAGMA_SUCCESS) // device memory for b
+            LOG4_THROW("Failed " << i << " calling magma_dmalloc d_b with error code " << err);
+    }
+    return {magma_queue, d_a, d_b};
+}
+
 
 void uninit_magma_solver(
         const magma_queue_t &magma_queue,
@@ -261,6 +287,25 @@ void uninit_magma_solver(
 
     if (magma_queue) magma_queue_destroy(magma_queue);
 
+    if ((err = magma_finalize()) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_finalize with error code " << err);
+}
+
+
+void uninit_magma_batch_solver(const magma_queue_t &magma_queue, std::vector<magmaDouble_ptr> &d_a, std::vector<magmaDouble_ptr> &d_b, const size_t gpu_id)
+{
+    cu_errchk(cudaSetDevice(gpu_id));
+    const size_t batch_size = d_a.size();
+    for (size_t i = 0; i < batch_size; ++i) {
+        magma_int_t err;
+        if (d_a[i] && (err = magma_free(d_a[i])) < MAGMA_SUCCESS)
+            LOG4_THROW("Failed calling magma_free d_a with error code " << err);
+        if (d_b[i] && (err = magma_free(d_b[i])) < MAGMA_SUCCESS)
+            LOG4_THROW("Failed calling magma_free d_b with error code " << err);
+    }
+    if (magma_queue) magma_queue_destroy(magma_queue);
+
+    magma_int_t err;
     if ((err = magma_finalize()) < MAGMA_SUCCESS)
         LOG4_THROW("Failed calling magma_finalize with error code " << err);
 }
@@ -311,6 +356,30 @@ __solve_dgesv:
     else if (psd)
         LOG4_DEBUG("Call to magma_dgesv_rbt triunfo.");
     magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
+}
+
+void iter_magma_batch_solve(
+        const int m, const int b_n, const std::vector<arma::mat> &a, const std::vector<arma::mat> &b, std::vector<arma::mat> &output,
+        const magma_queue_t magma_queue, std::vector<magmaDouble_ptr> &d_a, std::vector<magmaDouble_ptr> &d_b, const size_t gpu_id)
+{
+    const auto batch_size = a.size();
+    cu_errchk(cudaSetDevice(gpu_id));
+// #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(batch_size))
+    for (size_t i = 0; i < batch_size; ++i) {
+//        cu_errchk(cudaSetDevice(gpu_id));
+        magma_dsetmatrix(m, m, a[i].memptr(), m, d_a[i], m, magma_queue); // copy a -> d_a
+        magma_dsetmatrix(m, b_n, b[i].memptr(), m, d_b[i], m, magma_queue); // copy b -> d_b
+    }
+    magma_int_t err;
+    std::vector<magma_int_t> info(batch_size);
+    if ((err = magma_dgesv_rbt_batched(m, b_n, d_a.data(), m, d_b.data(), m, info.data(), magma_int_t(batch_size), magma_queue)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << common::to_string(info));
+
+//#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(batch_size))
+    for (size_t i = 0; i < batch_size; ++i) {
+//        cu_errchk(cudaSetDevice(gpu_id));
+        magma_dgetmatrix(m, b_n, d_b[i], m, output[i].memptr(), m, magma_queue); // copy solution d_b -> output
+    }
 }
 
 // Doesn't work with NVidia CuSolver 12.1

@@ -7,6 +7,9 @@
 #include <string>
 
 namespace svr {
+
+using namespace datamodel;
+
 kernel_type_e get_kernel_type_from_string(const std::string &kernel_type_str)
 {
     kernel_type_e kernel_type;

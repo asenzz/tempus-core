@@ -1,5 +1,5 @@
 //
-// Created by zarko on 7/5/22.
+// Created by Zarko on 7/5/22.
 //
 
 #ifndef SVR_FAST_CVMD_HPP
@@ -15,8 +15,8 @@
 #include "spectral_transform.hpp"
 #include "IQScalingFactorService.hpp"
 
-constexpr unsigned CVMD_INIT_LEN = 100000; // Last N samples of the input queue used for calculating frequencies
-constexpr double TAU_FIDELITY = 1000; // 1000 seems to yield best results
+constexpr unsigned CVMD_INIT_LEN = 100'000; // Last N samples of the input queue used for calculating frequencies
+constexpr double TAU_FIDELITY = 1e3; // 1000 seems to yield best results
 constexpr bool HAS_DC = false; // Has DC component is always false, it's removed during scaling
 constexpr double C_default_alpha_bins = 1600; // 2000 for EURUSD, 1600 for XAUUSD, Matlab examples use 50 on input length 1200
 constexpr unsigned MAX_VMD_ITERATIONS = 500;
@@ -24,7 +24,7 @@ constexpr double DEFAULT_PHASE_STEP = .1; // Multiplies frequency by N, best so 
 constexpr size_t C_freq_init_type = 1; // Type of initialization, let's use 1 for now.
 constexpr double CVMD_TOL = 5e-6; // std::numeric_limits<double>::epsilon();
 const auto C_arma_solver_opts = arma::solve_opts::refine + arma::solve_opts::equilibrate;
-// #define EMOS_OMEGAS_16
+// #define EMOS_OMEGAS
 
 namespace svr {
 namespace vmd {
@@ -40,13 +40,11 @@ struct fcvmd_frequency_outputs
 
 class fast_cvmd final : public spectral_transform
 {
-    const size_t levels = 0;
-    const size_t K = 0; // Number of modes/frequencies. because of DC=1 we use 1 more than the natural number of frequencies (3 in the signal above). Half of VMD levels, quarter of total levels.
-    arma::vec f;
+    const size_t levels = 0, K = 0; // Number of modes/frequencies. because of DC=1 we use 1 more than the natural number of frequencies (3 in the signal above). Half of VMD levels, quarter of total levels.
     arma::rowvec A;
     const arma::mat H;
-    const arma::uvec even_ixs, odd_ixs, K_ixs;
-    arma::vec row_values, soln;
+    const arma::uvec even_ixs, odd_ixs;
+    arma::vec f, row_values, soln;
     const bpt::ptime timenow;
     tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> vmd_frequencies;
     static const business::t_iqscaler C_no_scaler;

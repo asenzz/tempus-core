@@ -128,7 +128,7 @@ datamodel::DataRow_ptr &Queue::back()
     return data_.back();
 }
 
-DataRow::container::const_iterator Queue::begin() const
+DataRow::container::const_iterator Queue::cbegin() const
 {
     return data_.cbegin();
 }
@@ -138,7 +138,7 @@ DataRow::container::iterator Queue::begin()
     return data_.begin();
 }
 
-DataRow::container::const_iterator Queue::end() const
+DataRow::container::const_iterator Queue::cend() const
 {
     return data_.cend();
 }

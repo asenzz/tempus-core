@@ -43,13 +43,12 @@ fast_cvmd::fast_cvmd(const size_t _levels) :
     spectral_transform(std::string("cvmd"), _levels),
     levels(_levels),
     K(_levels / 2),
-    f(_levels),
     A(_levels),
     H(arma::eye(_levels, _levels)),
     even_ixs(arma::regspace<arma::uvec>(0, 2, _levels - 2)),
     odd_ixs(arma::regspace<arma::uvec>(1, 2, _levels - 1)),
-    K_ixs(arma::regspace<arma::uvec>(0, K - 1)),
-    row_values(_levels * 2, arma::fill::zeros),
+    f(_levels),
+    row_values(_levels * 2),
     soln(row_values.memptr() + _levels, _levels, false, true),
     timenow(boost::posix_time::second_clock::local_time())
 {
@@ -80,19 +79,19 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     const auto freq_key = freq_key_t(decon_queue_table_name, levels);
     if (vmd_frequencies.find(freq_key) != vmd_frequencies.end()) return;
 
-#ifdef EMOS_OMEGAS_16
-    {
-        const arma::colvec omega = {
-                1.000000000000000e-12, 4.830917874396136e-08, 9.661835748792271e-08, 2.415458937198068e-07, 6.038647342995169e-07,
-                1.207729468599034e-06, 2.415458937198068e-06, 1.207729468599034e-05, 3.472222222222222e-05, 6.944444444444444e-05,
-                1.388888888888889e-04, 2.777777777777778e-04, 5.555555555555556e-04, 1.111111111111111e-03, 3.333333333333333e-03,
-                1.666666666666667e-02};
-        const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
-        vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
-        return;
-    }
-#endif
-
+#ifdef EMOS_OMEGAS
+    static const arma::vec emos_omega = {
+            1.000000000000000e-12, 4.830917874396136e-08, 9.661835748792271e-08, 2.415458937198068e-07, 6.038647342995169e-07,
+            1.207729468599034e-06, 2.415458937198068e-06, 1.207729468599034e-05, 3.472222222222222e-05, 6.944444444444444e-05,
+            1.388888888888889e-04, 2.777777777777778e-04, 5.555555555555556e-04, 1.111111111111111e-03, 3.333333333333333e-03,
+            1.666666666666667e-02};
+    if (K > emos_omega.size()) LOG4_THROW("K " << K << " higher than Emo's omegas " << emos_omega.size());
+    arma::vec omega(K);
+    const size_t ratio_K = emos_omega.size() / K;
+    for (size_t i = 0; i < emos_omega.size(); i += ratio_K) omega[i / ratio_K] = emos_omega[i];
+    const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
+    vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
+#else
     //Initialize u, w, lambda, n
     const size_t save_T = input.distance();
     size_t T = save_T;
@@ -213,6 +212,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
 #endif
     const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
     vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
+#endif
 }
 
 
@@ -244,53 +244,8 @@ fast_cvmd::transform(
 
     const auto &phase_cos = found_freqs->second.phase_cos;
     const auto &phase_sin = found_freqs->second.phase_sin;
-
     if (K != phase_sin.size() || K != phase_cos.size())
-        LOG4_THROW("Invalid phase cos size " << arma::size(phase_cos) << " or phase sin size " << arma::size(phase_sin) << ", should be " << K);
-
-    data_row_container::const_iterator iterin;
-    if (decon.empty()) {
-        iterin = input.begin();
-        soln[0] = scaler((**iterin)[in_colix]);
-    } else {
-        iterin = lower_bound_back(input, decon.back()->get_value_time());
-        while ((**iterin).get_value_time() <= decon.back()->get_value_time() && iterin != input.end()) ++iterin;
-        if (iterin == input.end()) {
-            LOG4_WARN("No input data newer than " << decon.back()->get_value_time() << " to deconstruct.");
-            return;
-        }
-        memcpy(soln.memptr(), decon.back()->get_values().data() + levels, levels * sizeof(double));
-    }
-
-    const auto in_ct = std::distance(iterin , input.end());
-    const auto prev_decon_ct = decon.size();
-    decon.get_data().resize(prev_decon_ct + in_ct);
-#pragma omp parallel for num_threads(adj_threads(in_ct)) schedule(static, 1 + in_ct / std::thread::hardware_concurrency())
-    for (ssize_t t = 0; t < in_ct; ++t) {
-        const auto p_in_row = *(iterin + t - prev_decon_ct);
-        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels * 2);
-    }
-
-    f.rows(even_ixs) = -phase_cos.rows(K_ixs) % soln.rows(even_ixs) + phase_sin.rows(K_ixs) % soln.rows(odd_ixs);
-    f.rows(odd_ixs) = -phase_sin.rows(K_ixs) % soln.rows(even_ixs) - phase_cos.rows(K_ixs) % soln.rows(odd_ixs);
-#pragma omp parallel num_threads(adj_threads(3))
-#pragma omp single
-    for (size_t t = prev_decon_ct; t < decon.size() && iterin != input.end(); ++iterin, ++t)
-    {
-#define ASOLVE(M, N) arma::solve(M, (N), C_arma_solver_opts)
-        soln = ASOLVE(H, -A.t() * (-ASOLVE(A * ASOLVE(H, A.t()), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
-#pragma omp task
-        memcpy(decon[t]->get_values().data() + levels, soln.mem, levels * sizeof(double));
-#pragma omp task
-        f.rows(even_ixs) = -phase_cos.rows(K_ixs) % soln.rows(even_ixs) + phase_sin.rows(K_ixs) % soln.rows(odd_ixs);
-        f.rows(odd_ixs) = -phase_sin.rows(K_ixs) % soln.rows(even_ixs) - phase_cos.rows(K_ixs) % soln.rows(odd_ixs);
-#pragma omp taskwait
-    }
-}
-
-#if 0
-    if (K != found_freqs->second.phase_sin.size() || K != found_freqs->second.phase_cos.size())
-        LOG4_THROW("Invalid phase cos size " << found_freqs->second.phase_cos.size() << " or phase sin size " << found_freqs->second.phase_sin.size() << ", should be " << K);
+        LOG4_THROW("Invalid phase cos size " << phase_cos.size() << " or phase sin size " << phase_sin.size() << ", should be " << K);
 
     const size_t levels_size = levels * sizeof(double);
     data_row_container::const_iterator iterin;
@@ -310,49 +265,31 @@ fast_cvmd::transform(
     const auto in_ct = std::distance(iterin, input.cend());
     const auto prev_decon_ct = decon.size();
     decon.get_data().resize(prev_decon_ct + in_ct);
-#pragma omp parallel for num_threads(adj_threads(in_ct)) schedule(static, 1 + in_ct / std::thread::hardware_concurrency())
+#pragma omp parallel for simd num_threads(adj_threads(in_ct)) schedule(static, 1 + in_ct / std::thread::hardware_concurrency())
     for (ssize_t t = 0; t < in_ct; ++t) {
         const auto p_in_row = *(iterin + t - prev_decon_ct);
-        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels_size);
+        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels * 2);
     }
 
     auto f_even = f.rows(even_ixs);
     auto f_odd = f.rows(odd_ixs);
     auto sl_even = soln.rows(even_ixs);
     auto sl_odd = soln.rows(odd_ixs);
-    const arma::mat cos_K = found_freqs->second.phase_cos.rows(K_ixs);
-    const arma::mat sin_K = found_freqs->second.phase_sin.rows(K_ixs);
-    const arma::mat A_t = A.t();
-    f_even = -cos_K % sl_even + sin_K % sl_odd;
-    f_odd = -sin_K % sl_even - cos_K % sl_odd;
-
+    const arma::vec A_t = A.t();
+    f_even = -phase_cos % sl_even + phase_sin % sl_odd;
+    f_odd = -phase_sin % sl_even - phase_cos % sl_odd;
 #define ASOLVE(M, N) arma::solve(M, (N), C_arma_solver_opts)
-
-#ifdef FAST_CVMD_SIMD
-#pragma omp parallel for simd linear(t) firstprivate(iterin, A_t, A, H, f, soln, cos_K, sin_K, f_even, f_odd, in_colix) shared(decon)
+#pragma omp unroll
     for (size_t t = prev_decon_ct; t < decon.size(); ++t)
     {
         soln = ASOLVE(H, -A_t * (-ASOLVE(A * ASOLVE(H, A_t), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
         memcpy(decon[t]->p(levels), soln.mem, levels_size);
-        f_even = -cos_K % sl_even + sin_K % sl_odd;
-        f_odd = -sin_K % sl_even - cos_K % sl_odd;
+        f_even = -phase_cos % sl_even + phase_sin % sl_odd;
+        f_odd = -phase_sin % sl_even - phase_cos % sl_odd;
         ++iterin;
     }
-#else
-#pragma omp parallel num_threads(adj_threads(3))
-#pragma omp single
-    for (size_t t = prev_decon_ct; t < decon.size(); ++iterin, ++t)
-    {
-        soln = ASOLVE(H, -A_t * (-ASOLVE(A * ASOLVE(H, A_t), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
-#pragma omp task
-        memcpy(decon[t]->p(levels), soln.mem, levels_size);
-#pragma omp task
-        f_even = -cos_K % sl_even + sin_K % sl_odd;
-        f_odd = -sin_K % sl_even - cos_K % sl_odd;
-#pragma omp taskwait
-    }
-#endif
-#endif
+}
+
 
 void
 fast_cvmd::inverse_transform(

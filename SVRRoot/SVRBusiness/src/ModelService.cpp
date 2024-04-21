@@ -95,7 +95,7 @@ ModelService::validate(
     LOG4_BEGIN();
     if (labels.n_rows <= start_ix) {
         LOG4_WARN("Calling future validate at the end of labels array. MAE is 1000");
-        return {BAD_VALIDATION, BAD_VALIDATION, {}, {}, 0., {}};
+        return {C_bad_validation, C_bad_validation, {}, {}, 0., {}};
     }
 
     const size_t ix_fini = labels.n_rows - 1;

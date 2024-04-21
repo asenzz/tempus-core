@@ -10,7 +10,7 @@ namespace svr {
 template<typename scalar_type>
 class kernel_linear: public kernel_base<scalar_type> {
 public:
-    explicit kernel_linear(const SVRParameters &p): kernel_base<scalar_type> (p) {}
+    explicit kernel_linear(const datamodel::SVRParameters &p): kernel_base<scalar_type> (p) {}
 
     void operator() (
             const viennacl::matrix<scalar_type> &features,

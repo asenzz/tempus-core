@@ -48,6 +48,11 @@ IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     FILE(GLOB TEST_SOURCE_FILES "test/*.cpp")
     ADD_EXECUTABLE(${PROJECT_NAME}-test ${TEST_SOURCE_FILES})
     TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES})
+
+    IF(USE_INTEL_COMPILER AND PROFILE_OPTIMIZE)
+        INCLUDE(../../cmake/HWPGO.cmake)
+        HWPGO_EXECUTABLE(${PROJECT_NAME}-test IDENTIFIER manifold_tune_train_predict ARGUMENTS --gtest_filter=manifold_tune_train_predict.basic_integration)
+    ENDIF()
 endif()
 
 ADD_LIBRARY(${PROJECT_NAME} ${LIBS_BUILD_TYPE} ${SOURCE_FILES})

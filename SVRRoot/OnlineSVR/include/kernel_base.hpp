@@ -16,28 +16,25 @@
 #include "model/SVRParameters.hpp"
 #include "common/gpu_handler.hpp"
 
-using namespace svr::datamodel;
-
-
 namespace svr
 {
 
-kernel_type_e get_kernel_type_from_string(const std::string &kernel_type_str);
-std::string kernel_type_to_string(const kernel_type_e kernel_type);
+datamodel::kernel_type_e get_kernel_type_from_string(const std::string &kernel_type_str);
+std::string kernel_type_to_string(const datamodel::kernel_type_e kernel_type);
 
 template<typename scalar_type>
 class kernel_base
 {
 protected:
-    const SVRParameters parameters;
+    const datamodel::SVRParameters parameters;
 
 public:
-    const SVRParameters &get_parameters() const
+    const datamodel::SVRParameters &get_parameters() const
     { return parameters; }
 
     kernel_base() = default;
 
-    explicit kernel_base(const SVRParameters &p) : parameters(p)
+    explicit kernel_base(const datamodel::SVRParameters &p) : parameters(p)
     {}
 
     virtual ~kernel_base()

@@ -71,7 +71,7 @@
 #define DEFAULT_SVRPARAM_KERNEL_TYPE svr::datamodel::kernel_type_e::PATH
 #define DEFAULT_SVRPARAM_LAG_COUNT 1000
 
-constexpr double BAD_VALIDATION = 1e6;
+constexpr double C_bad_validation = 1e6;
 constexpr unsigned CUDA_BLOCK_SIZE = 1024;
 constexpr unsigned TILE_WIDTH = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
 

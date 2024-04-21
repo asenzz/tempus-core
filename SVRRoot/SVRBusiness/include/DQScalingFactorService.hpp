@@ -67,7 +67,7 @@ public:
     static void scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels);
     template<typename T> static inline void unscale_labels(const datamodel::DQScalingFactor &sf, T &labels)
     {
-        labels = labels * sf.get_labels_factor() + sf.get_dc_offset_labels();
+        labels = common::unscale<T>(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
     }
 
     static void add(datamodel::dq_scaling_factor_container_t &sf, const datamodel::dq_scaling_factor_container_t &new_sf, const bool overwrite = false);

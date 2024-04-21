@@ -79,7 +79,7 @@ DQScalingFactorService::find(
                   && (!check_features || common::isnormalz(sf->get_dc_offset_features()));
     });
     if (res == scaling_factors.cend()) {
-        LOG4_ERROR("Not found scaling factors for model " << model_id << ", chunk " << chunk << ", gradient " << gradient << ", level " << level << ", features " << check_features);
+        LOG4_ERROR("Scaling factors for model " << model_id << " not found, chunk " << chunk << ", gradient " << gradient << ", level " << level << ", features " << check_features);
         return nullptr;
     }
     return *res;
@@ -140,7 +140,7 @@ void DQScalingFactorService::scale_features(const size_t chunk_ix, const size_t 
         const auto row2 = (i + 1) * lag - 1;
         const auto p_sf = find(sf, 0, chunk_ix, grad_level, i, true, false);
         auto features_t_view = features_t.rows(row1, row2);
-        features_t_view = (features_t_view - p_sf->get_dc_offset_features()) / p_sf->get_features_factor();
+        features_t_view = common::scale<arma::mat>(features_t_view, p_sf->get_features_factor(), p_sf->get_dc_offset_features());
         if (features_t_view.has_nonfinite())
             LOG4_THROW("Scaled features not sane, factors " << *p_sf << ", level " << i << ", feats " << features_t_view << ", start " << row1 << ", end " << row2 <<
                                                             ", lag " << lag << ", chunk " << chunk_ix << ", gradient " << grad_level);
@@ -163,19 +163,20 @@ void DQScalingFactorService::scale_labels(const size_t chunk, const size_t gradi
 void DQScalingFactorService::scale_labels(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &labels)
 {
     if (labels.empty()) return;
-    const auto p_sf_labels = find(svr_model.get_scaling_factors(), svr_model.get_model_id(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_decon_level(), false, true);
+    const auto p_sf_labels = find(svr_model.get_scaling_factors(), svr_model.get_model_id(), chunk_ix, svr_model.get_gradient_level(),
+                                  svr_model.get_decon_level(), false, true);
     scale_labels(*p_sf_labels, labels);
 }
 
 void DQScalingFactorService::scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels)
 {
-    labels = (labels - sf.get_dc_offset_labels()) / sf.get_labels_factor();
+    labels = common::scale(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
     if (labels.has_nonfinite())  LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", labels " << labels);
 }
 
 double DQScalingFactorService::scale_label(const datamodel::DQScalingFactor &sf, double &label)
 {
-    label = (label - sf.get_dc_offset_labels()) / sf.get_labels_factor();
+    label = common::scale(label, sf.get_labels_factor(), sf.get_dc_offset_labels());
     if (!common::isnormalz(label))  LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", label " << label);
     return label;
 }
