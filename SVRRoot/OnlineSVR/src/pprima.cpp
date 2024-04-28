@@ -73,7 +73,7 @@ arma::vec pprima::ensure_bounds(const double *x, const arma::mat &bounds)
 pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arma::mat &bounds,
                const t_prima_cost_fun &cost_f,
                const size_t maxfun, const double rhobeg, const double rhoend,
-               const arma::mat &x0_, const arma::vec &pows) :
+               const arma::mat &x0_, const arma::vec &pows, const size_t n_threads) :
         n(n_particles), D(bounds.n_rows), bounds(bounds), pows(pows), ranges(bounds.col(1) - bounds.col(0))
 {
     arma::mat x0 = x0_;
@@ -84,12 +84,9 @@ pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arm
     equispaced(x0, bounds, pows, sobol_ctr);
 
     OMP_LOCK(res_l);
-#pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
+#pragma omp parallel for num_threads(adj_threads(n_threads ? n_threads : n)) schedule(static, 1)
     for (size_t i = 0; i < n; ++i) {
         prima_problem_t problem;
-        prima_options_t prima_options;
-        prima_result_t prima_result;
-        int rc;
         prima_init_problem(&problem, D);
         problem.calfun = [](const double x[], double *const f, const void *data) {
             PROFILE_EXEC_TIME((*(dtype(cost_f) * )data)(x, f), "Cost, score " << *f);
@@ -99,6 +96,7 @@ pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arm
         problem.xu = const_cast<double *>(bounds.col(1).colmem);
 
         // Set up the options
+        prima_options_t prima_options;
         prima_init_options(&prima_options);
         prima_options.npt = (D + 2. + .5 * (D + 1.) * (D + 2.)) / 2.;
         prima_options.iprint = PRIMA_MSG_EXIT;
@@ -109,7 +107,8 @@ pprima::pprima(const prima_algorithm_t type, const size_t n_particles, const arm
         prima_options.callback = prima_progress_callback;
 
         // Call the solver
-        rc = prima_minimize(type, problem, prima_options, &prima_result);
+        prima_result_t prima_result;
+        const auto rc = prima_minimize(type, problem, prima_options, &prima_result);
         // Print the result
         LOG4_DEBUG("Prima particle " << i << " final parameters " << common::to_string(prima_result.x, D) << ", score " << prima_result.f << ", cstrv " <<
                                      prima_result.cstrv << ", return code " << rc << ", " << prima_get_rc_string(static_cast<const prima_rc_t>(rc)) << ", message '"

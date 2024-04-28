@@ -5,9 +5,10 @@
 #include "DQScalingFactorService.hpp"
 #include <boost/date_time/posix_time/ptime.hpp>
 #include <execution>
+#include <utility>
 #include <vector>
 
-#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), common::gpu_handler::get().get_max_running_gpu_threads_number())))
+#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), 6)))
 
 // #define TUNE_FIREFLY
 #define TUNE_PRIMA
@@ -74,7 +75,7 @@ eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arm
     K_epsco.diag() += 1. / (2. * params.get_svr_C());
     double score = 0;
     try {
-#pragma omp parallel for simd reduction(+:score) schedule(static, 1) TUNE_THREADS(C_emo_max_j)
+#pragma omp parallel for simd reduction(+:score) schedule(static, 1) num_threads(adj_threads(C_emo_max_j))
         for (size_t j = 0; j < C_emo_max_j; ++j) {
             const size_t x_train_start = j * C_emo_slide_skip;
             const size_t x_train_final = x_train_start + train_len - 1;
@@ -127,8 +128,84 @@ eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arm
 }
 
 auto
-batched_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arma::mat &labels, const arma::mat &last_knowns, const size_t train_len,
+coot_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arma::mat &labels, const arma::mat &last_knowns, const size_t train_len,
            const double meanabs_labels)
+{
+    const ssize_t start_point_K = K.n_rows - C_emo_test_len - train_len;
+    const ssize_t start_point_labels = labels.n_rows - C_emo_test_len - train_len;
+    if (start_point_K < 0 || start_point_labels < 0 || labels.n_rows != K.n_rows || labels.n_rows != last_knowns.n_rows)
+        LOG4_THROW("Shorter K " << start_point_K << " or labels " << start_point_labels << " for K " << arma::size(K) << ", labels " << arma::size(labels)
+                                << ", last-knowns " << arma::size(last_knowns));
+    auto p_out_preds = ptr<std::deque<arma::mat>>(C_emo_max_j);
+    auto p_out_labels = ptr<std::deque<arma::mat>>(C_emo_max_j);
+    auto p_out_last_knowns = ptr<std::deque<arma::mat>>(C_emo_max_j);
+    arma::mat K_epsco = K;
+    K_epsco.diag() += 1. / (2. * params.get_svr_C());
+    double score = 0;
+    try {
+#pragma omp parallel for simd reduction(+:score) schedule(static, 1) num_threads(adj_threads(C_emo_max_j))
+        for (size_t j = 0; j < C_emo_max_j; ++j) {
+            const size_t x_train_start = j * C_emo_slide_skip;
+            const size_t x_train_final = x_train_start + train_len - 1;
+            const size_t x_test_start = x_train_final + 1;
+            LOG4_TRACE(
+                    "Try " << j << ", K " << arma::size(K) << ", start point labels " << start_point_labels << ", start point K " << start_point_K << ", train start " <<
+                           x_train_start << ", train final " << x_train_final << ", test start " << x_test_start << ", test final is mat end, train len " << train_len
+                           << ", labels " << arma::size(labels) << ", current score " << score);
+#ifdef TWO_SIDED_VALIDATION
+            const size_t x_test_final = x_test_start + EMO_TEST_LEN - j * EMO_SLIDE_SKIP - 1;
+            double this_score = arma::mean(arma::abs(arma::vectorise(K.submat(K.n_rows - 1 - start_point_K - x_test_final, K.n_rows - 1 - start_point_K - x_train_final,
+                                                                        K.n_rows - 1 - start_point_K - x_test_start, K.n_rows - 1 - start_point_K - x_train_start)
+                                                               * OnlineMIMOSVR::solve_dispatch(
+                                                                                               K.submat(K.n_rows - 1 - start_point_K - x_train_final,
+                                                                                                        K.n_rows - 1 - start_point_K - x_train_final,
+                                                                                                        K.n_rows - 1 - start_point_K - x_train_start,
+                                                                                                        K.n_rows - 1 - start_point_K - x_train_start),
+                                                                                               labels.rows(labels.n_rows - 1 - start_point_labels - x_train_final,
+                                                                                                           labels.n_rows - 1 - start_point_labels - x_train_start),
+                                                                                               PROPS.get_online_learn_iter_limit(), false)
+                                                               - labels.rows(labels.n_rows - 1 - start_point_labels - x_test_final,
+                                                                             labels.n_rows - 1 - start_point_labels - x_test_start)))) / meanabs_labels;
+#endif
+            p_out_labels->at(j) = labels.rows(start_point_labels + x_test_start, labels.n_rows - 1);
+            p_out_last_knowns->at(j) = last_knowns.rows(start_point_labels + x_test_start, last_knowns.n_rows - 1);
+
+            const common::gpu_context ctx;
+            const auto gpu_id = ctx.phy_id();
+            if (cudaSetDevice(gpu_id) != cudaSuccess) LOG4_THROW("cudaSetDevice " << gpu_id << " failed");
+            coot::init_rt(coot::coot_backend_t::CUDA_BACKEND, false, 0, gpu_id);
+            p_out_preds->at(j) =
+                    K.submat(start_point_K + x_test_start, start_point_K + x_train_start, K.n_rows - 1, start_point_K + x_train_final)
+                    * coot::conv_to<arma::mat>::from(OnlineMIMOSVR::solve_irwls(
+                            coot::conv_to<coot::mat>::from(
+                                    K_epsco.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final)),
+                            coot::conv_to<coot::mat>::from(
+                                    K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final)),
+                            coot::conv_to<coot::mat>::from(labels.rows(start_point_labels + x_train_start, start_point_labels + x_train_final)),
+                            PROPS.get_online_learn_iter_limit(), gpu_id)) - params.get_svr_epsilon();
+            const auto this_score = common::meanabs<double>(p_out_labels->at(j) - p_out_preds->at(j)) / meanabs_labels;
+            if (!std::isnormal(this_score)) LOG4_THROW("Score not normal for " << params);
+            score += this_score;
+        }
+    } catch (const std::exception &ex) {
+        LOG4_ERROR(
+                "Error solving matrix, K " << arma::size(K) << ", " << start_point_K << ", " << start_point_labels << ", " << train_len << ", error "
+                                           << ex.what());
+#pragma omp parallel for simd schedule(static, 1) num_threads(adj_threads(C_emo_max_j))
+        for (size_t j = 0; j < C_emo_max_j; ++j) {
+            p_out_preds->at(j) = arma::mat(p_out_preds->at(j).n_rows - j * C_emo_slide_skip + train_len, labels.n_cols, arma::fill::value(C_bad_validation));
+            p_out_labels->at(j) = p_out_preds->at(j);
+            p_out_last_knowns->at(j) = p_out_preds->at(j);
+        }
+        score = C_bad_validation;
+    }
+    return std::tuple(p_out_preds, p_out_labels, p_out_last_knowns, score);
+}
+
+auto
+batched_eval_score(
+        const datamodel::SVRParameters &params, const arma::mat &K, const arma::mat &labels,
+        const arma::mat &last_knowns, const size_t train_len, const double meanabs_labels)
 {
     const ssize_t start_point_K = K.n_rows - C_emo_test_len - train_len;
     const ssize_t start_point_labels = labels.n_rows - C_emo_test_len - train_len;
@@ -408,15 +485,12 @@ void OnlineMIMOSVR::tune()
 
     auto p_predictions = ccache().checkin_tuner(*this);
     const auto num_chunks = ixs.size();
-    const auto train_len = ixs.front().n_rows;
     if (chunks_score.size() != num_chunks) chunks_score.resize(num_chunks);
 
     LOG4_TRACE("Tuning labels " << common::present(*p_labels) << ", features " << common::present(*p_features) << ", last-knowns " << common::present(*p_last_knowns) <<
                                 ", slide skip " << C_emo_slide_skip << ", max j " << C_emo_max_j << ", tune min validation window "
-                                << C_emo_tune_min_validation_window <<
-                                ", test len " << C_emo_test_len << ", level " << decon_level << ", train len " << train_len << ", num chunks " << num_chunks);
-
-    OMP_LOCK(ins_chunk_results_l)
+                                << C_emo_tune_min_validation_window << ", test len " << C_emo_test_len << ", level " << decon_level << ", num chunks " << num_chunks);
+    const auto input_queue_column_name = (**param_set.cbegin()).get_input_queue_column_name();
 #pragma omp parallel for schedule(static, 1) TUNE_THREADS(num_chunks)
     for (size_t chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_template_chunk_params = get_params_ptr(chunk_ix);
@@ -432,6 +506,7 @@ void OnlineMIMOSVR::tune()
         }
 
         arma::uvec chunk_ixs_tune = ixs[chunk_ix] - C_emo_test_len;
+        const auto train_len = chunk_ixs_tune.n_rows;
         arma::mat tune_features_t = arma::join_cols(
                 p_features->rows(chunk_ixs_tune), p_features->rows(p_features->n_rows - C_emo_test_len, p_features->n_rows - 1)).t();
         arma::mat tune_labels = arma::join_cols(
@@ -499,6 +574,7 @@ void OnlineMIMOSVR::tune()
 
         constexpr unsigned n = 35;
         constexpr unsigned iters = 22;
+        constexpr unsigned prima_threads = 12;
         const optimizer::t_pprima_res res = optimizer::pprima(prima_algorithm_t::PRIMA_LINCOA, n, bounds, [&](const double *x, double *const f) {
             const auto xx = optimizer::pprima::ensure_bounds(x, bounds);
             auto score_params = *p_template_chunk_params;
@@ -513,7 +589,7 @@ void OnlineMIMOSVR::tune()
                                          tune_labels, tune_lastknowns),
                     "Validation, score " << *f << ", gamma base parameter " << xx[0] << ", mingamma " << mingamma << ", lambda " << lambda << " with parameters "
                                          << score_params);
-        }, iters, 2. / n, 1e-11); // default rhobeg=range/4, default rhoend 5e-10
+        }, iters, 2. / n, 1e-11, {}, {}, std::min(n, prima_threads)); // default rhobeg=range/4, default rhoend 5e-10
         tune_features_t.clear();
         tune_labels.clear();
         tune_lastknowns.clear();
@@ -561,13 +637,51 @@ void OnlineMIMOSVR::tune()
             LOG4_INFO("Final best score " << pp->score << ", final parameters " << *pp->p_params);
         });
         chunks_score[chunk_ix] = (**p_chunk_preds->cbegin()).score;
-        omp_set_lock(&ins_chunk_results_l);
-        p_predictions->emplace(std::tuple{p_template_chunk_params->get_decon_level(), p_template_chunk_params->get_grad_level(), chunk_ix}, p_chunk_preds);
+#pragma omp critical(ins_chunk_results_l)
+            p_predictions->emplace(std::tuple{decon_level, gradient, chunk_ix}, p_chunk_preds);
         if (calculated_sf) set_scaling_factors(chunk_sf);
-        omp_unset_lock(&ins_chunk_results_l);
     }
 
-    ccache().checkout_tuner(*this);
+    const auto used_chunks = get_predict_chunks();
+#pragma omp parallel num_threads(adj_threads(4))
+#pragma omp single
+    {
+#pragma omp task
+        common::keep_indices(ixs, used_chunks);
+#pragma omp task
+        common::keep_indices(train_feature_chunks_t, used_chunks);
+#pragma omp task
+        common::keep_indices(train_label_chunks, used_chunks);
+#pragma omp task
+        common::keep_indices(chunks_score, used_chunks);
+    }
+#pragma omp critical(ins_chunk_results_l)
+    {
+        size_t chunk_ix_iter = 0;
+        auto pred_iter = p_predictions->begin();
+        while (pred_iter != p_predictions->cend()) {
+            if (std::get<0>(pred_iter->first) != 0 || std::get<1>(pred_iter->first) != 0) {
+                ++pred_iter;
+                continue;
+            }
+            if (std::find(used_chunks.cbegin(), used_chunks.cend(), std::get<2>(pred_iter->first)) == used_chunks.cend()) {
+                pred_iter = p_predictions->erase(pred_iter);
+                continue;
+            }
+            auto nh = p_predictions->extract(pred_iter->first);
+            auto nh_key = nh.key();
+            LOG4_DEBUG("Replacing " << std::get<0>(nh_key) << ", " << std::get<1>(nh_key) << ", " << std::get<2>(nh_key) << " with " << chunk_ix_iter);
+            std::get<2>(nh_key) = chunk_ix_iter;
+            nh.key() = nh_key;
+            for (auto &p: *nh.mapped()) p->p_params->set_chunk_ix(chunk_ix_iter);
+            auto [ins_iter, rc, nh_] = p_predictions->insert(std::move(nh));
+            if (!rc) LOG4_THROW("Failed inserting " << std::get<0>(ins_iter->first) << ", " << std::get<1>(ins_iter->first) << ", " << std::get<2>(ins_iter->first));
+            ++chunk_ix_iter;
+            ++pred_iter;
+        }
+    }
+    param_set = ccache().get_best_parameters(input_queue_column_name, decon_level, gradient, ixs.size());
+    ccache().checkout_tuner(input_queue_column_name);
 }
 
 #endif

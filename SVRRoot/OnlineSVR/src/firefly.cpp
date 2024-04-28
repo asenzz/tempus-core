@@ -148,22 +148,19 @@ void firefly::move_ffa_adaptive(const double rate)
     const auto ffa_prev = ffa;
     const auto beta0_betamin = beta0 - betamin;
     levy_random = common::levy(D);
-#ifdef __INTEL_LLVM_COMPILER
-    #pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
-#else
-    #pragma omp parallel for num_threads(adj_threads(n * n)) schedule(static, 1) collapse(2)
-#endif
+#pragma omp parallel for num_threads(adj_threads(n * n)) schedule(static, 1 + n * n / std::thread::hardware_concurrency()) collapse(2)
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
-            if (i == j || particles[i].I <= particles[j].I) continue;
-            // brighter and more attractive
-            const double r = arma::accu(arma::abs(ffa.col(i) - ffa_prev.col(j)));
-            const double beta = beta0_betamin * std::exp(-gamma * r * r) + betamin;
-            const double l = -1. + 2. * drand48();
-            if (drand48() > rate)
-                ffa.col(i) = ffa.col(i) * (1. - beta) + ffa_prev.col(j) * beta + alpha * std::copysign(1., (drand48() - .5)) * levy_random % range;
-            else
-                ffa.col(i) = (ffa_prev.col(j) - ffa.col(i)) * beta * std::exp(l * b_1) * std::cos(2. * M_PI * -1. + 2. * drand48());
+            if (i != j && particles[i].I > particles[j].I) {
+	        // brighter and more attractive
+	        const double r = arma::accu(arma::abs(ffa.col(i) - ffa_prev.col(j)));
+	        const double beta = beta0_betamin * std::exp(-gamma * r * r) + betamin;
+	        const double l = -1. + 2. * drand48();
+	        if (drand48() > rate)
+	            ffa.col(i) = ffa.col(i) * (1. - beta) + ffa_prev.col(j) * beta + alpha * std::copysign(1., (drand48() - .5)) * levy_random % range;
+	        else
+        	    ffa.col(i) = (ffa_prev.col(j) - ffa.col(i)) * beta * std::exp(l * b_1) * std::cos(2. * M_PI * -1. + 2. * drand48());
+	    }
         }
     }
 #pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)

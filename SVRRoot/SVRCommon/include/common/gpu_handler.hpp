@@ -78,6 +78,8 @@ private:
 // TODO  Make CUDA stream context
 #ifdef VIENNACL_WITH_OPENCL
 class gpu_context {
+protected:
+    size_t context_id_;
 public:
     gpu_context();
     gpu_context(const gpu_context &context) : context_id_(context.context_id_) {};
@@ -87,8 +89,6 @@ public:
     size_t id() const { return context_id_; }
     size_t phy_id() const { return context_id_ % (gpu_handler::get().get_max_running_gpu_threads_number() / CTX_PER_GPU); }
     viennacl::ocl::context &ctx() const { return viennacl::ocl::get_context(context_id_);  }
-protected:
-    size_t context_id_;
 };
 
 class gpu_kernel: public gpu_context {

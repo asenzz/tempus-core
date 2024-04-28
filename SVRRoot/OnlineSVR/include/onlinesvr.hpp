@@ -7,6 +7,7 @@
 #include <memory>
 #include <set>
 #include <armadillo>
+#include <bandicoot>
 #include <deque>
 #include "common/compatibility.hpp"
 #include "common/constants.hpp"
@@ -26,11 +27,12 @@ constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
 constexpr double C_tune_range_min_lambda = 0;
 constexpr double C_tune_range_max_lambda = 1e2;
-constexpr double C_chunk_overlap = 0; // Chunk rows overlap ratio, higher generates more chunks
+constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio, higher generates more chunks
 constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
 constexpr double C_chunk_tail = .1;
 constexpr double C_chunk_header = 1. - C_chunk_tail;
-constexpr double C_predict_chunks = .5; // Ratio of best chunks used for predictions
+constexpr size_t C_predict_chunks = 1; // Ratio of best chunks used for predictions
+const std::deque<double> C_chunk_coefs {2500. / common::C_default_kernel_max_chunk_size, 1., 3500. / common::C_default_kernel_max_chunk_size};
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -65,6 +67,8 @@ using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
 class OnlineMIMOSVR final : public Entity
 {
+    std::mutex sf_mx;
+
     bigint model_id = 0;
     Dataset_ptr p_dataset;
     std::string column_name;
@@ -136,6 +140,8 @@ public:
 
     void set_dataset(const Dataset_ptr &p_dataset);
 
+    static coot::mat solve_irwls(const coot::mat &K_epsco, const coot::mat &K, const coot::mat &rhs, const size_t iters, const size_t gpu_id);
+
     // Move to solver module
     static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
 
@@ -200,7 +206,7 @@ public:
 
     static size_t get_num_chunks(const size_t n_rows, const size_t chunk_size_);
 
-    static std::deque<arma::uvec> generate_indexes(const size_t n_rows, const size_t decrement, const size_t max_chunk_size);
+    static auto generate_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size);
 
     arma::uvec get_other_ixs(const size_t i) const;
 

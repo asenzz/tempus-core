@@ -26,10 +26,13 @@ namespace bpt = boost::posix_time;
 #define dtype(T) std::decay_t<decltype(T)>
 
 namespace boost {
+
 #include "hashing.tpp"
+
 }
 
 namespace std {
+
 #include "hashing.tpp"
 
 //template<typename T, typename ...Args>
@@ -45,25 +48,37 @@ namespace svr {
 template<typename T, typename Enable = void>
 struct is_smart_pointer
 {
-    enum { value = false };
+    enum
+    {
+        value = false
+    };
 };
 
 template<typename T>
 struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::shared_ptr<typename T::element_type>>::value>::type>
 {
-    enum { value = true };
+    enum
+    {
+        value = true
+    };
 };
 
 template<typename T>
 struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::unique_ptr<typename T::element_type>>::value>::type>
 {
-    enum { value = true };
+    enum
+    {
+        value = true
+    };
 };
 
 template<typename T>
 struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::weak_ptr<typename T::element_type>>::value>::type>
 {
-    enum { value = true };
+    enum
+    {
+        value = true
+    };
 };
 
 
@@ -76,17 +91,19 @@ using mutex_ptr = std::shared_ptr<std::mutex>;
 std::string demangle(const std::string &name);
 
 template<typename T>
-bool operator !=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
+bool operator!=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
 {
     if (lhs.size() != rhs.size()) return true;
     for (auto lhs_iter = lhs.begin(), rhs_iter = rhs.begin(); lhs_iter != lhs.end(), rhs_iter != rhs.end(); ++lhs_iter, ++rhs_iter) {
         if (*lhs_iter != *rhs_iter) return true;
-        ++lhs_iter; ++rhs_iter;
+        ++lhs_iter;
+        ++rhs_iter;
     }
     return false;
 }
 
 bool operator<(const arma::SizeMat &lhs, const arma::SizeMat &rhs);
+
 bool operator<(const std::set<size_t> &lhs, const std::set<size_t> &rhs);
 
 using type_info_ref = std::reference_wrapper<const std::type_info>;
@@ -119,21 +136,6 @@ template<typename T> unsigned adj_threads(const T iterations)
     return static_cast<unsigned>(std::min<T>(iterations < 0 ? 0 : iterations, std::thread::hardware_concurrency()));
 }
 
-template<typename ContainerT, typename PredicateT>
-void remove_if(ContainerT &items, const PredicateT &predicate)
-{
-    typename std::decay_t<ContainerT>::iterator it = items.begin();
-    while (items.size() && it != items.end())
-        if (predicate(*it)) {
-            if (items.size() < 2) {
-                items.clear();
-                return;
-            } else
-                it = items.erase(it);
-        } else
-            ++it;
-}
-
 template<typename T> T operator^(const std::set<T> &s, const size_t i)
 {
     return *std::next(s.begin(), i);
@@ -144,12 +146,12 @@ template<typename T, typename C> T operator^(const std::set<T, C> &s, const size
     return *std::next(s.begin(), i);
 }
 
-template<typename T> T operator^(const tbb::concurrent_set<T> &s, const size_t i)
+template<typename T> T operator^(const tbb::concurrent_set <T> &s, const size_t i)
 {
     return *std::next(s.begin(), i);
 }
 
-template<typename T, typename C> T operator^(const tbb::concurrent_set<T, C> &s, const size_t i)
+template<typename T, typename C> T operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
 {
     return *std::next(s.begin(), i);
 }
@@ -184,52 +186,52 @@ template<typename K, typename V> V &operator^(std::unordered_map<K, V> &s, const
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> K operator%(const tbb::concurrent_map<K, V> &s, const size_t i)
+template<typename K, typename V> K operator%(const tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->first;
 }
 
-template<typename K, typename V> V operator^(const tbb::concurrent_map<K, V> &s, const size_t i)
+template<typename K, typename V> V operator^(const tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> K operator%(tbb::concurrent_map<K, V> &s, const size_t i)
+template<typename K, typename V> K operator%(tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->first;
 }
 
-template<typename K, typename V> V &operator^(tbb::concurrent_map<K, V> &s, const size_t i)
+template<typename K, typename V> V &operator^(tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> K last(const tbb::concurrent_map<K, V> &s)
+template<typename K, typename V> K last(const tbb::concurrent_map <K, V> &s)
 {
     return std::prev(s.end())->first;
 }
 
-template<typename K, typename V> V back(const tbb::concurrent_map<K, V> &s)
+template<typename K, typename V> V back(const tbb::concurrent_map <K, V> &s)
 {
     return std::prev(s.end())->second;
 }
 
-template<typename K, typename V> K first(const tbb::concurrent_map<K, V> &s)
+template<typename K, typename V> K first(const tbb::concurrent_map <K, V> &s)
 {
     return s.begin()->first;
 }
 
-template<typename K, typename V> V front(const tbb::concurrent_map<K, V> &s)
+template<typename K, typename V> V front(const tbb::concurrent_map <K, V> &s)
 {
     return s.begin()->second;
 }
 
-template<typename V> V front(const tbb::concurrent_set<V> &s)
+template<typename V> V front(const tbb::concurrent_set <V> &s)
 {
     return *s.begin();
 }
 
-template<typename V> V back(const tbb::concurrent_set<V> &s)
+template<typename V> V back(const tbb::concurrent_set <V> &s)
 {
     return *s.end();
 }
@@ -294,7 +296,7 @@ max_size(const C &container)
 
 
 template<typename T>
-arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
+arma::uvec find(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
 {
     arma::uvec r;
 #pragma omp parallel for ordered schedule(static, 1 + m2.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(m2.size()))
@@ -307,7 +309,7 @@ arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
 }
 
 template<typename T>
-arma::uvec lower_bound(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
+arma::uvec lower_bound(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
 {
     arma::uvec r;
 #pragma omp parallel for ordered schedule(static, 1 + m2.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(m2.size()))
@@ -333,7 +335,6 @@ bool file_exists(const std::string &filename);
 /* Return codes */
 typedef size_t svrerr_t;
 #define SVR_RC_GENERAL_ERROR (std::numeric_limits<size_t>::max())
-
 
 const long multi_div = 100000; // number of zeros tell the number of decimal points to assume when comparing doubles
 
@@ -362,8 +363,8 @@ clone_shared_ptr_elements(const std::deque<std::shared_ptr<T>> &arg)
 }
 
 template<typename T, typename L>
-tbb::concurrent_set<std::shared_ptr<T>, L> inline
-clone_shared_ptr_elements(const tbb::concurrent_set<std::shared_ptr<T>, L> &arg)
+tbb::concurrent_set <std::shared_ptr<T>, L> inline
+clone_shared_ptr_elements(const tbb::concurrent_set <std::shared_ptr<T>, L> &arg)
 {
     tbb::concurrent_set<std::shared_ptr<T>, L> res;
 #pragma omp parallel num_threads(adj_threads(arg.size()))
@@ -427,7 +428,7 @@ to_times(const std::map<bpt::ptime, std::shared_ptr<T>> &data_rows)
 
 
 template<typename T> void
-tovec(const arma::Mat<T> &input, std::vector<T> &output)
+tovec(const arma::Mat <T> &input, std::vector<T> &output)
 {
     output.resize(input.n_elem);
     output.shrink_to_fit();
@@ -435,7 +436,7 @@ tovec(const arma::Mat<T> &input, std::vector<T> &output)
 }
 
 template<typename T> std::vector<T>
-tovec(const arma::Mat<T> &input)
+tovec(const arma::Mat <T> &input)
 {
     std::vector<T> output(input.n_elem);
     tovec(input, output);
@@ -445,7 +446,7 @@ tovec(const arma::Mat<T> &input)
 viennacl::vector<double> tovcl(const arma::colvec &in);
 
 template<typename T> viennacl::matrix <T>
-tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
+tovcl(const arma::Mat <T> &in, const viennacl::ocl::context &cx)
 {
     cl_int rc;
     auto clbuf = (T *) clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
@@ -458,7 +459,7 @@ tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
 
 
 template<typename T> viennacl::matrix <T>
-tovcl(const arma::Mat<T> &in)
+tovcl(const arma::Mat <T> &in)
 {
     auto hostbuf = (T *) malloc(in.n_elem * sizeof(T));
     viennacl::matrix<T> r(hostbuf, viennacl::MAIN_MEMORY, in.n_cols, in.n_rows);
@@ -467,8 +468,8 @@ tovcl(const arma::Mat<T> &in)
 }
 
 
-template<typename T> arma::Col<T>
-toarmacol(const tbb::concurrent_vector<T> &v)
+template<typename T> arma::Col <T>
+toarmacol(const tbb::concurrent_vector <T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());
@@ -476,8 +477,8 @@ toarmacol(const tbb::concurrent_vector<T> &v)
     return r;
 }
 
-template<typename T> arma::Col<T>
-toarmacol(const tbb::concurrent_unordered_set<T> &v)
+template<typename T> arma::Col <T>
+toarmacol(const tbb::concurrent_unordered_set <T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());
@@ -486,7 +487,7 @@ toarmacol(const tbb::concurrent_unordered_set<T> &v)
 }
 
 
-template<typename T> arma::Mat<T>
+template<typename T> arma::Mat <T>
 toarma(const viennacl::matrix <T> &in)
 {
     arma::Mat<T> r(in.internal_size1(), in.internal_size2());
@@ -573,21 +574,21 @@ public:
     }
 };
 
-template <typename T>
+template<typename T>
 struct copyatomic
 {
     std::atomic<T> _a;
 
     copyatomic()
-            :_a()
+            : _a()
     {}
 
     copyatomic(const std::atomic<T> &a)
-            :_a(a.load(std::memory_order_relaxed))
+            : _a(a.load(std::memory_order_relaxed))
     {}
 
     copyatomic(const copyatomic &other)
-            :_a(other._a.load(std::memory_order_relaxed))
+            : _a(other._a.load(std::memory_order_relaxed))
     {}
 
     copyatomic &operator=(const copyatomic &other)
@@ -658,6 +659,37 @@ arma::mat af_product(const arma::mat &a, const arma::mat &b)
     return product;
 }
 #endif
+
+// Use for deque and vector containers
+template<typename T>
+void keep_indices(T &d, const std::deque<size_t> &indices)
+{
+    size_t last = 0;
+#pragma unroll
+    for (size_t i = 0; i < d.size(); ++i, ++last) {
+        while (std::find(indices.cbegin(), indices.cend(), i) == indices.cend() && i < d.size()) ++i;
+        if (i >= d.size()) break;
+        d[last] = d[i];
+    }
+    d.resize(last);
+}
+
+// Use for map and set containers
+template<typename ContainerT, typename PredicateT>
+void remove_if(ContainerT &items, const PredicateT &predicate)
+{
+    typename std::decay_t<ContainerT>::iterator it = items.begin();
+#pragma unroll
+    while (items.size() && it != items.end())
+        if (predicate(*it)) {
+            if (items.size() < 2) {
+                items.clear();
+                return;
+            } else
+                it = items.erase(it);
+        } else
+            ++it;
+}
 
 } // namespace common
 } // namespace svr

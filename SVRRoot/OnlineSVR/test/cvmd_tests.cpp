@@ -18,7 +18,7 @@
 
 namespace svr {
 
-constexpr size_t INPUT_LIMIT = std::numeric_limits<size_t>::max();
+constexpr size_t INPUT_LIMIT = CVMD_INIT_LEN;
 constexpr unsigned DECON_LEVELS = 32;
 constexpr double TEST_TOL = 1e-14;
 const std::string transform_input_filename = "xauusd_1_2023.csv";

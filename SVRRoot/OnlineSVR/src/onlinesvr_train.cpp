@@ -40,8 +40,11 @@ OnlineMIMOSVR::batch_train(
         }
     }
 
-    const auto num_chunks = get_num_chunks();
-    if (ixs.size() != num_chunks) ixs = generate_indexes();
+    if (ixs.empty()) {
+        ixs = generate_indexes();
+        (**param_set.cbegin()).set_svr_kernel_param(0);
+    }
+    auto num_chunks = ixs.size();
     train_feature_chunks_t.resize(num_chunks);
     train_label_chunks.resize(num_chunks);
     OMP_LOCK(param_set_l)
@@ -64,14 +67,10 @@ OnlineMIMOSVR::batch_train(
         if (precalc_kernel_matrices && precalc_kernel_matrices->size())
             LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
         PROFILE_EXEC_TIME(tune(), "Tune kernel parameters for level " << decon_level << ", gradient " << (**param_set.cbegin()).get_grad_level() << " of " << num_chunks << " chunks");
-        const auto p = *param_set.cbegin();
-        param_set = ccache().get_best_parameters(p->get_input_queue_column_name(), p->get_decon_level(), p->get_grad_level(), num_chunks);
+        num_chunks = ixs.size();
 #if 0
-        // Recombine parameters works only on the first gradient and with same number of chunks (decrement distance) across all models
-        if (p_dataset->get_gradient_count() == 1)
 #pragma omp parallel for schedule(static, 1) num_threads(num_chunks)
-            for (size_t i = 0; i < num_chunks; ++i)
-                recombine_params(i);
+        for (size_t i = 0; i < num_chunks; ++i) recombine_params(i);
 #endif
 #if 0
         if (model_id) {
@@ -100,7 +99,7 @@ OnlineMIMOSVR::batch_train(
     }
 
     if (weight_chunks.size() != num_chunks) weight_chunks.resize(num_chunks);
-    if (p_kernel_matrices->size() != ixs.size()) p_kernel_matrices->resize(ixs.size());
+    if (p_kernel_matrices->size() != num_chunks) p_kernel_matrices->resize(num_chunks);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_chunks))
     for (size_t i = 0; i < num_chunks; ++i) {
         if (!tuned) {

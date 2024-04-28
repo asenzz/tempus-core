@@ -130,14 +130,13 @@ datamodel::t_tuned_parameters_ptr calc_cache::checkin_tuner(const datamodel::Onl
     iter_state->second.started_tuners == iter_state->second.completed_tuners && iter_state->second.completed_tuners == ssize_t(svr.get_dataset()->get_model_count())
 
 
-void calc_cache::checkout_tuner(const datamodel::OnlineMIMOSVR &svr)
+void calc_cache::checkout_tuner(const std::string &input_queue_column_name)
 {
-    const auto p_params = svr.get_params_ptr();
     const std::scoped_lock l(tuners_mx);
-    auto tune_iter = tune_predictions.find(p_params->get_input_queue_column_name());
+    auto tune_iter = tune_predictions.find(input_queue_column_name);
     if (tune_iter == tune_predictions.end()) return;
     ++tune_iter->second.completed_tuners;
-    LOG4_DEBUG("Checking out tuner " << *p_params << ", started tuners " << tune_iter->second.started_tuners << ", completed tuners " << tune_iter->second.completed_tuners);
+    LOG4_DEBUG("Checking out tuner " << input_queue_column_name << ", started tuners " << tune_iter->second.started_tuners << ", completed tuners " << tune_iter->second.completed_tuners);
     tune_iter->second.p_tuners_done->notify_all();
 }
 
@@ -186,13 +185,13 @@ void calc_cache::clear_tune_cache(const std::string &column_name)
 #pragma omp parallel num_threads(adj_threads(4))
     {
 #pragma omp task
-        remove_if(gamma_cache, find_tune);
+        common::remove_if(gamma_cache, find_tune);
 #pragma omp task
-        remove_if(cml_cache, find_tune);
+        common::remove_if(cml_cache, find_tune);
 #pragma omp task
-        remove_if(Zy_cache, find_tune);
+        common::remove_if(Zy_cache, find_tune);
 #pragma omp task
-        remove_if(Z_cache, find_tune);
+        common::remove_if(Z_cache, find_tune);
     }
 }
 

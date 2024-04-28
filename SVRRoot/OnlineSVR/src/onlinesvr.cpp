@@ -4,6 +4,7 @@
 #include <cmath>
 #include <deque>
 #include <execution>
+#include <magma_v2.h>
 #include "common/compatibility.hpp"
 #include "common/gpu_handler.hpp"
 #include "appcontext.hpp"
@@ -208,11 +209,13 @@ const dq_scaling_factor_container_t &OnlineMIMOSVR::get_scaling_factors() const
 
 void OnlineMIMOSVR::set_scaling_factor(const DQScalingFactor_ptr &p_sf)
 {
+    const std::scoped_lock l(sf_mx);
     business::DQScalingFactorService::add(scaling_factors, p_sf);
 }
 
 void OnlineMIMOSVR::set_scaling_factors(const dq_scaling_factor_container_t &new_scaling_factors)
 {
+    const std::scoped_lock l(sf_mx);
     business::DQScalingFactorService::add(scaling_factors, new_scaling_factors);
 }
 
@@ -292,6 +295,50 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, cons
 #endif
 }
 
+coot::mat OnlineMIMOSVR::solve_irwls(const coot::mat &K_epsco, const coot::mat &K, const coot::mat &rhs, const size_t iters, const size_t gpu_id)
+{
+    magma_queue_t magma_queue = nullptr;
+    magma_init(); // initialize Magma
+    magma_queue_create(gpu_id, &magma_queue);
+    if (!magma_queue) LOG4_THROW("Failed creating MAGMA queue.");
+    const auto m = K.n_rows;
+    const auto b_n = rhs.n_cols;
+    coot::mat solved = rhs;
+    coot::get_rt().synchronise();
+    magma_int_t err, info;
+    if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, K.get_dev_mem(false).cuda_mem_ptr, m, solved.get_dev_mem(false).cuda_mem_ptr, m, &info)) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
+
+    auto best_sae = std::numeric_limits<double>::infinity();
+    coot::mat best_solution = solved;
+    size_t best_iter = 0;
+#pragma omp unroll
+    for (size_t i = 1; i < iters; ++i) {
+        const coot::mat error_mat = coot::abs(K * solved - rhs);
+        const double this_sae = coot::accu(error_mat);
+        if (this_sae < best_sae) {
+            LOG4_TRACE("IRWLS iteration " << i << ", SAE " << this_sae << ", kernel dimensions " << coot::size(K) << ", best SAE " << best_sae);
+            best_sae = this_sae;
+            best_solution = solved;
+            best_iter = i;
+        }
+        const coot::mat mult = coot::sqrt(error_mat + C_itersolve_delta / (double(i) * C_itersolve_range / double(iters)));
+        const coot::mat left = (mult * coot::ones<coot::mat>(mult.n_cols, K.n_cols)) % K_epsco;
+        solved = rhs % mult;
+        coot::coot_synchronise();
+        if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, left.get_dev_mem(false).cuda_mem_ptr, m, solved.get_dev_mem(false).cuda_mem_ptr, m, &info)) < MAGMA_SUCCESS)
+            LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
+        //magma_queue_sync(queue);
+    }
+
+    magma_queue_destroy(magma_queue);
+
+    if ((err = magma_finalize()) < MAGMA_SUCCESS)
+        LOG4_THROW("Failed calling magma_finalize with error code " << err);
+    LOG4_DEBUG("IRWLS best iteration " << best_iter << ", MAE " << best_sae / double(solved.n_elem) << ", kernel dimensions " << coot::size(K) <<
+                                       ", delta " << C_itersolve_delta << ", range " << C_itersolve_range << ", solution " << coot::size(solved));
+    return best_solution;
+}
 
 void OnlineMIMOSVR::solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const size_t iters, const bool psd)
 {
@@ -312,6 +359,7 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &K_epsco, const arma::mat &K, co
     auto best_sae = std::numeric_limits<double>::infinity();
     arma::mat best_solution = solved;
     size_t best_iter = 0;
+#pragma omp unroll
     for (size_t i = 1; i < iters; ++i) {
         const arma::mat error_mat = arma::abs(K * solved - rhs);
         const double this_sae = arma::accu(error_mat);
@@ -424,28 +472,26 @@ size_t OnlineMIMOSVR::get_num_chunks(const size_t n_rows, const size_t chunk_siz
         LOG4_WARN("Rows count " << n_rows << " or maximum chunk size " << chunk_size_ << " is zero!");
         return 0;
     }
-    return std::max<size_t>(1, std::ceil( double(n_rows) / (chunk_size_ * C_chunk_offlap) ));
+    return std::ceil(double(n_rows) / (double(chunk_size_) * C_chunk_offlap)) - std::ceil(1. / C_chunk_offlap) + 1;
 }
 
 size_t OnlineMIMOSVR::get_num_chunks()
 {
     if (is_manifold()) return 0;
-    const auto n_rows_train = get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance()); // p_labels && p_labels->n_rows ? std::min<size_t>(p_labels->n_rows, decrement) : decrement;
-    return get_num_chunks(n_rows_train, max_chunk_size);
+    const auto n_rows_train = get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance());
+    size_t num_chunks = 0;
+    for (const auto chunk_coef: C_chunk_coefs)
+        num_chunks += get_num_chunks(n_rows_train, chunk_coef * max_chunk_size);
+    return num_chunks;
 }
 
-std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
-{
-    return OnlineMIMOSVR::generate_indexes(p_labels->n_rows, (**param_set.cbegin()).get_svr_decremental_distance(), max_chunk_size);
-}
-
-std::deque<arma::uvec> // TODO Remove n_rows_datasets
-OnlineMIMOSVR::generate_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size)
+std::deque<arma::uvec>
+generate_chunk_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size)
 {
     // Make sure we train on the latest data
-    const auto n_rows_train = get_full_train_len(n_rows_dataset, decrement);
+    const auto n_rows_train = OnlineMIMOSVR::get_full_train_len(n_rows_dataset, decrement);
     const auto start_offset = n_rows_dataset - n_rows_train;
-    const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
+    const auto num_chunks = OnlineMIMOSVR::get_num_chunks(n_rows_train, max_chunk_size);
     std::deque<arma::uvec> indexes(num_chunks);
     if (num_chunks == 1) {
         indexes[0] = start_offset + arma::regspace<arma::uvec>(0, n_rows_train - 1);
@@ -470,6 +516,25 @@ OnlineMIMOSVR::generate_indexes(const size_t n_rows_dataset, const size_t decrem
     return indexes;
 }
 
+auto
+OnlineMIMOSVR::generate_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size)
+{
+    std::deque<arma::uvec> res;
+    OMP_LOCK(ins_l)
+#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(C_chunk_coefs.size()))
+    for (const auto chunk_coef: C_chunk_coefs) {
+        const auto ixs = generate_chunk_indexes(n_rows_dataset, decrement, max_chunk_size * chunk_coef);
+        omp_set_lock(&ins_l);
+        res.insert(res.end(), ixs.cbegin(), ixs.cend());
+        omp_unset_lock(&ins_l);
+    }
+    return res;
+}
+
+std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
+{
+    return generate_indexes(p_labels->n_rows, (**param_set.cbegin()).get_svr_decremental_distance(), max_chunk_size);
+}
 
 arma::uvec
 OnlineMIMOSVR::get_other_ixs(const size_t i) const

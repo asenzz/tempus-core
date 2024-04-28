@@ -2,10 +2,8 @@
 #include <common/common.hpp>
 #include <mutex>
 
-
 namespace svr {
 namespace common {
-
 
 gpu_handler::gpu_handler()
 {
@@ -80,7 +78,7 @@ void gpu_handler::init_devices(const int device_type)
     auto ocl_platforms = viennacl::ocl::get_platforms();
     LOG4_INFO("Found " << ocl_platforms.size() << " platforms.");
     for (auto &pf: ocl_platforms) {
-        LOG4_INFO("Platform " << pf.info());
+        LOG4_INFO("Platform " << pf.id() << ", " << pf.info());
         try {
             const auto new_devices = pf.devices(device_type);
             const auto prev_dev_size = devices_.size();

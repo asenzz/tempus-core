@@ -36,13 +36,19 @@ IF(WIN32 OR CYGWIN)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_OS_CYGWIN=1")
 ENDIF()
 
+SET(COMPILER_EXTENSIONS -std=c++17)
+SET(COMPILER_EXTENSIONS_CC -std=c17) # Deprecated -fcilkplus -lcilkrts
+SET(COMPILER_EXTENSIONS_ICX -march=native -Wno-pass-failed -Wno-unsupported-floating-point-opt -fdiagnostics-show-option -qopenmp-simd -fiopenmp -fopenmp=libiomp5 -fopenmp-targets=spir64_x86_64) # ,nvptx64-nvidia-cuda
+SET(COMPILER_EXTENSIONS_GCC -fopenmp -ggdb)
+
 IF (CMAKE_BUILD_TYPE MATCHES "Rel")
     # SET(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON) # ICXP segfaults
-    SET(CXX_OPTIMIZATION_FLAGS -fomit-frame-pointer -mtune=native -march=native -m64 -mstackrealign -mmovbe -mavx2 -mavx -malign-double -msse4.2 -mfpmath=sse -O3) # TODO Find a way to disable -fPIC switch, which is on by default
+    SET(CXX_OPTIMIZATION_FLAGS -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -O3) # TODO Find a way to disable -fPIC switch, which is on by default
     SET(CXX_OPTIMIZATION_FLAGS_ICX -qopt-mem-layout-trans=4 -funroll-loops -Wno-overriding-option -fp-model=precise -fp-speculation=safe -pc80 -fimf-use-svml=true -qopt-prefetch -mbranches-within-32B-boundaries)
     SET(CXX_OPTIMIZATION_FLAGS_GCC "")
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -Wl,--icf=safe -flto=full -fwhole-program)
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -Wl,-z,muldefs -fdiagnostics-show-option -qopenmp-simd -fiopenmp -fopenmp=libiomp5 -flto=full -Wl,--icf=safe -fopenmp-targets=spir64_x86_64 --offload-arch=native -Xopenmp-target-backend=spir64_x86_64 "-device=cpu -march=sse4.2")
+    SET(ENV {MKL_ENABLE_INSTRUCTIONS} "AVX2")
 ENDIF()
 
 IF (CMAKE_BUILD_TYPE MATCHES "Debug")
@@ -73,10 +79,22 @@ IF(USE_FAST_MATH)
     SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --use_fast_math" CACHE STRING "")
 ENDIF()
 
-SET(COMPILER_EXTENSIONS -std=c++17)
-SET(COMPILER_EXTENSIONS_CC -std=c17) # Deprecated -fcilkplus -lcilkrts
-SET(COMPILER_EXTENSIONS_ICX -Wno-pass-failed -Wno-unsupported-floating-point-opt -fdiagnostics-show-option -qopenmp-simd -fiopenmp -fopenmp=libiomp5 -fopenmp-targets=spir64_x86_64) # ,nvptx64-nvidia-cuda
-SET(COMPILER_EXTENSIONS_GCC -fopenmp -ggdb)
+OPTION(PRODUCTION_BUILD "Generate maximum performance build for use in well tested production setting." OFF)
+IF(PRODUCTION_BUILD)
+    ADD_COMPILE_DEFINITIONS(-DCOOT_NO_DEBUG -DARMA_NO_DEBUG -s)
+ENDIF()
+
+OPTION(PROFILE_OPTIMIZE "Generate profiling instrumentation code" OFF)
+IF(PROFILE_OPTIMIZE)
+    IF (USE_INTEL_COMPILER)
+        LIST(APPEND COMPILER_EXTENSIONS_ICX -fprofile-sample-generate)
+    ELSE()
+        LIST(APPEND COMPILER_EXTENSIONS_GCC -fprofile-generate)
+    ENDIF()
+    LIST(APPEND COMPILER_EXTENSIONS -fno-omit-frame-pointer)
+ELSE()
+    LIST(APPEND COMPILER_EXTENSIONS -fomit-frame-pointer)
+ENDIF()
 
 IF (USE_INTEL_COMPILER)
     FOREACH (OPT IN LISTS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_ICX CMAKE_PEDANTIC_FLAGS CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_ICX)
@@ -86,7 +104,6 @@ IF (USE_INTEL_COMPILER)
         ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:${OPT}>")
     ENDFOREACH()
     ADD_LINK_OPTIONS(${LINKER_OPTIMIZATION_FLAGS} ${LINKER_OPTIMIZATION_FLAGS_ICX}) # ${CXX_OPTIMIZATION_FLAGS} ${COMPILER_EXTENSIONS} ${COMPILER_EXTENSIONS_ICX})
-    OPTION(PROFILE_OPTIMIZE "Generate profiling code for Intel HWPGO" OFF)
 ELSE()
     FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_GCC)
         ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:${OPT}>")
@@ -97,6 +114,18 @@ ELSE()
     ADD_LINK_OPTIONS(${LINKER_OPTIMIZATION_FLAGS_GCC} ${CXX_OPTIMIZATION_FLAGS} ${COMPILER_EXTENSIONS} ${COMPILER_EXTENSIONS_GCC})
 ENDIF()
 
+FILE(GLOB_RECURSE PERF_DATA_FILES FOLLOW_SYMLINKS "*.perf.data")
+FOREACH (PERF_DATA IN LISTS PERF_DATA_FILES)
+    IF(EXISTS ${PERF_DATA} AND EXISTS ${PERF_DATA}.freq.prof AND EXISTS ${PERF_DATA}.misp.prof)
+        MESSAGE("Found perf data in ${PERF_DATA}")
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:-fprofile-sample-use=${PERF_DATA}.freq.prof>")
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:-mllvm>")
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:-unpredictable-hints-file=${PERF_DATA}.misp.prof>")
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:-fprofile-sample-use=${PERF_DATA}.freq.prof -mllvm -unpredictable-hints-file=${PERF_DATA}.misp.prof>")
+    ELSE()
+        MESSAGE("Complete perf data not found in ${PERF_DATA}, ${PERF_DATA}.freq.prof and ${PERF_DATA}.misp.prof")
+    ENDIF()
+ENDFOREACH()
 
 # ADD_COMPILE_OPTIONS(${CXX_OPTIMIZATION_FLAGS} ${CXX_OPTIMIZATION_FLAGS_ICX} ${COMPILER_EXTENSIONS} ${COMPILER_EXTENSIONS_ICX} ${COMPILER_EXTENSIONS_CC})
 
@@ -182,6 +211,7 @@ FIND_PACKAGE(Armadillo REQUIRED)
 FIND_PACKAGE(MKL REQUIRED)
 FIND_PACKAGE(PostgreSQL REQUIRED)
 FIND_PACKAGE(LibPQXX REQUIRED)
+FIND_PACKAGE(Bandicoot REQUIRED)
 
 SET(ENABLE_OMP_OFFLOAD ON CACHE BOOL "ENABLE_OMP_OFFLOAD" FORCE)
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})

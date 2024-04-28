@@ -6,8 +6,11 @@ fi
 
 # export DBG=gdb-oneapi
 export DBG=/usr/bin/gdb
+export DBG=/opt/intel/oneapi/debugger/2024.1/opt/debugger/bin/gdb-oneapi
 # export DBG=/usr/local/cuda/bin/cuda-gdb
-
+# export PERF=/opt/intel/oneapi/vtune/2024.1/bin64/amplxe-perf
+export PERF=/usr/bin/perf
+export PROFGEN=/opt/intel/oneapi/compiler/latest/bin/compiler/llvm-profgen
 
 export DAEMON_DIR=${PWD} # /mnt/faststore/repo/tempus-core/build
 export DAEMON_CONFIG=$DAEMON_DIR/../config/daemon.config
@@ -47,10 +50,10 @@ export OMP_WAIT_POLICY=PASSIVE                            # Sets spincount to ze
 # export OMP_SCHEDULE=dynamic,1                           # May disable nesting (bug in OMP?)
 export MAX_ACTIVE_LEVELS=$(( 10 * $NUM_THREADS ))         # Nested depth
 export OMP_THREAD_LIMIT=$(( 20 * $MAX_ACTIVE_LEVELS ))    # Increase with RAM size
-export OMP_NUM_THREADS=${NUM_THREADS}
+export OMP_NUM_THREADS=2 # ${NUM_THREADS}
 # export CILK_NWORKERS=${NUM_THREADS}
-export MKL_NUM_THREADS=${NUM_THREADS}
-export MAGMA_NUM_THREADS=${NUM_THREADS}
+export MKL_NUM_THREADS=6 # ${NUM_THREADS}
+export MAGMA_NUM_THREADS=6 # ${NUM_THREADS}
 export MKL_DYNAMIC="FALSE"
 # export VISIBLE_GPUS="0" # Disable GPUs
 # export CUDA_VISIBLE_DEVICES=VISIBLE_GPUS
@@ -64,4 +67,6 @@ then
   echo 1073741820 > /proc/sys/kernel/threads-max
   echo 1073741820 > /proc/sys/vm/max_map_count
   echo 1073741 > /proc/sys/kernel/pid_max
+  echo 0 > /proc/sys/kernel/kptr_restrict
+  echo -1 > /proc/sys/kernel/perf_event_paranoid
 fi

@@ -31,7 +31,7 @@ constexpr unsigned C_test_lag = DEFAULT_SVRPARAM_LAG_COUNT;
 const unsigned C_test_length = C_test_decrement + C_emo_test_len + common::INTEGRATION_TEST_VALIDATION_WINDOW;
 const std::string C_test_input_table_name = "q_svrwave_test_xauusd_avg_3600";
 const std::string C_test_aux_input_table_name = "q_svrwave_test_xauusd_avg_1";
-constexpr unsigned C_test_levels = MIN_LEVEL_COUNT;
+constexpr unsigned C_test_levels = 2 * MIN_LEVEL_COUNT;
 constexpr unsigned C_test_gradient_count = common::C_default_gradient_count;
 
 }
@@ -39,7 +39,7 @@ constexpr unsigned C_test_gradient_count = common::C_default_gradient_count;
 TEST(manifold_tune_train_predict, basic_integration)
 {
     omp_set_nested(true);
-    omp_set_max_active_levels(20 * std::thread::hardware_concurrency());
+    // omp_set_max_active_levels(20 * std::thread::hardware_concurrency());
     svr::context::AppContext::init_instance("../config/app.config");
     auto p_dataset = ptr<datamodel::Dataset>(
             0xDeadBeef, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",

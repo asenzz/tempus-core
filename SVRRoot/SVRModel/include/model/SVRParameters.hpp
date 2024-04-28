@@ -249,7 +249,7 @@ struct param_preds_cmp
 };
 typedef std::set<t_param_preds_ptr, param_preds_cmp> t_parameter_predictions_set;
 using t_parameter_predictions_set_ptr = std::shared_ptr<t_parameter_predictions_set>;
-typedef std::unordered_map<std::tuple<size_t /* level */, size_t /* grad */, size_t /* chunk */>, t_parameter_predictions_set_ptr> t_tuned_parameters;
+typedef std::map<std::tuple<size_t /* level */, size_t /* grad */, size_t /* chunk */>, t_parameter_predictions_set_ptr> t_tuned_parameters;
 using t_tuned_parameters_ptr = std::shared_ptr<t_tuned_parameters>;
 
 }

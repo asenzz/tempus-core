@@ -142,9 +142,11 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::cx_vec lambda_hat(freqs.n_elem); // keeping track of the evolution of lambda_hat with the iterations
     arma::cx_mat u_hat_plus(T, K);
     arma::cx_mat u_hat_plus_old(arma::size(u_hat_plus));
-    double uDiff = CVMD_TOL + std::numeric_limits<double>::epsilon(); //tol + eps must be different from just tol, that is why eps should not be too small
+    double uDiff = CVMD_TOL + std::numeric_limits<double>::epsilon(); // tol + eps must be different from just tol, that is why eps should not be too small
     arma::cx_vec sum_uk(T);
+
     size_t n_iter = 0;
+#pragma unroll
     while (n_iter < MAX_VMD_ITERATIONS && uDiff > CVMD_TOL) {
         //% update first mode accumulator
         sum_uk += u_hat_plus_old.col(K - 1) - u_hat_plus_old.col(0);
@@ -155,7 +157,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         //when DC is true, the first frequency can not be changed. that is why this cycle only for DC false.
         if (!HAS_DC) calc_omega(omega, 0, freqs, u_hat_plus, T);
 
-        // update of any other mode (k from 1 to K-1), after the first
+        // update of any other mode (k from 1 to K - 1), after the first
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(K - 1)) ordered
         for (size_t k = 1; k < K; ++k) {
             // accumulator
@@ -168,7 +170,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         }
         // Dual ascent
         lambda_hat += TAU_FIDELITY * (arma::accu(u_hat_plus.row(0)) - f_hat_plus);
-        // loop counter
+
         ++n_iter;
 
         // compute uDiff

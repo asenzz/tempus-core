@@ -119,7 +119,7 @@ public:
 
     datamodel::t_tuned_parameters_ptr checkin_tuner(const datamodel::OnlineMIMOSVR &svr);
 
-    void checkout_tuner(const datamodel::OnlineMIMOSVR &svr);
+    void checkout_tuner(const std::string &input_queue_column_name);
 
     bool recombine_go(const datamodel::OnlineMIMOSVR &svr);
 

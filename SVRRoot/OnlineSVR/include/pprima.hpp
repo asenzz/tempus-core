@@ -47,7 +47,7 @@ public:
            const size_t maxfun = 50,
            const double rhobeg = std::numeric_limits<double>::quiet_NaN(),
            const double rhoend = std::numeric_limits<double>::quiet_NaN(),
-           const arma::mat &x0_ = {}, const arma::vec &pows = {});
+           const arma::mat &x0_ = {}, const arma::vec &pows = {}, const size_t n_threads = 0);
 
     static arma::vec ensure_bounds(const double *x, const arma::mat &bounds);
 

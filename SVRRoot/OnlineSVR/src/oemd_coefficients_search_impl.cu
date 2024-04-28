@@ -35,6 +35,7 @@ gpu_multiply_smooth(
 {
     const auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
     const auto total_block_size = blockDim.x * gridDim.x;
+#pragma unroll
     for (auto j = thread_idx; j < input_size / 2 + 1; j += total_block_size) { // Because it is D2Z transform
         const double mult = std::exp(-coeff * double(j) / double(input_size));
         output[j].x *= mult;
@@ -52,9 +53,11 @@ vec_sift(
         cufftDoubleComplex *__restrict__ rem)
 {
     double px, py;
+#pragma unroll
     for (size_t j = blockIdx.x * blockDim.x + threadIdx.x; j < fft_size; j += blockDim.x * gridDim.x) {
         px = 1. - x[j].x;
         py = -x[j].y;
+#pragma unroll
         for (size_t i = 1; i < siftings; ++i) {
             px = px * (1. - x[j].x) - py * (-x[j].y);
             py = px * (-x[j].y) + py * (1. - x[j].x);
@@ -85,8 +88,10 @@ sum_expanded(
     double _sum_rem = 0;
     double _sum_corr = 0;
     // TODO Optimize code here!
+#pragma unroll
     for (size_t i = g_thr_ix; i < expand_size; i += grid_size) {
         double sum1 = 0, sum2 = 0;
+#pragma unroll
         for (size_t j = 0; j < expand_size; ++j) {
             sum1 += d_global_sift_matrix[labs(i - j)] * d_imf_mask[j];
             sum2 += d_global_sift_matrix[labs(i - j)] * d_rem_mask[j];
@@ -104,6 +109,7 @@ sum_expanded(
 
     __syncthreads();
 
+#pragma unroll
     for (size_t size = CUDA_BLOCK_SIZE / 2; size > 0; size /= 2) { // uniform
         if (thr_ix >= size) continue;
         _sh_sum_imf[thr_ix] += _sh_sum_imf[thr_ix + size];
@@ -142,6 +148,7 @@ oemd_coefficients_search::transform(
     fft_release();
 
     cufftDoubleComplex *dev_input_fft = thrust::raw_pointer_cast(d_input_fft.data());
+#pragma omp unroll
     for (size_t i = 0; i < siftings; ++i) {
         fft_acquire();
         cufft_errchk(cufftExecD2Z(plan_forward, d_values, dev_input_fft));
@@ -304,6 +311,7 @@ oemd_coefficients_search::evaluate_mask(
     double corr = 0;
     size_t corr_count = 0;
     const size_t half_window_len = inside_window_len / 2;
+#pragma omp unroll
     for (size_t i = half_window_len; i < inside_window_len; ++i) { // Non-parallelissabile!
         sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
         sum2 += pow(h_rem_temp[i] - h_rem_temp[i - 1], 2);
@@ -387,7 +395,7 @@ oemd_coefficients_search::create_random_mask(
 {
     step *= common::drander(buffer);
     if (!start_mask) {
-//#pragma omp simd
+#pragma omp unroll
         for (size_t i = 0; i < mask_size; ++i) mask[i] = common::drander(buffer);
     } else {
 #pragma omp parallel for default(shared) num_threads(adj_threads(mask_size))
@@ -466,7 +474,7 @@ oemd_coefficients_search::optimize_levels(
     const auto in_colix = input.begin()->get()->get_values().size() / 2;
 
     std::vector<double> h_workspace(window_len);
-#pragma omp parallel for schedule(static, 1 + window_len / std::thread::hardware_concurrency()) num_threads(adj_threads(window_len))
+#pragma omp unroll // parallel for schedule(static, 1 + window_len / std::thread::hardware_concurrency()) num_threads(adj_threads(window_len))
     for (size_t i = window_start; i < window_end; ++i)
         h_workspace[i - window_start] = i < tail.size() ? tail[i] : input[i - tail.size()]->get_value(in_colix);
 
@@ -493,6 +501,7 @@ oemd_coefficients_search::optimize_levels(
         cufft_errchk(cufftPlan1d(&plan_full_forward[i], window_len, CUFFT_D2Z, n_batch));
         cufft_errchk(cufftPlan1d(&plan_full_backward[i], window_len, CUFFT_Z2D, n_batch));
     }
+#pragma omp unroll
     for (size_t i = 0; i < masks.size(); ++i) {
         std::deque<cufftHandle> plan_sift_forward(C_parallelism);
         std::deque<cufftHandle> plan_sift_backward(C_parallelism);

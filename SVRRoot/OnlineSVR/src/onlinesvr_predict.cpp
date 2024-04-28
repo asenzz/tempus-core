@@ -31,8 +31,8 @@ std::deque<size_t> OnlineMIMOSVR::get_predict_chunks() const
     std::deque<size_t> score_idx(chunks_score.size());
     std::iota(score_idx.begin(), score_idx.end(), 0);
     std::stable_sort(std::execution::par_unseq, score_idx.begin(), score_idx.end(), [&](const size_t i1, const size_t i2) { return chunks_score[i1] < chunks_score[i2]; });
-    LOG4_DEBUG("Predicting using " << C_predict_chunks * score_idx.size() << " chunks from " << score_idx << ", scores " << chunks_score);
-    score_idx.erase(score_idx.begin() + std::max<size_t>(1, C_predict_chunks * score_idx.size()), score_idx.end());
+    score_idx.erase(score_idx.begin() + C_predict_chunks, score_idx.end());
+    LOG4_DEBUG("Level " << decon_level << " using " << C_predict_chunks << " chunks " << score_idx << ", of all chunks with scores " << chunks_score);
     return score_idx;
 }
 
@@ -40,13 +40,12 @@ std::deque<size_t> OnlineMIMOSVR::get_predict_chunks() const
 arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict)
 {
     if (is_manifold()) return manifold_predict(x_predict);
-    const auto score_idx = get_predict_chunks();
     const arma::mat x_predict_t = x_predict.t();
     arma::mat prediction;
     OMP_LOCK(predict_l);
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(score_idx.size()))
-    for (const auto chunk_ix: score_idx) {
-        LOG4_TRACE("Predicting " << arma::size(x_predict) << " with chunk " << chunk_ix << ", level " << decon_level << ", gradient " << gradient);
+#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(ixs.size()))
+    for (size_t chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
+        LOG4_TRACE("Predicting " << arma::size(x_predict) << " with chunk " << chunk_ix << ", indexes " << ixs[chunk_ix].front() << ".." << ixs[chunk_ix](ixs[chunk_ix].n_rows * .9 - 1) << ".." << ixs[chunk_ix].back() << ", level " << decon_level << ", gradient " << gradient);
         const auto p_params = get_params_ptr(chunk_ix);
         arma::mat chunk_x_predict_t = x_predict_t;
         const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient);
@@ -66,7 +65,7 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict)
             prediction += multiplicated;
         omp_unset_lock(&predict_l);
     }
-    return prediction / double(score_idx.size());
+    return prediction / double(ixs.size());
 }
 
 

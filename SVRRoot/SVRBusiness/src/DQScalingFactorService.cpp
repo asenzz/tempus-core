@@ -26,7 +26,8 @@ void DQScalingFactorService::add(datamodel::dq_scaling_factor_container_t &sf, c
 
 void DQScalingFactorService::add(datamodel::dq_scaling_factor_container_t &sf, const datamodel::dq_scaling_factor_container_t &new_sf, const bool overwrite)
 {
-    std::for_each(std::execution::par_unseq, new_sf.cbegin(), new_sf.cend(), [&sf, overwrite](const auto &nf) { if (!match_n_set(sf, *nf, overwrite)) sf.emplace(nf); });
+    std::for_each(std::execution::par_unseq, new_sf.cbegin(), new_sf.cend(), [&sf, overwrite](const auto &nf)
+                        { if (!match_n_set(sf, *nf, overwrite)) sf.emplace(nf); });
 }
 
 bool DQScalingFactorService::exists(const datamodel::DQScalingFactor_ptr &dq_scaling_factor)
@@ -56,7 +57,6 @@ DQScalingFactorService::find_all_by_model_id(const bigint model_id)
 }
 
 
-
 datamodel::DQScalingFactor_ptr
 DQScalingFactorService::find(
         const datamodel::dq_scaling_factor_container_t &scaling_factors,
@@ -68,18 +68,19 @@ DQScalingFactorService::find(
         const bool check_labels)
 {
     const auto res = std::find_if(std::execution::par_unseq, scaling_factors.cbegin(), scaling_factors.cend(),
-          [&check_features, &check_labels, &model_id, &chunk, &gradient, &level](const auto &sf) {
-              return (!model_id || !sf->get_model_id() || sf->get_model_id() == model_id)
-                  && level == sf->get_decon_level()
-                  && gradient == sf->get_grad_depth()
-                  && chunk == sf->get_chunk_index()
-                  && (!check_labels || std::isnormal(sf->get_labels_factor()))
-                  && (!check_features || std::isnormal(sf->get_features_factor()))
-                  && (!check_labels || common::isnormalz(sf->get_dc_offset_labels()))
-                  && (!check_features || common::isnormalz(sf->get_dc_offset_features()));
-    });
+                                  [&check_features, &check_labels, &model_id, &chunk, &gradient, &level](const auto &sf) {
+                                      return (!model_id || !sf->get_model_id() || sf->get_model_id() == model_id)
+                                             && level == sf->get_decon_level()
+                                             && gradient == sf->get_grad_depth()
+                                             && chunk == sf->get_chunk_index()
+                                             && (!check_labels || std::isnormal(sf->get_labels_factor()))
+                                             && (!check_features || std::isnormal(sf->get_features_factor()))
+                                             && (!check_labels || common::isnormalz(sf->get_dc_offset_labels()))
+                                             && (!check_features || common::isnormalz(sf->get_dc_offset_features()));
+                                  });
     if (res == scaling_factors.cend()) {
-        LOG4_ERROR("Scaling factors for model " << model_id << " not found, chunk " << chunk << ", gradient " << gradient << ", level " << level << ", features " << check_features);
+        LOG4_ERROR("Scaling factors for model " << model_id << " not found, chunk " << chunk << ", gradient " << gradient << ", level " << level << ", features "
+                                                << check_features);
         return nullptr;
     }
     return *res;
@@ -131,7 +132,8 @@ DQScalingFactorService::calculate(const size_t chunk_ix, const datamodel::Online
     return res;
 }
 
-void DQScalingFactorService::scale_features(const size_t chunk_ix, const size_t grad_level, const size_t lag, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t)
+void DQScalingFactorService::scale_features(const size_t chunk_ix, const size_t grad_level, const size_t lag, const datamodel::dq_scaling_factor_container_t &sf,
+                                            arma::mat &features_t)
 {
     const auto num_levels = features_t.n_rows / lag;
 #pragma omp parallel for num_threads(adj_threads(num_levels)) schedule(static, 1)
@@ -154,7 +156,8 @@ void DQScalingFactorService::scale_features(const size_t chunk_ix, const datamod
     scale_features(chunk_ix, svr_model.get_gradient_level(), svr_model.get_params_ptr(chunk_ix)->get_lag_count(), chunk_sf, features_t);
 }
 
-void DQScalingFactorService::scale_labels(const size_t chunk, const size_t gradient, const size_t level, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &labels)
+void
+DQScalingFactorService::scale_labels(const size_t chunk, const size_t gradient, const size_t level, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &labels)
 {
     const auto p_sf_labels = find(sf, 0, chunk, gradient, level, false, true);
     scale_labels(*p_sf_labels, labels);
@@ -171,13 +174,13 @@ void DQScalingFactorService::scale_labels(const size_t chunk_ix, const datamodel
 void DQScalingFactorService::scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels)
 {
     labels = common::scale(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
-    if (labels.has_nonfinite())  LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", labels " << labels);
+    if (labels.has_nonfinite()) LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", labels " << labels);
 }
 
 double DQScalingFactorService::scale_label(const datamodel::DQScalingFactor &sf, double &label)
 {
     label = common::scale(label, sf.get_labels_factor(), sf.get_dc_offset_labels());
-    if (!common::isnormalz(label))  LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", label " << label);
+    if (!common::isnormalz(label)) LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", label " << label);
     return label;
 }
 
