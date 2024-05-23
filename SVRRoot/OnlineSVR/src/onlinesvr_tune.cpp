@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), 6)))
+#define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<size_t>((MAX_THREADS), 4)))
 
 // #define TUNE_FIREFLY
 #define TUNE_PRIMA
@@ -26,6 +26,7 @@
 #endif
 
 #include <algorithm>
+#include <cublas_v2.h>
 #include <armadillo>
 #include <exception>
 #include <iterator>
@@ -36,6 +37,7 @@
 #include <omp.h>
 #include <string>
 #include <tuple>
+#include <magma.h>
 #include "common/compatibility.hpp"
 #include "common/defines.h"
 #include "firefly.hpp"
@@ -45,11 +47,13 @@
 #include "common/constants.hpp"
 #include "firefly.hpp"
 #include "appcontext.hpp"
-#include "cuqrsolve.hpp"
+#include "cuqrsolve.cuh"
+#include "common/cuda_util.cuh"
 #include "util/math_utils.hpp"
 #include "util/string_utils.hpp"
 #include "ModelService.hpp"
 #include "recombine_parameters.cuh"
+
 
 namespace svr {
 namespace datamodel {
@@ -127,6 +131,7 @@ eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arm
     return std::tuple(p_out_preds, p_out_labels, p_out_last_knowns, score);
 }
 
+#if 0
 auto
 coot_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, const arma::mat &labels, const arma::mat &last_knowns, const size_t train_len,
            const double meanabs_labels)
@@ -201,6 +206,7 @@ coot_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, cons
     }
     return std::tuple(p_out_preds, p_out_labels, p_out_last_knowns, score);
 }
+#endif
 
 auto
 batched_eval_score(
@@ -215,7 +221,7 @@ batched_eval_score(
     auto p_out_preds = ptr<std::deque<arma::mat>>(C_emo_max_j);
     auto p_out_labels = ptr<std::deque<arma::mat>>(C_emo_max_j);
     auto p_out_last_knowns = ptr<std::deque<arma::mat>>(C_emo_max_j);
-    std::vector<arma::mat> K_epsco_batch(C_emo_max_j), K_train_batch(C_emo_max_j), solutions(C_emo_max_j), labels_train_batch(C_emo_max_j);
+    std::deque<arma::mat> K_epsco_batch(C_emo_max_j), K_train_batch(C_emo_max_j), solutions, labels_train_batch(C_emo_max_j);
     arma::mat K_epsco = K;
     K_epsco.diag() += 1. / (2. * params.get_svr_C());
     double score = 0;
@@ -231,10 +237,13 @@ batched_eval_score(
         K_epsco_batch[j] = K_epsco.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final);
         K_train_batch[j] = K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final);
         labels_train_batch[j] = labels.rows(start_point_labels + x_train_start, start_point_labels + x_train_final);
-        solutions[j] = labels_train_batch[j];
     }
     try {
-        OnlineMIMOSVR::solve_batched_irwls(K_epsco_batch, K_train_batch, labels_train_batch, solutions, PROPS.get_online_learn_iter_limit());
+        common::gpu_context ctx;
+        magma_queue_t mq;
+        magma_queue_create(&mq);
+        solutions = OnlineMIMOSVR::solve_batched_irwls(K_epsco_batch, K_train_batch, labels_train_batch, PROPS.get_online_learn_iter_limit(), mq, ctx.phy_id());
+        magma_queue_destroy(mq);
         K_epsco_batch.clear();
         K_train_batch.clear();
         labels_train_batch.clear();
@@ -269,6 +278,7 @@ __bail:
     return std::tuple(p_out_preds, p_out_labels, p_out_last_knowns, score);
 }
 
+#if 0
 double validate_gammas(
         const double mingamma, const arma::mat &Z, const arma::mat &Ztrain, const std::deque<double> &gamma_multis, const SVRParameters &score_params,
         const size_t chunk_ix, t_parameter_predictions_set &chunk_preds, omp_lock_t *p_chunk_preds_l, const double all_labels_meanabs, const size_t train_len,
@@ -303,20 +313,19 @@ double validate_gammas(
         if (!chunk_ix) LOG4_FILE("/tmp/tune_score_gamma_lambda.csv",
                                  score << ',' << p_gamma_params->get_svr_kernel_param() << ',' << p_gamma_params->get_svr_kernel_param2());
         omp_set_lock(p_chunk_preds_l);
-        if (chunk_preds.size() < size_t(common::C_tune_keep_preds) || score < (**chunk_preds.cbegin()).score) {
+        if (chunk_preds.size() < common::C_tune_keep_preds || score < (**chunk_preds.cbegin()).score) {
+            chunk_preds.pop_back();
             p_gamma_params->set_svr_C(1. / (2. * epsco));
-            chunk_preds.emplace(otr<t_param_preds>(score, p_gamma_params, p_out_preds, p_out_labels, p_out_last_knowns));
+            chunk_preds.emplace_front(otr<t_param_preds>(score, p_gamma_params, p_out_preds, p_out_labels, p_out_last_knowns));
             LOG4_DEBUG("Lambda, gamma tune best score " << score << ", MAPE " << 100. * score / double(C_emo_max_j) << " pct, for gamma multi " << gamma_mult <<
                                                         ", mingamma " << mingamma << ", parameters " << *p_gamma_params);
-            if (chunk_preds.size() > size_t(common::C_tune_keep_preds))
-                chunk_preds.erase(std::next(chunk_preds.begin(), common::C_tune_keep_preds), chunk_preds.end());
         }
         if (score < call_score) call_score = score;
         omp_unset_lock(p_chunk_preds_l);
     }
     return call_score;
 };
-
+#endif
 #ifdef SYSTEMIC_TUNE
 
 void OnlineMIMOSVR::tune()
@@ -473,8 +482,7 @@ void OnlineMIMOSVR::tune()
     ccache().checkout_tuner(*this);
 }
 
-#else
-
+#elif 0
 
 void OnlineMIMOSVR::tune()
 {
@@ -491,6 +499,7 @@ void OnlineMIMOSVR::tune()
                                 ", slide skip " << C_emo_slide_skip << ", max j " << C_emo_max_j << ", tune min validation window "
                                 << C_emo_tune_min_validation_window << ", test len " << C_emo_test_len << ", level " << decon_level << ", num chunks " << num_chunks);
     const auto input_queue_column_name = (**param_set.cbegin()).get_input_queue_column_name();
+    magma_init();
 #pragma omp parallel for schedule(static, 1) TUNE_THREADS(num_chunks)
     for (size_t chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_template_chunk_params = get_params_ptr(chunk_ix);
@@ -499,7 +508,7 @@ void OnlineMIMOSVR::tune()
                 if (!p->is_manifold()) {
                     p_template_chunk_params = otr(*p);
                     LOG4_WARN("Parameters for chunk " << chunk_ix << " not found, using template from " << *p);
-                    p_template_chunk_params->set_chunk_ix(chunk_ix);
+                    p_template_chunk_params->set_chunk_index(chunk_ix);
                     break;
                 }
             if (!p_template_chunk_params) LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
@@ -632,17 +641,24 @@ void OnlineMIMOSVR::tune()
             range_max_lambda = range_min_lambda + 2. * range_half_lambda * lambda_range_tightening;
         }
 #endif
-        if (p_chunk_preds->size() > common::C_tune_keep_preds) p_chunk_preds->erase(std::next(p_chunk_preds->begin(), common::C_tune_keep_preds), p_chunk_preds->end());
         std::for_each(std::execution::par_unseq, p_chunk_preds->cbegin(), p_chunk_preds->cend(), [](const auto &pp) {
-            LOG4_INFO("Final best score " << pp->score << ", final parameters " << *pp->p_params);
+            LOG4_INFO("Final best score " << pp->score << ", final parameters " << *pp->params);
         });
-        chunks_score[chunk_ix] = (**p_chunk_preds->cbegin()).score;
+        chunks_score[chunk_ix].first = (**p_chunk_preds->cbegin()).score;
+        // business::DQScalingFactorService::unscale_labels(*p_sf, chunks_score[chunk_ix]); // Not needed if score is MAPE
 #pragma omp critical(ins_chunk_results_l)
             p_predictions->emplace(std::tuple{decon_level, gradient, chunk_ix}, p_chunk_preds);
         if (calculated_sf) set_scaling_factors(chunk_sf);
     }
+/*
+    const auto used_chunks; // get_predict_chunks();
 
-    const auto used_chunks = get_predict_chunks();
+    for (auto iter = scaling_factors.cbegin(); iter != scaling_factors.cend();)
+        if (std::find(used_chunks.cbegin(), used_chunks.cend(), (**iter).get_chunk_index()) == used_chunks.cend())
+            iter = scaling_factors.unsafe_erase(iter);
+        else
+            ++iter;
+
 #pragma omp parallel num_threads(adj_threads(4))
 #pragma omp single
     {
@@ -659,6 +675,9 @@ void OnlineMIMOSVR::tune()
     {
         size_t chunk_ix_iter = 0;
         auto pred_iter = p_predictions->begin();
+#ifndef __GNUC__
+#pragma unroll
+#endif
         while (pred_iter != p_predictions->cend()) {
             if (std::get<0>(pred_iter->first) != 0 || std::get<1>(pred_iter->first) != 0) {
                 ++pred_iter;
@@ -673,13 +692,18 @@ void OnlineMIMOSVR::tune()
             LOG4_DEBUG("Replacing " << std::get<0>(nh_key) << ", " << std::get<1>(nh_key) << ", " << std::get<2>(nh_key) << " with " << chunk_ix_iter);
             std::get<2>(nh_key) = chunk_ix_iter;
             nh.key() = nh_key;
+#ifndef __GNUC__
+#pragma unroll
+#endif
             for (auto &p: *nh.mapped()) p->p_params->set_chunk_ix(chunk_ix_iter);
-            auto [ins_iter, rc, nh_] = p_predictions->insert(std::move(nh));
+            const auto [ins_iter, rc, nh_] = p_predictions->insert(std::move(nh));
             if (!rc) LOG4_THROW("Failed inserting " << std::get<0>(ins_iter->first) << ", " << std::get<1>(ins_iter->first) << ", " << std::get<2>(ins_iter->first));
             ++chunk_ix_iter;
             ++pred_iter;
         }
     }
+    */
+    ma_errchk(magma_finalize());
     param_set = ccache().get_best_parameters(input_queue_column_name, decon_level, gradient, ixs.size());
     ccache().checkout_tuner(input_queue_column_name);
 }
@@ -689,9 +713,12 @@ void OnlineMIMOSVR::tune()
 void
 OnlineMIMOSVR::recombine_params(const size_t chunk_ix)
 {
-    if (not ccache().recombine_go(*this)) return;
+    const datamodel::t_level_tuned_parameters *p_tune_predictions = ccache().recombine_go(*this, chunk_ix);
+    if (!p_tune_predictions) {
+        LOG4_DEBUG("Skipping recombine parameters.");
+        return;
+    }
 
-    const auto &tune_predictions = ccache().get_tuner_state(column_name);
     const auto colct = p_dataset->get_model_count();
     const auto levct = p_dataset->get_transformation_levels();
     constexpr size_t grad_level = 0; // Only gradient level 0 supported
@@ -705,24 +732,24 @@ OnlineMIMOSVR::recombine_params(const size_t chunk_ix)
         for (uint32_t rowix = 0; rowix < common::C_tune_keep_preds; ++rowix) {
             params_preds[rowix * colct + colix].params_ix = rowix;
             const auto levix = business::ModelService::to_level_ix(colix, levct);
-            if (tune_predictions.at({levix, grad_level, chunk_ix})->size() < common::C_tune_keep_preds)
-                LOG4_THROW("Not enough tune results " << tune_predictions.at({levix, grad_level, chunk_ix})->size() << " to recombine!");
             const auto p_sf = business::DQScalingFactorService::find(scaling_factors, 0, levix, grad_level, chunk_ix, false, true);
-            const auto &tp = *tune_predictions.at({levix, grad_level, chunk_ix}) ^ rowix;
-#pragma omp parallel for num_threads(adj_threads(C_emo_max_j))
+            const auto &tp = p_tune_predictions->at(levix).param_pred[rowix];
+#pragma omp unroll
             for (uint32_t j = 0; j < C_emo_max_j; ++j) {
                 const uint32_t elto = C_emo_tune_min_validation_window + (C_emo_max_j - j - 1) * C_emo_slide_skip;
+#pragma omp unroll
                 for (uint32_t el = 0; el < elto; ++el) {
-                    auto &preds = params_preds[rowix * colct + colix].predictions[j][el] = arma::mean(tp->p_predictions->at(j).row(el));
+                    auto &preds = params_preds[rowix * colct + colix].predictions[j][el] = arma::mean(tp.p_predictions->at(j)->row(el));
                     business::DQScalingFactorService::unscale_labels(*p_sf, preds);
-                    auto &labels = params_preds[rowix * colct + colix].labels[j][el] = arma::mean(tp->p_labels->at(j).row(el));
+                    auto &labels = params_preds[rowix * colct + colix].labels[j][el] = arma::mean(p_tune_predictions->at(levix).labels[j].row(el));
                     business::DQScalingFactorService::unscale_labels(*p_sf, labels);
-                    auto &lastknowns = params_preds[rowix * colct + colix].last_knowns[j][el] = arma::mean(tp->p_last_knowns->at(j).row(el));
+                    auto &lastknowns = params_preds[rowix * colct + colix].last_knowns[j][el] = arma::mean(p_tune_predictions->at(levix).last_knowns[j].row(el));
                     business::DQScalingFactorService::unscale_labels(*p_sf, lastknowns);
                     LOG4_TRACE("Row " << rowix << ", J " << j << ", col " << colix << ", prediction " << params_preds[rowix * colct + colix].predictions[j][el]
                                       << ", label " << params_preds[rowix * colct + colix].labels[j][el] << ", last known "
                                       << params_preds[rowix * colct + colix].last_knowns[j][el]);
                 }
+#pragma omp unroll
                 for (uint32_t el = elto; el < C_emo_test_len; ++el) {
                     params_preds[rowix * colct + colix].predictions[j][el] = 0;
                     params_preds[rowix * colct + colix].labels[j][el] = 0;
@@ -732,23 +759,23 @@ OnlineMIMOSVR::recombine_params(const size_t chunk_ix)
         }
     }
 
-    const uint32_t rows_gpu = common::gpu_handler::get().get_max_gpu_data_chunk_size() / 2 / colct / (2 * CUDA_BLOCK_SIZE) * (2 * CUDA_BLOCK_SIZE);
-    auto best_score = std::numeric_limits<double>::max();
+    const uint32_t rows_gpu = common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / 2 / colct / (2 * CUDA_BLOCK_SIZE) * (2 * CUDA_BLOCK_SIZE);
+    auto best_score = std::numeric_limits<double>::infinity();
     std::vector<uint8_t> best_params_ixs(colct, uint8_t(0));
     LOG4_DEBUG("Predictions filtered out " << filter_combos << ", total prediction rows " << num_combos << ", rows per GPU " << rows_gpu << ", column count " << colct
                                            << ", limit num combos " << common::C_num_combos);
 
     // const auto start_time = std::chrono::steady_clock::now();
     OMP_LOCK(best_score_l)
-#pragma omp parallel for schedule(static, 1) num_threads(common::gpu_handler::get().get_max_running_gpu_threads_number())
+#pragma omp parallel for schedule(static, 1) num_threads(common::gpu_handler_hid::get().get_max_running_gpu_threads_number())
     for (uint64_t start_row_ix = 0; start_row_ix < num_combos; start_row_ix += rows_gpu) {
         // if (best_score != std::numeric_limits<double>::max()) continue;
         // if (std::chrono::steady_clock::now() - start_time > std::chrono::minutes(45)) continue;
         const uint64_t end_row_ix = std::min<uint64_t>(start_row_ix + rows_gpu, num_combos);
         const uint64_t chunk_rows_ct = end_row_ix - start_row_ix;
-        const arma::colvec colixs = arma::linspace<arma::colvec>(double(start_row_ix), double(end_row_ix), chunk_rows_ct);
+        const arma::vec colixs = arma::regspace(start_row_ix, end_row_ix);
         arma::uchar_mat combos(chunk_rows_ct, colct);
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(colct))
+#pragma omp unroll
         for (uint32_t colix = 0; colix < colct; ++colix)
             combos.col(colix) = arma::conv_to<arma::uchar_colvec>::from(common::mod<double>(
                     colixs / std::pow<double>(common::C_tune_keep_preds, colct - colix) / filter_combos, double(common::C_tune_keep_preds)));
@@ -759,7 +786,7 @@ OnlineMIMOSVR::recombine_params(const size_t chunk_ix)
                           "Recombine chunk " << chunk_rows_ct << "x" << colct << ", added set of size " << unsigned(common::C_tune_keep_preds)
                                              << ", filter out " << filter_combos - 1 << " combinations, start row " << start_row_ix << ", end row " << end_row_ix
                                              << ", score " << chunk_best_score);
-        dtype(combos){}.swap(combos);
+        release_cont(combos);
         omp_set_lock(&best_score_l);
         if (chunk_best_score < best_score) {
             best_score = chunk_best_score;
@@ -769,16 +796,17 @@ OnlineMIMOSVR::recombine_params(const size_t chunk_ix)
         }
         omp_unset_lock(&best_score_l);
     }
-    dtype(params_preds){}.swap(params_preds);
+    release_cont(params_preds);
 
     auto p_ensemble = p_dataset->get_ensemble(column_name);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(colct))
     for (uint32_t colix = 0; colix < colct; ++colix) {
         const uint32_t levix = business::ModelService::to_level_ix(colix, p_dataset->get_transformation_levels());
-        const auto p_params = (**tune_predictions.at(std::forward_as_tuple(levix, grad_level, chunk_ix))->cbegin()).p_params;
-        auto m_grad = p_ensemble->get_model(levix)->get_gradient(grad_level);
-        if (m_grad->is_manifold()) m_grad->get_manifold()->set_params(p_params, chunk_ix);
-        else m_grad->set_params(p_params, chunk_ix);
+        const auto &params = p_tune_predictions->at(levix).param_pred[best_params_ixs[colix]].params;
+        auto p_model = p_ensemble->get_model(levix)->get_gradient(grad_level);
+        if (p_model->is_manifold()) p_model = p_model->get_manifold();
+        p_model->set_params(params, chunk_ix);
+        p_model->chunks_score[chunk_ix].first = p_model->chunks_score[chunk_ix].second = best_score;
     }
 }
 

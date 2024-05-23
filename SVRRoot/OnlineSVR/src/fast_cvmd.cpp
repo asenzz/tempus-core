@@ -146,7 +146,9 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::cx_vec sum_uk(T);
 
     size_t n_iter = 0;
+#ifndef __GNUC__
 #pragma unroll
+#endif
     while (n_iter < MAX_VMD_ITERATIONS && uDiff > CVMD_TOL) {
         //% update first mode accumulator
         sum_uk += u_hat_plus_old.col(K - 1) - u_hat_plus_old.col(0);

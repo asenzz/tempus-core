@@ -94,7 +94,7 @@ SVRParametersService::slice(const std::deque<datamodel::SVRParameters_ptr> &para
 {
     datamodel::t_param_set r;
     for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix)
+        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
             && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
             r.emplace(p);
     return r;
@@ -105,7 +105,7 @@ SVRParametersService::slice(const datamodel::t_param_set &params, const size_t c
 {
     datamodel::t_param_set r;
     for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix)
+        if ((chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
             && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix))
             r.emplace(p);
     return r;
@@ -114,7 +114,7 @@ SVRParametersService::slice(const datamodel::t_param_set &params, const size_t c
 datamodel::SVRParameters_ptr SVRParametersService::find(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
 {
     const auto res = std::find_if(std::execution::par_unseq, params.cbegin(), params.cend(), [chunk_ix, grad_ix](const auto &p) {
-        return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_ix() == chunk_ix)
+        return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
                && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix);
     });
     return res == params.end() ? nullptr : *res;
@@ -123,7 +123,7 @@ datamodel::SVRParameters_ptr SVRParametersService::find(const datamodel::t_param
 bool SVRParametersService::check(const datamodel::t_param_set &params, const size_t num_chunks)
 {
     std::deque<bool> present(num_chunks, false);
-    for (const auto &p: params) present[p->get_chunk_ix()] = true;
+    for (const auto &p: params) present[p->get_chunk_index()] = true;
     return std::all_of(std::execution::par_unseq, present.cbegin(), present.cend(), [](const auto p) { return p; });
 }
 

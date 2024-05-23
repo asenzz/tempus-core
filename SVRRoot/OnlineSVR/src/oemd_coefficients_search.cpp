@@ -259,7 +259,7 @@ oemd_coefficients_search::oemd_coefficients_search() : sem_fft({})
 {
     srand48(928171);
     sem_init(&sem_fft, 0, C_parallelism);
-    max_gpus = common::gpu_handler().get().get_max_running_gpu_threads_number() / CTX_PER_GPU;
+    max_gpus = common::gpu_handler_hid().get().get_gpu_devices_count();
     gpuids.resize(max_gpus);
     for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
 };
@@ -371,7 +371,7 @@ void oemd_coefficients_search::fix_mask(std::vector<double> &mask)
 #pragma omp parallel for reduction(+:sum) num_threads(adj_threads(mask.size())) default(shared)
     for (size_t i = 0; i < mask.size(); ++i) {
         if (mask[i] < 0) mask[i] = 0;
-        if (isnan(mask[i]) || isinf(mask[i])) {
+        if (std::isnan(mask[i]) || std::isinf(mask[i])) {
             LOG4_DEBUG("Very bad masks!");
             mask[i] = padding_value;
         }

@@ -19,17 +19,7 @@ struct t_pprima_res {
     size_t total_iterations = 0;
 };
 
-typedef std::function<void(const double x[], double *const f)> t_prima_cost_fun, *t_prima_cost_fun_ptr;
-
-struct calfun_data {
-    const t_prima_cost_fun &cost_fun;
-    const size_t particle_index = 0;
-    std::deque<double> &f_all;
-    double best_f = std::numeric_limits<double>::infinity();
-    size_t maxfun = 0;
-    size_t nf = 0;
-    size_t last_kill = 0;
-};
+typedef std::function<void(const double x[], double *const f)> t_pprima_cost_fun, *t_prima_cost_fun_ptr;
 
 class pprima {
     const size_t n, D;
@@ -41,9 +31,11 @@ class pprima {
             const int n, const double x[], const double f, const int nf,
             const int tr, const double cstrv, const int m_nlcon, const double nlconstr[], bool *const terminate);
 
+    static void calfun(const double x[], double *const f, const void *data);
+
 public:
     pprima(const prima_algorithm_t type, const size_t n_particles, const arma::mat &bounds,
-           const t_prima_cost_fun &cost_f,
+           const t_pprima_cost_fun &cost_f,
            const size_t maxfun = 50,
            const double rhobeg = std::numeric_limits<double>::quiet_NaN(),
            const double rhoend = std::numeric_limits<double>::quiet_NaN(),

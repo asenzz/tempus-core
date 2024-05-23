@@ -64,20 +64,18 @@ public:
 };
 
 
-__global__ void vec_power(
+__global__ void G_vec_power(
         const cufftDoubleComplex *__restrict__ x,
         cufftDoubleComplex *__restrict__ y,
         const size_t x_size,
         const size_t siftings);
 
-__global__ void
-gpu_multiply_complex(
+__global__ void G_gpu_multiply_complex(
         const size_t input_size,
         const cufftDoubleComplex *__restrict__ multiplier,
         cufftDoubleComplex *__restrict__ output);
 
-__global__ void
-vec_subtract_inplace(
+__global__ void G_vec_subtract_inplace(
         double *__restrict__ x,
         const double *__restrict__ y,
         const size_t x_size);

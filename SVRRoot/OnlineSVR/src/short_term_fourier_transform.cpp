@@ -155,7 +155,7 @@ void short_term_fourier_transform_cpu::inverse_transform(
 
 short_term_fourier_transform_opencl::short_term_fourier_transform_opencl(const size_t levels)
         : spectral_transform(std::string("stft_ocl"), levels),
-          gpu_parallelism{common::gpu_handler::get().get_max_running_gpu_threads_number()},
+          gpu_parallelism{common::gpu_handler_hid::get().get_max_running_gpu_threads_number()},
           frame_size{levels + 1}
 {
     if (levels != 15)

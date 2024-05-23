@@ -22,12 +22,16 @@ extern int SVR_LOG_LEVEL;
 
 #ifdef SVR_ENABLE_DEBUGGING
 
-#define FLUSH_OUTS  (void) ::fflush(stdout); (void) ::fflush(stderr);
-// #define FLUSH_OUTS
+#ifdef PRODUCTION_BUILD
+#define FLUSH_OUTS
+#else
+#define FLUSH_OUTS  // (void) ::fflush(stdout); (void) ::fflush(stderr);
+#endif
+
 #define CMD_WRAP(cmd) do { cmd; FLUSH_OUTS; } while (0)
 
 #define EXCEPTION_FORMAT FILE_NAME << ":" << __LINE__ << " [" << __FUNCTION__ << "] "
-#define PRINT_STACK std::cout << "Executing thread " << std::this_thread::get_id() << ", Backtrace:\n" << boost::stacktrace::stacktrace() << std::endl
+#define PRINT_STACK std::cout << "Executing thread " << std::this_thread::get_id() << ", Backtrace:\n" << boost::stacktrace::stacktrace() << '\n'
 
 #define THROW_EX_F(ex, msg) CMD_WRAP(::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
 #define THROW_EX_FS(ex, msg) CMD_WRAP(PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
@@ -45,7 +49,7 @@ extern int SVR_LOG_LEVEL;
 
 #define LOG4_THROW(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg; THROW_EX_FS(::std::runtime_error, msg);)
 //#define LOG4_ASSERT(cond, failmsg) { if (!(cond)) LOG4_THROW((failmsg)); } // TODO Fix!
-#define LOG4_FILE(logfile, msg) { std::ofstream of( ::svr::common::formatter() << logfile, std::ofstream::out | std::ofstream::app); of.precision(std::numeric_limits<double>::max_digits10); of << msg << std::endl; }
+#define LOG4_FILE(logfile, msg) { std::ofstream of( ::svr::common::formatter() << logfile, std::ofstream::out | std::ofstream::app); of.precision(std::numeric_limits<double>::max_digits10); of << msg << '\n'; }
 
 #else
 
@@ -64,8 +68,7 @@ extern int SVR_LOG_LEVEL;
 
 #define PROFILE_EXEC_TIME(X, M_NAME)    \
 {                                       \
-    const bpt::ptime __start_time = bpt::microsec_clock::local_time();  \
-    (X);                                                                \
-    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - __start_time) << \
-    " process memory RSS " << svr::common::memory_manager::get_process_resident_set() << " MB"); \
+    const bpt::ptime __start_time = bpt::microsec_clock::local_time(); (X);  \
+    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - __start_time) << " process memory RSS " << \
+    svr::common::memory_manager::get_process_resident_set() << " MB"); \
 }

@@ -12,9 +12,15 @@
 
 namespace svr {
 
+#ifdef VALGRIND_BUILD
+constexpr unsigned C_emo_slide_skip = 1;
+constexpr unsigned C_emo_max_j = 1;
+constexpr unsigned C_emo_test_len = 1;
+#else
 constexpr unsigned C_emo_slide_skip = 5;
 constexpr unsigned C_emo_max_j = 20;
 constexpr unsigned C_emo_test_len = 17 * 17; // Must be square-rootable
+#endif
 constexpr unsigned C_emo_tune_min_validation_window = C_emo_test_len - C_emo_slide_skip * (C_emo_max_j - 1);
 constexpr double C_emo_slides_len = [](){
     double r = 0;
@@ -34,7 +40,7 @@ constexpr double C_input_obseg_features = 1;
 
 constexpr unsigned C_forecast_focus = 115;
 
-constexpr uint8_t C_tune_keep_preds = TUNE_KEEP_PREDS;
+constexpr uint8_t C_tune_keep_preds = 2;
 const uint64_t C_num_combos = std::pow<uint64_t>(3, 22); // should be even power of TUNE_KEEP_PREDS // 3^22, 4^18
 
 constexpr double C_default_value_tick_volume = 1;
@@ -69,6 +75,9 @@ const unsigned INTEGRATION_TEST_VALIDATION_WINDOW = []() {
     return p ? strtoul(p, nullptr, 10) : TEST_OFFSET_DEFAULT;
 }();
 #endif
+
+constexpr double C_itersolve_delta = 1e-4;
+constexpr double C_itersolve_range = 1e2;
 
 }
 }

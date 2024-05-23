@@ -131,7 +131,7 @@ to_stringstream(const T *v, const size_t l)
     }
     for (size_t i = 0; i < l - 1; ++i) s << v[i] << ", ";
     s << v[l - 1];
-__bail:
+    __bail:
     return s;
 }
 
@@ -141,10 +141,24 @@ to_string(const T *v, const size_t l)
     return to_stringstream(v, l).str();
 }
 
+template<typename T> std::string to_string(const arma::Mat<T> &v, const size_t start_i, const size_t n)
+{
+    if (v.is_empty()) return "empty";
+
+    std::stringstream ss;
+    ss.precision(std::numeric_limits<double>::max_digits10);
+    const auto last_i = start_i + n - 1;
+    for (size_t i = start_i; i < last_i; ++i) ss << i << ": " << v(i) << ", ";
+    ss << last_i << ": " << v(last_i);
+
+    return ss.str();
+}
+
+
 template<typename T> std::string
 to_string(const std::vector<T> &v)
 {
-    if (v.empty()) return "";
+    if (v.empty()) return "empty";
 
     std::stringstream ss;
     ss.precision(std::numeric_limits<double>::max_digits10);
@@ -154,11 +168,19 @@ to_string(const std::vector<T> &v)
     return ss.str();
 }
 
+template<typename Tx, typename Ty>
+std::string to_string(const std::pair<Tx, Ty> &p)
+{
+    std::stringstream s;
+    s.precision(std::numeric_limits<double>::max_digits10);
+    s << "first: " << p.first << ", second: " << p.second;
+    return s.str();
+}
 
 template<typename T>
 std::string to_string(const std::deque<T> &v)
 {
-    if (v.empty()) return "";
+    if (v.empty()) return "empty";
 
     std::stringstream s;
     s.precision(std::numeric_limits<double>::max_digits10);
@@ -301,11 +323,6 @@ to_string(const std::deque<std::shared_ptr<T>> &v)
     return s.str();
 }
 
-template<typename T> inline std::string
-to_string(const T v)
-{
-    return to_string_with_precision(v);
-}
 
 }
 
@@ -356,12 +373,6 @@ from_string(const std::string &s)
     return t;
 }
 
-template<typename T>
-std::string to_string(const T &t)
-{
-    return to_string<T>(t);
-}
-
 
 } // namespace common
 } // namespace svr
@@ -381,7 +392,7 @@ operator<<(std::basic_ostream<char> &s, const std::deque<std::shared_ptr<T>> &v)
 }
 
 template<typename T, typename C, typename Tr>
-std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
+std::basic_ostream<C, Tr> &operator<<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
 {
     if (aset.size() < 2) return s << *aset.begin();
     for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << el << ", "; });
@@ -389,7 +400,7 @@ std::basic_ostream<C, Tr> &operator <<(std::basic_ostream<C, Tr> &s, const std::
 }
 
 template<typename C, typename Tr, typename T> std::basic_ostream<C, Tr> &
-operator <<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
+operator<<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
 {
     if (aset.size() < 2) return s << *aset.begin();
     for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << *el << ", "; });
@@ -397,9 +408,33 @@ operator <<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &as
 }
 
 template<typename T, typename C, typename Ca> std::basic_ostream<C, Ca> &
-operator <<(std::basic_ostream<C, Ca> &s, const std::deque<T> &v)
+operator<<(std::basic_ostream<C, Ca> &s, const std::deque<T> &v)
 {
     return s << svr::common::to_string(v);
+}
+
+template<typename Tx, typename Ty, typename C, typename Ca> std::basic_ostream<C, Ca> &
+operator<<(std::basic_ostream<C, Ca> &s, const std::pair<Tx, Ty> &p)
+{
+    return s << svr::common::to_string(p);
+}
+
+namespace detail {
+template<typename ...Ts, size_t ...Is>
+std::ostream &println_tuple_impl(std::ostream &os, const std::tuple<Ts...> &tuple, std::index_sequence<Is...>)
+{
+    static_assert(sizeof...(Is) == sizeof...(Ts), "Indices must have same number of elements as tuple types!");
+    static_assert(sizeof...(Ts) > 0, "Cannot insert empty tuple into stream.");
+    auto last = sizeof...(Ts) - 1; // assuming index sequence 0,...,N-1
+
+    return ((os << std::get<Is>(tuple) << (Is != last ? "\r\n" : "")), ...);
+}
+}
+
+template<typename ...Ts>
+std::ostream &operator<<(std::ostream &os, const std::tuple<Ts...> &tuple)
+{
+    return detail::println_tuple_impl(os, tuple, std::index_sequence_for<Ts...>{});
 }
 
 }

@@ -24,6 +24,7 @@
 namespace bpt = boost::posix_time;
 
 #define dtype(T) std::decay_t<decltype(T)>
+#define release_cont(x) dtype((x)){}.swap((x));
 
 namespace boost {
 
@@ -133,37 +134,37 @@ inline auto highLevelF(Args&&... args) -> dtype(lowLevelF(std::forward<Args>(arg
 
 template<typename T> unsigned adj_threads(const T iterations)
 {
-    return static_cast<unsigned>(std::min<T>(iterations < 0 ? 0 : iterations, std::thread::hardware_concurrency()));
+    return (unsigned) std::min<T>(iterations < 0 ? 0 : iterations, std::thread::hardware_concurrency());
 }
 
-template<typename T> T operator^(const std::set<T> &s, const size_t i)
+template<typename T> const T &operator^(const std::set<T> &s, const size_t i)
 {
-    return *std::next(s.begin(), i);
+    return *std::next(s.cbegin(), i);
 }
 
-template<typename T, typename C> T operator^(const std::set<T, C> &s, const size_t i)
+template<typename T, typename C> const T &operator^(const std::set<T, C> &s, const size_t i)
 {
-    return *std::next(s.begin(), i);
+    return *std::next(s.cbegin(), i);
 }
 
-template<typename T> T operator^(const tbb::concurrent_set <T> &s, const size_t i)
+template<typename T> const T &operator^(const tbb::concurrent_set <T> &s, const size_t i)
 {
-    return *std::next(s.begin(), i);
+    return *std::next(s.cbegin(), i);
 }
 
-template<typename T, typename C> T operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
+template<typename T, typename C> const T &operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
 {
-    return *std::next(s.begin(), i);
+    return *std::next(s.cbegin(), i);
 }
 
-template<typename K, typename V> K operator%(const std::map<K, V> &s, const size_t i)
+template<typename K, typename V> const K &operator%(const std::map<K, V> &s, const size_t i)
 {
-    return std::next(s.begin(), i)->first;
+    return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> V operator^(const std::map<K, V> &s, const size_t i)
+template<typename K, typename V> const V &operator^(const std::map<K, V> &s, const size_t i)
 {
-    return std::next(s.begin(), i)->second;
+    return std::next(s.cbegin(), i)->second;
 }
 
 template<typename K, typename V> V &operator^(std::map<K, V> &s, const size_t i)
@@ -171,14 +172,14 @@ template<typename K, typename V> V &operator^(std::map<K, V> &s, const size_t i)
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> K operator%(const std::unordered_map<K, V> &s, const size_t i)
+template<typename K, typename V> const K &operator%(const std::unordered_map<K, V> &s, const size_t i)
 {
-    return std::next(s.begin(), i)->first;
+    return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> V operator^(const std::unordered_map<K, V> &s, const size_t i)
+template<typename K, typename V> const V &operator^(const std::unordered_map<K, V> &s, const size_t i)
 {
-    return std::next(s.begin(), i)->second;
+    return std::next(s.cbegin(), i)->second;
 }
 
 template<typename K, typename V> V &operator^(std::unordered_map<K, V> &s, const size_t i)
@@ -186,19 +187,14 @@ template<typename K, typename V> V &operator^(std::unordered_map<K, V> &s, const
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> K operator%(const tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> const K &operator%(const tbb::concurrent_map <K, V> &s, const size_t i)
 {
-    return std::next(s.begin(), i)->first;
+    return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> V operator^(const tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> const V &operator^(const tbb::concurrent_map <K, V> &s, const size_t i)
 {
-    return std::next(s.begin(), i)->second;
-}
-
-template<typename K, typename V> K operator%(tbb::concurrent_map <K, V> &s, const size_t i)
-{
-    return std::next(s.begin(), i)->first;
+    return std::next(s.cbegin(), i)->second;
 }
 
 template<typename K, typename V> V &operator^(tbb::concurrent_map <K, V> &s, const size_t i)
@@ -206,44 +202,48 @@ template<typename K, typename V> V &operator^(tbb::concurrent_map <K, V> &s, con
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> K last(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> const K &last(const tbb::concurrent_map <K, V> &s)
 {
+    if (s.size() < 2) return *s.cbegin()->first;
     return std::prev(s.end())->first;
 }
 
-template<typename K, typename V> V back(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> const V &back(const tbb::concurrent_map <K, V> &s)
 {
-    return std::prev(s.end())->second;
+    if (s.size() < 2) return *s.cbegin()->second;
+    return std::prev(s.cend())->second;
 }
 
-template<typename K, typename V> K first(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> const K &first(const tbb::concurrent_map <K, V> &s)
 {
-    return s.begin()->first;
+    return s.cbegin()->first;
 }
 
-template<typename K, typename V> V front(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> const V &front(const tbb::concurrent_map <K, V> &s)
 {
-    return s.begin()->second;
+    return s.cbegin()->second;
 }
 
-template<typename V> V front(const tbb::concurrent_set <V> &s)
+template<typename V> const V &front(const tbb::concurrent_set <V> &s)
 {
-    return *s.begin();
+    return *s.cbegin();
 }
 
-template<typename V> V back(const tbb::concurrent_set <V> &s)
+template<typename V> const V &back(const tbb::concurrent_set <V> &s)
 {
-    return *s.end();
+    if (s.size() < 2) return *s.cbegin();
+    return *std::prev(s.cend());
 }
 
-template<typename V, typename L> V front(const std::set<V, L> &s)
+template<typename V, typename L> const V &front(const std::set<V, L> &s)
 {
-    return *s.begin();
+    return *s.cbegin();
 }
 
-template<typename V, typename L> V back(const std::set<V, L> &s)
+template<typename V, typename L> const V &back(const std::set<V, L> &s)
 {
-    return *s.end();
+    if (s.size() < 2) return *s.cbegin();
+    return *std::prev(s.cend());
 }
 
 
@@ -660,26 +660,14 @@ arma::mat af_product(const arma::mat &a, const arma::mat &b)
 }
 #endif
 
-// Use for deque and vector containers
-template<typename T>
-void keep_indices(T &d, const std::deque<size_t> &indices)
-{
-    size_t last = 0;
-#pragma unroll
-    for (size_t i = 0; i < d.size(); ++i, ++last) {
-        while (std::find(indices.cbegin(), indices.cend(), i) == indices.cend() && i < d.size()) ++i;
-        if (i >= d.size()) break;
-        d[last] = d[i];
-    }
-    d.resize(last);
-}
-
 // Use for map and set containers
 template<typename ContainerT, typename PredicateT>
 void remove_if(ContainerT &items, const PredicateT &predicate)
 {
     typename std::decay_t<ContainerT>::iterator it = items.begin();
+#ifndef __GNUC__
 #pragma unroll
+#endif
     while (items.size() && it != items.end())
         if (predicate(*it)) {
             if (items.size() < 2) {

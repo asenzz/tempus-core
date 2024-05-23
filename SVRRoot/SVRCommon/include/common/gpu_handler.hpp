@@ -10,6 +10,7 @@
 #include "viennacl/ocl/backend.hpp"
 #endif // VIENNACL_WITH_OPENCL
 #include "common/logging.hpp"
+#include "semaphore.hpp"
 #include <stack>
 #include <mutex>
 #include <thread>
@@ -19,76 +20,101 @@
 #include <CL/opencl.hpp>
 #pragma GCC diagnostic pop
 
+// #define IPC_SEMAPHORE // GPU counter semaphore is IPC
 
 // OpenCL kernel options
 #define KERNEL_DIRECTORY_PATH   "../SVRRoot/opencl-libsvm/libsvm/kernels/"
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
-
-#define CTX_PER_GPU       4 // Number of contexts per GPU at once, be careful with kernel VRAM usage!
-
+#define CTX_PER_GPU 28
+#ifdef IPC_SEMAPHORE
 #define SVRWAVE_GPU_SEM         "svrwave_gpu_sem"
+#endif
 
 namespace svr {
 namespace common {
 
 class gpu_context;
+class fat_gpu_context;
 
+template<const unsigned context_per_gpu>
 class gpu_handler : boost::noncopyable {
     friend gpu_context;
+    friend fat_gpu_context;
     size_t get_free_gpu();
-    void return_gpu(const size_t gpu_index);
+    size_t get_free_gpus(const size_t gpu_ct);
+    void return_gpu();
+    void return_gpus(const size_t gpu_ct);
+    void sort_free_gpus();
+
+    gpu_handler(const gpu_handler&) = delete;
+    gpu_handler& operator=(const gpu_handler&) = delete;
+
+    void init_devices(const int device_type);
+#ifdef IPC_SEMAPHORE
+    std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_;
+#else
+    std::unique_ptr<svr::fast_semaphore> p_gpu_sem_;
+#endif
+
+    std::size_t max_running_gpu_threads_number_;
+    std::size_t m_max_gpu_kernels_;
+    std::size_t max_gpu_data_chunk_size_;
+#ifdef VIENNACL_WITH_OPENCL
+    std::deque<viennacl::ocl::device> devices_;
+#endif //VIENNACL_WITH_OPENCL
+
+    // tbb::concurrent_bounded_queue<size_t> available_devices_; // TODO Compare to next_device atomic counter for even distribution of workload and resource usage
+    std::atomic<size_t> next_device_;
+    mutable boost::shared_mutex devices_mutex_;
+
 public:
-    size_t get_free_gpus() const;
     size_t get_max_running_gpu_threads_number() const;
     size_t get_gpu_devices_count() const;
     size_t get_max_gpu_kernels() const;
     size_t get_max_gpu_data_chunk_size() const;
-    void gpu_sem_enter();
-    bool gpu_sem_try_enter();
-    void gpu_sem_leave();
 
 #ifdef VIENNACL_WITH_OPENCL
-    const viennacl::ocl::device & device(const size_t idx) const;
+    const viennacl::ocl::device &device(const size_t idx) const;
 #endif //VIENNACL_WITH_OPENCL
 
     static gpu_handler& get();
 
     gpu_handler();
     ~gpu_handler();
-private:
-    gpu_handler(const gpu_handler&) = delete;
-    gpu_handler& operator=(const gpu_handler&) = delete;
-
-    void init_devices(const int device_type);
-
-    std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_;
-    std::size_t max_running_gpu_threads_number_;
-    std::size_t m_max_gpu_kernels_;
-    std::size_t max_gpu_data_chunk_size_;
-    std::stack<size_t> free_gpus_;
-#ifdef VIENNACL_WITH_OPENCL
-    std::vector<viennacl::ocl::device> devices_;
-#endif //VIENNACL_WITH_OPENCL
-
-    mutable boost::shared_mutex devices_mutex_;
-    mutable std::mutex free_gpu_mutex_;
 };
+
+using gpu_handler_hid = gpu_handler<CTX_PER_GPU>;
 
 // TODO  Make CUDA stream context
 #ifdef VIENNACL_WITH_OPENCL
+
 class gpu_context {
 protected:
     size_t context_id_;
 public:
     gpu_context();
-    gpu_context(const gpu_context &context) : context_id_(context.context_id_) {};
+    gpu_context(const gpu_context &context);
 
     virtual ~gpu_context();
 
-    size_t id() const { return context_id_; }
-    size_t phy_id() const { return context_id_ % (gpu_handler::get().get_max_running_gpu_threads_number() / CTX_PER_GPU); }
-    viennacl::ocl::context &ctx() const { return viennacl::ocl::get_context(context_id_);  }
+    size_t id() const;
+    size_t phy_id() const;
+    viennacl::ocl::context &ctx() const;
+};
+
+class fat_gpu_context {
+protected:
+    size_t context_id_;
+public:
+    fat_gpu_context();
+    fat_gpu_context(const fat_gpu_context &context);
+
+    virtual ~fat_gpu_context();
+
+    size_t id() const;
+    size_t phy_id() const;
+    viennacl::ocl::context &ctx() const;
 };
 
 class gpu_kernel: public gpu_context {
@@ -182,8 +208,7 @@ public:
     template<class T>
     kernel_helper & set_arg(size_t position, T t){
         cl_int code = setArg(position, t);
-        if(code != CL_SUCCESS)
-            LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
+        if(code != CL_SUCCESS) LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
         return *this;
     }
 
@@ -193,16 +218,14 @@ private:
     void set_args(size_t args_sz, T t, Args... args)
     {
         cl_int code = setArg(args_sz - sizeof...(Args) - 1, t);
-        if(code != CL_SUCCESS)
-            LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
+        if(code != CL_SUCCESS) LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
         set_args(args_sz, args...);
     }
     template<class T>
     void set_args(size_t args_sz, T t)
     {
         cl_int code = setArg(args_sz - 1, t);
-        if(code != CL_SUCCESS)
-            LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
+        if(code != CL_SUCCESS) LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
     }
 };
 
@@ -217,9 +240,8 @@ inline cl::NDRange ndrange(const range_args2_t &range_args)
 
 
 #define CL_CHECK(cl_call) { cl_int code = (cl_call); if (code != CL_SUCCESS /* == clblasSuccess */ )                     \
-            LOG4_THROW("OpenCL call failed. Error: " << svr::common::gpu_helper::get_error_string(code)); }
+            LOG4_THROW("OpenCL call failed with error " << svr::common::gpu_helper::get_error_string(code)); }
 
 #endif //VIENNACL_WITH_OPENCL
 }  //namespace cl12
 }
-

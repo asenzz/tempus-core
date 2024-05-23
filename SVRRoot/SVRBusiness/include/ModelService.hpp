@@ -105,6 +105,7 @@ public:
             const std::deque<bpt::ptime> &label_times,
             const std::deque<datamodel::DeconQueue_ptr> &features_aux,
             const size_t lag,
+            const double quantize,
             const std::set<size_t> &adjacent_levels,
             const bpt::time_duration &max_gap,
             const bpt::time_duration &aux_queue_res,

@@ -6,33 +6,35 @@
 #include <boost/date_time/posix_time/ptime.hpp>
 #include <memory>
 #include <set>
-#include <armadillo>
-#include <bandicoot>
 #include <deque>
+#include <armadillo>
+#include <magma_types.h>
 #include "common/compatibility.hpp"
 #include "common/constants.hpp"
 #include "common/defines.h"
 #include "model/DQScalingFactor.hpp"
 #include "model/SVRParameters.hpp"
+#include "common/cuda_util.cuh"
+
 
 namespace svr {
 namespace business {
 class calc_cache;
 }
 
+
 namespace datamodel {
 
 constexpr unsigned C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
-constexpr double C_itersolve_delta = 1e-4;
-constexpr double C_itersolve_range = 1e2;
 constexpr double C_tune_range_min_lambda = 0;
 constexpr double C_tune_range_max_lambda = 1e2;
 constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio, higher generates more chunks
 constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
 constexpr double C_chunk_tail = .1;
 constexpr double C_chunk_header = 1. - C_chunk_tail;
-constexpr size_t C_predict_chunks = 1; // Ratio of best chunks used for predictions
-const std::deque<double> C_chunk_coefs {2500. / common::C_default_kernel_max_chunk_size, 1., 3500. / common::C_default_kernel_max_chunk_size};
+constexpr size_t C_predict_chunks = 1; // Best chunks used for predictions
+const std::deque<double> C_chunk_coefs = {2750. / 3000., 1., 3500. / 3000.}; // , 4500. / 3000.
+constexpr size_t C_end_chunks = 1;
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -67,8 +69,6 @@ using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
 class OnlineMIMOSVR final : public Entity
 {
-    std::mutex sf_mx;
-
     bigint model_id = 0;
     Dataset_ptr p_dataset;
     std::string column_name;
@@ -82,7 +82,7 @@ class OnlineMIMOSVR final : public Entity
     datamodel::dq_scaling_factor_container_t scaling_factors;
     std::deque<arma::mat> weight_chunks, train_feature_chunks_t, train_label_chunks;
     std::deque<arma::uvec> ixs;
-    std::deque<double> chunks_score;
+    std::deque<std::pair<double, double>> chunks_score;
     arma::mat all_weights;
     size_t multistep_len = svr::common::C_default_multistep_len;
     size_t max_chunk_size = common::C_default_kernel_max_chunk_size;
@@ -94,6 +94,15 @@ class OnlineMIMOSVR final : public Entity
     virtual std::string to_string() const override;
 
     void parse_params();
+
+    static std::tuple<double, double, double, std::array<arma::mat *, C_emo_max_j> *, double *> cuvalidate(
+            const double gamma_variance, const double labels_mean, const double lambda, const double gamma_param, const double svr_epsilon, const double all_labels_meanabs,
+            const size_t train_len, const size_t lag, const arma::mat &tune_cuml, const arma::mat &train_cuml, const arma::mat &chunk_labels, const size_t iters,
+            double &test_train_mape_ratio, bool &mape_ratio_set, omp_lock_t *p_mape_l, const size_t gpu_id);
+
+    static std::deque<size_t> get_predict_chunks(const std::deque<std::pair<double, double>> &chunks_score);
+
+    void clean_chunks();
 
 public:
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
@@ -140,13 +149,16 @@ public:
 
     void set_dataset(const Dataset_ptr &p_dataset);
 
-    static coot::mat solve_irwls(const coot::mat &K_epsco, const coot::mat &K, const coot::mat &rhs, const size_t iters, const size_t gpu_id);
 
     // Move to solver module
     static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
 
-    static void solve_batched_irwls(
-            const std::vector<arma::mat> &K_epsco, const std::vector<arma::mat> &K, const std::vector<arma::mat> &rhs, std::vector<arma::mat> &solved, const size_t iters);
+    static arma::mat solve_irwls(
+            const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, const size_t iters, const magma_queue_t &magma_queue, magmaDouble_ptr d_a, magmaDouble_ptr d_b);
+
+    static std::deque<arma::mat> solve_batched_irwls(
+            const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
+            const magma_queue_t &magma_queue, const size_t gpu_phy_id);
 
     static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
 
@@ -176,7 +188,7 @@ public:
 
     void set_params(const SVRParameters_ptr &p_svr_parameters_, const size_t chunk_ix = 0);
 
-    void set_params(const SVRParameters &svr_parameters_, const size_t chunk_ix = 0);
+    void set_params(const SVRParameters &param, const size_t chunk_ix = 0);
 
     SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0) const;
 
@@ -189,6 +201,8 @@ public:
     bool needs_tuning() const;
 
     void tune();
+
+    void tune_fast();
 
     void recombine_params(const size_t chunk_ix);
 
@@ -212,9 +226,9 @@ public:
 
     std::deque<arma::uvec> generate_indexes() const;
 
-    std::deque<size_t> get_predict_chunks() const;
-
     arma::mat predict(const arma::mat &x_predict);
+
+    arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time);
 
     arma::mat manifold_predict(const arma::mat &x_predict) const;
 
@@ -233,13 +247,13 @@ public:
 
     arma::uvec get_active_ixs() const;
 
-    arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &x_predict, const bpt::ptime &time);
+    static mat_ptr prepare_Ky(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
 
-    arma::mat prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
+    static mat_ptr prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
 
-    arma::mat prepare_K(const SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
+    static mat_ptr prepare_K(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
 
-    static arma::mat prepare_K(const SVRParameters &params, const arma::mat &x_t);
+    static mat_ptr prepare_K(const SVRParameters &params, const arma::mat &x_t);
 
     static mat_ptr prepare_Z(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
@@ -250,6 +264,8 @@ public:
     static mat_ptr prepare_Zy(const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t);
 
     static std::shared_ptr<std::deque<arma::mat>> prepare_cumulatives(const SVRParameters &params, const arma::mat &features_t);
+
+    static mat_ptr all_cumulatives(const SVRParameters &p, const arma::mat &features_t);
 
     static double calc_gamma(const arma::mat &Z, const double mean_L);
 

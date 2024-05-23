@@ -7,14 +7,48 @@
 
 namespace svr::kernel::path {
 
-void
-cu_distances_xx(const unsigned long lag, const unsigned long cols, const unsigned long end_col, const unsigned long end_row, const double *X, const double lambda,
-                double *Z);
+__global__  void
+G_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t len_TILE_WIDTH, const double lambda,
+            const double *__restrict__ X, double *__restrict__ Z);
 
-void
-cu_distances_xy(const unsigned long lag, const unsigned long X_cols, const unsigned long Xy_cols, const unsigned long end_col, const unsigned long end_row,
-                const double *X, const double *Xy, const double lambda, double *Z);
+__global__  void
+G_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t len_TILE_WIDTH,
+            const double lambda, const double gamma_2_pow_2, const double *__restrict__ X, double *__restrict__ Z);
+
+__global__  void
+G_kernel_xx(const uint32_t cols, const uint32_t lag, const uint32_t len_TILE_WIDTH, const double lambda, const double *__restrict__ X, double *__restrict__ Z);
+
+__global__  void
+G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t len_TILE_WIDTH, const double lambda,
+            const double *__restrict__ X, const double *__restrict__ Y, double *__restrict__ Z);
+
+__global__  void
+G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t len_TILE_WIDTH,
+            const double lambda, const double gamma_2_2, const double *X, const double *Y, double *Z);
+
+__global__  void
+G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t lag, const unsigned len_TILE_WIDTH, const double lambda,
+            const double *__restrict__ X, const double *__restrict__ Y, double *__restrict__ Z);
+
+void do_gpu_kernel_compute_mat_xy(
+        const uint32_t sizeX, const uint32_t sizeY, const uint32_t startX, const uint32_t startY, const uint32_t numX, const uint32_t numY,
+        const uint32_t total_len_features, const uint32_t dim, const double *X, const double *Y, double *Z, const double param2, const double param3, const double param4);
+
+void cu_distances_xx(const uint32_t cols, const uint32_t lag, const double *X, const double lambda, double *Z);
+
+void cu_distances_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const double lambda, const double *X, double *Z);
+
+void cu_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const double lambda, const double gamma, const double *X, double *Z);
+
+void cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t lag, const double lambda, const double *X, const double *Xy, double *Z);
+
+void cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint32_t lag, const double lambda, const double *X, const double *Xy, double *Z);
+
+void cu_kernel_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint32_t lag, const double lambda, const double gamma,
+                  const double *X, const double *Xy, double *Z);
+
+
 
 }
 
-#endif //SVR_CUDA_PATH_HPP
+#endif

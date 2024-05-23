@@ -6,7 +6,7 @@
 #include "model/DQScalingFactor.hpp"
 #include "model/DataRow.hpp"
 #include "util/string_utils.hpp"
-#include "cuqrsolve.hpp"
+#include "cuqrsolve.cuh"
 #include "firefly.hpp"
 #include "common/constants.hpp"
 #include "model/SVRParameters.hpp"
@@ -128,7 +128,7 @@ ModelService::validate(
 #endif
         const double cur_absdiff_lk = std::abs(lastknown[ix] - actual[ix]);
         const double cur_absdiff_batch = std::abs(predicted[ix] - actual[ix]);
-        const double cur_alpha_pct_batch = 100. * (cur_absdiff_lk / cur_absdiff_batch - 1.);
+        const double cur_alpha_pct_batch = 100. * (1. - cur_absdiff_batch / cur_absdiff_lk);
         sum_abs_labels += std::abs(actual[ix]);
         sum_absdiff_batch += cur_absdiff_batch;
         sum_absdiff_lk += std::abs(actual[ix] - lastknown[ix]);
@@ -141,9 +141,9 @@ ModelService::validate(
         if (print_line)
             row_report << "Position " << ix << ", level " << level << ", actual " << actual[ix] << ", batch predicted " << predicted[ix] << ", last known " <<
                        lastknown[ix] << " batch MAE " << sum_absdiff_batch / ix_div << ", MAE last-known " << sum_absdiff_lk / ix_div << ", batch MAPE "
-                       << 100. * sum_absdiff_batch / sum_abs_labels << " pct., MAPE last-known " << 100. * sum_absdiff_lk / sum_abs_labels << " pct., batch alpha "
-                       << 100. * (sum_absdiff_lk / sum_absdiff_batch - 1.) << " pct., current batch alpha " << cur_alpha_pct_batch << " pct., batch correct predictions "
-                       << 100. * batch_correct_predictions / ix_div << " pct., batch correct directions " << 100. * batch_correct_directions / ix_div << " pct.";
+                       << 100. * sum_absdiff_batch / sum_abs_labels << "pc, MAPE last-known " << 100. * sum_absdiff_lk / sum_abs_labels << "pc, batch alpha "
+                       << 100. * (1. - sum_absdiff_batch / sum_absdiff_lk) << "pc, current batch alpha " << cur_alpha_pct_batch << "pc, batch correct predictions "
+                       << 100. * batch_correct_predictions / ix_div << "pc, batch correct directions " << 100. * batch_correct_directions / ix_div << "pc";
 
         if (online) {
             PROFILE_EXEC_TIME(
@@ -167,9 +167,9 @@ ModelService::validate(
             online_correct_directions += std::signbit(predicted_online[ix] - lastknown[ix]) == std::signbit(actual[ix] - lastknown[ix]);
             if (print_line)
                 row_report << ", online predicted " << predicted_online[ix] << ", online MAE " << sum_absdiff_online / ix_div << ", online MAPE " <<
-                           100. * sum_absdiff_online / sum_abs_labels << " pct., online alpha " << 100. * (sum_absdiff_lk / sum_absdiff_online - 1.)
-                           << " pct., current online alpha " << cur_alpha_pct_online << " pct., online correct predictions " << 100. * online_correct_predictions / ix_div
-                           << " pct., online correct directions " << 100. * online_correct_directions / ix_div << " pct.";
+                           100. * sum_absdiff_online / sum_abs_labels << "pc, online alpha " << 100. * (sum_absdiff_lk / sum_absdiff_online - 1.)
+                           << "pc, current online alpha " << cur_alpha_pct_online << "pc, online correct predictions " << 100. * online_correct_predictions / ix_div
+                           << "pc, online correct directions " << 100. * online_correct_directions / ix_div << "pc";
         }
         if (row_report.str().size()) LOG4_DEBUG(row_report.str());
     }
@@ -430,12 +430,7 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     auto head_parameters = *model.get_head_params();
     if (!dataset_rows) dataset_rows = head_parameters.get_svr_decremental_distance() + C_emo_test_len;
     const datamodel::datarow_crange labels_range = {ModelService::get_start( // Main labels are used for timing
-            label_decon,
-            dataset_rows,
-            model.get_last_modeled_value_time(),
-            dataset.get_input_queue()->get_resolution()),
-                                                    label_decon.get_data().cend(),
-                                                    label_decon};
+            label_decon, dataset_rows, model.get_last_modeled_value_time(), dataset.get_input_queue()->get_resolution()), label_decon.get_data().cend(), label_decon};
     const auto aux_resolution = dataset.get_aux_input_queues().empty() ? dataset.get_input_queue()->get_resolution() : dataset.get_aux_input_queue()->get_resolution();
     const auto adjacent_indexes = head_parameters.get_adjacent_levels();
 
@@ -444,8 +439,8 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
             model.get_last_modeled_value_time(), dataset.get_input_queue()->get_resolution(), model.get_multiout());
 
     const auto p_features = dataset.get_calc_cache().get_cached_features(
-            label_times, ensemble.get_aux_decon_queues(), head_parameters.get_lag_count(), adjacent_indexes, dataset.get_max_lookback_time_gap(), aux_resolution,
-            dataset.get_input_queue()->get_resolution());
+            label_times, ensemble.get_aux_decon_queues(), head_parameters.get_lag_count(), head_parameters.get_feature_quantization(), adjacent_indexes,
+            dataset.get_max_lookback_time_gap(), aux_resolution, dataset.get_input_queue()->get_resolution());
 
     if (p_labels->n_rows != p_features->n_rows)
         LOG4_THROW("Labels size " << arma::size(*p_labels) << ", features size " << arma::size(*p_features) << " do not match.");
@@ -487,11 +482,11 @@ ModelService::prepare_labels(
 #define SHED_ROW(msg) {                 \
         LOG4_DEBUG(msg);                \
         shedded_rows.emplace(rowix);    \
-        continue;                       \
-    }
+        continue; }
 
-#pragma omp parallel for num_threads(adj_threads(expected_rows)) schedule(static, 1 + expected_rows / adj_threads(expected_rows))
-        for (std::decay_t<dtype(expected_rows)> rowix = 0; rowix < expected_rows; ++rowix) {
+        const auto thr = adj_threads(expected_rows);
+#pragma omp parallel for num_threads(thr) schedule(static, 1 + expected_rows / thr)
+        for (dtype(expected_rows) rowix = 0; rowix < expected_rows; ++rowix) {
             const auto label_start_time = harvest_range[rowix]->get_value_time();
             if (label_start_time <= last_modeled_value_time)
                 SHED_ROW("Skipping already modeled row with value time " << label_start_time);
@@ -586,13 +581,13 @@ ModelService::prepare_features(
         const std::deque<bpt::ptime> &label_times,
         const std::deque<datamodel::DeconQueue_ptr> &features_aux,
         const size_t lag,
+        const double quantize,
         const std::set<size_t> &adjacent_levels,
         const bpt::time_duration &max_gap,
         const bpt::time_duration &aux_queue_res,
         const bpt::time_duration &main_queue_resolution)
 {
     LOG4_BEGIN();
-    const auto main_to_aux_period_ratio = main_queue_resolution / aux_queue_res;
     const auto feature_cols = adjacent_levels.size() * lag * features_aux.size();
     if (features.n_rows != label_times.size() || features.n_cols != feature_cols) features.zeros(label_times.size(), feature_cols);
 #pragma omp parallel for num_threads(adj_threads(label_times.size())) schedule(static, 1)
@@ -606,11 +601,10 @@ ModelService::prepare_features(
             const auto r_start = q * adjacent_levels.size() * lag;
             const auto last_feature_iter = lower_bound_back(*f, f->end(), last_feature_time);
             const auto p_last_row = *last_feature_iter;
-            const auto levels = p_last_row->size();
 #pragma omp parallel for num_threads(adj_threads(adjacent_levels.size())) schedule(static, 1)
             for (size_t adj_ix = 0; adj_ix < adjacent_levels.size(); ++adj_ix) {
                 const auto adjacent_level = adjacent_levels ^ adj_ix;
-                const auto start_feature_time = last_feature_time - aux_queue_res * lag * common::calc_quant_offset_mul(main_to_aux_period_ratio, adjacent_level, levels);
+                const auto start_feature_time = last_feature_time - aux_queue_res * lag * quantize;
                 const auto start_feature_iter = lower_bound_or_before_back(*f, last_feature_iter, start_feature_time);
 #ifdef EMO_DIFF
                 arma::rowvec level_row(lag + 1);
@@ -737,7 +731,7 @@ ModelService::predict(
     OMP_LOCK(predict_lock);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(model.get_gradient_count()))
     for (const auto &p_svr: model.get_gradients()) {
-        const auto this_prediction = p_svr->predict(*predict_features.p_features);
+        const auto this_prediction = p_svr->predict(*predict_features.p_features, predict_features.times.back());
         omp_set_lock(&predict_lock);
         prediction += this_prediction;
         omp_unset_lock(&predict_lock);

@@ -14,7 +14,7 @@
 #include <viennacl/linalg/prod.hpp>
 
 #include "model/SVRParameters.hpp"
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 
 namespace svr
 {

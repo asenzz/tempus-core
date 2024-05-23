@@ -11,7 +11,7 @@ scoped_transaction_guard::scoped_transaction_guard(const std::string &connection
         : commit_on_destroy(true), data_source(data_source), connection(pqxx::connection(connection_string))
 {
     trx = new pqxx::work(connection);
-    LOG4_TRACE("Opening new transaction from thread " << std::this_thread::get_id() << " trx " << trx);
+    LOG4_TRACE("Opening new transaction " << trx);
 }
 
 

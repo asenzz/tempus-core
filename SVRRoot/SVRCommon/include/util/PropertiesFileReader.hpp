@@ -26,6 +26,7 @@ class PropertiesFileReader
     size_t slide_skip_;
     size_t validation_window_;
     size_t tune_run_limit_;
+    std::string db_connection_string_;
 
     size_t read_property_file(std::string property_file_name);
     void set_global_log_level(const std::string& log_level_value);
@@ -48,6 +49,7 @@ public:
 
     ConcreteDaoType get_dao_type() const;
 
+    std::string get_db_connection_string() { return db_connection_string_; }
     bool get_set_thread_affinity() const { return set_thread_affinity_; }
     size_t get_multistep_len() const { return multistep_len; }
     size_t get_online_learn_iter_limit() const { return online_learn_iter_limit_; }
@@ -72,6 +74,7 @@ private:
     static const std::string ONLINE_LEARN_ITER_LIMIT;
     static const std::string STABILIZE_ITERATIONS_COUNT;
     static const std::string ERROR_TOLERANCE;
+    static const std::string CONNECTION_STRING;
     static const std::string SCALING_ALPHA;
     static const std::string ONLINESVR_LOG_FILE;
     static const std::string SLIDE_COUNT;

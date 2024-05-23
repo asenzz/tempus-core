@@ -11,13 +11,30 @@
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
 #include <common.hpp>
+#include <mkl_cblas.h>
 #include "common/compatibility.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 
 namespace svr {
 
 #define ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
+
+std::vector<double> operator*(const std::vector<double> &v1, const double &m);
+
+std::vector<double> operator*(const double &m, const std::vector<double> &v1);
+
+std::vector<double> operator*(const std::vector<double> &v1, const std::vector<double> &v2);
+
+std::vector<double> operator+(const std::vector<double> &v1, const std::vector<double> &v2);
+
+std::vector<double> operator-(const std::vector<double> &v1, const std::vector<double> &v2);
+
+std::vector<double> operator-(const std::vector<double> &v);
+
+std::vector<double> operator^(const std::vector<double> &v, const double a);
+
+std::vector<double> operator^(const double a, const std::vector<double> &v);
 
 template<typename T>
 std::vector<T> &operator/=(std::vector<T> &lsh, const T rhs)
@@ -44,6 +61,8 @@ std::atomic<T> &operator&=(std::atomic<T> &lhs, const T &rhs)
 
 
 namespace common {
+
+arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &v2);
 
 template<typename T> std::enable_if_t<std::is_integral_v<T>, T>
 bounce(const T v, const T lim)
@@ -143,6 +162,19 @@ sumabs(const std::vector<scalar_t> &v)
     return sum;
 }
 
+template<typename scalar_t> scalar_t
+sumabs(const arma::Mat<scalar_t> &m)
+{
+    return arma::accu(arma::abs(arma::vectorise(m)));
+}
+
+template<> double sumabs(const std::vector<double> &v);
+
+template<> float sumabs(const std::vector<float> &v);
+
+template<> double sumabs(const arma::Mat<double> &m);
+
+template<> float sumabs(const arma::Mat<float> &m);
 
 template<typename scalar_t> void
 normalize(std::vector<scalar_t> &v, const double min, const double max)
@@ -273,6 +305,24 @@ max(const C &container)
     return max;
 }
 
+
+// Use for deque and vector containers
+template<typename T>
+void keep_indices(T &d, const std::deque<size_t> &indices)
+{
+    if (d.size() <= indices.size() || d.size() <= max(indices) || d.empty()) return;
+    size_t last = 0;
+#ifndef __GNUC__
+#pragma unroll
+#endif
+    for (size_t i = 0; i < d.size(); ++i, ++last) {
+        while (std::find(indices.cbegin(), indices.cend(), i) == indices.cend() && i < d.size()) ++i;
+        if (i >= d.size()) break;
+        d[last] = d[i];
+    }
+    d.resize(last);
+}
+
 template<typename T> arma::Mat<T>
 join_rows(const size_t arg_ct...)
 {
@@ -344,6 +394,8 @@ present(const arma::subview<T> &m)
     return res.str();
 }
 
+std::string present_chunk(const arma::uvec &u, const double tail_factor);
+
 template<typename T> inline T
 mean_asymm(const arma::Mat<T> &m, const size_t last)
 {
@@ -351,12 +403,13 @@ mean_asymm(const arma::Mat<T> &m, const size_t last)
                  arma::mean(arma::vectorise(m.submat(m.n_rows - 1, m.n_cols - last, m.n_rows - 1, m.n_cols - 2))));
 }
 
-template<typename T> inline T
+template<typename T> T
 meanabs(const arma::Mat<T> &m)
 {
     return arma::mean(arma::abs(arma::vectorise(m)));
 }
 
+template<> double meanabs<double>(const arma::Mat<double> &m);
 
 template<typename T> inline T
 medianabs(const arma::Mat<T> &m)
@@ -374,6 +427,10 @@ meanabs(const std::vector<T> &v)
     return res / double(v.size());
 }
 
+template<> double meanabs<double>(const std::vector<double> &v);
+
+template<> float meanabs<float>(const std::vector<float> &v);
+
 template<typename T> T
 meanabs(const std::deque<T> &v)
 {
@@ -389,7 +446,7 @@ meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typen
 {
     double res = 0;
     for (auto iter = begin; iter != end; ++iter) res += std::abs(*iter);
-    return res / std::abs(double(std::distance(begin, end)));
+    return res / double(std::distance(begin, end));
 }
 
 
@@ -505,21 +562,6 @@ std::vector<size_t> argsort(const std::vector<T> &v)
     return result;
 }
 
-std::vector<double> operator*(const std::vector<double> &v1, const double &m);
-
-std::vector<double> operator*(const double &m, const std::vector<double> &v1);
-
-std::vector<double> operator*(const std::vector<double> &v1, const std::vector<double> &v2);
-
-std::vector<double> operator+(const std::vector<double> &v1, const std::vector<double> &v2);
-
-std::vector<double> operator-(const std::vector<double> &v1, const std::vector<double> &v2);
-
-std::vector<double> operator-(const std::vector<double> &v);
-
-std::vector<double> operator^(const std::vector<double> &v, const double a);
-
-std::vector<double> operator^(const double a, const std::vector<double> &v);
 
 double dot_product(double const *a, double const *b, const size_t size);
 

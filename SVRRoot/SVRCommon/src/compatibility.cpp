@@ -223,7 +223,7 @@ double Round(const double &dbl)
 
 size_t hash_lambda(const double param_val)
 {
-    return param_val * 1e7;
+    return param_val * 1e6;
 }
 
 } // common

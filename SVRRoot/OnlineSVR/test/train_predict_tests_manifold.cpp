@@ -2,6 +2,43 @@
 // Created by zarko on 21/05/19.
 //
 
+/*
+ * \d+ q_svrwave_test_xauusd_avg_1
+                               View "public.q_svrwave_test_xauusd_avg_1"
+     Column     |            Type             | Collation | Nullable | Default | Storage | Description
+----------------+-----------------------------+-----------+----------+---------+---------+-------------
+ value_time     | timestamp without time zone |           |          |         | plain   |
+ update_time    | timestamp without time zone |           |          |         | plain   |
+ tick_volume    | double precision            |           |          |         | plain   |
+ xauusd_avg_bid | double precision            |           |          |         | plain   |
+View definition:
+ SELECT value_time,
+    update_time,
+    tick_volume,
+    xauusd_avg_bid
+   FROM q_svrwave_xauusd_avg_1
+  ORDER BY value_time DESC
+ LIMIT (10000 * 3600);
+
+ \d+ q_svrwave_test_xauusd_avg_3600
+                             View "public.q_svrwave_test_xauusd_avg_3600"
+     Column     |            Type             | Collation | Nullable | Default | Storage | Description
+----------------+-----------------------------+-----------+----------+---------+---------+-------------
+ value_time     | timestamp without time zone |           |          |         | plain   |
+ update_time    | timestamp without time zone |           |          |         | plain   |
+ tick_volume    | double precision            |           |          |         | plain   |
+ xauusd_avg_bid | double precision            |           |          |         | plain   |
+View definition:
+ SELECT value_time,
+    update_time,
+    tick_volume,
+    xauusd_avg_bid
+   FROM q_svrwave_xauusd_avg_3600
+  ORDER BY value_time DESC
+ LIMIT 10000;
+
+ */
+
 #include "common/defines.h"
 
 #ifdef INTEGRATION_TEST
@@ -10,6 +47,7 @@
 #include <cstdlib>
 #include <omp.h>
 #include <gtest/gtest.h>
+#include <pqxx/pqxx>
 #include "EnsembleService.hpp"
 #include "IQScalingFactorService.hpp"
 #include "ModelService.hpp"
@@ -25,15 +63,19 @@ using namespace svr;
 #define TEST_ACTUAL_DATA
 
 namespace {
-
-constexpr unsigned C_test_decrement = 2 * DEFAULT_SVRPARAM_DECREMENT_DISTANCE;
+#ifdef VALGRIND_BUILD
+constexpr unsigned C_test_decrement = 1;
+constexpr unsigned C_test_lag = 1;
+#else
+constexpr unsigned C_test_decrement = DEFAULT_SVRPARAM_DECREMENT_DISTANCE; // 1.5 *
 constexpr unsigned C_test_lag = DEFAULT_SVRPARAM_LAG_COUNT;
+#endif
+
 const unsigned C_test_length = C_test_decrement + C_emo_test_len + common::INTEGRATION_TEST_VALIDATION_WINDOW;
 const std::string C_test_input_table_name = "q_svrwave_test_xauusd_avg_3600";
 const std::string C_test_aux_input_table_name = "q_svrwave_test_xauusd_avg_1";
-constexpr unsigned C_test_levels = 2 * MIN_LEVEL_COUNT;
+constexpr unsigned C_test_levels = 1; // 2 * MIN_LEVEL_COUNT;
 constexpr unsigned C_test_gradient_count = common::C_default_gradient_count;
-
 }
 
 TEST(manifold_tune_train_predict, basic_integration)
@@ -41,6 +83,23 @@ TEST(manifold_tune_train_predict, basic_integration)
     omp_set_nested(true);
     // omp_set_max_active_levels(20 * std::thread::hardware_concurrency());
     svr::context::AppContext::init_instance("../config/app.config");
+
+    try {
+        pqxx::connection c(PROPS.get_db_connection_string());
+        pqxx::work w(c);
+        const std::string q = common::formatter() << "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_1; "
+             "CREATE VIEW " << C_test_aux_input_table_name << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_1 "
+             "ORDER BY value_time DESC LIMIT (" << 1.6 * C_test_length << " * 3600); "
+             "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_3600; "
+             "CREATE VIEW " << C_test_input_table_name << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_3600 "
+             "ORDER BY value_time DESC LIMIT " << C_test_length + 1;
+        w.exec0(q);
+        w.commit();
+    } catch (const std::exception &ex) {
+        LOG4_DEBUG("Error " << ex.what() << " while preparing test queue.");
+        return;
+    }
+
     auto p_dataset = ptr<datamodel::Dataset>(
             0xDeadBeef, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
             C_test_gradient_count, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), C_test_levels, "cvmd", DEFAULT_FEATURES_MAX_TIME_GAP);
@@ -91,8 +150,9 @@ TEST(manifold_tune_train_predict, basic_integration)
         LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params);
         const auto [p_level_features, p_level_labels, p_level_last_knowns, level_times] = business::ModelService::get_training_data(
                 *p_dataset, *p_dataset->get_ensemble(), *p_model, C_test_length);
-        const auto train_start = p_level_labels->n_rows - C_test_length;
-        const auto train_end = p_level_labels->n_rows - common::INTEGRATION_TEST_VALIDATION_WINDOW - 1;
+        assert(p_level_labels->n_rows >= C_test_length);
+        const size_t train_start = p_level_labels->n_rows - C_test_length;
+        const size_t train_end = p_level_labels->n_rows - common::INTEGRATION_TEST_VALIDATION_WINDOW - 1;
 #else
         auto p_all_features = ptr<arma::mat>(C_test_length, TEST_LAG, arma::fill::randn);
         auto p_all_labels = ptr<arma::mat>(C_test_length, 1, arma::fill::randn);
@@ -142,9 +202,9 @@ TEST(manifold_tune_train_predict, basic_integration)
         mae_lk += cur_mae_lk;
         recon_mae += cur_recon_error;
 
-        if (mae < mae_lk) LOG4_DEBUG("Positive cumulative alpha at " << i << ", " << cml_alpha_pct << " pct.");
+        if (mae < mae_lk) LOG4_DEBUG("Positive cumulative alpha at " << i << ", " << cml_alpha_pct << "pc");
         if (cur_mae < cur_mae_lk) {
-            LOG4_DEBUG("Positive alpha " << cur_alpha_pct << " pct., at " << i);
+            LOG4_DEBUG("Positive alpha " << cur_alpha_pct << "pc, at " << i);
             ++positive_mae;
         }
         if (std::signbit(recon_predicted[i] - recon_last_knowns[i]) == std::signbit(recon_actual[i] - recon_last_knowns[i])) {
@@ -162,15 +222,15 @@ TEST(manifold_tune_train_predict, basic_integration)
                                ", last known " << recon_last_knowns[i] <<
                                ", total MAE " << mae / i_div <<
                                ", total MAE last known " << mae_lk / i_div <<
-                               ", positive directions " << 100. * double(pos_direct) / i_div << " pct."
-                               ", positive errors " << 100. * double(positive_mae) / i_div << " pct."
+                               ", positive directions " << 100. * double(pos_direct) / i_div << "pc"
+                               ", positive errors " << 100. * double(positive_mae) / i_div << "pc"
                                ", current MAE " << cur_mae <<
                                ", current MAE last known " << cur_mae_lk <<
                                ", predicted movement " << recon_predicted[i] - recon_last_knowns[i] <<
                                ", actual movement " << recon_actual[i] - recon_last_knowns[i] <<
-                               ", current alpha " << cur_alpha_pct << " pct., cumulative alpha " << cml_alpha_pct << " pct."
-                               ", recon error " << cur_recon_error << ", average recon error " << 100. * recon_mae / i_div << " pct.");
-        if (i < common::C_forecast_focus)
+                               ", current alpha " << cur_alpha_pct << "pc, cumulative alpha " << cml_alpha_pct << "pc"
+                               ", recon error " << cur_recon_error << ", average recon error " << 100. * recon_mae / i_div << "pc");
+        if (i < common::C_forecast_focus && std::isnormal(recon_predicted[i]))
             APP.request_service.save(ptr<datamodel::MultivalResponse>(0, 0, cur_time, p_decon->get_input_queue_column_name(), recon_predicted[i]));
     }
     mae /= double(validated_ct);
@@ -180,12 +240,12 @@ TEST(manifold_tune_train_predict, basic_integration)
     const double mape_lk = 100. * mae_lk / labels_meanabs;
     const double alpha_pct = 100. * (mape_lk / mape - 1.);
     LOG4_INFO("Total MAE of " << validated_ct << " compared values is " << mae << ","
-                              " MAPE is " << mape << " pct.,"
+                              " MAPE is " << mape << "pc,"
                               " last-known MAE " << mae_lk << ","
-                              " last-known MAPE " << mape_lk << " pct.,"
-                              " alpha " << alpha_pct << " pct.,"
-                              " positive direction " << 100. * double(pos_direct) / double(validated_ct) << " pct.,"
-                              " positive error " << 100. * double(positive_mae) / double(validated_ct) << " pct.");
+                              " last-known MAPE " << mape_lk << "pc,"
+                              " alpha " << alpha_pct << "pc,"
+                              " positive direction " << 100. * double(pos_direct) / double(validated_ct) << "pc,"
+                              " positive error " << 100. * double(positive_mae) / double(validated_ct) << "pc");
 }
 
 #endif

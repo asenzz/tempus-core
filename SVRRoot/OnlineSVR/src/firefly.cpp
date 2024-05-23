@@ -35,7 +35,7 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 #ifdef FIREFLY_CUDA
 #include "firefly.cuh"
 #endif
@@ -218,7 +218,7 @@ void firefly::ffa_main()
         }
         if (this_fbest < best_score) {
             LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << this_fbest << ", previous best score " << best_score << ", improvement "
-                                            << 100. * (1. - this_fbest / best_score) << " pct.");
+                                            << 100. * (1. - this_fbest / best_score) << "pc");
             best_parameters = nbest;
             best_score = this_fbest;
             if (D < 10) LOG4_TRACE("Best parameters " << best_parameters);

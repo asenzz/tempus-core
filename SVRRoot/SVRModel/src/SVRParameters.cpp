@@ -46,6 +46,7 @@ SVRParameters::SVRParameters(
         const double svr_adjacent_levels_ratio,
         const kernel_type_e kernel_type,
         const size_t lag_count,
+        const double feature_quantization,
         const std::set<size_t> &adjacent_levels)
         : Entity(id),
           dataset_id(dataset_id),
@@ -63,7 +64,8 @@ SVRParameters::SVRParameters(
           svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
           adjacent_levels(adjacent_levels),
           kernel_type(kernel_type),
-          lag_count(lag_count)
+          lag_count(lag_count),
+          feature_quantization(feature_quantization)
 {
     if (adjacent_levels.empty()) (void) get_adjacent_levels();
 #ifdef ENTITY_INIT_ID
@@ -89,6 +91,7 @@ SVRParameters::SVRParameters(const SVRParameters &o) :
                 o.svr_adjacent_levels_ratio,
                 o.kernel_type,
                 o.lag_count,
+                o.feature_quantization,
                 o.adjacent_levels)
 {}
 
@@ -225,12 +228,12 @@ void SVRParameters::set_level_count(const size_t levels)
     (void) get_adjacent_levels();
 }
 
-size_t SVRParameters::get_chunk_ix() const
+size_t SVRParameters::get_chunk_index() const
 {
     return chunk_ix_;
 }
 
-void SVRParameters::set_chunk_ix(const size_t _chunk_ix)
+void SVRParameters::set_chunk_index(const size_t _chunk_ix)
 {
     chunk_ix_ = _chunk_ix;
 }
@@ -318,14 +321,14 @@ void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_lev
     (void) get_adjacent_levels();
 }
 
-std::set<size_t> SVRParameters::get_adjacent_levels()
+std::set<size_t> &SVRParameters::get_adjacent_levels()
 {
     return adjacent_levels.empty()
            ? adjacent_levels = business::SVRParametersService::get_adjacent_indexes(decon_level_, svr_adjacent_levels_ratio, levels_ct)
            : adjacent_levels;
 }
 
-std::set<size_t> SVRParameters::get_adjacent_levels() const
+const std::set<size_t> &SVRParameters::get_adjacent_levels() const
 {
     if (adjacent_levels.empty()) LOG4_THROW("Adjacent levels not initialized.");
     return adjacent_levels;
@@ -360,6 +363,15 @@ void SVRParameters::set_lag_count(const size_t _lag_count)
     lag_count = _lag_count;
 }
 
+double SVRParameters::get_feature_quantization() const
+{
+    return feature_quantization;
+}
+
+void SVRParameters::set_feature_quantization(const double quantize)
+{
+    feature_quantization = quantize;
+}
 
 std::string SVRParameters::to_string() const
 {
@@ -423,7 +435,7 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
     set_input_queue_column_name(tokens[3]);
     set_level_count(atol(tokens[4].c_str()));
     set_decon_level(atol(tokens[5].c_str()));
-    set_chunk_ix(atol(tokens[6].c_str()));
+    set_chunk_index(atol(tokens[6].c_str()));
     set_grad_level(atol(tokens[7].c_str()));
     set_svr_C(atof(tokens[8].c_str()));
     set_svr_epsilon(atof(tokens[9].c_str()));

@@ -100,6 +100,7 @@ class SVRParameters : public Entity
     std::set<size_t> adjacent_levels;
     kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE;
     size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT;
+    double feature_quantization = QUANTIZE_FIXED;
 
 public:
     explicit SVRParameters() : Entity(0) {}
@@ -121,6 +122,7 @@ public:
             const double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO,
             const kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE,
             const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT,
+            const double feature_quantization = QUANTIZE_FIXED,
             const std::set<size_t> &adjacent_levels = {});
 
     SVRParameters(const SVRParameters &o);
@@ -155,9 +157,9 @@ public:
 
     void set_decon_level(const size_t _decon_level);
 
-    size_t get_chunk_ix() const;
+    size_t get_chunk_index() const;
 
-    void set_chunk_ix(const size_t _chunk_ix);
+    void set_chunk_index(const size_t _chunk_ix);
 
     size_t get_grad_level() const;
 
@@ -191,9 +193,9 @@ public:
 
     void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio);
 
-    std::set<size_t> get_adjacent_levels();
+    std::set<size_t> &get_adjacent_levels();
 
-    std::set<size_t> get_adjacent_levels() const;
+    const std::set<size_t> &get_adjacent_levels() const;
 
     kernel_type_e get_kernel_type() const;
 
@@ -205,6 +207,10 @@ public:
     size_t get_lag_count() const;
 
     void set_lag_count(const size_t _lag_count);
+
+    double get_feature_quantization() const;
+
+    void set_feature_quantization(const double quantize);
 
     std::string to_string() const override;
 
@@ -223,34 +229,28 @@ std::basic_ostream<T> &operator<<(std::basic_ostream<T> &os, const SVRParameters
 
 struct t_param_preds
 {
-    const double score = std::numeric_limits<double>::max();
-    svr::datamodel::SVRParameters_ptr p_params;
-    std::shared_ptr<std::deque<arma::mat>> p_predictions;
-    std::shared_ptr<std::deque<arma::mat>> p_labels;
-    std::shared_ptr<std::deque<arma::mat>> p_last_knowns;
-
-    t_param_preds(const double score,
-                  const datamodel::SVRParameters_ptr &params,
-                  const std::shared_ptr<std::deque<arma::mat>> &predictions,
-                  const std::shared_ptr<std::deque<arma::mat>> &labels,
-                  const std::shared_ptr<std::deque<arma::mat>> &last_knowns) :
-            score(score), p_params(params), p_predictions(predictions), p_labels(labels), p_last_knowns(last_knowns)
-    {}
-};
-
-typedef std::shared_ptr<t_param_preds> t_param_preds_ptr;
-
-struct param_preds_cmp
-{
-    bool operator()(const t_param_preds_ptr &lhs, const t_param_preds_ptr &rhs) const
+    double score = std::numeric_limits<double>::infinity();
+    svr::datamodel::SVRParameters params{};
+    std::array<arma::mat *, C_emo_max_j> *p_predictions = nullptr;
+    void free()
     {
-        return lhs->score < rhs->score;
+        if (p_predictions) {
+            for (size_t j = 0; j < C_emo_max_j; ++j) delete p_predictions->at(j);
+            delete p_predictions;
+        }
     }
 };
-typedef std::set<t_param_preds_ptr, param_preds_cmp> t_parameter_predictions_set;
+typedef std::shared_ptr<t_param_preds> t_param_preds_ptr;
+
+struct t_parameter_predictions_set {
+    std::array<arma::mat, C_emo_max_j> labels;
+    std::array<arma::mat, C_emo_max_j> last_knowns;
+    std::array<t_param_preds, common::C_tune_keep_preds> param_pred;
+};
+
 using t_parameter_predictions_set_ptr = std::shared_ptr<t_parameter_predictions_set>;
-typedef std::map<std::tuple<size_t /* level */, size_t /* grad */, size_t /* chunk */>, t_parameter_predictions_set_ptr> t_tuned_parameters;
-using t_tuned_parameters_ptr = std::shared_ptr<t_tuned_parameters>;
+typedef std::unordered_map<size_t /* level */, t_parameter_predictions_set> t_level_tuned_parameters;
+using t_level_tuned_parameters_ptr = std::shared_ptr<t_level_tuned_parameters>;
 
 }
 }

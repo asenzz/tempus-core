@@ -10,7 +10,7 @@
 #include <thrust/host_vector.h>
 #include <common/cuda_util.cuh>
 #include "model/DeconQueue.hpp"
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 #include "online_emd.hpp"
 
 #ifdef OEMDFFT
@@ -22,7 +22,7 @@ namespace oemd {
 
 
 __global__ void
-gpu_multiply_complex(
+G_gpu_multiply_complex(
         const size_t input_size,
         const cufftDoubleComplex *__restrict__ multiplier,
         cufftDoubleComplex *__restrict__ output)
@@ -64,7 +64,7 @@ vec_power(
 }
 
 __global__ void
-vec_power(
+G_vec_power(
         const cufftDoubleComplex *__restrict__ x,
         cufftDoubleComplex *__restrict__ y,
         const size_t x_size,
@@ -86,26 +86,13 @@ vec_power(
 
 
 __global__ void
-vec_subtract_inplace(
+G_vec_subtract_inplace(
         double *__restrict__ x,
         const double *__restrict__ y,
         const size_t x_size)
 {
-    for (auto j = blockIdx.x * blockDim.x + threadIdx.x; j < x_size; j += blockDim.x * gridDim.x) x[j] -= y[j];
+    CUDA_STRIDED_FOR_i(x_size) x[i] -= y[i];
 }
-
-#if 0
-__global__ void
-vec_subtract_inplace(
-        double *__restrict__ x,
-        const double *__restrict__ y,
-        const size_t x_size)
-{
-    const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    if (ix < x_size) x[ix] -= y[ix];
-}
-#endif
-
 
 __global__ void
 apply_mask(
@@ -148,7 +135,7 @@ void transform_fft(
     const size_t in_colix = levels * 2;
     const auto full_input_size = inout.distance() + tail.size();
     cu_errchk(cudaSetDevice(0));
-    const auto max_gpus = common::gpu_handler::get().get_gpu_devices_count();
+    const auto max_gpus = common::gpu_handler_hid::get().get_gpu_devices_count();
     std::deque<size_t> gpuids(max_gpus);
     for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
     std::vector<double> h_rx(full_input_size);
@@ -229,7 +216,7 @@ void transform_fir(
     const size_t levels = inout.levels() / 4;
     const size_t in_colix = levels * 2;
     const auto full_input_size = inout.distance() + tail.size();
-    const auto max_gpus = common::gpu_handler::get().get_max_running_gpu_threads_number() / CTX_PER_GPU;
+    const auto max_gpus = common::gpu_handler_hid::get().get_gpu_devices_count();
     std::deque<size_t> gpuids(max_gpus);
     for (size_t d = 0; d < max_gpus; ++d) gpuids[d] = d;
     std::vector<double> h_rx(full_input_size);
@@ -263,7 +250,7 @@ void transform_fir(
             for (size_t d = 0; d < max_gpus; ++d) {
                 cu_errchk(cudaSetDevice(gpuids[d]));
                 apply_mask<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(stretch_coef, d_rx_ptr[d], full_input_size, d_mask_ptr[d], mask[l].size(), stretched_mask_size, d_rx2_ptr[d], start_ix[d]);
-                oemd::vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_rx_ptr[d] + start_ix[d], d_rx2_ptr[d] + start_ix[d], job_len[d]);
+                oemd::G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_rx_ptr[d] + start_ix[d], d_rx2_ptr[d] + start_ix[d], job_len[d]);
             }
         }
 
@@ -277,7 +264,7 @@ void transform_fir(
             for (size_t i = start_ix[d]; i < start_ix[d] + job_len[d]; ++i)
                 if (i >= tail.size()) inout[i - tail.size()]->set_value(2 * actual_l, h_tmp[i]);
 
-            oemd::vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_remainder_ptr[d] + start_ix[d], d_rx_ptr[d] + start_ix[d], job_len[d]);
+            oemd::G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(job_len[d])>>>(d_remainder_ptr[d] + start_ix[d], d_rx_ptr[d] + start_ix[d], job_len[d]);
             cu_errchk(cudaMemcpy(d_rx_ptr[d] + start_ix[d], d_remainder_ptr[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
             cu_errchk(cudaFree(d_mask_ptr[d]));
         }

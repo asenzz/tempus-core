@@ -1,192 +1,76 @@
-#include <common/gpu_handler.hpp>
+#include <cuda_runtime_api.h>
+#include "common/cuda_util.cuh"
+#include "common/semaphore.hpp"
+#include <common/gpu_handler.tpp>
 #include <common/common.hpp>
 #include <mutex>
 
 namespace svr {
 namespace common {
 
-gpu_handler::gpu_handler()
-{
-#ifdef VIENNACL_WITH_OPENCL
-    bool try_ocl_cpu = false;
-    try {
-        init_devices(CL_DEVICE_TYPE_GPU);
-    } catch (...) {
-        try_ocl_cpu = true;
-        LOG4_WARN("No GPU device could be found. Using CPUs instead.");
-    }
-    try {
-        if (try_ocl_cpu) init_devices(CL_DEVICE_TYPE_CPU);
-    } catch (const std::exception &ex) {
-        LOG4_ERROR("Failed initializing OpenCL, " << ex.what());
-        throw;
-    }
-#endif // VIENNACL_WITH_OPENCL
-
-    LOG4_DEBUG("Max running GPU threads " << max_running_gpu_threads_number_);
-    p_gpu_sem_ = std::make_unique<boost::interprocess::named_semaphore>(
-            boost::interprocess::open_or_create_t(), SVRWAVE_GPU_SEM, max_running_gpu_threads_number_, boost::interprocess::permissions(0x1FF));
-    // This hack is needed as the semaphore created with sudo privileges, does not have W rights.
-    std::shared_ptr<FILE> pipe_gpu(popen("chmod a+rw /dev/shm/sem." SVRWAVE_GPU_SEM, "r"), pclose);
-}
-
-gpu_handler::~gpu_handler()
-{
-#if 0
-    try {
-        if (!named_semaphore::remove(SVRWAVE_GPU_SEM))
-            LOG4_WARN("Failed removing named semaphore " << SVRWAVE_GPU_SEM);
-    } catch (const std::exception &ex) {
-        LOG4_ERROR("Exception " << ex.what());
-    }
-#endif
-}
-
-
-void gpu_handler::gpu_sem_enter()
-{
-    p_gpu_sem_->wait();
-}
-
-
-bool gpu_handler::gpu_sem_try_enter()
-{
-    return p_gpu_sem_->try_wait();
-}
-
-
-void gpu_handler::gpu_sem_leave()
-{
-    p_gpu_sem_->post();
-}
-
-
-gpu_handler &gpu_handler::get()
-{
-    static gpu_handler handler;
-    return handler;
-}
-
-void gpu_handler::init_devices(const int device_type)
-{
-    const std::scoped_lock wl(devices_mutex_);
-    devices_.clear();
-    max_running_gpu_threads_number_ = 0;
-    max_gpu_data_chunk_size_ = std::numeric_limits<size_t>::max();
-    m_max_gpu_kernels_ = std::numeric_limits<size_t>::max();
-#ifdef VIENNACL_WITH_OPENCL
-    auto ocl_platforms = viennacl::ocl::get_platforms();
-    LOG4_INFO("Found " << ocl_platforms.size() << " platforms.");
-    for (auto &pf: ocl_platforms) {
-        LOG4_INFO("Platform " << pf.id() << ", " << pf.info());
-        try {
-            const auto new_devices = pf.devices(device_type);
-            const auto prev_dev_size = devices_.size();
-            for (unsigned mult = 0; mult < CTX_PER_GPU; ++mult)
-                devices_.insert(devices_.begin(), new_devices.cbegin(), new_devices.cend());
-
-            max_running_gpu_threads_number_ += new_devices.size() * CTX_PER_GPU;
-            for (const auto &device: new_devices) {
-                if (device.max_mem_alloc_size() && device.max_mem_alloc_size() < max_gpu_data_chunk_size_)
-                    max_gpu_data_chunk_size_ = device.max_mem_alloc_size();
-                size_t prod = 1;
-                std::vector<size_t> item_sizes = device.max_work_item_sizes();
-                for (const auto i: item_sizes) prod *= i;
-                if (prod < m_max_gpu_kernels_) m_max_gpu_kernels_ = prod;
-            }
-            LOG4_INFO("Devices available " << max_running_gpu_threads_number_ << ", device max allocate size is " << max_gpu_data_chunk_size_ <<
-                        " bytes, max GPU kernels " << m_max_gpu_kernels_);
-            for (size_t i = 0; i < devices_.size(); ++i) {
-                const auto devix = prev_dev_size + i;
-                setup_context(devix, devices_[devix]);
-                free_gpus_.push(devix);
-            }
-        } catch (const std::exception &ex) {
-            LOG4_ERROR("Failed enumerating platform " << pf.info() << " for devices, error " << ex.what());
-        }
-    }
-#else
-    max_running_gpu_threads_number_ = DEFAULT_GPU_NUM;
-    m_max_gpu_kernels = 1;
-    max_gpu_data_chunk_size_ = std::numeric_limits<size_t>::max();
-    for (size_t i = 0; i < DEFAULT_GPU_NUM; ++i) {
-        free_gpus_.push(i);
-    }
-#endif //VIENNACL_WITH_OPENCL
-}
-
-
-size_t gpu_handler::get_free_gpus() const
-{
-    const std::scoped_lock l(free_gpu_mutex_);
-    return free_gpus_.size();
-}
-
-
-size_t gpu_handler::get_free_gpu()
-{
-    const std::scoped_lock l(free_gpu_mutex_);
-    const auto free_gpu_index = free_gpus_.top();
-    free_gpus_.pop();
-    return free_gpu_index;
-}
-
-
-void gpu_handler::return_gpu(const size_t gpu_index)
-{
-    const std::scoped_lock l(free_gpu_mutex_);
-    free_gpus_.push(gpu_index);
-}
-
-
-size_t gpu_handler::get_max_running_gpu_threads_number() const
-{
-    return max_running_gpu_threads_number_;
-}
-
-
-size_t gpu_handler::get_gpu_devices_count() const
-{
-    return max_running_gpu_threads_number_ / CTX_PER_GPU;
-}
-
-
-size_t gpu_handler::get_max_gpu_kernels() const
-{
-    return m_max_gpu_kernels_;
-}
-
-
-size_t gpu_handler::get_max_gpu_data_chunk_size() const
-{
-    return max_gpu_data_chunk_size_;
-}
-
-
-#ifdef VIENNACL_WITH_OPENCL
-
-const viennacl::ocl::device &gpu_handler::device(const size_t idx) const
-{
-    const boost::shared_lock<boost::shared_mutex> rl(devices_mutex_);
-    if (idx >= devices_.size()) LOG4_THROW("Wrong device index " << idx << " of available " << devices_.size());
-    return devices_[idx];
-}
-
 // GPU Context, set the worker as blocked during its lifetime.
 gpu_context::gpu_context()
 {
-    gpu_handler::get().gpu_sem_enter();
-    context_id_ = gpu_handler::get().get_free_gpu();
+    context_id_ = gpu_handler_hid::get().get_free_gpu();
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
+gpu_context::gpu_context(const gpu_context &context) :
+context_id_(context.context_id_)
+{};
+
+size_t gpu_context::id() const
+{
+    return context_id_;
+}
+
+size_t gpu_context::phy_id() const
+{
+    return context_id_ % gpu_handler_hid::get().get_gpu_devices_count();
+}
+
+viennacl::ocl::context &gpu_context::ctx() const
+{
+    return viennacl::ocl::get_context(context_id_);
+}
 
 gpu_context::~gpu_context()
 {
-    gpu_handler::get().return_gpu(context_id_);
-    gpu_handler::get().gpu_sem_leave();
+    gpu_handler_hid::get().return_gpu();
     LOG4_TRACE("Exit ctx " << context_id_);
 }
+
+fat_gpu_context::fat_gpu_context()
+{
+    context_id_ = gpu_handler_hid::get().get_free_gpus(CTX_PER_GPU / 4);
+    LOG4_TRACE("Enter ctx " << context_id_);
+}
+
+fat_gpu_context::fat_gpu_context(const fat_gpu_context &context) :
+context_id_(context.context_id_)
+{}
+
+fat_gpu_context::~fat_gpu_context()
+{
+    gpu_handler_hid::get().return_gpus(CTX_PER_GPU / 4);
+    LOG4_TRACE("Exit fat ctx " << context_id_);
+}
+
+size_t fat_gpu_context::id() const
+{
+    return context_id_;
+}
+
+size_t fat_gpu_context::phy_id() const
+{
+    return context_id_ % gpu_handler_hid::get().get_gpu_devices_count();
+}
+
+viennacl::ocl::context &fat_gpu_context::ctx() const
+{
+    return viennacl::ocl::get_context(context_id_);
+}
+
 
 static std::map<std::string, std::stringstream> kernel_file_cache;
 
@@ -202,8 +86,7 @@ gpu_kernel::add_ctx_kernel(
 }
 
 
-gpu_kernel::gpu_kernel(const std::string &kernel_name)
-        : kernel_name_(kernel_name)
+gpu_kernel::gpu_kernel(const std::string &kernel_name) : kernel_name_(kernel_name)
 {
     viennacl::ocl::context &ctx = viennacl::ocl::get_context(context_id_);
     const auto iter_kernels_cache = kernel_file_cache.find(kernel_name);
@@ -246,7 +129,6 @@ void gpu_helper::enqueue(const viennacl::ocl::kernel &kernel, const size_t local
 
 } //namespace common
 
-#endif //VIENNACL_WITH_OPENCL
 
 namespace cl12 {
 cl_int

@@ -1,5 +1,5 @@
 #include <util/MemoryManager.hpp>
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 #include <common/logging.hpp>
 #include <chrono>
 #include <thread>
@@ -70,7 +70,7 @@ bool memory_manager::threads_available()
     LOG4_TRACE("Number of cores " << num_of_cores << ", number of threads " << num_of_threads);
     if (num_of_cores < 1 || num_of_threads < 1)
         throw std::runtime_error("Number of cores or number of threads cannot be zero!");
-    return num_of_threads <= (svr::common::gpu_handler::get().get_max_running_gpu_threads_number() +
+    return num_of_threads <= (svr::common::gpu_handler_hid::get().get_max_running_gpu_threads_number() +
                               num_of_cores * THREADS_CORES_MULTIPLIER);
 }
 
@@ -87,7 +87,7 @@ void memory_manager::check_memory()
         const auto prev_mem_available = mem_available_;
         mem_available_ = (ram_left >= FREE_RAM_THRESHOLD) && true;//threads_available();
         if (mem_available_ != prev_mem_available) {
-            LOG4_DEBUG("Changed mem_available to " << mem_available_ << " RAM left, " << 100. * ram_left << " pct., free ram " << static_cast<double>(ram_free) / GB_RAM_UNIT_DIVIDER <<
+            LOG4_DEBUG("Changed mem_available to " << mem_available_ << " RAM left, " << 100. * ram_left << "pc, free ram " << static_cast<double>(ram_free) / GB_RAM_UNIT_DIVIDER <<
                         " GB" << ", total ram " << static_cast<double>(mem_info.mem_total) / GB_RAM_UNIT_DIVIDER << " GB");
             cv_.notify_all();
             trigger = true;

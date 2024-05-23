@@ -112,19 +112,6 @@ vec_power(
 }
 
 
-__global__ void
-vec_subtract_inplace(
-        double *x,
-        const double *__restrict__ y,
-        const size_t x_size)
-{
-    const size_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    for (int j = ix; j < x_size; j += blockDim.x * gridDim.x) {
-        x[j] = x[j] - y[j];
-    }
-}
-
-
 const size_t oemd_block_size = 1024;
 #define CUDA_THREADS_BLOCKS(x_size) ((x_size) + oemd_block_size - 1) / oemd_block_size, oemd_block_size
 

@@ -10,7 +10,7 @@
 
 #ifdef VIENNACL_WITH_OPENCL
 
-#include <common/gpu_handler.hpp>
+#include "common/gpu_handler.tpp"
 
 #endif
 
@@ -131,7 +131,7 @@ public:
         const size_t size1 = features.size1();
         const size_t size2 = features.size2();
         const size_t block_size = 3072;
-        const size_t local_work_size[2] = {TILE_WIDTH, TILE_WIDTH};
+        const size_t local_work_size[2] = {CUDA_TILE_WIDTH, CUDA_TILE_WIDTH};
         const size_t N_groups_max_0 = block_size / local_work_size[0];
         const size_t N_groups_max_1 = block_size / local_work_size[1];
 
@@ -261,7 +261,7 @@ public:
 
         //Number of threads (work items) per Compute Unit (work group)
         //16*16=256 - this is the maximum size for older AMD cards.
-        const size_t local_work_size[2] = {TILE_WIDTH, TILE_WIDTH};
+        const size_t local_work_size[2] = {CUDA_TILE_WIDTH, CUDA_TILE_WIDTH};
         const size_t block_size = 3072;
         const size_t N_groups_max_0 = block_size / local_work_size[0];
         const size_t N_groups_max_1 = block_size / local_work_size[1];
@@ -421,7 +421,7 @@ public:
                 err = cq_command_queue.finish();
                 CL_CHECK(err);
 
-                const size_t local_work_size[2] = {TILE_WIDTH, TILE_WIDTH}; // TODO replace with proper hardware checks
+                const size_t local_work_size[2] = {CUDA_TILE_WIDTH, CUDA_TILE_WIDTH}; // TODO replace with proper hardware checks
                 const size_t global_work_size[2] = {
                         ((int) (numX / local_work_size[0]) + (bool) (numX % local_work_size[0])) *
                         local_work_size[0],

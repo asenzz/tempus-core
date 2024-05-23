@@ -62,13 +62,17 @@ dtranspose_kernel(
     A  += ibx + tx + (iby + ty)*lda;
     AT += iby + tx + (ibx + ty)*ldat;
     
-    #pragma unroll
+#ifndef __GNUC__
+#pragma unroll
+#endif
     for( int tile=0; tile < NB/NX; ++tile ) {
         // load NX-by-NB subtile transposed from A into sA
         i = ibx + tx + tile*NX;
         j = iby + ty;
         if (i < m) {
-            #pragma unroll
+#ifndef __GNUC__
+#pragma unroll
+#endif
             for( int j2=0; j2 < NB; j2 += NY ) {
                 if (j + j2 < n) {
                     sA[ty + j2][tx] = A[j2*lda];
@@ -80,10 +84,14 @@ dtranspose_kernel(
         // save NB-by-NX subtile from sA into AT
         i = iby + tx;
         j = ibx + ty + tile*NX;
-        #pragma unroll
+#ifndef __GNUC__
+#pragma unroll
+#endif
         for( int i2=0; i2 < NB; i2 += NX ) {
             if (i + i2 < n) {
-                #pragma unroll
+#ifndef __GNUC__
+#pragma unroll
+#endif
                 for( int j2=0; j2 < NX; j2 += NY ) {
                     if (j + j2 < m) {
                         AT[i2 + j2*ldat] = sA[tx + i2][ty + j2];

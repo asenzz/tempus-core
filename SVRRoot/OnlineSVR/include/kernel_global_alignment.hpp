@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <cmath>
 #include <time.h>
-#include <common/gpu_handler.hpp>
+#include "common/gpu_handler.tpp"
 #include <unordered_map>
 #include <tuple>
 
@@ -769,10 +769,10 @@ kernel_global_alignment<scalar_type>::operator()(
     CL_CHECK(err);
 
     const size_t memory_acceptable =
-            svr::common::gpu_handler::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
+            svr::common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
     size_t num_kernels = std::min(std::min(
             size_t(0.5 * memory_acceptable / cl),
-            svr::common::gpu_handler::get().get_max_gpu_kernels()),
+            svr::common::gpu_handler_hid::get().get_max_gpu_kernels()),
                                   size1_sqr);
     cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
     CL_CHECK(err);
@@ -990,10 +990,10 @@ kernel_global_alignment<scalar_type>::operator()(
     CL_CHECK(err);
 
     const size_t memory_acceptable =
-            svr::common::gpu_handler::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
+            svr::common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
     size_t num_kernels = std::min(std::min(
             size_t(0.5 * memory_acceptable / cl),
-            svr::common::gpu_handler::get().get_max_gpu_kernels()),
+            svr::common::gpu_handler_hid::get().get_max_gpu_kernels()),
                                   size1_sqr);
     cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
     CL_CHECK(err);

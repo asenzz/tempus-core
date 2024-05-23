@@ -3,7 +3,7 @@
 
 
 #include <common/logging.hpp>
-#include <common/gpu_handler.hpp>
+#include <common/gpu_handler.tpp>
 
 
 namespace svr {

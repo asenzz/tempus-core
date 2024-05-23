@@ -5,11 +5,11 @@
 #ifndef SVR_OEMD_COEFFICIENTS_SEARCH_HPP
 #define SVR_OEMD_COEFFICIENTS_SEARCH_HPP
 
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 
 #include <vector>
 #include <cufft.h>
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 #include "oemd_coefficients.hpp"
 #include "model/DataRow.hpp"
 

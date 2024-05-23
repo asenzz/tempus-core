@@ -215,7 +215,7 @@ TEST(path_train_predict, basic_integration)
         LOG4_DEBUG("Cumulative " << i << " MAE " << cml_mae / double(i + 1) << ", MAPE " << 100. * cml_mae / (meanabs_labels * double(i + 1)));
     }
 
-    LOG4_INFO("Validation on last 1000 rows, MAE " << mae << ", MAPE " << mape << " pct.");
+    LOG4_INFO("Validation on last 1000 rows, MAE " << mae << ", MAPE " << mape << "pc");
     LOG4_END();
 }
 #endif

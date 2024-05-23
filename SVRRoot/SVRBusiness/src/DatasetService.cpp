@@ -271,7 +271,7 @@ DatasetService::prepare_prediction_data(datamodel::Dataset &dataset, const datam
         const auto p_head_params = p_model->get_head_params();
         const auto levels = p_head_params->get_adjacent_levels();
         auto p_features = dataset.ccache.get_cached_features(
-                predict_times, ensemble.get_aux_decon_queues(), p_head_params->get_lag_count(), levels, dataset.get_max_lookback_time_gap(),
+                predict_times, ensemble.get_aux_decon_queues(), p_head_params->get_lag_count(), p_head_params->get_feature_quantization(), levels, dataset.get_max_lookback_time_gap(),
                 dataset.get_aux_input_queues().empty() ? dataset.get_input_queue()->get_resolution() : dataset.get_aux_input_queue()->get_resolution(),
                 dataset.get_input_queue()->get_resolution());
 #pragma omp ordered

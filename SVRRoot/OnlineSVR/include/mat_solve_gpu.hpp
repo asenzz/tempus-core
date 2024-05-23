@@ -7,7 +7,7 @@
 
 #include <CL/cl.h>
 
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 
 namespace svr {
 

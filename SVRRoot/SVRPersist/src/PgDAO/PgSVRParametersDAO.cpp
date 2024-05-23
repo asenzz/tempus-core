@@ -31,7 +31,7 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
                                   p_svr_parameters->get_input_queue_column_name(),
                                   p_svr_parameters->get_level_count(),
                                   p_svr_parameters->get_decon_level(),
-                                  p_svr_parameters->get_chunk_ix(),
+                                  p_svr_parameters->get_chunk_index(),
                                   p_svr_parameters->get_grad_level(),
                                   p_svr_parameters->get_svr_C(),
                                   p_svr_parameters->get_svr_epsilon(),
@@ -47,7 +47,7 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
                                   p_svr_parameters->get_input_queue_table_name(),
                                   p_svr_parameters->get_input_queue_column_name(),
                                   p_svr_parameters->get_decon_level(),
-                                  p_svr_parameters->get_chunk_ix(),
+                                  p_svr_parameters->get_chunk_index(),
                                   p_svr_parameters->get_grad_level(),
                                   p_svr_parameters->get_svr_C(),
                                   p_svr_parameters->get_svr_epsilon(),
@@ -62,7 +62,8 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
 
 int PgSVRParametersDAO::remove(const datamodel::SVRParameters_ptr& svr_parameters)
 {
-    return data_source.update(get_sql("remove_by_unique"), svr_parameters->get_dataset_id(), svr_parameters->get_input_queue_table_name(), svr_parameters->get_input_queue_column_name(), svr_parameters->get_decon_level(), svr_parameters->get_chunk_ix(), svr_parameters->get_grad_level());
+    return data_source.update(get_sql("remove_by_unique"), svr_parameters->get_dataset_id(), svr_parameters->get_input_queue_table_name(), svr_parameters->get_input_queue_column_name(), svr_parameters->get_decon_level(),
+                              svr_parameters->get_chunk_index(), svr_parameters->get_grad_level());
 }
 
 int PgSVRParametersDAO::remove_by_dataset_id(const bigint dataset_id)

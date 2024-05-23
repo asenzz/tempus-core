@@ -7,130 +7,78 @@
 
 #include <cufft.h>
 #include <sstream>
-#include <cstdint>
 #include <thrust/device_vector.h>
 #include "common/logging.hpp"
 #include "common/defines.h"
 
 constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;
 
+#define CUDA_STRIDED_FOR_i(N) \
+    const auto __stride = blockDim.x * gridDim.x; \
+    _Pragma("unroll")                             \
+    for (auto i = blockIdx.x * blockDim.x + threadIdx.x; i < (N); i += __stride)
+
 #define _CUSIGN(X) ((X) > 0. ? 1.: (X) < 0 ? -1. : 0.)
 #define _MIN(X, Y) ((X) > (Y) ? (Y) : (Y) > (X) ? (X) : (X))
 
 
-#define CUDA_THREADS(x_size) ((x_size) > CUDA_BLOCK_SIZE ? CUDA_BLOCK_SIZE : (x_size))
-#define CUDA_THREADS_BLOCKS(x_size) (x_size) > CUDA_BLOCK_SIZE ? ((x_size) + CUDA_BLOCK_SIZE - 1) / CUDA_BLOCK_SIZE : 1, CUDA_THREADS(x_size)
+#define CUDA_THREADS(x_size) unsigned((x_size) > CUDA_BLOCK_SIZE ? CUDA_BLOCK_SIZE : (x_size))
+#define CUDA_BLOCKS(x_size) unsigned(std::ceil(double(x_size) / double(CUDA_BLOCK_SIZE)))
+#define CUDA_THREADS_BLOCKS(x_size) CUDA_BLOCKS(x_size), CUDA_THREADS(x_size)
+
+#define CUDA_THREADS_2D(x_size) unsigned((x_size) > CUDA_TILE_WIDTH ? CUDA_TILE_WIDTH : (x_size))
+#define CUDA_BLOCKS_2D(x_size) unsigned(std::ceil(double(x_size) / double(CUDA_TILE_WIDTH)))
+#define CUDA_THREADS_BLOCKS_2D(x_size) dim3(CUDA_BLOCKS_2D(x_size), CUDA_BLOCKS_2D(x_size)), dim3(CUDA_THREADS_2D(x_size), CUDA_THREADS_2D(x_size))
 
 
-static inline double msecs()
-{
-    struct timespec start;
-    long seconds, useconds;
+std::string cufft_get_error_string(const cufftResult s);
 
-    //gettimeofday(&start, NULL);
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    seconds = start.tv_sec;
-    useconds = start.tv_nsec;
-
-    double stime = ((seconds) * 1 + (double) useconds / 1000000000.0);
-
-
-    return stime;
-}
-
-class cuformatter
-{
-public:
-    cuformatter()
-    {}
-
-    ~cuformatter()
-    {}
-
-    template<typename Type>
-    cuformatter &operator<<(const Type &value)
-    {
-        stream_ << value;
-        return *this;
+#ifdef PRODUCTION_BUILD
+#define cf_errchk(cmd) (cmd)
+#define ma_errchk(cmd) (cmd)
+#define cu_errchk(cmd) (cmd)
+#define cb_errchk(cmd) (cmd)
+#define cs_errchk(cmd) (cmd)
+#else
+#ifndef cf_errchk
+#define cf_errchk(cmd) {               \
+    cufftResult __err;                 \
+    if ((__err = cmd) != CUFFT_SUCCESS) \
+        LOG4_THROW("CuFFT call " #cmd " failed with error " << int(__err) << ", " << cufft_get_error_string(__err)); \
     }
+#endif
 
-    std::string str() const
-    { return stream_.str(); }
-
-    operator std::string() const
-    { return stream_.str(); }
-/*
-    operator const char *() const
-    { return stream_.str().c_str(); }
-*/
-    enum ConvertToString
-    {
-        to_str
-    };
-
-    std::string operator>>(ConvertToString)
-    { return stream_.str(); }
-
-private:
-    std::stringstream stream_;
-
-    cuformatter(const cuformatter &);
-
-    cuformatter &operator=(cuformatter &);
-};
-
-#define CU_LOG4_FILE(logfile, msg) { std::ofstream of( ::cuformatter() << logfile, std::ofstream::out | std::ofstream::app); of.precision(std::numeric_limits<double>::max_digits10); of << msg << std::endl; }
-
-template<typename T> static inline std::string
-deep_to_nsv(const std::vector<T> &v)
-{
-    if (v.empty()) return "";
-
-    std::stringstream ss;
-    ss.precision(std::numeric_limits<double>::max_digits10);
-    for (size_t i = 0; i < v.size() - 1; ++i) ss << v[i] << '\n';
-    ss << v.back();
-
-    return ss.str();
-}
-
-#define cufft_errchk(ans) { cufftAssert((ans), __FILE__, __LINE__); }
-
-inline void cufftAssert(cufftResult_t code,const  char *file, int line, bool abort=true){
-    if (code != CUFFT_SUCCESS) {
-        fprintf(stderr,"cufftAssert: error code %i file %s line %d\n", (int)code, file, line);
-        if (abort) exit(code);
+#ifndef ma_errchk
+#define ma_errchk(cmd) {   \
+        magma_int_t __err; \
+        if ((__err = (cmd)) < MAGMA_SUCCESS) \
+            LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err)); \
     }
-}
+#endif
 
-inline void gpu_assert(const cudaError_t errc, bool abort = false)
-{
-    if (errc == cudaSuccess) return;
-    std::string error_msg = svr::common::formatter() << "Error " << int(errc) << " " << cudaGetErrorName(errc) << ", " << cudaGetErrorString(errc);
-    LOG4_ERROR(error_msg);
-    if (abort)
-        exit(errc);
-    else
-        THROW_EX_FS(std::runtime_error, error_msg);
-}
+#ifndef cu_errchk
+#define cu_errchk(cmd) {               \
+    cudaError_t __err;                 \
+    if ((__err = cmd) != cudaSuccess) \
+        LOG4_THROW("Cuda call " #cmd " failed with error " << int(__err) << " " << cudaGetErrorName(__err) << ", " << cudaGetErrorString(__err)); \
+    }
+#endif
 
-#define cu_errchk(ans) { gpu_assert((ans)); }
-
-#ifndef cublas_safe_call
-#define cublas_safe_call(cmd)                                       \
-{                                                                   \
-        if (const auto __ec = (cmd))                                \
-            LOG4_THROW("Cublas call failed with " << int(__ec));    \
+#ifndef cb_errchk
+#define cb_errchk(cmd) {      \
+        cublasStatus_t __err; \
+        if ((__err = (cmd)) != CUBLAS_STATUS_SUCCESS) \
+            LOG4_THROW("Cublas call " #cmd " failed with " << int(__err) << " " << cublasGetStatusName(__err) << ", " << cublasGetStatusString(__err)); \
 }
 #endif
 
-#ifndef cusolver_safe_call
-#define cusolver_safe_call(cmd)                                     \
-{                                                                   \
-        cusolverStatus_t __ec;                                      \
-        if ((__ec = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
-            LOG4_THROW("Cublas call failed with " << int(__ec));    \
+#ifndef cs_errchk
+#define cs_errchk(cmd) {                                             \
+        cusolverStatus_t __err;                                      \
+        if ((__err = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
+            LOG4_THROW("Cusolver call " #cmd " failed with " << int(__err));  \
 }
+#endif
 #endif
 
 template<typename T> T *
@@ -144,8 +92,7 @@ cuda_malloccopy(const T *source, const size_t size, const cudaMemcpyKind kind)
             break;
         case cudaMemcpyDeviceToDevice:
         case cudaMemcpyHostToDevice:
-        case cudaMemcpyDefault:
-            cu_errchk(cudaMalloc(&ptr, size));
+        case cudaMemcpyDefault: cu_errchk(cudaMalloc(&ptr, size));
             break;
     }
     cu_errchk(cudaMemcpy(ptr, source, size, kind));
@@ -192,7 +139,6 @@ inline void *cuda_calloc(const size_t size, const size_t count)
     cu_errchk(cudaMemset(ptr, 0, count * size));
     return ptr;
 }
-
 
 
 #endif //SVR_CUDA_UTIL_CUH

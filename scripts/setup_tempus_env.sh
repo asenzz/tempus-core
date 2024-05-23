@@ -4,10 +4,18 @@ if [[ -z "${SETVARS_COMPLETED}" ]]; then
   source /opt/intel/oneapi/setvars.sh intel64 lp64
 fi
 
-# export DBG=gdb-oneapi
-export DBG=/usr/bin/gdb
-export DBG=/opt/intel/oneapi/debugger/2024.1/opt/debugger/bin/gdb-oneapi
-# export DBG=/usr/local/cuda/bin/cuda-gdb
+export UBSAN_OPTIONS=print_stacktrace=1:print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.ubsan.log
+export LSAN_OPTIONS=suppressions=print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.lsan.log
+export ASAN_OPTIONS=protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=0:detect_leaks=0:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log
+export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
+
+export VGRIND=/usr/local/bin/valgrind
+
+# Debugger
+export DBG=/usr/bin/gdb # GNU
+# export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger
+# export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
+
 # export PERF=/opt/intel/oneapi/vtune/2024.1/bin64/amplxe-perf
 export PERF=/usr/bin/perf
 export PROFGEN=/opt/intel/oneapi/compiler/latest/bin/compiler/llvm-profgen
@@ -52,15 +60,17 @@ export MAX_ACTIVE_LEVELS=$(( 10 * $NUM_THREADS ))         # Nested depth
 export OMP_THREAD_LIMIT=$(( 20 * $MAX_ACTIVE_LEVELS ))    # Increase with RAM size
 export OMP_NUM_THREADS=2 # ${NUM_THREADS}
 # export CILK_NWORKERS=${NUM_THREADS}
-export MKL_NUM_THREADS=6 # ${NUM_THREADS}
-export MAGMA_NUM_THREADS=6 # ${NUM_THREADS}
+export MKL_NUM_THREADS=8 # ${NUM_THREADS}
+export MAGMA_NUM_THREADS=8 # ${NUM_THREADS}
 export MKL_DYNAMIC="FALSE"
 # export VISIBLE_GPUS="0" # Disable GPUs
 # export CUDA_VISIBLE_DEVICES=VISIBLE_GPUS
+export MKL_ENABLE_INSTRUCTIONS=AVX2
 
 ulimit -s 8192
 ulimit -i unlimited
 ulimit -n 100000
+ulimit -c unlimited
 
 if [ `whoami` == 'root' ]
 then

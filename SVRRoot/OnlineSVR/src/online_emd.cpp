@@ -7,7 +7,7 @@
 #include "online_emd.hpp"
 #include "util/string_utils.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 #include "oemd_coefficients_search.hpp"
 
 

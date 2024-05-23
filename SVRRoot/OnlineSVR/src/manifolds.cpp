@@ -166,7 +166,7 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
     const auto n_learning_rows = std::min<size_t>(n_rows, p->get_svr_decremental_distance());
     const auto n_manifold_samples = n_rows * n_rows / C_interlace_manifold_factor;
     p_manifold_parameters->set_svr_decremental_distance(n_learning_rows * n_learning_rows / C_interlace_manifold_factor);
-    p_manifold_parameters->set_chunk_ix(0);
+    p_manifold_parameters->set_chunk_index(0);
     p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
 
     auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, p_features->n_cols * 2);

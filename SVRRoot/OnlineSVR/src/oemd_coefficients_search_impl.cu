@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <thrust/execution_policy.h>
 
+#include "common/compatibility.hpp"
 #include "oemd_coefficients_search.hpp"
 #include "online_emd.hpp"
 #include "../../SVRCommon/include/common/cuda_util.cuh"
@@ -35,7 +36,9 @@ gpu_multiply_smooth(
 {
     const auto thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
     const auto total_block_size = blockDim.x * gridDim.x;
+#ifndef __GNUC__
 #pragma unroll
+#endif
     for (auto j = thread_idx; j < input_size / 2 + 1; j += total_block_size) { // Because it is D2Z transform
         const double mult = std::exp(-coeff * double(j) / double(input_size));
         output[j].x *= mult;
@@ -53,11 +56,15 @@ vec_sift(
         cufftDoubleComplex *__restrict__ rem)
 {
     double px, py;
+#ifndef __GNUC__
 #pragma unroll
+#endif
     for (size_t j = blockIdx.x * blockDim.x + threadIdx.x; j < fft_size; j += blockDim.x * gridDim.x) {
         px = 1. - x[j].x;
         py = -x[j].y;
+#ifndef __GNUC__
 #pragma unroll
+#endif
         for (size_t i = 1; i < siftings; ++i) {
             px = px * (1. - x[j].x) - py * (-x[j].y);
             py = px * (-x[j].y) + py * (1. - x[j].x);
@@ -88,10 +95,14 @@ sum_expanded(
     double _sum_rem = 0;
     double _sum_corr = 0;
     // TODO Optimize code here!
+#ifndef __GNUC__
 #pragma unroll
+#endif
     for (size_t i = g_thr_ix; i < expand_size; i += grid_size) {
         double sum1 = 0, sum2 = 0;
+#ifndef __GNUC__
 #pragma unroll
+#endif
         for (size_t j = 0; j < expand_size; ++j) {
             sum1 += d_global_sift_matrix[labs(i - j)] * d_imf_mask[j];
             sum2 += d_global_sift_matrix[labs(i - j)] * d_rem_mask[j];
@@ -109,7 +120,9 @@ sum_expanded(
 
     __syncthreads();
 
+#ifndef __GNUC__
 #pragma unroll
+#endif
     for (size_t size = CUDA_BLOCK_SIZE / 2; size > 0; size /= 2) { // uniform
         if (thr_ix >= size) continue;
         _sh_sum_imf[thr_ix] += _sh_sum_imf[thr_ix + size];
@@ -142,23 +155,23 @@ oemd_coefficients_search::transform(
     cufftDoubleComplex *dev_expanded_mask_fft = thrust::raw_pointer_cast(d_expanded_mask_fft.data());
     const int n_batch = 1;
     fft_acquire();
-    cufft_errchk(cufftPlan1d(&plan_forward, input_size, CUFFT_D2Z, n_batch));
-    cufft_errchk(cufftPlan1d(&plan_backward, input_size, CUFFT_Z2D, n_batch));
-    cufft_errchk(cufftExecD2Z(plan_forward, thrust::raw_pointer_cast(d_expanded_mask.data()), dev_expanded_mask_fft));
+    cf_errchk(cufftPlan1d(&plan_forward, input_size, CUFFT_D2Z, n_batch));
+    cf_errchk(cufftPlan1d(&plan_backward, input_size, CUFFT_Z2D, n_batch));
+    cf_errchk(cufftExecD2Z(plan_forward, thrust::raw_pointer_cast(d_expanded_mask.data()), dev_expanded_mask_fft));
     fft_release();
 
     cufftDoubleComplex *dev_input_fft = thrust::raw_pointer_cast(d_input_fft.data());
 #pragma omp unroll
     for (size_t i = 0; i < siftings; ++i) {
         fft_acquire();
-        cufft_errchk(cufftExecD2Z(plan_forward, d_values, dev_input_fft));
+        cf_errchk(cufftExecD2Z(plan_forward, d_values, dev_input_fft));
         fft_release();
-        gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(to_fft_size(input_size)) >>>(input_size, dev_expanded_mask_fft, dev_input_fft);
+        G_gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(to_fft_size(input_size)) >>>(input_size, dev_expanded_mask_fft, dev_input_fft);
         cu_errchk(cudaPeekAtLastError());
         fft_acquire();
-        cufft_errchk(cufftExecZ2D(plan_backward, dev_input_fft, d_temp));
+        cf_errchk(cufftExecZ2D(plan_backward, dev_input_fft, d_temp));
         fft_release();
-        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input_size)>>>(d_values, d_temp, input_size);
+        G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(input_size)>>>(d_values, d_temp, input_size);
         cu_errchk(cudaPeekAtLastError());
     }
 
@@ -197,8 +210,8 @@ oemd_coefficients_search::sift_the_mask(
     //cufft_errchk(cufftExecD2Z(plan_sift_forward, d_expanded_mask_ptr, d_expanded_mask_fft));
     vec_sift<<<CUDA_THREADS_BLOCKS(fft_size)>>>(
             fft_size, siftings, d_expanded_mask_fft, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_mask_rem_fft.data()));
-    cufft_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_imf_mask.data())));
-    cufft_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_rem_fft.data()), thrust::raw_pointer_cast(d_rem_mask.data())));
+    cf_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_imf_mask.data())));
+    cf_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_rem_fft.data()), thrust::raw_pointer_cast(d_rem_mask.data())));
 
     auto d_sum_imf = (double *) cuda_calloc(sizeof(double), 1);
     auto d_sum_rem = (double *) cuda_calloc(sizeof(double), 1);
@@ -240,7 +253,7 @@ oemd_coefficients_search::evaluate_mask(
     online_emd::expand_the_mask(h_mask.size(), expanded_size, d_mask_ptr, d_expanded_mask);
     cufftDoubleComplex *d_expanded_mask_fft;
     cu_errchk(cudaMalloc(&d_expanded_mask_fft, to_fft_size(expanded_size) * sizeof(*d_expanded_mask_fft)));
-    cufft_errchk(cufftExecD2Z(plan_mask_forward, d_expanded_mask, d_expanded_mask_fft));
+    cf_errchk(cufftExecD2Z(plan_mask_forward, d_expanded_mask, d_expanded_mask_fft));
     auto h_mask_fft = cuda_copy(d_expanded_mask_fft, to_fft_size(expanded_size));
 
 #ifdef FILTEROUT_BAD_MASKS
@@ -273,17 +286,16 @@ oemd_coefficients_search::evaluate_mask(
     online_emd::expand_the_mask(h_mask.size(), full_input_size, d_mask_ptr, d_zm_ptr);
     cu_errchk(cudaFree(d_mask_ptr));
 
-    cufftDoubleComplex *d_zm_fft_ptr;
+    cufftDoubleComplex *d_zm_fft_ptr, *d_zm_convert_ptr;
     cu_errchk(cudaMalloc(&d_zm_fft_ptr, to_fft_size(full_input_size) * sizeof(*d_zm_fft_ptr)));
-    cufftDoubleComplex *d_zm_convert_ptr;
-    cu_errchk(cudaMalloc(&d_zm_convert_ptr, to_fft_size(full_input_size) * sizeof(*d_zm_convert_ptr)))
-    cufft_errchk(cufftExecD2Z(plan_expanded_forward, d_zm_ptr, d_zm_fft_ptr));
-    vec_power<<<CUDA_THREADS_BLOCKS(to_fft_size(full_input_size))>>>(d_zm_fft_ptr, d_zm_convert_ptr, full_input_size, siftings);
+    cu_errchk(cudaMalloc(&d_zm_convert_ptr, to_fft_size(full_input_size) * sizeof(*d_zm_convert_ptr)));
+    cf_errchk(cufftExecD2Z(plan_expanded_forward, d_zm_ptr, d_zm_fft_ptr));
+    G_vec_power<<<CUDA_THREADS_BLOCKS(to_fft_size(full_input_size))>>>(d_zm_fft_ptr, d_zm_convert_ptr, full_input_size, siftings);
     cu_errchk(cudaFree(d_zm_fft_ptr));
 
-    gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(to_fft_size(full_input_size))>>>(full_input_size, dev_values_fft, d_zm_convert_ptr);
+    G_gpu_multiply_complex<<<CUDA_THREADS_BLOCKS(to_fft_size(full_input_size))>>>(full_input_size, dev_values_fft, d_zm_convert_ptr);
     cu_errchk(cudaFree(dev_values_fft));
-    cufft_errchk(cufftExecZ2D(plan_expanded_backward, d_zm_convert_ptr, d_zm_ptr));
+    cf_errchk(cufftExecZ2D(plan_expanded_backward, d_zm_convert_ptr, d_zm_ptr));
     cu_errchk(cudaFree(d_zm_convert_ptr));
 
     const size_t inside_window_start = val_start + h_mask.size() * siftings;
@@ -293,12 +305,22 @@ oemd_coefficients_search::evaluate_mask(
     double *d_values_copy;
     cu_errchk(cudaMalloc(&d_values_copy, inside_window_len * sizeof(*d_values_copy)));
     cu_errchk(cudaMemcpy(d_values_copy, d_workspace + inside_window_start, inside_window_len * sizeof(*d_values_copy), cudaMemcpyDeviceToDevice));
-    vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(inside_window_len)>>>(d_values_copy, d_zm_ptr + inside_window_start, inside_window_len);
+    G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(inside_window_len)>>>(d_values_copy, d_zm_ptr + inside_window_start, inside_window_len);
     auto h_rem_temp = cuda_copy(d_values_copy, inside_window_len);
     cu_errchk(cudaFree(d_zm_ptr));
     cu_errchk(cudaFree(d_values_copy));
     cu_errchk(cudaFree(d_workspace));
-    cu_errchk(cudaDeviceSynchronize());
+#if 1
+    const arma::vec input((double *)h_workspace.data() + inside_window_start, inside_window_len, false, true);
+    const arma::vec output((double *)h_rem_temp.data(), inside_window_len, false, true);
+    double score = 0;
+#pragma omp parallel for simd num_threads(adj_threads(inside_window_len)) schedule(static, 1)
+    for (size_t i = 0; i < inside_window_len / 2; ++i)
+        score = std::min(score, common::meanabs<double>(output.head(inside_window_len - i) - output.tail(inside_window_len - i)));
+    const auto meanabs_input = common::meanabs(input);
+    score = score / meanabs_input + .2 * (1. - std::min(1., common::meanabs(output) / meanabs_input));
+    return score;
+#endif
 
     double sum1 = 0;
     double sum2 = 0;
@@ -378,9 +400,9 @@ oemd_coefficients_search::gauss_smoothen_mask(
     thrust::device_vector<cufftDoubleComplex> d_mask_zm_fft(to_fft_size(full_size));
     cu_errchk(cudaMemset(thrust::raw_pointer_cast(d_mask_zm.data() + mask_size), 0, mask_size * sizeof(double)));
     cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(d_mask_zm.data()), mask.data(), sizeof(double) * mask_size, cudaMemcpyKind::cudaMemcpyHostToDevice));
-    cufft_errchk(cufftExecD2Z(plan_mask_forward, thrust::raw_pointer_cast(d_mask_zm.data()), thrust::raw_pointer_cast(d_mask_zm_fft.data())));
+    cf_errchk(cufftExecD2Z(plan_mask_forward, thrust::raw_pointer_cast(d_mask_zm.data()), thrust::raw_pointer_cast(d_mask_zm_fft.data())));
     gpu_multiply_smooth<<<CUDA_THREADS_BLOCKS(to_fft_size(full_size))>>>(full_size, 5. * -log(common::drander(buffer)), thrust::raw_pointer_cast(d_mask_zm_fft.data()));
-    cufft_errchk(cufftExecZ2D(plan_mask_backward, thrust::raw_pointer_cast(d_mask_zm_fft.data()), thrust::raw_pointer_cast(d_mask_zm.data())));
+    cf_errchk(cufftExecZ2D(plan_mask_backward, thrust::raw_pointer_cast(d_mask_zm_fft.data()), thrust::raw_pointer_cast(d_mask_zm.data())));
     thrust::transform(thrust::device,
                       d_mask_zm.begin(), d_mask_zm.begin() + mask_size, d_mask_zm.begin(),
     [mask_size] __device__ (const double &iter) -> double { return (iter > 0 ? iter : 0) / double(mask_size); } );
@@ -498,8 +520,8 @@ oemd_coefficients_search::optimize_levels(
 #pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
     for (size_t i = 0; i < C_parallelism; ++i) {
         CUDA_SET_DEVICE(i);
-        cufft_errchk(cufftPlan1d(&plan_full_forward[i], window_len, CUFFT_D2Z, n_batch));
-        cufft_errchk(cufftPlan1d(&plan_full_backward[i], window_len, CUFFT_Z2D, n_batch));
+        cf_errchk(cufftPlan1d(&plan_full_forward[i], window_len, CUFFT_D2Z, n_batch));
+        cf_errchk(cufftPlan1d(&plan_full_backward[i], window_len, CUFFT_Z2D, n_batch));
     }
 #pragma omp unroll
     for (size_t i = 0; i < masks.size(); ++i) {
@@ -508,8 +530,8 @@ oemd_coefficients_search::optimize_levels(
 #pragma omp parallel for num_threads(adj_threads(C_parallelism))
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);
-            cufft_errchk(cufftPlan1d(&plan_sift_forward[j], siftings[i] * masks[i].size(), CUFFT_D2Z, n_batch));
-            cufft_errchk(cufftPlan1d(&plan_sift_backward[j], siftings[i] * masks[i].size(), CUFFT_Z2D, n_batch));
+            cf_errchk(cufftPlan1d(&plan_sift_forward[j], siftings[i] * masks[i].size(), CUFFT_D2Z, n_batch));
+            cf_errchk(cufftPlan1d(&plan_sift_backward[j], siftings[i] * masks[i].size(), CUFFT_Z2D, n_batch));
         }
         //auto global_sift_matrix = fill_auto_matrix(
         //        masks[i].size(), siftings[i], window_len - start_valid_ix, &h_workspace[window_start + start_valid_ix]);
@@ -518,11 +540,11 @@ oemd_coefficients_search::optimize_levels(
 #pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);
-            cufft_errchk(cufftPlan1d(&plan_mask_forward[j], C_mask_expander * masks[i].size(), CUFFT_D2Z, n_batch));
-            cufft_errchk(cufftPlan1d(&plan_mask_backward[j], C_mask_expander * masks[i].size(), CUFFT_Z2D, n_batch));
+            cf_errchk(cufftPlan1d(&plan_mask_forward[j], C_mask_expander * masks[i].size(), CUFFT_D2Z, n_batch));
+            cf_errchk(cufftPlan1d(&plan_mask_backward[j], C_mask_expander * masks[i].size(), CUFFT_Z2D, n_batch));
         }
         cu_errchk(cudaSetDevice(gpu_id));
-        cufft_errchk(cufftExecD2Z(plan_full_forward[0], d_workspace_ptr, d_values_fft_ptr));
+        cf_errchk(cufftExecD2Z(plan_full_forward[0], d_workspace_ptr, d_values_fft_ptr));
         auto h_values_fft = cuda_copy(d_values_fft);
         const double result = find_good_mask_ffly(
                 siftings[i], start_valid_ix, h_workspace, h_values_fft,
@@ -534,7 +556,7 @@ oemd_coefficients_search::optimize_levels(
         d_imf[i] = d_workspace; // copy
         double *d_imf_ptr = thrust::raw_pointer_cast(d_imf[i].data());
         transform(d_imf_ptr, masks[i].data(), window_len, masks[i].size(), siftings[i], d_temp_ptr, gpu_id);
-        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_workspace_ptr, d_imf_ptr, window_len);
+        G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(window_len)>>>(d_workspace_ptr, d_imf_ptr, window_len);
         start_valid_ix += siftings[i] * (masks[i].size() - 1); // is it -1 really?
 /*
         h_imf[i] = d_imf[i];
@@ -550,17 +572,17 @@ oemd_coefficients_search::optimize_levels(
 #pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
         for (size_t j = 0; j < C_parallelism; ++j) {
             CUDA_SET_DEVICE(j);
-            cufft_errchk(cufftDestroy(plan_mask_forward[j]));
-            cufft_errchk(cufftDestroy(plan_sift_forward[j]));
-            cufft_errchk(cufftDestroy(plan_sift_backward[j]));
+            cf_errchk(cufftDestroy(plan_mask_forward[j]));
+            cf_errchk(cufftDestroy(plan_sift_forward[j]));
+            cf_errchk(cufftDestroy(plan_sift_backward[j]));
         }
     }
 
 #pragma omp parallel for num_threads(adj_threads(C_parallelism)) schedule(static, 1)
     for (size_t i = 0; i < C_parallelism; ++i) {
         CUDA_SET_DEVICE(i);
-        cufft_errchk(cufftDestroy(plan_full_forward[i]));
-        cufft_errchk(cufftDestroy(plan_full_backward[i]));
+        cf_errchk(cufftDestroy(plan_full_forward[i]));
+        cf_errchk(cufftDestroy(plan_full_backward[i]));
     }
 }
 

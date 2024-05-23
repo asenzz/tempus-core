@@ -22,6 +22,7 @@ const std::string PropertiesFileReader::ONLINE_LEARN_ITER_LIMIT = "ONLINE_LEARN_
 const std::string PropertiesFileReader::STABILIZE_ITERATIONS_COUNT = "STABILIZE_ITERATIONS_COUNT";
 const std::string PropertiesFileReader::ERROR_TOLERANCE = "ERROR_TOLERANCE";
 const std::string PropertiesFileReader::SCALING_ALPHA = "SCALING_ALPHA";
+const std::string PropertiesFileReader::CONNECTION_STRING = "CONNECTION_STRING";
 const std::string PropertiesFileReader::ONLINESVR_LOG_FILE = "ONLINESVR_LOG_FILE";
 const std::string PropertiesFileReader::SLIDE_COUNT = "SLIDE_COUNT";
 const std::string PropertiesFileReader::TUNE_RUN_LIMIT = "TUNE_RUN_LIMIT";
@@ -102,6 +103,7 @@ PropertiesFileReader::PropertiesFileReader(const std::string& app_config_file, c
     slide_count_ = get_property<size_t>(app_config_file, SLIDE_COUNT, DEFAULT_SLIDE_COUNT);
 	tune_run_limit_ = get_property<size_t>(app_config_file, TUNE_RUN_LIMIT, DEFAULT_TUNE_RUN_LIMIT);
 	scaling_alpha_ = get_property<double>(app_config_file, SCALING_ALPHA, DEFAULT_SCALING_ALPHA);
+    db_connection_string_ = get_property<std::string>(app_config_file, CONNECTION_STRING, DEFAULT_CONNECTION_STRING);
 }
 
 ConcreteDaoType PropertiesFileReader::get_dao_type() const

@@ -4,6 +4,67 @@
 
 #ifndef SVR_SEMAPHORE_HPP
 #define SVR_SEMAPHORE_HPP
+
+#pragma once
+
+#include <sys/types.h>
+#include <condition_variable>
+#include <mutex>
+#include <atomic>
+
+namespace svr {
+
+template<class T> class copyable_atomic: public std::atomic<T>
+{
+public:
+    copyable_atomic() : std::atomic<T>(T{})
+    {}
+
+    constexpr copyable_atomic(T desired) :
+            std::atomic<T>(desired)
+    {}
+
+    constexpr copyable_atomic(const copyable_atomic<T> &other) :
+            copyable_atomic(other.load(std::memory_order_relaxed))
+    {}
+
+    copyable_atomic &operator=(const copyable_atomic<T> &other)
+    {
+        store(other.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        return *this;
+    }
+};
+
+class semaphore
+{
+    ssize_t m_count;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+
+public:
+    explicit semaphore(const ssize_t count) noexcept;
+
+    void post() noexcept;
+    ssize_t wait() noexcept;
+    bool try_wait() noexcept;
+};
+
+class fast_semaphore
+{
+    std::atomic<ssize_t> m_count;
+    semaphore m_semaphore;
+
+public:
+    explicit fast_semaphore(const ssize_t count) noexcept;
+    void post();
+    ssize_t wait();
+    bool try_wait();
+    size_t get_count();
+};
+
+
+}  // namespace svr
+
 // MIT License
 
 // Copyright (c) 2021 CyanHill
@@ -26,74 +87,85 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#pragma once
 
 #include <cassert>
 #include <chrono>
-#include <condition_variable>
-#include <cstddef>
 #include <limits>
-#include <mutex>
-#include <atomic>
 
+namespace cyan {
 
-namespace svr {
-
-
-class semaphore
-{
+template <std::ptrdiff_t least_max_value = std::numeric_limits<std::ptrdiff_t>::max()>
+class counting_semaphore {
 public:
-    explicit semaphore(const ssize_t count) noexcept
-            : m_count(count) { assert(count > -1); }
+    static constexpr std::ptrdiff_t max() noexcept {
+        static_assert(least_max_value >= 0, "least_max_value shall be non-negative");
+        return least_max_value;
+    }
 
-    void post() noexcept
-    {
+    explicit counting_semaphore(std::ptrdiff_t desired) : counter_(desired) { assert(desired >= 0 && desired <= max()); }
+
+    ~counting_semaphore() = default;
+
+    counting_semaphore(const counting_semaphore&) = delete;
+    counting_semaphore& operator=(const counting_semaphore&) = delete;
+
+    void post(std::ptrdiff_t update = 1) {
         {
-            std::scoped_lock lock(m_mutex);
-            ++m_count;
+            std::lock_guard<decltype(mutex_)> lock{mutex_};
+            assert(update >= 0 && update <= max() - counter_);
+            counter_ += update;
+            if (counter_ <= 0) {
+                return;
+            }
+        }  // avoid hurry up and wait
+        cv_.notify_all();
+    }
+
+    void wait() {
+        std::unique_lock<decltype(mutex_)> lock{mutex_};
+        cv_.wait(lock, [&]() { return counter_ > 0; });
+        --counter_;
+    }
+
+    bool try_wait() noexcept {
+        std::unique_lock<decltype(mutex_)> lock{mutex_};
+        if (counter_ <= 0) {
+            return false;
         }
-        m_cv.notify_one();
+        --counter_;
+        return true;
     }
 
-    void wait() noexcept
-    {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [&]() { return m_count != 0; });
-        --m_count;
+    template <class Rep, class Period>
+    bool try_wait_for(const std::chrono::duration<Rep, Period>& rel_time) {
+        const auto timeout_time = std::chrono::steady_clock::now() + rel_time;
+        return do_try_acquire_wait(timeout_time);
     }
 
-private:
-    ssize_t m_count;
-    std::mutex m_mutex;
-    std::condition_variable m_cv;
-};
-
-class fast_semaphore
-{
-public:
-    explicit fast_semaphore(const ssize_t count) noexcept
-            : m_count(count), m_semaphore(0) {}
-
-    void post()
-    {
-        std::atomic_thread_fence(std::memory_order_release);
-        ssize_t count = m_count.fetch_add(1, std::memory_order_relaxed);
-        if (count < 0) m_semaphore.post();
-    }
-
-    void wait()
-    {
-        ssize_t count = m_count.fetch_sub(1, std::memory_order_relaxed);
-        if (count < 1) m_semaphore.wait();
-        std::atomic_thread_fence(std::memory_order_acquire);
+    template <class Clock, class Duration>
+    bool try_wait_until(const std::chrono::time_point<Clock, Duration>& abs_time) {
+        return do_try_acquire_wait(abs_time);
     }
 
 private:
-    std::atomic<ssize_t> m_count;
-    semaphore m_semaphore;
+    template <typename Clock, typename Duration>
+    bool do_try_acquire_wait(const std::chrono::time_point<Clock, Duration>& timeout_time) {
+        std::unique_lock<decltype(mutex_)> lock{mutex_};
+        if (!cv_.wait_until(lock, timeout_time, [&]() { return counter_ > 0; })) {
+            return false;
+        }
+        --counter_;
+        return true;
+    }
+
+private:
+    std::ptrdiff_t counter_{0};
+    std::condition_variable cv_;
+    std::mutex mutex_;
 };
 
+using binary_semaphore = counting_semaphore<1>;
 
-}  // namespace svr
+}  // namespace cyan
 
 #endif //SVR_SEMAPHORE_HPP

@@ -3,12 +3,94 @@
 #include <map>
 #include "util/math_utils.hpp"
 #include "common/compatibility.hpp"
-#include "common/gpu_handler.hpp"
+#include "common/gpu_handler.tpp"
 #include "sobolvec.h"
 
 
 namespace svr {
+
+
+std::vector<double> operator*(const std::vector<double> &v1, const double &m)
+{
+    std::vector<double> ret(v1.size());
+    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), ret.begin(), [m](const auto val) -> double { return val * m; });
+    return ret;
+}
+
+std::vector<double> operator*(const double &m, const std::vector<double> &v1)
+{
+    return v1 * m;
+}
+
+std::vector<double> operator*(const std::vector<double> &v1, const std::vector<double> &v2)
+{
+    assert(v1.size() == v2.size());
+    std::vector<double> ret(v1.size());
+    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(),
+                   [](const auto val1, const auto val2) -> double { return val1 * val2; });
+    return ret;
+}
+
+std::vector<double> operator+(const std::vector<double> &v1, const std::vector<double> &v2)
+{
+    assert(v1.size() == v2.size());
+    std::vector<double> ret(v1.size());
+    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(),
+                   [](const auto val1, const auto val2) -> double { return val1 + val2; });
+    return ret;
+}
+
+std::vector<double> operator-(const std::vector<double> &v1, const std::vector<double> &v2)
+{
+    assert(v1.size() == v2.size());
+    std::vector<double> ret(v1.size());
+    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(),
+                   [](const auto val1, const auto val2) -> double { return val1 - val2; });
+    return ret;
+}
+
+std::vector<double> operator-(const std::vector<double> &v)
+{
+    std::vector<double> result{v};
+    std::for_each(result.begin(), result.end(), [](double &x) { x *= -1.0; });
+
+    return result;
+}
+
+std::vector<double> operator^(const std::vector<double> &v, const double a)
+{
+    assert(a >= 0);
+    std::vector<double> result{v};
+    std::for_each(result.begin(), result.end(), [=](double &x) { x = std::pow(x, a); });
+
+    return result;
+}
+
+std::vector<double> operator^(const double a, const std::vector<double> &v)
+{
+    assert(a >= 0);
+    std::vector<double> result{v};
+    std::for_each(result.begin(), result.end(), [=](double &x) { x = std::pow(a, x); });
+
+    return result;
+}
+
 namespace common {
+
+std::string present_chunk(const arma::uvec &u, const double tail_factor)
+{
+    const size_t head_n = u.n_rows * (1. - tail_factor);
+    std::stringstream s;
+    s << "size " << arma::size(u);
+    if (u.n_rows < 20)
+        s << ", elements " << u;
+    else
+        s << ", head len " << head_n << ", tail len " << u.n_rows - head_n <<
+          ", head " << to_string(u, 0, 5) <<
+          ", cross-over " << to_string(u, head_n - 2, 5) <<
+          ", tail " << to_string(u, u.n_elem - 5, 5);
+    return s.str();
+}
 
 arma::vec levy(const size_t d) // Return colvec of columns d
 {
@@ -83,8 +165,8 @@ transpose_matrix(const std::vector<std::vector<double>> &vvmat)
 
     std::vector<std::vector<double>> result(vvmat[0].size(), std::vector<double>(vvmat.size()));
     __omp_pfor(j, 0, vvmat[0].size(),
-        for (size_t i = 0; i < vvmat.size(); ++i)
-            result[j][i] = vvmat[i][j];
+               for (size_t i = 0; i < vvmat.size(); ++i)
+                   result[j][i] = vvmat[i][j];
     )
 
     return result;
@@ -161,69 +243,11 @@ get_uniform_random_vector(const std::pair<std::vector<double>, std::vector<doubl
     return random_vector;
 }
 
-std::vector<double> operator *(const std::vector<double> &v1, const double &m)
+arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &v2)
 {
-    std::vector<double> ret(v1.size());
-    transform(v1.begin(), v1.end(), ret.begin(), [&m](double val) -> double { return val * m; });
+    arma::vec ret(v1.size());
+    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(), [](const auto val1, const auto val2) { return val1 + val2; });
     return ret;
-}
-
-std::vector<double> operator*(const double &m, const std::vector<double> &v1)
-{
-    return v1 * m;
-}
-
-std::vector<double> operator*(const std::vector<double> &v1, const std::vector<double> &v2)
-{
-    assert(v1.size() == v2.size());
-    std::vector<double> ret(v1.size());
-    transform(v1.begin(), v1.end(), v2.begin(), ret.begin(),
-              [](double val1, double val2) -> double { return val1 * val2; });
-    return ret;
-}
-
-std::vector<double> operator+(const std::vector<double> &v1, const std::vector<double> &v2)
-{
-    assert(v1.size() == v2.size());
-    std::vector<double> ret(v1.size());
-    transform(v1.begin(), v1.end(), v2.begin(), ret.begin(),
-              [](double val1, double val2) -> double { return val1 + val2; });
-    return ret;
-}
-
-std::vector<double> operator-(const std::vector<double> &v1, const std::vector<double> &v2)
-{
-    assert(v1.size() == v2.size());
-    std::vector<double> ret(v1.size());
-    transform(v1.begin(), v1.end(), v2.begin(), ret.begin(),
-              [](double val1, double val2) -> double { return val1 - val2; });
-    return ret;
-}
-
-std::vector<double> operator-(const std::vector<double> &v)
-{
-    std::vector<double> result{v};
-    std::for_each(result.begin(), result.end(), [](double &x) { x *= -1.0; });
-
-    return result;
-}
-
-std::vector<double> operator^(const std::vector<double> &v, const double a)
-{
-    assert(a >= 0);
-    std::vector<double> result{v};
-    std::for_each(result.begin(), result.end(), [=](double &x) { x = std::pow(x, a); });
-
-    return result;
-}
-
-std::vector<double> operator^(const double a, const std::vector<double> &v)
-{
-    assert(a >= 0);
-    std::vector<double> result{v};
-    std::for_each(result.begin(), result.end(), [=](double &x) { x = std::pow(a, x); });
-
-    return result;
 }
 
 #ifdef VIENNACL_WITH_OPENCL
@@ -259,7 +283,7 @@ double dot_product(double const *a, double const *b, const size_t length)
 
     queue.enqueueReadBuffer(C, CL_TRUE, 0, length * sizeof(double), c.data());
 
-    for (auto const &vc : c) result += vc;
+    for (auto const &vc: c) result += vc;
 
     return result;
 }
@@ -341,6 +365,44 @@ arma::mat pdist(const arma::mat &input)
         }
     }
     return foo;
+}
+
+template<> double sumabs(const std::vector<double> &v)
+{
+    return cblas_dasum(v.size(), v.data(), 1);
+}
+
+template<> float sumabs(const std::vector<float> &v)
+{
+    return cblas_sasum(v.size(), v.data(), 1);
+}
+
+template<> double sumabs(const arma::Mat<double> &m)
+{
+    return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
+}
+
+template<> float sumabs(const arma::Mat<float> &m)
+{
+    return cblas_sasum(m.n_elem, m.mem, 1) / double(m.n_elem);
+}
+
+template<> double
+meanabs<double>(const std::vector<double> &v)
+{
+    return cblas_dasum(v.size(), v.data(), 1) / double(v.size());
+}
+
+template<> float
+meanabs<float>(const std::vector<float> &v)
+{
+    return cblas_sasum(v.size(), v.data(), 1) / float(v.size());
+}
+
+template<> double
+meanabs<double>(const arma::Mat<double> &m)
+{
+    return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
 }
 
 double mean(const arma::mat &input)
