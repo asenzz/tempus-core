@@ -88,14 +88,14 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             dataset_100->get_id(),
             test_iq_name,
             "eurusd",
-            1, 0, 0, 0,
-            DEFAULT_SVRPARAM_SVR_COST,
-            DEFAULT_SVRPARAM_SVR_EPSILON,
-            DEFAULT_SVRPARAM_KERNEL_PARAM_1,
-            DEFAULT_SVRPARAM_KERNEL_PARAM_2,
-            DEFAULT_SVRPARAM_DECREMENT_DISTANCE,
+            1, 0, 0, 0, 0,
+            datamodel::C_default_svrparam_svr_cost,
+            datamodel::C_default_svrparam_svr_epsilon,
+            datamodel::C_default_svrparam_kernel_param1,
+            datamodel::C_default_svrparam_kernel_param2,
+            datamodel::C_default_svrparam_decrement_distance,
             adjacent_levels_ratio,
-            DEFAULT_SVRPARAM_KERNEL_TYPE,
+            datamodel::C_default_svrparam_kernel_type,
             lookback_rows);
 
     auto real_training_matrix = std::make_shared<arma::mat>(features);

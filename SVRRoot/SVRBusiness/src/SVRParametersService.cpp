@@ -84,9 +84,9 @@ std::deque<datamodel::SVRParameters_ptr> SVRParametersService::get_all_by_datase
 }
 
 std::deque<datamodel::SVRParameters_ptr>
-SVRParametersService::get_by_dataset_column_level(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
+SVRParametersService::get_by_dataset_column_level(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step)
 {
-    return svr_parameters_dao.get_svrparams(dataset_id, input_queue_column_name, decon_level);
+    return svr_parameters_dao.get_svrparams(dataset_id, input_queue_column_name, decon_level, step);
 }
 
 datamodel::t_param_set
@@ -111,12 +111,26 @@ SVRParametersService::slice(const datamodel::t_param_set &params, const size_t c
     return r;
 }
 
-datamodel::SVRParameters_ptr SVRParametersService::find(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
+
+datamodel::t_param_set::iterator SVRParametersService::find(datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
 {
-    const auto res = std::find_if(std::execution::par_unseq, params.cbegin(), params.cend(), [chunk_ix, grad_ix](const auto &p) {
+    return std::find_if(std::execution::par_unseq, params.begin(), params.end(), [chunk_ix, grad_ix](const auto &p) {
         return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
                && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix);
     });
+}
+
+datamodel::t_param_set::const_iterator SVRParametersService::find(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
+{
+    return std::find_if(std::execution::par_unseq, params.cbegin(), params.cend(), [chunk_ix, grad_ix](const auto &p) {
+        return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
+               && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix);
+    });
+}
+
+datamodel::SVRParameters_ptr SVRParametersService::find_ptr(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
+{
+    const auto res = find(params, chunk_ix, grad_ix);
     return res == params.end() ? nullptr : *res;
 }
 
@@ -151,7 +165,7 @@ std::set<size_t> SVRParametersService::get_adjacent_indexes(const size_t level, 
     }
 
     std::set<size_t> res;
-    OMP_LOCK(level_indexes_l)
+    t_omp_lock level_indexes_l;
 #pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / std::thread::hardware_concurrency())
     for (ssize_t level_index = min_index; level_index <= max_index; ++level_index) {
         if (level_index >= 0
@@ -159,9 +173,9 @@ std::set<size_t> SVRParametersService::get_adjacent_indexes(const size_t level, 
             && (level_count < MIN_LEVEL_COUNT || (level_index != ssize_t(level_count) / 2 && level_index % 2 == 0)
                     /*|| level_index > ssize_t(level_count) / 2*/))
         {
-            omp_set_lock(&level_indexes_l);
+            level_indexes_l.set();
             res.emplace(level_index);
-            omp_unset_lock(&level_indexes_l);
+            level_indexes_l.unset();
         } else
             LOG4_TRACE("Skipping level " << level_index << " adjacent ratio " << ratio << " for level " << level);
     }

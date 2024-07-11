@@ -76,8 +76,6 @@ public:
 
     void update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs);
 
-    static datamodel::t_training_data prepare_training_data(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
-
     static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &predict_times);
 
     static void process(datamodel::Dataset &dataset);

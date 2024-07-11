@@ -4,9 +4,7 @@ PROJECT(SVRBenchmarks)
 #Define project dependencies
 SET(DEPENDENCIES SVRModel OnlineSVR)
 
-FOREACH(DEP ${DEPENDENCIES})
-    INCLUDE_DIRECTORIES(../${DEP}/include)
-ENDFOREACH(DEP)
+INCLUDE(../../cmake/IncludeDependencies.cmake)
 
 if(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     message("~~ Building ${PROJECT_NAME}")

@@ -244,6 +244,12 @@ using data_row_container_ptr = std::shared_ptr<data_row_container>;
 datamodel::DataRow::container
 clone_datarows(datamodel::DataRow::container::const_iterator it, const datamodel::DataRow::container::const_iterator &end);
 
+datamodel::DataRow::container::iterator
+lower_bound(const datamodel::DataRow::container::iterator &begin, const datamodel::DataRow::container::iterator &end, const bpt::ptime &t);
+
+datamodel::DataRow::container::const_iterator
+lower_bound(const datamodel::DataRow::container::const_iterator &cbegin, const datamodel::DataRow::container::const_iterator &cend, const bpt::ptime &t);
+
 data_row_container::const_iterator
 lower_bound(const data_row_container &c, const bpt::ptime &t);
 
@@ -289,14 +295,17 @@ lower_bound_back_before(
         const bpt::ptime &time_key);
 
 data_row_container::const_iterator
+lower_bound_back_before(
+        const data_row_container &data,
+        const bpt::ptime &time_key);
+
+data_row_container::iterator
+lower_bound_back_before(data_row_container &data, const bpt::ptime &time_key);
+
+data_row_container::const_iterator
 lower_bound_or_before_back(
         const data_row_container &data,
         const data_row_container::const_iterator &hint_end,
-        const bpt::ptime &time_key);
-
-data_row_container::const_iterator
-lower_bound_back_before(
-        const data_row_container &data,
         const bpt::ptime &time_key);
 
 data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);

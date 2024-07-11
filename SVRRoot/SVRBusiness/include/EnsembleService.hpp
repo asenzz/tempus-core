@@ -73,17 +73,17 @@ public:
             const datamodel::InputQueue &input_queue,
             std::deque<datamodel::DeconQueue_ptr> &decon_queues);
 
-    static void train(datamodel::Ensemble &ensemble, const datamodel::t_training_data &ensemble_training_data);
+    static void train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
 
     static datamodel::DeconQueue_ptr predict(
             const datamodel::Dataset &dataset,
             const datamodel::Ensemble &ensemble,
-            const std::unordered_map<size_t, datamodel::t_level_predict_features> &features);
+            const datamodel::t_predict_features &features);
 
     static datamodel::DeconQueue_ptr predict_noexcept(
             const datamodel::Dataset &dataset,
             const datamodel::Ensemble &ensemble,
-            const std::unordered_map<size_t, datamodel::t_level_predict_features> &features) noexcept;
+            const datamodel::t_predict_features &features) noexcept;
 
     static bool
     is_ensemble_input_queue(const datamodel::Ensemble_ptr &p_ensemble, const datamodel::InputQueue_ptr &p_input_queue);

@@ -35,7 +35,7 @@ void OnlineMIMOSVR::init_id()
 {
     if (!id) {
         boost::hash_combine(id, column_name);
-        boost::hash_combine(id, decon_level);
+        boost::hash_combine(id, level);
         boost::hash_combine(id, gradient);
         SVRParameters_ptr p_head_params;
         if ((p_head_params = get_params_ptr())) {
@@ -50,15 +50,15 @@ std::string OnlineMIMOSVR::to_string() const
 {
     std::stringstream s;
     s << " Samples trained " << samples_trained <<
-    ", features " << p_features->rows(0, 10) <<
-    ", labels " << p_labels->rows(0, 10) <<
-    ", kernel matrices " << (p_kernel_matrices ? p_kernel_matrices->size() : 0) <<
-    ", indexes " << ixs.size() <<
-    ", multiout " << multistep_len <<
-    ", max chunk size " << max_chunk_size <<
-    ", gradient level " << gradient <<
-    ", decon level " << decon_level <<
-    ", manifold " << p_manifold ? p_manifold->to_string() : "nil";
+      ", features " << p_features->rows(0, 10) <<
+      ", labels " << p_labels->rows(0, 10) <<
+      ", kernel matrices " << (p_kernel_matrices ? p_kernel_matrices->size() : 0) <<
+      ", indexes " << ixs.size() <<
+      ", multiout " << multiout <<
+      ", max chunk size " << max_chunk_size <<
+      ", gradient level " << gradient <<
+      ", decon level " << level <<
+      ", manifold " << p_manifold ? p_manifold->to_string() : "nil";
     return s.str();
 }
 

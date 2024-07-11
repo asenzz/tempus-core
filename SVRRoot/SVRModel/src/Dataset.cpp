@@ -28,7 +28,7 @@ Dataset::Dataset() :
         ccache(),
         gradients_(common::C_default_gradient_count),
         max_chunk_size_(common::C_default_kernel_max_chunk_size),
-        multiout_(common::C_default_multistep_len),
+        multistep_(common::C_default_multistep_len),
         transformation_levels_(common::C_default_level_count),
         is_active_(false)
 {
@@ -64,7 +64,7 @@ Dataset::Dataset(
           description_(description),
           gradients_(gradients),
           max_chunk_size_(chunk_size),
-          multiout_(multiout),
+          multistep_(multiout),
           transformation_levels_(transformation_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
@@ -111,7 +111,7 @@ Dataset::Dataset(
           description_(description),
           gradients_(gradients),
           max_chunk_size_(chunk_size),
-          multiout_(multiout),
+          multistep_(multiout),
           transformation_levels_(transformation_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
@@ -142,7 +142,7 @@ Dataset::Dataset(Dataset const &dataset) :
                 dataset.description_,
                 dataset.gradients_,
                 dataset.max_chunk_size_,
-                dataset.multiout_,
+                dataset.multistep_,
                 dataset.transformation_levels_,
                 dataset.transformation_name_,
                 dataset.max_lookback_time_gap_,
@@ -183,14 +183,14 @@ bool Dataset::operator==(const Dataset &o) const
 bool Dataset::operator^=(const Dataset &o) const
 {
     std::atomic<bool> res = id == o.id
-               && dataset_name_ == o.dataset_name_
-               && user_name_ == o.user_name_
-               && input_queue_.get_id() == o.input_queue_.get_id()
-               && priority_ == o.priority_
-               && gradients_ == o.gradients_
-               && max_chunk_size_ == o.max_chunk_size_
-               && multiout_ == o.multiout_
-               && transformation_levels_ == o.transformation_levels_
+                            && dataset_name_ == o.dataset_name_
+                            && user_name_ == o.user_name_
+                            && input_queue_.get_id() == o.input_queue_.get_id()
+                            && priority_ == o.priority_
+                            && gradients_ == o.gradients_
+                            && max_chunk_size_ == o.max_chunk_size_
+                            && multistep_ == o.multistep_
+                            && transformation_levels_ == o.transformation_levels_
                && transformation_name_ == o.transformation_name_
                && max_lookback_time_gap_ == o.max_lookback_time_gap_
                && is_active_ == o.is_active_;
@@ -228,8 +228,8 @@ size_t Dataset::get_gradient_count() const
 size_t Dataset::get_max_chunk_size() const
 { return max_chunk_size_; };
 
-size_t Dataset::get_multiout() const
-{ return multiout_; };
+size_t Dataset::get_multistep() const
+{ return multistep_; };
 
 void Dataset::set_gradients(const size_t grads)
 { gradients_ = grads; }
@@ -237,8 +237,8 @@ void Dataset::set_gradients(const size_t grads)
 void Dataset::set_chunk_size(const size_t chunk_size)
 { max_chunk_size_ = chunk_size; }
 
-void Dataset::set_multiout(const size_t multiout)
-{ multiout_ = multiout; }
+void Dataset::set_multistep(const size_t multistep)
+{ multistep_ = multistep; }
 
 std::string Dataset::get_dataset_name() const
 { return dataset_name_; }
@@ -533,7 +533,7 @@ size_t Dataset::get_max_decrement()
 {
     if (max_decremental_distance_cache_) return max_decremental_distance_cache_;
     max_decremental_distance_cache_ = 0;
-    OMP_LOCK(max_decrement_l)
+    t_omp_lock max_decrement_l;
 #pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
     for (const auto &e: ensembles_)
 #pragma omp parallel for num_threads(adj_threads(e->get_models().size()))
@@ -541,9 +541,9 @@ size_t Dataset::get_max_decrement()
             for (const auto &svr: m->get_gradients())
                 for (const auto &p: svr->get_param_set())
                     if (p) {
-                        omp_set_lock(&max_decrement_l);
+                        max_decrement_l.set();
                         max_decremental_distance_cache_ = std::max(max_decremental_distance_cache_, p->get_svr_decremental_distance());
-                        omp_unset_lock(&max_decrement_l);
+                        max_decrement_l.unset();
                     }
 
     LOG4_DEBUG("Returning non-cached value " << max_decremental_distance_cache_);
@@ -555,19 +555,19 @@ size_t Dataset::get_max_residuals_length() const
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
     size_t result = 0;
-    OMP_LOCK(max_residuals_l)
+    t_omp_lock max_residuals_l;
 #pragma omp parallel for num_threads(adj_threads(ensembles_.size())) schedule(static, 1)
     for (const auto &p_ensemble: ensembles_) {
         const size_t res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
-        omp_set_lock(&max_residuals_l);
+        max_residuals_l.set();
         result = std::max(result, res_count);
-        omp_unset_lock(&max_residuals_l);
+        max_residuals_l.unset();
 #pragma omp parallel for num_threads(adj_threads(p_ensemble->get_aux_decon_queues().size())) schedule(static, 1)
         for (const auto &p_decon: p_ensemble->get_aux_decon_queues()) {
             const size_t res_count_aux = get_residuals_length(p_decon->get_table_name());
-            omp_set_lock(&max_residuals_l);
+            max_residuals_l.set();
             result = std::max(result, res_count_aux);
-            omp_unset_lock(&max_residuals_l);
+            max_residuals_l.unset();
         }
     }
     return result;
@@ -609,7 +609,7 @@ std::string Dataset::to_string() const
       << ", transformation name " << transformation_name_
       << ", gradients " << gradients_
       << ", chunk size " << max_chunk_size_
-      << ", multi out " << multiout_
+      << ", multi out " << multistep_
       << ", max lookback time gap " << bpt::to_simple_string(get_max_lookback_time_gap())
       << ", is active " << get_is_active();
 

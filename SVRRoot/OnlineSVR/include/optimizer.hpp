@@ -8,8 +8,8 @@ namespace svr {
 namespace optimizer {
 
 
-#define MAX_ITERATIONS_OPT 50
-#define OPT_PARTICLES 100
+constexpr unsigned MAX_ITERATIONS_OPT = 50;
+constexpr unsigned OPT_PARTICLES = 100;
 
 
 typedef std::function<double (const std::vector<double>&)> loss_callback_t;

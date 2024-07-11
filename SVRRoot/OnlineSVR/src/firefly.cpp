@@ -62,7 +62,7 @@ firefly::firefly(
         const arma::vec &pows,
         const loss_callback_t function) :
         levy_random(common::levy(D)), D(D), n(n), MaxGeneration(MaxGeneration),
-        sobol_ctr(78786876896ULL + (long) floor(svr::common::get_uniform_random_value() * (double) 4503599627370496ULL)),
+        sobol_ctr(common::init_sobol_ctr()),
         range(ub - lb), lb(lb), ub(ub), alpha(alpha), betamin(betamin), gamma(gamma), ffa(D, n), particles(n), best_parameters(D), function(function)
 {
     LOG4_DEBUG(

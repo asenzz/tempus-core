@@ -14,13 +14,14 @@ bool Model::operator==(const Model &o) const
            && last_modified == o.last_modified && last_modeled_value_time == o.last_modeled_value_time && svr_models == o.svr_models;
 }
 
-Model::Model(const bigint id, const bigint ensemble_id, const size_t decon_level,
+Model::Model(const bigint id, const bigint ensemble_id, const size_t decon_level, const size_t step,
              const size_t multiout_, const size_t gradient_ct, const size_t chunk_size,
              std::deque<OnlineMIMOSVR_ptr> svr_model, const bpt::ptime &last_modified,
              const bpt::ptime &last_modeled_value_time)
         : Entity(id),
           ensemble(ensemble_id),
           decon_level(decon_level),
+          step(step),
           multiout(multiout_),
           gradient_ct(gradient_ct),
           max_chunk_size(chunk_size),
@@ -38,6 +39,7 @@ void Model::init_id()
     if (!id) {
         boost::hash_combine(id, ensemble.get_id());
         boost::hash_combine(id, decon_level);
+        boost::hash_combine(id, step);
     }
 }
 
@@ -86,7 +88,18 @@ size_t Model::get_decon_level() const
 /** Set the decon level this model is predicting */
 void Model::set_decon_level(const size_t _decon_level)
 {
-    this->decon_level = _decon_level;
+    decon_level = _decon_level;
+}
+
+size_t Model::get_step() const
+{
+    return step;
+}
+
+/** Set the decon level this model is predicting */
+void Model::set_step(const size_t _step)
+{
+    step = _step;
 }
 
 /** Get pointer to an OnlineSVR model instance */

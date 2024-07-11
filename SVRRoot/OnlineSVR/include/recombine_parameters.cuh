@@ -11,16 +11,16 @@ namespace svr {
 
 struct t_param_preds_cu
 {
-    double predictions[C_emo_max_j][C_emo_test_len];
-    double labels[C_emo_max_j][C_emo_test_len];
-    double last_knowns[C_emo_max_j][C_emo_test_len];
+    double predictions[C_max_j][C_test_len];
+    double labels[C_max_j][C_test_len];
+    double last_knowns[C_max_j][C_test_len];
     uint8_t params_ix;
 };
 typedef t_param_preds_cu *t_param_preds_cu_ptr;
 
 void
 recombine_parameters(
-        const uint32_t rows_ct,
+        const uint32_t rowct,
         const uint32_t colct,
         const uint8_t *combos,
         const t_param_preds_cu *params_preds,

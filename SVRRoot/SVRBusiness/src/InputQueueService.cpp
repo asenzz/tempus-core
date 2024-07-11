@@ -13,9 +13,9 @@
 
 std::string svr::business::InputQueueService::make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
 {
-    std::string result = common::sanitize_db_table_name(
-            common::C_input_queue_table_name_prefix + "_" + user_name + "_" + logical_name + "_" + std::to_string(resolution.total_seconds()));
-    std::transform(std::execution::par_unseq, result.begin(), result.end(), result.begin(), tolower);
+    std::string result = common::sanitize_db_table_name(common::formatter() <<
+            common::C_input_queue_table_name_prefix << "_" << user_name << "_" << logical_name << "_" << resolution.total_seconds());
+    std::transform(std::execution::par_unseq, result.begin(), result.end(), result.begin(), ::tolower);
     LOG4_DEBUG("Returning " << result);
     return result;
 }
@@ -450,7 +450,7 @@ InputQueueService::compare_to_decon_queue(const datamodel::InputQueue &input_que
     }
 
     boost::posix_time::ptime missing_time = boost::posix_time::max_date_time;
-    OMP_LOCK(missing_time_l)
+    t_omp_lock missing_time_l;
 #pragma omp parallel for num_threads(adj_threads(decon_queue.size()))
     for (auto range_iter = lower_bound(input_queue.get_data(), decon_queue.front()->get_value_time()); range_iter != input_queue.cend(); ++range_iter) {
         if (std::any_of(std::execution::par_unseq, decon_queue.cbegin(), decon_queue.cend(), [&range_iter](const auto &item)
@@ -458,9 +458,9 @@ InputQueueService::compare_to_decon_queue(const datamodel::InputQueue &input_que
                 continue;
         LOG4_DEBUG("Input row at " << (**range_iter).get_value_time() << " not found in decon queue " << decon_queue.get_input_queue_table_name() <<
                                    " " << decon_queue.get_input_queue_column_name());
-        omp_set_lock(&missing_time_l);
+        missing_time_l.set();
         if (missing_time > (**range_iter).get_value_time()) missing_time = (**range_iter).get_value_time();
-        omp_unset_lock(&missing_time_l);
+        missing_time_l.unset();
     }
 
     LOG4_DEBUG("Compared input queue " << input_queue.get_table_name() << " with data from " << input_queue.front()->get_value_time() << " to " <<

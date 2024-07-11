@@ -49,25 +49,28 @@ public:
 
     static datamodel::DQScalingFactor_ptr find(
             const datamodel::dq_scaling_factor_container_t &scaling_factors,
-            const size_t model_id, const size_t chunk, const size_t gradient, const size_t level,
+            const size_t model_id, const size_t chunk, const size_t gradient, const size_t step, const size_t level,
             const bool check_features, const bool check_labels);
 
-    static datamodel::dq_scaling_factor_container_t slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient);
+    static datamodel::dq_scaling_factor_container_t
+    slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient, const size_t step);
 
     static double calc_scaling_factor(const arma::mat &v);
     static double calc_dc_offset(const arma::mat &v);
 
     static datamodel::dq_scaling_factor_container_t calculate(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, const arma::mat &features_t, const arma::mat &labels);
 
-    static void scale_features(const size_t chunk_ix, const size_t grad_level, const size_t lag, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t);
+    static void scale_features(const size_t chunk_ix, const size_t grad_level, const size_t step, const size_t lag,
+                               const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t);
     static void scale_features(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &features_t);
-    static void scale_labels(const size_t chunk, const size_t gradient, const size_t level, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &labels);
+    static void scale_labels(const size_t chunk, const size_t gradient, const size_t step, const size_t level, const datamodel::dq_scaling_factor_container_t &sf,
+                             arma::mat &labels);
     static double scale_label(const datamodel::DQScalingFactor &sf, double &label);
     static void scale_labels(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &labels);
     static void scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels);
     template<typename T> static inline void unscale_labels(const datamodel::DQScalingFactor &sf, T &labels)
     {
-        labels = common::unscale<T>(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
+        common::unscale_I<T>(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
     }
 
     static void add(datamodel::dq_scaling_factor_container_t &sf, const datamodel::dq_scaling_factor_container_t &new_sf, const bool overwrite = false);

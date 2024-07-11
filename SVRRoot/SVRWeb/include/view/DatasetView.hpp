@@ -96,7 +96,7 @@ struct traits<datamodel::Dataset_ptr>
         dataset->set_description(v.get<std::string>("description"));
         dataset->set_gradients(v.get<size_t>("gradients"));
         dataset->set_chunk_size(v.get<size_t>("max_chunk_size"));
-        dataset->set_multiout(v.get<size_t>("multiout"));
+        dataset->set_multistep(v.get<size_t>("multiout"));
         dataset->set_transformation_levels(v.get<size_t>("transformation_levels"));
         dataset->set_transformation_name(v.get<std::string>("transformation_name"));
 

@@ -1,9 +1,8 @@
+#include <ipp.h>
 #include <viennacl/vector_proxy.hpp>
 #include <common.hpp>
 #include <map>
-#include "util/math_utils.hpp"
-#include "common/compatibility.hpp"
-#include "common/gpu_handler.tpp"
+#include <mkl_vml.h>
 #include "sobolvec.h"
 
 
@@ -77,9 +76,9 @@ std::vector<double> operator^(const double a, const std::vector<double> &v)
 
 namespace common {
 
-std::string present_chunk(const arma::uvec &u, const double tail_factor)
+std::string present_chunk(const arma::uvec &u, const double head_factor)
 {
-    const size_t head_n = u.n_rows * (1. - tail_factor);
+    const size_t head_n = u.n_rows * head_factor;
     std::stringstream s;
     s << "size " << arma::size(u);
     if (u.n_rows < 20)
@@ -224,6 +223,13 @@ double get_uniform_random_value()
     return rand_num;
 }
 
+
+unsigned long long init_sobol_ctr()
+{
+    return 78786876896ULL + (long) std::floor(get_uniform_random_value() * (double) 4503599627370496ULL);
+}
+
+
 std::vector<double> get_uniform_random_vector(const size_t size)
 {
     std::vector<double> result(size);
@@ -316,31 +322,6 @@ arma::uvec subview_indexes(const arma::uvec &batch_ixs, const arma::uvec &ix_tra
 }
 
 
-double calc_quant_offset_mul(const double main_to_aux_period_ratio, const double level, const double levels_count)
-{
-#ifdef QUANTIZE_FIXED
-    return QUANTIZE_FIXED;
-    if (level < levels_count / 2 - 4) return QUANTIZE_FIXED;
-    else if (level == levels_count / 2 - 4) return 3;
-    else return 1;
-#elif defined(QUANTIZE_FIXED_MAX) && defined(QUANTIZE_FIXED_MIN)
-    return (QUANTIZE_FIXED_MAX - QUANTIZE_FIXED_MIN) * std::pow(1. - level / levels_count, QUANTIZE_FEAT_EXP) + QUANTIZE_FIXED_MIN;
-#else
-    return (1. + (QUANTIZE_FEAT_MUL * main_to_aux_period_ratio - 1.) * (std::pow(1. - (level / levels_count), QUANTIZE_FEAT_EXP)));
-#endif
-}
-
-double get_quantization_max(const double main_to_aux_period_ratio)
-{
-#ifdef QUANTIZE_FIXED
-    return QUANTIZE_FIXED;
-#elif defined(QUANTIZE_FIXED_MAX) && defined(QUANTIZE_FIXED_MIN)
-    return QUANTIZE_FIXED_MAX;
-#else
-    return (1. + (QUANTIZE_FEAT_MUL * main_to_aux_period_ratio - 1.) * 1.);
-#endif
-}
-
 void shuffle_matrix(
         const arma::mat &x,
         const arma::mat &y,
@@ -405,9 +386,37 @@ meanabs<double>(const arma::Mat<double> &m)
     return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
 }
 
+double max(const arma::mat &input)
+{
+#if 0 // IPP freezes on init
+    double r;
+    ip_errchk(ippsMax_64f(input.mem, input.n_elem, &r));
+    return r;
+#else
+    return input.max();
+#endif
+}
+
+double min(const arma::mat &input)
+{
+#if 0
+    double r;
+    ip_errchk(ippsMin_64f(input.mem, input.n_elem, &r));
+    return r;
+#else
+    return input.min();
+#endif
+}
+
 double mean(const arma::mat &input)
 {
-    return accu(input) / double(input.n_elem);
+#if 0 // IPP freezes when initialized in multiple shared objects
+    double r;
+    ip_errchk(ippsMean_64f(input.mem, input.n_elem, &r));
+    return r;
+#else
+    return arma::mean(arma::vectorise(input));
+#endif
 }
 
 arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level)
@@ -428,6 +437,13 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle)
     for (size_t i = 0; i < to_shuffle.size(); ++i)
         result((i * prime_multiplier + remainder) % to_shuffle.n_elem) = to_shuffle(i);
     return result;
+}
+
+arma::mat unscale(const arma::mat &m, const double sf, const double dc)
+{
+    arma::mat r(arma::size(m));
+    vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, r.memptr());
+    return r;
 }
 
 } //namespace common

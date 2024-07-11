@@ -9,14 +9,14 @@ namespace svr {
 semaphore::semaphore(const ssize_t count) noexcept
         : m_count(count)
 {
-    LOG4_TRACE("m_count " << m_count << ", count " << count);
+    LOG4_TRACE("Count " << m_count);
     // assert(count > -1);
 }
 
 void semaphore::post() noexcept 
 {
     {
-        const std::scoped_lock lock(m_mutex);
+        const std::scoped_lock l(m_mutex);
         ++m_count;
     }
     m_cv.notify_one();

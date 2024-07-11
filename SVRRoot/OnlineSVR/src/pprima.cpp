@@ -102,7 +102,7 @@ void pprima::calfun(const double x[], double *const f, const void *data)
 
     auto p_calfun_data = (calfun_data *) data;
     if (p_calfun_data->zombie) {
-        *f = C_bad_validation;
+        *f = common::C_bad_validation;
         return;
     }
     for (const auto drop_coef: maxfun_drop_coefs) {

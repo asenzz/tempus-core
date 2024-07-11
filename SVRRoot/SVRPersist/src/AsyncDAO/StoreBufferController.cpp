@@ -26,14 +26,14 @@ struct StoreBufferController::StoreBufferControllerImpl
     std::atomic<bool> volatile poll {false}, stopped;
     pthread_t tid;
 
-    static void polling(StoreBufferController::StoreBufferControllerImpl & inst)
+    static void polling(StoreBufferController::StoreBufferControllerImpl & inst_)
     {
-        inst.stopped = false; auto sg { at_scope_exit( [&inst](){ inst.stopped = true; } ) }; (void) sg;
-        inst.tid = pthread_self();
+        inst_.stopped = false; auto sg {at_scope_exit([&inst_](){ inst_.stopped = true; } ) }; (void) sg;
+        inst_.tid = pthread_self();
 
-        while (inst.poll)
+        while (inst_.poll)
         {
-            inst.flush();
+            inst_.flush();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
@@ -99,10 +99,10 @@ void StoreBufferController::flush()
 }
 
 
-void StoreBufferController::addStoreBuffer(StoreBufferInterface & inst)
+void StoreBufferController::addStoreBuffer(StoreBufferInterface & inst_)
 {
-    std::scoped_lock<std::timed_mutex> (pImpl.mutex);
-    pImpl.storeBuffers.push_back(&inst);
+    const std::scoped_lock l(pImpl.mutex);
+    pImpl.storeBuffers.push_back(&inst_);
 }
 
 StoreBufferController::StoreBufferController()

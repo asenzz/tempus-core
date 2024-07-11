@@ -14,8 +14,6 @@
 #include "common/defines.h"
 #include "model/DQScalingFactor.hpp"
 #include "model/SVRParameters.hpp"
-#include "common/cuda_util.cuh"
-
 
 namespace svr {
 namespace business {
@@ -28,13 +26,16 @@ namespace datamodel {
 constexpr unsigned C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
 constexpr double C_tune_range_min_lambda = 0;
 constexpr double C_tune_range_max_lambda = 1e2;
-constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio, higher generates more chunks
+constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
 constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
 constexpr double C_chunk_tail = .1;
 constexpr double C_chunk_header = 1. - C_chunk_tail;
-constexpr size_t C_predict_chunks = 1; // Best chunks used for predictions
-const std::deque<double> C_chunk_coefs = {2750. / 3000., 1., 3500. / 3000.}; // , 4500. / 3000.
-constexpr size_t C_end_chunks = 1;
+constexpr size_t C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
+constexpr size_t C_end_chunks = 1; // [1..1/offlap]
+constexpr double C_gamma_variance = 6e4;
+constexpr magma_int_t C_rbt_iter = 40; // default 30
+constexpr double C_rbt_threshold = 0; // (0..1] default 1
+constexpr double C_features_superset_coef = 1e2; // [1..+inf)
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -67,9 +68,12 @@ class OnlineMIMOSVR;
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
+struct mmm_t { double mean = 0, max = 0, min = 0; };
+
 class OnlineMIMOSVR final : public Entity
 {
     bigint model_id = 0;
+    bpt::ptime last_trained_time;
     Dataset_ptr p_dataset;
     std::string column_name;
     std::set<size_t> tmp_ixs;
@@ -84,10 +88,12 @@ class OnlineMIMOSVR final : public Entity
     std::deque<arma::uvec> ixs;
     std::deque<std::pair<double, double>> chunks_score;
     arma::mat all_weights;
-    size_t multistep_len = svr::common::C_default_multistep_len;
+    size_t multiout = common::C_default_multiout;
     size_t max_chunk_size = common::C_default_kernel_max_chunk_size;
-    size_t gradient = DEFAULT_SVRPARAM_GRAD_LEVEL;
-    size_t decon_level = DEFAULT_SVRPARAM_DECON_LEVEL;
+    size_t gradient = C_default_svrparam_grad_level;
+    size_t level = C_default_svrparam_decon_level;
+    size_t step = C_default_svrparam_step;
+    unsigned projection = 0;
 
     virtual void init_id() override;
 
@@ -95,16 +101,23 @@ class OnlineMIMOSVR final : public Entity
 
     void parse_params();
 
-    static std::tuple<double, double, double, std::array<arma::mat *, C_emo_max_j> *, double *> cuvalidate(
-            const double gamma_variance, const double labels_mean, const double lambda, const double gamma_param, const double svr_epsilon, const double all_labels_meanabs,
-            const size_t train_len, const size_t lag, const arma::mat &tune_cuml, const arma::mat &train_cuml, const arma::mat &chunk_labels, const size_t iters,
-            double &test_train_mape_ratio, bool &mape_ratio_set, omp_lock_t *p_mape_l, const size_t gpu_id);
-
     static std::deque<size_t> get_predict_chunks(const std::deque<std::pair<double, double>> &chunks_score);
 
     void clean_chunks();
 
+    arma::mat feature_chunk_t(const arma::uvec &ixs_i);
+
+    arma::mat predict_chunk_t(const arma::mat &x_predict);
+
 public:
+    static std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
+    cuvalidate(const double lambda, const double gamma_param, const size_t lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
+               const arma::mat &tune_label_chunk, const mmm_t &train_L_m, const double labels_sf, magma_queue_t ma_queue);
+
+    static std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
+    cuvalidate_batched(const double lambda, const double gamma_param, const size_t lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
+               const arma::mat &tune_label_chunk, const mmm_t &train_L_m, const double labels_sf, magma_queue_t ma_queue);
+
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
     OnlineMIMOSVR(
@@ -149,12 +162,10 @@ public:
 
     void set_dataset(const Dataset_ptr &p_dataset);
 
-
     // Move to solver module
-    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
+    static void solve_opt(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved);
 
-    static arma::mat solve_irwls(
-            const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, const size_t iters, const magma_queue_t &magma_queue, magmaDouble_ptr d_a, magmaDouble_ptr d_b);
+    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters);
 
     static std::deque<arma::mat> solve_batched_irwls(
             const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
@@ -162,15 +173,13 @@ public:
 
     static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
 
-    static void solve_dispatch(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters, const bool psd);
-
-    static arma::mat solve_dispatch(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, const size_t iters, const bool psd);
-
     static arma::mat direct_solve(const arma::mat &a, const arma::mat &b);
 
     size_t get_gradient_level() const;
 
     size_t get_decon_level() const;
+
+    size_t get_step() const;
 
     ssize_t get_samples_trained_number() const;
 
@@ -190,6 +199,8 @@ public:
 
     void set_params(const SVRParameters &param, const size_t chunk_ix = 0);
 
+    SVRParameters &get_params(const size_t chunk_ix = 0) const;
+
     SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0) const;
 
     SVRParameters_ptr is_manifold() const;
@@ -204,7 +215,7 @@ public:
 
     void tune_fast();
 
-    void recombine_params(const size_t chunk_ix);
+    void recombine_params(const size_t chunkix, const size_t stepix);
 
 #if defined(TUNE_HYBRID)
     double produce_kernel_inverse_order(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &y_train);
@@ -243,11 +254,12 @@ public:
 
     arma::mat &get_labels();
 
-    size_t get_multistep_len() const;
+    size_t get_multiout() const;
 
     arma::uvec get_active_ixs() const;
 
-    static mat_ptr prepare_Ky(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
+    static mat_ptr prepare_Ky(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t,
+                              const bpt::ptime &predict_time, const bpt::ptime &trained_time);
 
     static mat_ptr prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
 
@@ -259,7 +271,8 @@ public:
 
     static mat_ptr prepare_Z(const SVRParameters &params, const arma::mat &features_t);
 
-    static mat_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time);
+    static mat_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t,
+                              const bpt::ptime &time, const bpt::ptime &trained_time);
 
     static mat_ptr prepare_Zy(const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t);
 
@@ -267,13 +280,15 @@ public:
 
     static mat_ptr all_cumulatives(const SVRParameters &p, const arma::mat &features_t);
 
-    static double calc_gamma(const arma::mat &Z, const double mean_L);
+    static double calc_gamma(const arma::mat &Z, const double train_L_m);
 
     static double calc_epsco(const arma::mat &K);
 
     void calc_weights(const size_t chunk_ix, const size_t iters);
 
     void update_all_weights();
+
+    static double calc_qgamma(const double Z_mean, const double Z_minmax, const double L_mean, const double L_minmax, const double train_len, const double q);
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;

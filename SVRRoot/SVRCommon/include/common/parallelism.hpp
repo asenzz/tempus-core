@@ -1,14 +1,32 @@
 #pragma once
 
+#ifdef __INTEL_LLVM_COMPILER
+
+#include </opt/intel/oneapi/compiler/latest/opt/compiler/include/omp.h>
+
+#else
+#include <omp.h>
+#endif
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
+
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
+
 #pragma GCC diagnostic pop
+
 #include "compatibility.hpp"
 
+#define _OMP_ADJFOR_ITERS(_n) std::max<unsigned>(1, _CEILDIV((_n), std::thread::hardware_concurrency()))
+#define ADJ_ITERS_CTR TOKENPASTE2(__adj_iters_, __LINE__)
+#define OMP_FOR_(__n, __x) \
+    const auto ADJ_ITERS_CTR = _OMP_ADJFOR_ITERS(__n);                    \
+    PRAGMASTR(omp parallel for __x schedule(static, ADJ_ITERS_CTR) num_threads(std::max<unsigned>(1, _CEILDIV(__n, ADJ_ITERS_CTR))))
+#define OMP_FOR(__n) \
+    const auto ADJ_ITERS_CTR = _OMP_ADJFOR_ITERS(__n);                    \
+    PRAGMASTR(omp parallel for simd schedule(static, ADJ_ITERS_CTR) num_threads(std::max<unsigned>(1, _CEILDIV(__n, ADJ_ITERS_CTR))))
 
-#define OMP_LOCK(lock_name) omp_lock_t lock_name; omp_init_lock(&lock_name);
 
 #define __non_stpfor(TY, IX, FROM, TO, STEP, ...) \
     for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; }
@@ -28,7 +46,7 @@
                 std::deque<std::thread> __thr_q_##IX; \
                 for (TYPE IX = FROM; IX < TO; STEP) \
                     __thr_q_##IX.emplace_back([&] (const TYPE IX) { \
-                        for (auto __pxt_##IX = IX; __pxt_##IX == IX; ++__pxt_##IX) { __VA_ARGS__; }}, IX); \
+                        __VA_ARGS__; }, IX); \
                 for (auto &__t_##IX: __thr_q_##IX) __t_##IX.join(); \
             };
 #endif
@@ -36,7 +54,7 @@
 #define __pxt_tpfor(TYPE, IX, FROM, TO, ...) __pxt_stpfor(TYPE, IX, FROM, TO, ++IX, __VA_ARGS__)
 #define __pxt_pfor(IX, FROM, TO, ...) __pxt_tpfor(dtype(TO), IX, FROM, TO, __VA_ARGS__)
 #define __pxt_pfor_i(FROM, TO, ...) __pxt_pfor(i, FROM, TO, __VA_ARGS__)
-
+#define __pxt_pfor_i0(TO, ...) __pxt_pfor_i(0, TO, __VA_ARGS__)
 
 #ifdef NO_PARALLEL
 #define __omp_stpfor(TY, IX, FROM, TO, STEP, ...)  __non_stpfor(TYPE, IX, FROM, TO, STEP, __VA_ARGS__)
@@ -107,3 +125,16 @@
     } \
 }
 
+namespace svr {
+
+class t_omp_lock {
+    omp_lock_t l;
+public:
+    t_omp_lock();
+    operator omp_lock_t *();
+    void set();
+    void unset();
+    ~t_omp_lock();
+};
+
+}

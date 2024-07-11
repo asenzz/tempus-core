@@ -4,9 +4,8 @@
 #include "DQScalingFactorService.hpp"
 #include "appcontext.hpp"
 #include "util/math_utils.hpp"
-#include "common/cuda_util.cuh"
+#include "pprune.hpp"
 #include <cstddef>
-#include <omp.h>
 #include <magma_auxiliary.h>
 
 namespace svr {
@@ -22,11 +21,12 @@ OnlineMIMOSVR::batch_train(
 {
     if (p_xtrain->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty() || !p_xtrain->n_cols || !p_ytrain->n_cols || p_ytrain->n_rows != p_ylastknown->n_rows)
         LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) <<
-                    ", last knowns " << arma::size(*p_ylastknown) << ", level " << decon_level);
+                                                        ", last knowns " << arma::size(*p_ylastknown) << ", level " << level);
 
     LOG4_DEBUG(
             "Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown)
-            << ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin());
+            << ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin() <<
+            ", last value time " << last_value_time);
     reset();
 
     p_features = p_xtrain;
@@ -42,42 +42,14 @@ OnlineMIMOSVR::batch_train(
         }
     }
 
-    if (ixs.empty()) {
-        ixs = generate_indexes();
-        (**param_set.begin()).set_svr_kernel_param(0);
-    }
-    auto num_chunks = ixs.size();
-    train_feature_chunks_t.resize(num_chunks);
-    train_label_chunks.resize(num_chunks);
-    OMP_LOCK(param_set_l)
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_chunks))
-    for (size_t i = 0; i < num_chunks; ++i) {
-        train_feature_chunks_t[i] = p_features->rows(ixs[i]).t();
-        train_label_chunks[i] = p_labels->rows(ixs[i]);
-        SVRParameters_ptr p;
-        if (!(p = get_params_ptr(i))) {
-            p = otr(**param_set.cbegin());
-            p->set_chunk_index(i);
-            omp_set_lock(&param_set_l);
-            param_set.emplace(p);
-            omp_unset_lock(&param_set_l);
-        }
-    }
-
+    size_t num_chunks = ixs.size();
     bool tuned = false;
     if (needs_tuning() && !is_manifold()) {
         if (precalc_kernel_matrices && precalc_kernel_matrices->size())
             LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
-#ifdef RECOMBINE_PARAMETERS
-        PROFILE_EXEC_TIME(tune(), "Tune kernel parameters for level " << decon_level << ", gradient " << (**param_set.cbegin()).get_grad_level() << " of " << num_chunks << " chunks");
+        PROFILE_EXEC_TIME(tune_fast(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level() << " of " << num_chunks << " chunks");
         num_chunks = ixs.size();
-#pragma omp parallel for schedule(static, 1) num_threads(num_chunks)
-        for (size_t i = 0; i < num_chunks; ++i) recombine_params(i);
-#else
-        PROFILE_EXEC_TIME(tune_fast(), "Tune kernel parameters for level " << decon_level << ", gradient " << (**param_set.cbegin()).get_grad_level() << " of " << num_chunks << " chunks");
-        num_chunks = ixs.size();
-#endif
-#if 0
+#if 0 // save parameters
         if (model_id) {
             for (const auto &p: param_set) {
                 if (APP.svr_parameters_service.exists(p))
@@ -110,23 +82,21 @@ OnlineMIMOSVR::batch_train(
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_chunks))
         for (size_t i = 0; i < num_chunks; ++i) {
             const auto p_params = get_params_ptr(i);
-            const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, i, gradient);
-            business::DQScalingFactorService::scale_features(i, gradient, p_params->get_lag_count(), chunk_sf, train_feature_chunks_t[i]);
-            const auto p_sf = business::DQScalingFactorService::find(chunk_sf, model_id, i, gradient, decon_level, false, true);
+
+            const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, i, gradient, step);
+            business::DQScalingFactorService::scale_features(i, gradient, step, p_params->get_lag_count(), chunk_sf, train_feature_chunks_t[i]);
+            const auto p_sf = business::DQScalingFactorService::find(chunk_sf, model_id, i, gradient, step, level, false, true);
             business::DQScalingFactorService::scale_labels(*p_sf, train_label_chunks[i]);
 
-            if (p_kernel_matrices->at(i).empty()) {
-                const auto K = prepare_K(*get_params_ptr(i), train_feature_chunks_t[i]);
-                p_kernel_matrices->at(i) = *K;
-            } else
-                LOG4_DEBUG("Using pre-calculated kernel matrix for " << i);
+            if (p_kernel_matrices->at(i).empty()) p_kernel_matrices->at(i) = *prepare_K(ccache(), *get_params_ptr(i), train_label_chunks[i], last_value_time);
+            else LOG4_DEBUG("Using pre-calculated kernel matrix for " << i);
 
             calc_weights(i, PROPS.get_stabilize_iterations_count());
         }
-        update_all_weights();
     }
-
+    update_all_weights();
     samples_trained = p_features->n_rows;
+    last_trained_time = last_value_time;
 }
 
 
@@ -194,22 +164,22 @@ void OnlineMIMOSVR::learn(
     arma::uvec shed_ixs; // Active indexes to be shedded to make space for new learning data
     auto active_rows = get_active_ixs();
     if (!forget_ixs.empty()) {
-        OMP_LOCK(learn_lk);
+        t_omp_lock learn_lk;
 #pragma omp parallel for num_threads(adj_threads(forget_ixs.size())) schedule(static, 1)
         for (const auto f: forget_ixs) {
             arma::uvec contained_ixs = arma::find(active_rows == f);
             if (contained_ixs.empty()) {
                 const auto oldest_ix = active_rows.index_min();
                 LOG4_ERROR("Suggested forget index " << f << " not found in active indexes, using oldest active index " << oldest_ix << ", " << active_rows[oldest_ix] << " instead.");
-                omp_set_lock(&learn_lk);
+                learn_lk.set();
                 shed_ixs.insert_rows(shed_ixs.n_rows, active_rows[oldest_ix]);
-                omp_unset_lock(&learn_lk);
+                learn_lk.unset();
                 active_rows.shed_row(oldest_ix);
             } else {
                 LOG4_DEBUG("Using suggested index " << f);
-                omp_set_lock(&learn_lk);
+                learn_lk.set();
                 shed_ixs.insert_rows(shed_ixs.n_rows, f);
-                omp_unset_lock(&learn_lk);
+                learn_lk.unset();
             }
         }
     }
@@ -314,7 +284,7 @@ void OnlineMIMOSVR::learn(
             }
         }
         const auto epsco = calc_epsco(K_chunk);
-        params.set_svr_C(1. / (2. * epsco));
+        params.set_svr_C(1 / epsco);
         K_chunk.diag() += epsco;
 
         ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, p_labels->n_rows + new_ixs);
@@ -343,19 +313,18 @@ void OnlineMIMOSVR::learn(
         calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit());
     update_all_weights();
     samples_trained += new_rows_ct;
+    last_trained_time = last_value_time;
 }
 
 
 void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const size_t iters)
 {
-    auto p_params = get_params_ptr(chunk_ix);
-    const auto epsco = 1. / (2. * p_params->get_svr_C());
+    const auto p_params = get_params_ptr(chunk_ix);
     arma::mat K_epsco = p_kernel_matrices->at(chunk_ix);
-    K_epsco.diag().fill(epsco);
-    solve_dispatch(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters, false);
-    const double score = common::meanabs<double>(p_kernel_matrices->at(chunk_ix) * weight_chunks[chunk_ix] - train_label_chunks[chunk_ix]);
-    LOG4_TRACE("Chunk " << chunk_ix << ", level " << decon_level << ", gradient " << gradient << ", MAE " << score << ", parameters " << *p_params);
-    chunks_score[chunk_ix].second = score;
+    K_epsco.diag().fill(1. / p_params->get_svr_C());
+    solve_irwls(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters);
+    LOG4_TRACE("Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << *p_params << ", K epsco " << common::present(K_epsco)
+                        << ", w " << common::present(weight_chunks[chunk_ix]));
 }
 
 
@@ -369,7 +338,7 @@ void OnlineMIMOSVR::update_all_weights()
         divisors.rows(ixs[i]) += 1;
     }
     all_weights /= divisors;
-    LOG4_TRACE("Total weights for level " << decon_level << " " << arma::size(all_weights));
+    LOG4_TRACE("Total weights for level " << level << " " << arma::size(all_weights));
 }
 
 } // datamodel

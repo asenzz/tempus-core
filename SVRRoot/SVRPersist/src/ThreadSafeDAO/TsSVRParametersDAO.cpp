@@ -42,9 +42,9 @@ std::deque<datamodel::SVRParameters_ptr> TsSVRParametersDAO::get_all_svrparams_b
     return ts_call<std::deque<datamodel::SVRParameters_ptr>>(&SVRParametersDAO::get_all_svrparams_by_dataset_id, dataset_id);
 }
 
-std::deque<datamodel::SVRParameters_ptr> TsSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
+std::deque<datamodel::SVRParameters_ptr> TsSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step)
 {
-    return ts_call<std::deque<datamodel::SVRParameters_ptr>>(&SVRParametersDAO::get_svrparams, dataset_id, input_queue_column_name, decon_level);
+    return ts_call<std::deque<datamodel::SVRParameters_ptr>>(&SVRParametersDAO::get_svrparams, dataset_id, input_queue_column_name, decon_level, step);
 }
 
 size_t TsSVRParametersDAO::get_dataset_levels(const bigint dataset_id)

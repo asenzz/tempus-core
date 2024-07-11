@@ -81,7 +81,7 @@ OnlineMIMOSVR::batch_train(
     }
 
     if (p_kernel_matrices->size() != ixs.size()) p_kernel_matrices->resize(ixs.size());
-    if (auto_gu.size() != ixs.size()) auto_gu.resize(ixs.size(), 1. / (2. * p_param_set->get_svr_C()));
+    if (auto_gu.size() != ixs.size()) auto_gu.resize(ixs.size(), 1 / p_param_set->get_svr_C());
 
 #pragma omp parallel for num_threads(ixs.size()) schedule(static, 1)
     for (uint32_t i = 0; i < ixs.size(); ++i) {

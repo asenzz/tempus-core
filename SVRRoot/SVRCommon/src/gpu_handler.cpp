@@ -1,21 +1,20 @@
 #include <cuda_runtime_api.h>
-#include "common/cuda_util.cuh"
 #include "common/semaphore.hpp"
 #include <common/gpu_handler.tpp>
-#include <common/common.hpp>
 #include <mutex>
 
 namespace svr {
 namespace common {
 
 // GPU Context, set the worker as blocked during its lifetime.
-gpu_context::gpu_context()
+__attribute_noinline__ gpu_context::gpu_context()
 {
+    __asm("");
     context_id_ = gpu_handler_hid::get().get_free_gpu();
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
-gpu_context::gpu_context(const gpu_context &context) :
+__attribute_noinline__ gpu_context::gpu_context(const gpu_context &context) :
 context_id_(context.context_id_)
 {};
 
@@ -26,7 +25,9 @@ size_t gpu_context::id() const
 
 size_t gpu_context::phy_id() const
 {
-    return context_id_ % gpu_handler_hid::get().get_gpu_devices_count();
+    const size_t gpu_id = context_id_ % gpu_handler_hid::get().get_gpu_devices_count();
+    LOG4_TRACE("Returning GPU with ID " << gpu_id);
+    return gpu_id;
 }
 
 viennacl::ocl::context &gpu_context::ctx() const
@@ -40,39 +41,10 @@ gpu_context::~gpu_context()
     LOG4_TRACE("Exit ctx " << context_id_);
 }
 
-fat_gpu_context::fat_gpu_context()
-{
-    context_id_ = gpu_handler_hid::get().get_free_gpus(CTX_PER_GPU / 4);
-    LOG4_TRACE("Enter ctx " << context_id_);
+namespace {
+std::unordered_map<std::string, std::stringstream> kernel_file_cache;
+tbb::mutex kernel_file_cache_mx;
 }
-
-fat_gpu_context::fat_gpu_context(const fat_gpu_context &context) :
-context_id_(context.context_id_)
-{}
-
-fat_gpu_context::~fat_gpu_context()
-{
-    gpu_handler_hid::get().return_gpus(CTX_PER_GPU / 4);
-    LOG4_TRACE("Exit fat ctx " << context_id_);
-}
-
-size_t fat_gpu_context::id() const
-{
-    return context_id_;
-}
-
-size_t fat_gpu_context::phy_id() const
-{
-    return context_id_ % gpu_handler_hid::get().get_gpu_devices_count();
-}
-
-viennacl::ocl::context &fat_gpu_context::ctx() const
-{
-    return viennacl::ocl::get_context(context_id_);
-}
-
-
-static std::map<std::string, std::stringstream> kernel_file_cache;
 
 void
 gpu_kernel::add_ctx_kernel(
@@ -88,6 +60,7 @@ gpu_kernel::add_ctx_kernel(
 
 gpu_kernel::gpu_kernel(const std::string &kernel_name) : kernel_name_(kernel_name)
 {
+    const tbb::mutex::scoped_lock lk(kernel_file_cache_mx);
     viennacl::ocl::context &ctx = viennacl::ocl::get_context(context_id_);
     const auto iter_kernels_cache = kernel_file_cache.find(kernel_name);
 

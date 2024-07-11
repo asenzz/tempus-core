@@ -2,9 +2,9 @@
 // Created by zarko on 1/13/24.
 //
 
-#include "model/SVRParameters.hpp"
-#include "SVRParametersService.hpp"
 #include <set>
+#include "SVRParametersService.hpp"
+#include "model/SVRParameters.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -36,6 +36,7 @@ SVRParameters::SVRParameters(
         const std::string &input_queue_column_name,
         const size_t level_ct,
         const size_t decon_level,
+        const size_t step,
         const size_t chunk_ix,
         const size_t grad_level,
         const double svr_C,
@@ -46,7 +47,6 @@ SVRParameters::SVRParameters(
         const double svr_adjacent_levels_ratio,
         const kernel_type_e kernel_type,
         const size_t lag_count,
-        const double feature_quantization,
         const std::set<size_t> &adjacent_levels)
         : Entity(id),
           dataset_id(dataset_id),
@@ -54,6 +54,7 @@ SVRParameters::SVRParameters(
           input_queue_column_name(input_queue_column_name),
           levels_ct(level_ct),
           decon_level_(decon_level),
+          step_(step),
           chunk_ix_(chunk_ix),
           grad_level_(grad_level),
           svr_C(svr_C),
@@ -64,8 +65,7 @@ SVRParameters::SVRParameters(
           svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
           adjacent_levels(adjacent_levels),
           kernel_type(kernel_type),
-          lag_count(lag_count),
-          feature_quantization(feature_quantization)
+          lag_count(lag_count)
 {
     if (adjacent_levels.empty()) (void) get_adjacent_levels();
 #ifdef ENTITY_INIT_ID
@@ -81,6 +81,7 @@ SVRParameters::SVRParameters(const SVRParameters &o) :
                 o.input_queue_column_name,
                 o.levels_ct,
                 o.decon_level_,
+                o.step_,
                 o.chunk_ix_,
                 o.grad_level_,
                 o.svr_C,
@@ -91,7 +92,6 @@ SVRParameters::SVRParameters(const SVRParameters &o) :
                 o.svr_adjacent_levels_ratio,
                 o.kernel_type,
                 o.lag_count,
-                o.feature_quantization,
                 o.adjacent_levels)
 {}
 
@@ -168,6 +168,9 @@ bool SVRParameters::operator<(const SVRParameters &o) const
     if (decon_level_ < o.decon_level_) return true;
     if (decon_level_ > o.decon_level_) return false;
 
+    if (step_ < o.step_) return true;
+    if (step_ > o.step_) return false;
+
     if (grad_level_ < o.grad_level_) return true;
     if (grad_level_ > o.grad_level_) return false;
 
@@ -219,6 +222,16 @@ void SVRParameters::set_decon_level(const size_t _decon_level)
 size_t SVRParameters::get_level_count() const
 {
     return levels_ct;
+}
+
+size_t SVRParameters::get_step() const
+{
+    return step_;
+}
+
+void SVRParameters::set_step(const size_t _step)
+{
+    step_ = _step;
 }
 
 void SVRParameters::set_level_count(const size_t levels)
@@ -363,14 +376,19 @@ void SVRParameters::set_lag_count(const size_t _lag_count)
     lag_count = _lag_count;
 }
 
-double SVRParameters::get_feature_quantization() const
+t_feature_mechanics &SVRParameters::get_feature_mechanics()
 {
-    return feature_quantization;
+    return feature_mechanics;
 }
 
-void SVRParameters::set_feature_quantization(const double quantize)
+t_feature_mechanics SVRParameters::get_feature_mechanics() const
 {
-    feature_quantization = quantize;
+    return feature_mechanics;
+}
+
+void SVRParameters::set_feature_mechanics(const t_feature_mechanics &f)
+{
+    feature_mechanics = f;
 }
 
 std::string SVRParameters::to_string() const
@@ -451,5 +469,11 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
     return true;
 }
 
+bool t_feature_mechanics::needs_tuning() const noexcept
+{
+    return quantization.empty() || quantization.has_nonfinite()
+        || stretches.empty() || stretches.has_nonfinite()
+        || trims.empty() || trims.has_nonfinite();
+}
 }
 }

@@ -20,7 +20,8 @@ bool PgDQScalingFactorDAO::exists(const datamodel::DQScalingFactor_ptr& p_dq_sca
 {
     return data_source.query_for_type<int>(
             AbstractDAO::get_sql("exists_by_pk"),
-            p_dq_scaling_factor->get_model_id(), p_dq_scaling_factor->get_decon_level(), p_dq_scaling_factor->get_grad_depth(), p_dq_scaling_factor->get_chunk_index()
+            p_dq_scaling_factor->get_model_id(), p_dq_scaling_factor->get_decon_level(), p_dq_scaling_factor->get_step(), p_dq_scaling_factor->get_grad_depth(),
+            p_dq_scaling_factor->get_chunk_index()
         );
 }
 
@@ -31,6 +32,7 @@ int PgDQScalingFactorDAO::save(const datamodel::DQScalingFactor_ptr& p_dq_scalin
             p_dq_scaling_factor->get_id(),
             p_dq_scaling_factor->get_model_id(),
             p_dq_scaling_factor->get_decon_level(),
+            p_dq_scaling_factor->get_step(),
             p_dq_scaling_factor->get_grad_depth(),
             p_dq_scaling_factor->get_chunk_index(),
             p_dq_scaling_factor->get_features_factor(),

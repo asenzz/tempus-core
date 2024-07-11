@@ -162,7 +162,7 @@ void gpu_handler<context_per_gpu>::return_gpus(const size_t gpu_ct)
 
 
 template<const unsigned context_per_gpu>
-size_t gpu_handler<context_per_gpu>::get_max_running_gpu_threads_number() const
+size_t gpu_handler<context_per_gpu>::get_max_gpu_threads() const
 {
     return max_running_gpu_threads_number_;
 }

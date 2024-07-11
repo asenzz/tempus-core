@@ -55,16 +55,10 @@ void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::E
 }
 
 
-void EnsembleService::train(datamodel::Ensemble &ensemble, const datamodel::t_training_data &training_data)
+void EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
 {
-#pragma omp parallel for num_threads(adj_threads(std::min<size_t>(C_parallel_train_models, ensemble.get_models().size()))) schedule(static, 1)
-    for (auto p_model: ensemble.get_models())
-        ModelService::train(
-                *p_model,
-                training_data.features.at(p_model->get_decon_level()),
-                training_data.labels.at(p_model->get_decon_level()),
-                training_data.last_knowns.at(p_model->get_decon_level()),
-                training_data.last_row_time);
+#pragma omp parallel for num_threads(adj_threads(std::min<size_t>(C_parallel_train_models, ensemble.get_model_ct()))) schedule(static, 1)
+    for (auto p_model: ensemble.get_models()) ModelService::train(dataset, ensemble, *p_model);
 }
 
 datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(
@@ -83,12 +77,10 @@ datamodel::DeconQueue_ptr EnsembleService::predict(const datamodel::Dataset &dat
     LOG4_BEGIN();
 
     auto p_aux_decon = ensemble.get_label_aux_decon()->clone_empty();
-    if (!p_aux_decon) LOG4_THROW("Auxiliary decon queue for column " << ensemble.get_column_name() << " not found.");
-#pragma omp parallel for num_threads(adj_threads(ensemble.get_models().size())) schedule(static, 1)
+    tbb::mutex insert_mx;
+#pragma omp parallel for num_threads(adj_threads(ensemble.get_model_ct())) schedule(static, 1)
     for (auto &p_model: ensemble.get_models())
-        ModelService::predict(ensemble, *p_model, features.at(p_model->get_decon_level()), dataset.get_input_queue()->get_resolution(), *p_aux_decon);
-
-    LOG4_END();
+        ModelService::predict(ensemble, *p_model, features.at(std::tuple{p_model->get_decon_level(), p_model->get_step()}), dataset.get_input_queue()->get_resolution(), insert_mx, *p_aux_decon);
 
     return p_aux_decon;
 }
@@ -250,14 +242,14 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
     if (!check(p_dataset->get_ensembles(), p_dataset->get_input_queue()->get_value_columns()) && p_dataset->get_id())
         p_dataset->set_ensembles(APP.ensemble_service.get_all_by_dataset_id(p_dataset->get_id()), true);
 
-    OMP_LOCK(ens_emplace_l)
+    t_omp_lock ens_emplace_l;
     auto &ensembles = p_dataset->get_ensembles();
 #pragma omp parallel for num_threads(adj_threads(main_decon_queues.size())) schedule(static, 1)
     for (size_t i = 0; i < main_decon_queues.size(); ++i) {
         const auto &p_main_decon = main_decon_queues[i];
         std::decay_t<dtype(ensembles)>::iterator ens_iter;
         datamodel::Ensemble_ptr p_ensemble;
-        omp_set_lock(&ens_emplace_l);
+        ens_emplace_l.set();
         if ((ens_iter = std::find_if(std::execution::par_unseq, ensembles.begin(), ensembles.end(),
                                      [&p_main_decon](const auto &p_ensemble) {
                                          return p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_main_decon->get_input_queue_table_name() &&
@@ -266,7 +258,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
             p_ensemble = ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, aux_decon_queues));
         else
             p_ensemble = *ens_iter;
-        omp_unset_lock(&ens_emplace_l);
+        ens_emplace_l.unset();
         APP.model_service.init_models(p_dataset, p_ensemble);
     }
 

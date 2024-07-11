@@ -97,21 +97,23 @@ public:
             const bpt::time_duration &aux_queue_res,
             const bpt::ptime &last_modeled_value_time,
             const bpt::time_duration &main_queue_resolution,
-            const size_t multiout);
+            const size_t multistep);
 
-    static void
-    prepare_features(
-            arma::mat &features,
+    static void tune_features(
+            datamodel::SVRParameters &params,
+            const arma::mat &labels,
             const std::deque<bpt::ptime> &label_times,
             const std::deque<datamodel::DeconQueue_ptr> &features_aux,
-            const size_t lag,
-            const double quantize,
-            const std::set<size_t> &adjacent_levels,
             const bpt::time_duration &max_gap,
             const bpt::time_duration &aux_queue_res,
             const bpt::time_duration &main_queue_resolution);
 
-    static std::tuple<mat_ptr, mat_ptr, vec_ptr, std::deque<bpt::ptime>>
+    static void
+    prepare_features(arma::mat &features, const std::deque<bpt::ptime> &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux,
+                     const datamodel::SVRParameters &params, const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res,
+                     const bpt::time_duration &main_queue_resolution);
+
+    static std::tuple<mat_ptr, mat_ptr, vec_ptr, times_ptr>
     get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, size_t dataset_rows = 0);
 
     static void predict(
@@ -119,6 +121,7 @@ public:
             datamodel::Model &model,
             const datamodel::t_level_predict_features &predict_features,
             const bpt::time_duration &resolution,
+            tbb::mutex &insmx,
             data_row_container &output_data);
 
     // A bit more expensive but checks for lag count values before found time
@@ -135,14 +138,13 @@ public:
             const bpt::time_duration &max_gap,
             const bpt::ptime &feat_time);
 
-    static void train(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_last_knowns,
-                      const bpt::ptime &new_last_modeled_value_time);
+    static void train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
     static void train_batch(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_lastknowns, const bpt::ptime &last_value_time);
 
     static void train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const bpt::ptime &last_value_time);
 
-    static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const size_t levix);
+    static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const size_t levix, const size_t stepix);
 
     void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble);
 

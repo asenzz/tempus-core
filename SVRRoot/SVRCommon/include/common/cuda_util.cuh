@@ -10,76 +10,33 @@
 #include <thrust/device_vector.h>
 #include "common/logging.hpp"
 #include "common/defines.h"
+#include "common/constants.hpp"
 
 constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;
 
+#define tid threadIdx.x
+
+#ifdef PRODUCTION_BUILD
 #define CUDA_STRIDED_FOR_i(N) \
     const auto __stride = blockDim.x * gridDim.x; \
-    _Pragma("unroll")                             \
+    _Pragma("unroll")         \
     for (auto i = blockIdx.x * blockDim.x + threadIdx.x; i < (N); i += __stride)
+#else
+#define CUDA_STRIDED_FOR_i(N) \
+    const auto __stride = blockDim.x * gridDim.x; \
+    for (auto i = blockIdx.x * blockDim.x + threadIdx.x; i < (N); i += __stride)
+#endif
 
-#define _CUSIGN(X) ((X) > 0. ? 1.: (X) < 0 ? -1. : 0.)
-#define _MIN(X, Y) ((X) > (Y) ? (Y) : (Y) > (X) ? (X) : (X))
+#define CUDA_THREADS(n) unsigned((n) > common::C_cu_block_size ? common::C_cu_block_size : (n))
+#define CUDA_BLOCKS(n) (unsigned) _CEILDIV((n), common::C_cu_block_size)
+#define CUDA_THREADS_BLOCKS(n) CUDA_BLOCKS(n), CUDA_THREADS(n)
 
-
-#define CUDA_THREADS(x_size) unsigned((x_size) > CUDA_BLOCK_SIZE ? CUDA_BLOCK_SIZE : (x_size))
-#define CUDA_BLOCKS(x_size) unsigned(std::ceil(double(x_size) / double(CUDA_BLOCK_SIZE)))
-#define CUDA_THREADS_BLOCKS(x_size) CUDA_BLOCKS(x_size), CUDA_THREADS(x_size)
-
-#define CUDA_THREADS_2D(x_size) unsigned((x_size) > CUDA_TILE_WIDTH ? CUDA_TILE_WIDTH : (x_size))
-#define CUDA_BLOCKS_2D(x_size) unsigned(std::ceil(double(x_size) / double(CUDA_TILE_WIDTH)))
+#define CUDA_THREADS_2D(x_size) unsigned((x_size) > common::C_cu_tile_width ? common::C_cu_tile_width : (x_size))
+#define CUDA_BLOCKS_2D(x_size) (unsigned) _CEILDIV((x_size), common::C_cu_tile_width)
 #define CUDA_THREADS_BLOCKS_2D(x_size) dim3(CUDA_BLOCKS_2D(x_size), CUDA_BLOCKS_2D(x_size)), dim3(CUDA_THREADS_2D(x_size), CUDA_THREADS_2D(x_size))
 
 
-std::string cufft_get_error_string(const cufftResult s);
-
-#ifdef PRODUCTION_BUILD
-#define cf_errchk(cmd) (cmd)
-#define ma_errchk(cmd) (cmd)
-#define cu_errchk(cmd) (cmd)
-#define cb_errchk(cmd) (cmd)
-#define cs_errchk(cmd) (cmd)
-#else
-#ifndef cf_errchk
-#define cf_errchk(cmd) {               \
-    cufftResult __err;                 \
-    if ((__err = cmd) != CUFFT_SUCCESS) \
-        LOG4_THROW("CuFFT call " #cmd " failed with error " << int(__err) << ", " << cufft_get_error_string(__err)); \
-    }
-#endif
-
-#ifndef ma_errchk
-#define ma_errchk(cmd) {   \
-        magma_int_t __err; \
-        if ((__err = (cmd)) < MAGMA_SUCCESS) \
-            LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err)); \
-    }
-#endif
-
-#ifndef cu_errchk
-#define cu_errchk(cmd) {               \
-    cudaError_t __err;                 \
-    if ((__err = cmd) != cudaSuccess) \
-        LOG4_THROW("Cuda call " #cmd " failed with error " << int(__err) << " " << cudaGetErrorName(__err) << ", " << cudaGetErrorString(__err)); \
-    }
-#endif
-
-#ifndef cb_errchk
-#define cb_errchk(cmd) {      \
-        cublasStatus_t __err; \
-        if ((__err = (cmd)) != CUBLAS_STATUS_SUCCESS) \
-            LOG4_THROW("Cublas call " #cmd " failed with " << int(__err) << " " << cublasGetStatusName(__err) << ", " << cublasGetStatusString(__err)); \
-}
-#endif
-
-#ifndef cs_errchk
-#define cs_errchk(cmd) {                                             \
-        cusolverStatus_t __err;                                      \
-        if ((__err = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
-            LOG4_THROW("Cusolver call " #cmd " failed with " << int(__err));  \
-}
-#endif
-#endif
+constexpr unsigned clamp_n (const unsigned n) { return _MIN(n, svr::common::C_cu_clamp_n); }
 
 template<typename T> T *
 cuda_malloccopy(const T *source, const size_t size, const cudaMemcpyKind kind)

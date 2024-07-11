@@ -8,10 +8,7 @@ IF(EXPERIMENTAL_FEATURES)
 ENDIF(EXPERIMENTAL_FEATURES)
 
 
-FOREACH(DEP ${DEPENDENCIES})
-    INCLUDE_DIRECTORIES(../${DEP}/include)
-ENDFOREACH(DEP)
-
+INCLUDE(../../cmake/IncludeDependencies.cmake)
 INCLUDE("../../cmake/SourceList.cmake")
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED)
 

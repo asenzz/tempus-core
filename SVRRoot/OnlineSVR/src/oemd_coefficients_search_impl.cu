@@ -11,7 +11,7 @@
 #include <thrust/device_vector.h>
 #include <iomanip>
 #include <thrust/execution_policy.h>
-
+#include "pprune.hpp"
 #include "common/compatibility.hpp"
 #include "oemd_coefficients_search.hpp"
 #include "online_emd.hpp"
@@ -87,8 +87,8 @@ sum_expanded(
         const double *__restrict__ d_global_sift_matrix)
 {
     const size_t thr_ix = threadIdx.x;
-    const size_t g_thr_ix = thr_ix + blockIdx.x * CUDA_BLOCK_SIZE;
-    const size_t grid_size = CUDA_BLOCK_SIZE * gridDim.x;
+    const size_t g_thr_ix = thr_ix + blockIdx.x * common::C_cu_block_size;
+    const size_t grid_size = common::C_cu_block_size * gridDim.x;
     const auto d_expand_size = double(expand_size);
 
     double _sum_imf = 0;
@@ -111,9 +111,9 @@ sum_expanded(
         _sum_rem += sum2 * d_rem_mask[i] / d_expand_size / d_expand_size;
         _sum_corr += sum1 * d_rem_mask[i] / d_expand_size / d_expand_size;
     }
-    __shared__ double _sh_sum_imf[CUDA_BLOCK_SIZE];
-    __shared__ double _sh_sum_rem[CUDA_BLOCK_SIZE];
-    __shared__ double _sh_sum_corr[CUDA_BLOCK_SIZE];
+    __shared__ double _sh_sum_imf[common::C_cu_block_size];
+    __shared__ double _sh_sum_rem[common::C_cu_block_size];
+    __shared__ double _sh_sum_corr[common::C_cu_block_size];
     _sh_sum_imf[thr_ix] = _sum_imf;
     _sh_sum_rem[thr_ix] = _sum_rem;
     _sh_sum_corr[thr_ix] = _sum_corr;
@@ -123,7 +123,7 @@ sum_expanded(
 #ifndef __GNUC__
 #pragma unroll
 #endif
-    for (size_t size = CUDA_BLOCK_SIZE / 2; size > 0; size /= 2) { // uniform
+    for (size_t size = common::C_cu_block_size / 2; size > 0; size /= 2) { // uniform
         if (thr_ix >= size) continue;
         _sh_sum_imf[thr_ix] += _sh_sum_imf[thr_ix + size];
         _sh_sum_rem[thr_ix] += _sh_sum_rem[thr_ix + size];
@@ -300,26 +300,31 @@ oemd_coefficients_search::evaluate_mask(
 
     const size_t inside_window_start = val_start + h_mask.size() * siftings;
     const size_t inside_window_end = full_input_size;
-    const size_t inside_window_len = inside_window_end - inside_window_start;
-    auto h_imf_temp = cuda_copy(d_zm_ptr + inside_window_start, inside_window_len);
+    const size_t in_window_len = inside_window_end - inside_window_start;
+    auto h_imf_temp = cuda_copy(d_zm_ptr + inside_window_start, in_window_len);
     double *d_values_copy;
-    cu_errchk(cudaMalloc(&d_values_copy, inside_window_len * sizeof(*d_values_copy)));
-    cu_errchk(cudaMemcpy(d_values_copy, d_workspace + inside_window_start, inside_window_len * sizeof(*d_values_copy), cudaMemcpyDeviceToDevice));
-    G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(inside_window_len)>>>(d_values_copy, d_zm_ptr + inside_window_start, inside_window_len);
-    auto h_rem_temp = cuda_copy(d_values_copy, inside_window_len);
+    cu_errchk(cudaMalloc(&d_values_copy, in_window_len * sizeof(*d_values_copy)));
+    cu_errchk(cudaMemcpy(d_values_copy, d_workspace + inside_window_start, in_window_len * sizeof(*d_values_copy), cudaMemcpyDeviceToDevice));
+    G_vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(in_window_len)>>>(d_values_copy, d_zm_ptr + inside_window_start, in_window_len);
+    auto h_rem_temp = cuda_copy(d_values_copy, in_window_len);
     cu_errchk(cudaFree(d_zm_ptr));
     cu_errchk(cudaFree(d_values_copy));
     cu_errchk(cudaFree(d_workspace));
 #if 1
-    const arma::vec input((double *)h_workspace.data() + inside_window_start, inside_window_len, false, true);
-    const arma::vec output((double *)h_rem_temp.data(), inside_window_len, false, true);
-    double score = 0;
-#pragma omp parallel for simd num_threads(adj_threads(inside_window_len)) schedule(static, 1)
-    for (size_t i = 0; i < inside_window_len / 2; ++i)
-        score = std::min(score, common::meanabs<double>(output.head(inside_window_len - i) - output.tail(inside_window_len - i)));
+    const arma::vec input((double *)h_workspace.data() + inside_window_start, in_window_len, false, true);
+    const arma::vec output((double *)h_rem_temp.data(), in_window_len, false, true);
+    double loscore = 0;
+    const unsigned half_in_window_len = in_window_len / 2;
+    OMP_FOR_(half_in_window_len, simd reduction(+:loscore))
+    for (size_t i = half_in_window_len; i < in_window_len; ++i) {
+        const double score = arma::mean(arma::abs(output.head(i) - output.tail(i)));
+        loscore += score;
+    }
+    loscore /= double(half_in_window_len);
     const auto meanabs_input = common::meanabs(input);
-    score = score / meanabs_input + .2 * (1. - std::min(1., common::meanabs(output) / meanabs_input));
-    return score;
+    const auto meanabs_output = common::meanabs(output);
+    LOG4_TRACE("Loscore " << loscore << ", meanabs input " << meanabs_input << ", meanabs output " << meanabs_output);
+    return 2. * loscore / meanabs_output + (1. - std::min(1., meanabs_output / meanabs_input));
 #endif
 
     double sum1 = 0;
@@ -332,9 +337,9 @@ oemd_coefficients_search::evaluate_mask(
     size_t cntr = 0;
     double corr = 0;
     size_t corr_count = 0;
-    const size_t half_window_len = inside_window_len / 2;
-#pragma omp unroll
-    for (size_t i = half_window_len; i < inside_window_len; ++i) { // Non-parallelissabile!
+    const size_t half_window_len = in_window_len / 2;
+#pragma omp unroll // Non-parallelissabile!
+    for (size_t i = half_window_len; i < in_window_len; ++i) {
         sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
         sum2 += pow(h_rem_temp[i] - h_rem_temp[i - 1], 2);
         big_sum1 += pow(h_imf_temp[i] - h_imf_temp[i - 1], 2);
@@ -453,7 +458,7 @@ oemd_coefficients_search::find_good_mask_ffly(
         std::deque<cufftHandle> &plan_sift_forward, std::deque<cufftHandle> &plan_sift_backward,
         const size_t current_level)
 {
-    svr::optimizer::loss_callback_t loss_function = [&](const std::vector<double> &x) -> double {
+    const auto loss_function = [&](const double *x, double *const f) {
         static std::mutex mx_incr;
         static size_t gl_incr;
         std::unique_lock<std::mutex> ul(mx_incr);
@@ -464,17 +469,25 @@ oemd_coefficients_search::find_good_mask_ffly(
 
         static std::deque<std::mutex> mxs(C_parallelism);
         const std::scoped_lock lg(mxs[l_incr]);
-        return evaluate_mask(
-                siftings, x, h_workspace, h_workspace_fft, valid_start_index,
+        *f = evaluate_mask(
+                siftings, common::wrap_vector<double>((double *)x, h_mask.size()), h_workspace, h_workspace_fft, valid_start_index,
                 plan_full_forward[l_incr], plan_full_backward[l_incr], plan_mask_forward[l_incr], plan_sift_forward[l_incr], plan_sift_backward[l_incr],
                 current_level, devix);
     };
 
     double score;
+    /*
     std::tie(score, h_mask) = svr::optimizer::firefly(
-            h_mask.size(), FIREFLY_PARTICLES, FIREFLY_ITERATIONS, FFA_ALPHA, FFA_BETAMIN, FFA_GAMMA,
+            h_mask.size(), FIREFLY_PARTICLES, FIREFLY_ITERATIONS, common::C_FFA_alpha, common::C_FFA_betamin, common::C_FFA_gamma,
             arma::vec(h_mask.size()), arma::vec(h_mask.size(), arma::fill::value(1. / h_mask.size())), arma::vec(h_mask.size(), arma::fill::ones),
             loss_function).operator std::pair<double, std::vector<double>>();
+    */
+    arma::mat bounds(h_mask.size(), 2);
+    bounds.col(0).zeros();
+    bounds.col(1).fill(1. / h_mask.size());
+    const optimizer::t_pprune_res res = optimizer::pprune(prima_algorithm_t::PRIMA_LINCOA, 50, bounds, loss_function, 200, .25, 1e-11);
+    h_mask = arma::conv_to<std::vector<double>>::from(res.best_parameters);
+    score = res.best_score;
     fix_mask(h_mask);
     return score;
 }

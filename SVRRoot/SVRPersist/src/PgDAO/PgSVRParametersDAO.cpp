@@ -76,10 +76,10 @@ std::deque<datamodel::SVRParameters_ptr> PgSVRParametersDAO::get_all_svrparams_b
     return data_source.query_for_deque(row_mapper, get_sql("get_all_by_dataset_id"), dataset_id);
 }
 
-std::deque<datamodel::SVRParameters_ptr> PgSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
+std::deque<datamodel::SVRParameters_ptr> PgSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step)
 {
     SVRParametersRowMapper row_mapper;
-    return data_source.query_for_deque(row_mapper, get_sql("get_by_dataset_column_decon"), dataset_id, input_queue_column_name, decon_level);
+    return data_source.query_for_deque(row_mapper, get_sql("get_by_dataset_column_decon"), dataset_id, input_queue_column_name, decon_level, step);
 }
 
 size_t PgSVRParametersDAO::get_dataset_levels(const bigint dataset_id)

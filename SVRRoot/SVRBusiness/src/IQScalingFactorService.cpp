@@ -6,6 +6,7 @@
 #include "model/InputQueue.hpp"
 #include "model/Dataset.hpp"
 #include "IQScalingFactorService.hpp"
+#include "appcontext.hpp"
 
 
 namespace svr {
@@ -91,10 +92,10 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     const auto resolution_ratio = dataset.get_input_queue()->get_resolution() / input_queue.get_resolution();
 #ifdef INTEGRATION_TEST
     auto test_input_queue = input_queue;
-    test_input_queue.get_data().erase(test_input_queue.end() - (common::INTEGRATION_TEST_VALIDATION_WINDOW - 1) * resolution_ratio, test_input_queue.end());
+    test_input_queue.get_data().erase(test_input_queue.end() - (common::C_integration_test_validation_window - 1) * resolution_ratio, test_input_queue.end());
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
             test_input_queue, dataset.get_id(),
-            dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * QUANTIZE_FIXED / resolution_ratio + dataset.get_max_decrement() * resolution_ratio), true),
+            dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * PROPS.get_default_feature_quantization() / resolution_ratio + dataset.get_max_decrement() * resolution_ratio), true),
                       "Calculate input queue scaling factors for " << input_queue.get_table_name());
 #else
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(

@@ -2,6 +2,7 @@
 #ifndef ARMA_ALLOW_FAKE_GCC
 #define ARMA_ALLOW_FAKE_GCC
 #endif
+
 #include <set>
 #include <armadillo>
 #include <vector>
@@ -15,10 +16,20 @@
 #include "common/compatibility.hpp"
 #include "util/math_utils.hpp"
 #include "common/gpu_handler.tpp"
+#include "common/parallelism.hpp"
 
 namespace svr {
 
-#define ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
+#define ARRAYLEN(X) (sizeof(X) / sizeof((X)[0]))
+
+#define _ABS(X) ((X) >= 0 ? (X) : (-X))
+#define _ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
+#define _SIGN(X) ((X) > 0. ? 1.: (X) < 0 ? -1. : 0.)
+#define _MIN(X, Y) (((X) > (Y)) ? (Y) : (X)) // X returned if smaller or equal
+#define _MAX(X, Y) (((X) < (Y)) ? (Y) : (X)) // X returned if larger or equal
+#define _MAXAS(X, Y) if ((X) < (Y)) (X) = (Y) // (((X) < (Y)) && ((X) = (Y))) // Y assigned to X only if Y larger than X
+#define _MINAS(X, Y) if ((X) > (Y)) (X) = (Y) // (((X) > (Y)) && ((X) = (Y))) // Y assigned to X only if Y smaller than X
+#define _CEILDIV(X, Y) std::ceil(double(X) / double(Y))
 
 std::vector<double> operator*(const std::vector<double> &v1, const double &m);
 
@@ -86,14 +97,66 @@ const size_t C_ip_max = 0x100000000;
  * @param   n       Divisor
  */
 
-template<typename T, typename Td> arma::Mat<T>
-mod(const arma::Mat<T> &a, const Td n)
+template<typename T> arma::Mat<T>
+mod(const arma::Mat<T> &a, const T n)
 {
     return a - arma::floor(a / n) * n;
 }
 
 void cholesky_check(viennacl::matrix<double> &A);
 
+// Sign-safe natural logarithm of scalar
+template<typename T> inline std::enable_if_t<std::is_scalar_v<T>, T> sln(const T v)
+{
+    return v < 0 ? -1. * std::log(std::abs(v)) : std::log(v);
+}
+
+// Sign-safe natural logarithm of arma matrix
+template<typename T> inline arma::Mat<T> slog(const arma::Mat<T> &m)
+{
+    arma::Mat<T> r(arma::size(m));
+    const arma::uvec nsd_ixs = arma::find(r < 0);
+    r.elem(nsd_ixs) = -1. * arma::log(arma::abs(m.elem(nsd_ixs)));
+    const arma::uvec pd_ixs = arma::find(r >= 0);
+    r.elem(pd_ixs) = arma::log(m.elem(pd_ixs));
+    return r;
+}
+
+// Sign-safe natural logarithm of arma matrix in-place
+template<typename T> inline T slog_I(T &&m)
+{
+    const arma::uvec nsd_ixs = arma::find(m < 0);
+    m.elem(nsd_ixs) = -1. * arma::log(arma::abs(m.elem(nsd_ixs)));
+    const arma::uvec pd_ixs = arma::find(m >= 0);
+    m.elem(pd_ixs) = arma::log(m.elem(pd_ixs));
+    return m;
+}
+
+template<typename T> inline std::enable_if_t<std::is_scalar_v<T>, T> sexp(const T v)
+{
+    return v < 0 ? -1. * std::exp(std::abs(v)) : std::exp(v);
+}
+
+// Sign-safe natural exponent of arma matrix
+template<typename T> inline arma::Mat<T> sexp(const arma::Mat<T> &m)
+{
+    arma::Mat<T> r(arma::size(m));
+    const arma::uvec nsd_ixs = arma::find(r < 0);
+    r.elem(nsd_ixs) = -1. * arma::exp(arma::abs(m.elem(nsd_ixs)));
+    const arma::uvec pd_ixs = arma::find(r >= 0);
+    r.elem(pd_ixs) = arma::exp(m.elem(pd_ixs));
+    return r;
+}
+
+// Sign-safe natural exponent of arma matrix in-place
+template<typename T> inline T &sexp_I(T &&m)
+{
+    const arma::uvec nsd_ixs = arma::find(m < 0);
+    m.elem(nsd_ixs) = -1. * arma::exp(arma::abs(m.elem(nsd_ixs)));
+    const arma::uvec pd_ixs = arma::find(m >= 0);
+    m.elem(pd_ixs) = arma::exp(m.elem(pd_ixs));
+    return m;
+}
 
 template<typename T> bool isnormalz(const T v)
 { return v == 0 || std::isnormal(v); }
@@ -162,10 +225,10 @@ sumabs(const std::vector<scalar_t> &v)
     return sum;
 }
 
-template<typename scalar_t> scalar_t
-sumabs(const arma::Mat<scalar_t> &m)
+template<typename T> T
+sumabs(const arma::Mat<T> &m)
 {
-    return arma::accu(arma::abs(arma::vectorise(m)));
+    return arma::accu(arma::abs(m));
 }
 
 template<> double sumabs(const std::vector<double> &v);
@@ -175,6 +238,29 @@ template<> float sumabs(const std::vector<float> &v);
 template<> double sumabs(const arma::Mat<double> &m);
 
 template<> float sumabs(const arma::Mat<float> &m);
+
+template<typename T> arma::subview<T> &normalize_cols_I(arma::subview<T> &&m)
+{
+    const arma::Row<T> means = arma::mean(m);
+    OMP_FOR(m.n_cols)
+    for (size_t c = 0; c < m.n_cols; ++c) {
+        m.col(c) -= means[c];
+        m.col(c) /= arma::median(m.col(c));
+    }
+    return m;
+}
+
+template<typename T> arma::Mat<T> normalize_cols(const arma::Mat<T> &m)
+{
+    const arma::Row<T> means = arma::mean(m);
+    arma::Mat<T> r(arma::size(m), arma::fill::none);
+    OMP_FOR(m.n_cols)
+    for (size_t c = 0; c < m.n_cols; ++c) {
+        r.col(c) = m.col(c) - means[c];
+        r.col(c) /= m.n_rows > 10 ? arma::median(r.col(c)) : arma::mean(r.col(c));
+    }
+    return r;
+}
 
 template<typename scalar_t> void
 normalize(std::vector<scalar_t> &v, const double min, const double max)
@@ -235,6 +321,60 @@ stretch_cut_mask(const std::vector<scalar_t> &values, const double factor, const
     }
     normalize(result, 0, 1);
     return result;
+}
+
+template<typename T> inline auto &shift_I(arma::Mat<T> &m, const arma::Col<unsigned> &shiftings)
+{
+    if (shiftings.n_elem != m.n_cols) LOG4_THROW("Shiftings " << arma::size(shiftings) << " not compatible with matrix " << arma::size(m));
+    OMP_FOR(m.n_cols)
+    for (size_t i = 0; i < m.n_cols; ++i)
+        if (shiftings[i])
+            m.col(i) = arma::shift(m.col(i), shiftings[i]);
+    return m;
+}
+
+template<typename T> inline auto shift(const arma::Mat<T> &m, const arma::Col<unsigned> &shiftings)
+{
+    arma::Mat<T> v(arma::size(m), arma::fill::none);
+    if (shiftings.n_elem != m.n_cols) LOG4_THROW("Shiftings " << arma::size(shiftings) << " not compatible with matrix " << arma::size(m));
+    OMP_FOR(m.n_cols)
+    for (size_t i = 0; i < m.n_cols; ++i)
+        if (shiftings[i])
+            v.col(i) = arma::shift(m.col(i), shiftings[i]);
+    return v;
+}
+
+template<typename T> arma::Col<T> inline stretch_crop(const arma::subview<T> &v, const double f, size_t n = 0)
+{
+    if (f == 1) return v;
+    if (!n) n = v.n_elem;
+    arma::Col<T> r(n);
+    arma::uvec div(n);
+#pragma omp unroll
+    for (size_t out_i = 0; out_i < r.n_elem; ++out_i) {
+        r[out_i] += v[size_t(out_i / f) % v.n_elem];
+        ++div[out_i];
+    }
+    return r / div;
+}
+
+template<typename T> arma::Col<T> stretch(const arma::Col<T> &v, const double f)
+{
+    if (f == 1) return v;
+
+    arma::Col<T> r(v.n_elem * f);
+    arma::uvec div(r.n_elem);
+#pragma omp unroll
+    for (unsigned out_i = 0; out_i < r.n_elem; ++out_i) {
+        r[out_i] += v[double(out_i) / f];
+        ++div[out_i];
+    }
+    return r / div;
+}
+
+template<typename T> arma::Col<T> stretch(const arma::Col<T> &v, const size_t n)
+{
+    return stretch(v, double(n) / double(v.n_elem));
 }
 
 template<typename T> std::vector<T>
@@ -340,15 +480,22 @@ join_rows(const size_t arg_ct...)
     return res;
 }
 
-template<typename T> T scale(const T v, const double sf, const double dc)
+template<typename T> T scale(const T &v, const double sf, const double dc)
 {
     return (v - dc) / sf;
 }
 
-template<typename T> T unscale(const T v, const double sf, const double dc)
+template<typename T> T unscale(const T &v, const double sf, const double dc)
 {
     return v * sf + dc;
 }
+
+template<typename T> void unscale_I(T &v, const double sf, const double dc)
+{
+    v = v * sf + dc;
+}
+
+arma::mat unscale(const arma::mat &m, const double sf, const double dc);
 
 template<typename T> arma::Mat<T>
 norm(const arma::subview<std::complex<T>> &cxm)
@@ -368,33 +515,6 @@ norm(const arma::Mat<std::complex<T>> &cxm)
     for (size_t i = 0; i < cxm.n_elem; ++i) norm_cxm[i] = std::norm(cxm[i]);
     return norm_cxm;
 }
-
-
-template<typename T> std::string
-present(const arma::Mat<T> &m)
-{
-    std::stringstream res;
-    const auto vm = arma::vectorise(m);
-    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
-        << arma::stddev(vm) <<
-        ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "
-        << arma::mean(arma::abs(vm));
-    return res.str();
-}
-
-template<typename T> std::string
-present(const arma::subview<T> &m)
-{
-    std::stringstream res;
-    const auto vm = arma::vectorise(m);
-    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
-        << arma::stddev(vm) <<
-        ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "
-        << arma::mean(arma::abs(vm));
-    return res.str();
-}
-
-std::string present_chunk(const arma::uvec &u, const double tail_factor);
 
 template<typename T> inline T
 mean_asymm(const arma::Mat<T> &m, const size_t last)
@@ -450,12 +570,6 @@ meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typen
 }
 
 
-template<typename T> T
-accuabs(const arma::Mat<T> &m)
-{
-    return arma::accu(arma::abs(m));
-}
-
 template<typename T> arma::Mat<T>
 extrude_rows(const arma::Mat<T> &m, const size_t ct)
 {
@@ -464,6 +578,34 @@ extrude_rows(const arma::Mat<T> &m, const size_t ct)
     if (r.n_cols > ct) r.shed_cols(ct, r.n_cols - 1);
     return r;
 }
+
+template<typename T> std::string
+present(const arma::Mat<T> &m)
+{
+    std::stringstream res;
+    const auto vm = arma::vectorise(m);
+    res << "elements " << m.n_elem << ", size " << arma::size(m);
+    if (m.has_nonfinite())
+        res << (m.has_inf() ? ", has infinite" : m.has_nan() ? ", has nan" : "");
+    else
+        res << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev " << arma::stddev(vm) << ", var " << arma::var(vm) <<
+            ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs " << meanabs(m);
+    return res.str();
+}
+
+template<typename T> std::string
+present(const arma::subview<T> &m)
+{
+    std::stringstream res;
+    const auto vm = arma::vectorise(m);
+    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
+        << arma::stddev(vm) <<
+        ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "
+        << arma::mean(arma::abs(vm));
+    return res.str();
+}
+
+std::string present_chunk(const arma::uvec &u, const double head_factor);
 
 #define INF (9.9e99)
 
@@ -523,26 +665,9 @@ inv_diff_return(
     return res;
 }
 
-
-template<class T>
-T ABS(T X)
-{
-    if (X >= 0)
-        return X;
-    else
-        return -X;
-}
-
-template<class T>
-T SIGN(T X)
-{
-    if (X >= 0)
-        return (T) 1;
-    else
-        return (T) -1;
-}
-
 double get_uniform_random_value();
+
+unsigned long long init_sobol_ctr();
 
 std::vector<double> get_uniform_random_vector(const size_t size);
 
@@ -570,17 +695,15 @@ template<typename T> inline bool equals(const T t1, const T t2, const T epsilon 
     return fabs(t1 - t2) < epsilon;
 }
 
-// Add to vector
-#define AVEC_PUSH(v, val) {\
-const auto _n_elem  = v.size(); \
-v.resize(_n_elem + 1); \
-v(_n_elem) = (val); }
-
 void shuffle_matrix(const arma::mat &x, const arma::mat &y, arma::uvec &shuffled_rows, arma::uvec &shuffled_cols);
 
 arma::mat pdist(const arma::mat &input);
 
 double mean(const arma::mat &input);
+
+double max(const arma::mat &input);
+
+double min(const arma::mat &input);
 
 arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level);
 

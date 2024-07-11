@@ -5,6 +5,9 @@
 #ifndef SVR_CUDA_PATH_HPP
 #define SVR_CUDA_PATH_HPP
 
+#define DISTPOW 4 // Should be even number
+#define DIST(x) pow((x), DISTPOW)
+
 namespace svr::kernel::path {
 
 __global__  void
@@ -13,7 +16,7 @@ G_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const 
 
 __global__  void
 G_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t len_TILE_WIDTH,
-            const double lambda, const double gamma_2_pow_2, const double *__restrict__ X, double *__restrict__ Z);
+            const double lambda, const double gamma, const double *__restrict__ X, double *__restrict__ Z);
 
 __global__  void
 G_kernel_xx(const uint32_t cols, const uint32_t lag, const uint32_t len_TILE_WIDTH, const double lambda, const double *__restrict__ X, double *__restrict__ Z);
@@ -24,7 +27,7 @@ G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, c
 
 __global__  void
 G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t len_TILE_WIDTH,
-            const double lambda, const double gamma_2_2, const double *X, const double *Y, double *Z);
+            const double lambda, const double gamma, const double *X, const double *Y, double *Z);
 
 __global__  void
 G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t lag, const unsigned len_TILE_WIDTH, const double lambda,
@@ -47,6 +50,10 @@ void cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32
 void cu_kernel_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint32_t lag, const double lambda, const double gamma,
                   const double *X, const double *Xy, double *Z);
 
+inline double calc_g(const double n, const double Z_mm, const double L_mm)
+{
+    return std::pow(- (L_mm - n) / (double(n) * Z_mm), -1. / DISTPOW);
+}
 
 
 }

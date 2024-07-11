@@ -20,8 +20,8 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
     std::vector<svr::t_param_preds_cu> params_preds(colct * svr::common::C_tune_keep_preds);
     for (uint32_t i = 0; i < colct * svr::common::C_tune_keep_preds; ++i) {
         params_preds[i].params_ix = 0;
-        for (uint32_t j = 0; j < C_emo_max_j; ++j) {
-            for (uint32_t el = 0; el < C_emo_test_len; ++el) {
+        for (uint32_t j = 0; j < C_max_j; ++j) {
+            for (uint32_t el = 0; el < C_test_len; ++el) {
                 params_preds[i].labels[j][el] = 1;
                 params_preds[i].last_knowns[j][el] = 0;
                 params_preds[i].predictions[j][el] = 0;
@@ -36,8 +36,8 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
         combos[.5 * rowct * colct + colix] = 0;
 #endif
         params_preds[colix].params_ix = 77;
-        for (uint32_t j = 0; j < C_emo_max_j; ++j)
-            for (uint32_t el = 0; el < C_emo_test_len; ++el)
+        for (uint32_t j = 0; j < C_max_j; ++j)
+            for (uint32_t el = 0; el < C_test_len; ++el)
                 if (el % 2) params_preds[colix].predictions[j][el] = 100;
     }
     arma::uchar_mat combos(rowct, colct, arma::fill::ones);

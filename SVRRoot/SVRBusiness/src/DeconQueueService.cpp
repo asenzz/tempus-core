@@ -185,7 +185,7 @@ DeconQueueService::deconstruct(
 
     const double res_ratio = main_resolution / input_queue.get_resolution();
 #ifdef INTEGRATION_TEST
-    const auto test_offset = res_ratio * common::INTEGRATION_TEST_VALIDATION_WINDOW;
+    const auto test_offset = res_ratio * common::C_integration_test_validation_window;
 #else
     constexpr size_t test_offset = 0;
 #endif
@@ -469,11 +469,8 @@ DeconQueueService::make_queue_table_name(
 {
     if (input_queue_table_name.empty() || input_queue_column_name.empty())
         LOG4_THROW("Illegal arguments, input queue table name " << input_queue_table_name << ", input queue column name " << input_queue_column_name << ", dataset id " << dataset_id);
-    std::string result = common::sanitize_db_table_name(
-            common::C_decon_queue_table_name_prefix + "_" +
-            input_queue_table_name + "_" +
-            std::to_string(dataset_id) + "_" +
-            input_queue_column_name);
+    std::string result = common::sanitize_db_table_name(common::formatter() <<
+            common::C_decon_queue_table_name_prefix << "_" << input_queue_table_name << "_" << dataset_id << "_" << input_queue_column_name);
     std::transform(std::execution::par_unseq, result.begin(), result.end(), result.begin(), ::tolower);
     return result;
 }

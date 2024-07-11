@@ -26,7 +26,7 @@
 #define KERNEL_DIRECTORY_PATH   "../SVRRoot/opencl-libsvm/libsvm/kernels/"
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
-#define CTX_PER_GPU 28
+#define CTX_PER_GPU 4
 #ifdef IPC_SEMAPHORE
 #define SVRWAVE_GPU_SEM         "svrwave_gpu_sem"
 #endif
@@ -69,7 +69,7 @@ class gpu_handler : boost::noncopyable {
     mutable boost::shared_mutex devices_mutex_;
 
 public:
-    size_t get_max_running_gpu_threads_number() const;
+    size_t get_max_gpu_threads() const;
     size_t get_gpu_devices_count() const;
     size_t get_max_gpu_kernels() const;
     size_t get_max_gpu_data_chunk_size() const;
@@ -93,24 +93,10 @@ class gpu_context {
 protected:
     size_t context_id_;
 public:
-    gpu_context();
-    gpu_context(const gpu_context &context);
+    __attribute_noinline__ gpu_context();
+    __attribute_noinline__ gpu_context(const gpu_context &context);
 
     virtual ~gpu_context();
-
-    size_t id() const;
-    size_t phy_id() const;
-    viennacl::ocl::context &ctx() const;
-};
-
-class fat_gpu_context {
-protected:
-    size_t context_id_;
-public:
-    fat_gpu_context();
-    fat_gpu_context(const fat_gpu_context &context);
-
-    virtual ~fat_gpu_context();
 
     size_t id() const;
     size_t phy_id() const;

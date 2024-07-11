@@ -13,20 +13,22 @@
 namespace svr {
 namespace business {
 
-template<typename rT, typename kT, typename fT> std::unordered_map<kT, rT> cached<rT, kT, fT>::cache_cont;
-template<typename rT, typename kT, typename fT> tbb::concurrent_unordered_map<kT, std::mutex> cached<rT, kT, fT>::mx_map;
+#define __rT typename cached<kT, fT>::rT
+
+template<typename kT, typename fT> std::unordered_map<kT, __rT> cached<kT, fT>::cache_cont;
+template<typename kT, typename fT> tbb::concurrent_unordered_map<kT, tbb::mutex> cached<kT, fT>::mx_map;
 
 
-template<typename rT, typename kT, typename fT> rT &cached<rT, kT, fT>::operator()(const kT &cache_key, const fT &f)
+template<typename kT, typename fT> __rT &cached<kT, fT>::operator()(const kT &cache_key, const fT &f)
 {
     auto iter = cache_cont.find(cache_key);
     if (iter != cache_cont.end()) goto __bail;
     {
-        const std::scoped_lock l(mx_map[cache_key]);
+        const tbb::mutex::scoped_lock l(mx_map[cache_key]);
         iter = cache_cont.find(cache_key);
         if (iter == cache_cont.end()) {
-            typename std::unordered_map<kT, rT>::mapped_type r;
-            PROFILE_EXEC_TIME(r = f(), "Prepare");
+            typename std::unordered_map<kT, __rT>::mapped_type r;
+            PROFILE_(r = f());
             bool rc;
             std::tie(iter, rc) = cache_cont.emplace(cache_key, r); // If rehashing occurs here, we are doomed, in that case replace mx_map with plain mx
             if (!rc) LOG4_THROW("Error inserting entry in cache");
@@ -36,25 +38,25 @@ template<typename rT, typename kT, typename fT> rT &cached<rT, kT, fT>::operator
     return iter->second;
 }
 
-template<typename rT, typename kT, typename fT> void cached<rT, kT, fT>::clear()
+template<typename kT, typename fT> void cached<kT, fT>::clear()
 {
     release_cont(cache_cont);
 }
 
-template<typename rT, typename kT, typename fT> cached<rT, kT, fT>::cached()
+template<typename kT, typename fT> cached<kT, fT>::cached()
 {
     cached_register::cr.emplace(this);
 }
 
-template<typename rT, typename kT, typename fT> cached<rT, kT, fT> &cached<rT, kT, fT>::get()
+template<typename kT, typename fT> cached<kT, fT> &cached<kT, fT>::get()
 {
-    static cached<rT, kT, fT> o;
+    static cached<kT, fT> o;
     return o;
 }
 
-template<typename rT, typename kT, typename fT> cached<rT, kT, fT>::~cached()
+template<typename kT, typename fT> cached<kT, fT>::~cached()
 {
-    const std::scoped_lock l(cached_register::erase_mx);
+    const tbb::mutex::scoped_lock l(cached_register::erase_mx);
     cached_register::cr.unsafe_erase(this);
 }
 

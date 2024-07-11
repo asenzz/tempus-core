@@ -1,22 +1,19 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 IF(USE_CUDA)
 	PROJECT(OnlineSVR LANGUAGES CUDA CXX)
-    LINK_LIBRARIES(CUDA::cudart_static CUDA::cuda_driver CUDA::cublas_static CUDA::cufftw_static CUDA::cusolver_static)
+    LINK_LIBRARIES(CUDA::cudart_static CUDA::cuda_driver CUDA::cublas_static CUDA::cufftw_static CUDA::cusolver_static CUDA::nppc_static CUDA::npps_static)
 ELSE()
 	PROJECT(OnlineSVR CXX)
 ENDIF()
 
 SET(DEPENDENCIES SVRCommon SVRModel)
-FOREACH(DEP ${DEPENDENCIES})
-    INCLUDE_DIRECTORIES(../${DEP}/include)
-ENDFOREACH(DEP)
-
-INCLUDE("../../cmake/SourceList.cmake")
+INCLUDE(../../cmake/IncludeDependencies.cmake)
+INCLUDE(../../cmake/SourceList.cmake)
 
 FIND_PACKAGE(prima REQUIRED)
 # FIND_PACKAGE(Bandicoot REQUIRED)
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system REQUIRED)
-LINK_LIBRARIES(${DEPENDENCIES} magma armadillo MKL::MKL ${OMP_LIBRARY} TBB::tbb ${JEMALLOC_LIBRARIES} prima::primac) # bandicoot
+LINK_LIBRARIES(${DEPENDENCIES} magma MKL::MKL TBB::tbb ${JEMALLOC_LIBRARIES} prima::primac) # bandicoot
 
 IF (EXPERIMENTAL_FEATURES)
     #FIND_PACKAGE(OSQP REQUIRED)

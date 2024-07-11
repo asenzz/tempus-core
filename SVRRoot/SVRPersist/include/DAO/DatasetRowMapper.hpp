@@ -22,7 +22,7 @@ public:
                 row_set["description"].as<std::string>(""),
                 row_set["gradients"].as<size_t>(0),
                 row_set["max_chunk_size"].as<size_t>(0),
-                row_set["multiout"].as<size_t>(0),
+                row_set["multistep"].as<size_t>(0),
                 row_set["levels"].as<size_t>(0),
                 row_set["deconstruction"].as<std::string>(""),
                 row_set["max_gap"].is_null() ? bpt::time_duration() : bpt::duration_from_string(row_set["max_gap"].as<std::string>()),

@@ -19,10 +19,10 @@ OnlineMIMOSVR::serialize(A &ar, const unsigned version)
     ar & weight_chunks;
     ar & chunks_score;
     ar & ixs;
-    ar & multistep_len;
+    ar & multiout;
     ar & max_chunk_size;
     ar & gradient;
-    ar & decon_level;
+    ar & level;
 }
 
 // TODO Rewrite using boost serialization or similar library

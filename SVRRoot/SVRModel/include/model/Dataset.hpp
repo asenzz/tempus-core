@@ -49,13 +49,13 @@ class Dataset : public Entity
     std::string description_; // Textual description of the dataset
     size_t gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
     size_t max_chunk_size_ = common::C_default_kernel_max_chunk_size; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
-    size_t multiout_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
+    size_t multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<svr::oemd::online_emd> p_oemd_transformer_fat;
     std::unique_ptr<svr::vmd::fast_cvmd> p_cvmd_transformer;
     size_t transformation_levels_ = common::C_default_level_count; // Number of spectral components to extract from every input queue column
     std::string transformation_name_ = "cvmd"; // Deconstruction type
-    bpt::time_duration max_lookback_time_gap_ = DEFAULT_FEATURES_MAX_TIME_GAP; // Maximum time gap between feature points after which the whole row is discarded from the learning process
+    bpt::time_duration max_lookback_time_gap_ = common::C_default_features_max_time_gap; // Maximum time gap between feature points after which the whole row is discarded from the learning process
 
     std::deque<datamodel::Ensemble_ptr> ensembles_; // Number of ensembles equals number of columns in the main input queue
     std::mutex ensembles_mx;
@@ -81,7 +81,7 @@ public:
             const size_t multiout = common::C_default_multistep_len,
             const size_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
-            const bpt::time_duration &max_lookback_time_gap = DEFAULT_FEATURES_MAX_TIME_GAP,
+            const bpt::time_duration &max_lookback_time_gap = common::C_default_features_max_time_gap,
             const std::deque<datamodel::Ensemble_ptr> &ensembles = {},
             bool is_active = false,
             const std::deque<IQScalingFactor_ptr> iq_scaling_factors = {});
@@ -99,7 +99,7 @@ public:
             const size_t multiout = common::C_default_multistep_len,
             const size_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
-            const bpt::time_duration &max_lookback_time_gap_ = DEFAULT_FEATURES_MAX_TIME_GAP,
+            const bpt::time_duration &max_lookback_time_gap_ = common::C_default_features_max_time_gap,
             const std::deque<datamodel::Ensemble_ptr> &ensembles_ = {},
             bool is_active_ = false,
             const std::deque<IQScalingFactor_ptr> iq_scaling_factors = {});
@@ -150,7 +150,7 @@ public:
 
     size_t get_max_chunk_size() const;
 
-    size_t get_multiout() const;
+    size_t get_multistep() const;
 
     void set_transformation_levels(const size_t transformation_levels);
 
@@ -158,7 +158,7 @@ public:
 
     void set_chunk_size(const size_t chunk_size);
 
-    void set_multiout(const size_t multiout);
+    void set_multistep(const size_t multistep);
 
     std::string get_transformation_name() const;
 

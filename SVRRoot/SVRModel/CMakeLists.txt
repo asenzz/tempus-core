@@ -3,10 +3,7 @@ PROJECT(SVRModel)
 
 # Include external dependencies
 SET(DEPENDENCIES SVRCommon)
-
-FOREACH(DEP ${DEPENDENCIES})
-    INCLUDE_DIRECTORIES(../${DEP}/include)
-ENDFOREACH(DEP)
+INCLUDE(../../cmake/IncludeDependencies.cmake)
 
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS date_time REQUIRED)
 

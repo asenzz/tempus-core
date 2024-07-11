@@ -449,7 +449,6 @@ void sw_transform::fill_swt_data_structure(std::vector<double> input, std::vecto
 #ifdef WAVELET_TRANSFORM_DEBUGGING
         std::cout << "Padded " << out_coercion_padding << " values to the right, to coerce the signal to be N * 2^(nLevels), ie: " << padded_data_container.size() << std::endl;
 #endif
-        n_data = padded_data_container.size();
     }
     else
     {

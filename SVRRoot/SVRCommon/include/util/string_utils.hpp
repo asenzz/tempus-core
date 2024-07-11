@@ -15,9 +15,13 @@
 
 namespace svr {
 
-static const std::string C_dd_separator{".."};
-static const std::string C_cm_separator{","};
+#define __TOSTR(X) #X
+#define TOSTR(X) __TOSTR(X)
+#define TOKENPASTE(x, y) x##y
+#define TOKENPASTE2(x, y) TOKENPASTE(x, y)
 
+constexpr char C_dd_separator[] = "..";
+constexpr char C_cm_separator[] = ",";
 
 std::ostream &operator<<(std::ostream &os, const std::vector<size_t> &v);
 
@@ -185,7 +189,7 @@ std::string to_string(const std::deque<T> &v)
     std::stringstream s;
     s.precision(std::numeric_limits<double>::max_digits10);
     for (size_t i = 0; i < v.size() - 1; ++i) s << i << ": " << v[i] << ", ";
-    s << (v.size() - 1) << ": " << v.back();
+    s << v.size() - 1 << ": " << v.back();
 
     return s.str();
 }
@@ -412,29 +416,31 @@ operator<<(std::basic_ostream<C, Ca> &s, const std::deque<T> &v)
 {
     return s << svr::common::to_string(v);
 }
-
+#if 0
 template<typename Tx, typename Ty, typename C, typename Ca> std::basic_ostream<C, Ca> &
 operator<<(std::basic_ostream<C, Ca> &s, const std::pair<Tx, Ty> &p)
 {
     return s << svr::common::to_string(p);
 }
-
-namespace detail {
-template<typename ...Ts, size_t ...Is>
-std::ostream &println_tuple_impl(std::ostream &os, const std::tuple<Ts...> &tuple, std::index_sequence<Is...>)
+#endif
+namespace {
+template<typename TupleT, std::size_t... Is>
+std::ostream &printTupleImp(std::ostream &os, const TupleT &tp, std::index_sequence<Is...>)
 {
-    static_assert(sizeof...(Is) == sizeof...(Ts), "Indices must have same number of elements as tuple types!");
-    static_assert(sizeof...(Ts) > 0, "Cannot insert empty tuple into stream.");
-    auto last = sizeof...(Ts) - 1; // assuming index sequence 0,...,N-1
-
-    return ((os << std::get<Is>(tuple) << (Is != last ? "\r\n" : "")), ...);
+    auto printElem = [&os](const auto &x, size_t id) {
+        if (id > 0)
+            os << ", ";
+        os << id << ": " << x;
+    };
+    (printElem(std::get<Is>(tp), Is), ...);
+    return os;
 }
 }
 
-template<typename ...Ts>
-std::ostream &operator<<(std::ostream &os, const std::tuple<Ts...> &tuple)
+template<typename TupleT, std::size_t TupSize = std::tuple_size<TupleT>::value>
+std::ostream &operator<<(std::ostream &os, const TupleT &tp)
 {
-    return detail::println_tuple_impl(os, tuple, std::index_sequence_for<Ts...>{});
+    return printTupleImp(os, tp, std::make_index_sequence<TupSize>{});
 }
 
 }

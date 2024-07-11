@@ -83,7 +83,7 @@ public:
 
     void set_value_columns(const std::deque<std::string> &value_columns);
 
-    const bool is_tick_queue() const;
+    bool is_tick_queue() const;
 
     bpt::time_duration const &get_missing_hours_retention() const;
 

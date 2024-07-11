@@ -1,3 +1,6 @@
+#include <ipp.h>
+#include <iterator>
+#include <limits>
 #include "common/constants.hpp"
 #include "onlinesvr.hpp"
 #include "util/math_utils.hpp"
@@ -5,8 +8,6 @@
 #include "appcontext.hpp"
 #include "DAO/DQScalingFactorDAO.hpp"
 #include "spectral_transform.hpp"
-#include <iterator>
-#include <limits>
 #include "DQScalingFactorService.hpp"
 
 #ifdef CUDA_SCALING_FACTORS
@@ -63,14 +64,16 @@ DQScalingFactorService::find(
         const size_t model_id,
         const size_t chunk,
         const size_t gradient,
+        const size_t step,
         const size_t level,
         const bool check_features,
         const bool check_labels)
 {
     const auto res = std::find_if(std::execution::par_unseq, scaling_factors.cbegin(), scaling_factors.cend(),
-                                  [&check_features, &check_labels, &model_id, &chunk, &gradient, &level](const auto &sf) {
+                                  [&check_features, &check_labels, &model_id, &chunk, &gradient, &step, &level](const auto &sf) {
                                       return (!model_id || !sf->get_model_id() || sf->get_model_id() == model_id)
                                              && level == sf->get_decon_level()
+                                             && step == sf->get_step()
                                              && gradient == sf->get_grad_depth()
                                              && chunk == sf->get_chunk_index()
                                              && (!check_labels || std::isnormal(sf->get_labels_factor()))
@@ -79,8 +82,8 @@ DQScalingFactorService::find(
                                              && (!check_features || common::isnormalz(sf->get_dc_offset_features()));
                                   });
     if (res == scaling_factors.cend()) {
-        LOG4_ERROR("Scaling factors for model " << model_id << " not found, chunk " << chunk << ", gradient " << gradient << ", level " << level << ", features "
-                                                << check_features);
+        LOG4_ERROR("Scaling factors for model " << model_id << " not found, chunk " << chunk << ", gradient " << gradient << ", step " << step << ", level " << level <<
+            ", features " << check_features);
         return nullptr;
     }
     return *res;
@@ -88,7 +91,10 @@ DQScalingFactorService::find(
 
 double DQScalingFactorService::calc_dc_offset(const arma::mat &v)
 {
-    return arma::mean(arma::vectorise(v));
+    double r;
+    ip_errchk(ippsMean_64f(v.mem, v.n_elem, &r));
+    return r;
+    // return arma::mean(arma::vectorise(v));
 }
 
 
@@ -105,46 +111,47 @@ DQScalingFactorService::calculate(const size_t chunk_ix, const datamodel::Online
     auto p_params = svr_model.get_params_ptr(chunk_ix);
     const auto dataset_id = svr_model.get_dataset() ? svr_model.get_dataset()->get_id() : 0;
     const auto labels_level = p_params->get_decon_level();
+    const auto labels_step = p_params->get_step();
     LOG4_DEBUG("Calculating scaling factors for dataset id " << dataset_id << ", model " << svr_model.get_model_id() << ", parameters " << *p_params);
 
     const auto dc_offset_labels = calc_dc_offset(labels);
     const auto labels_factor = calc_scaling_factor(labels - dc_offset_labels);
     add(res, otr<datamodel::DQScalingFactor>(
-            dataset_id, svr_model.get_model_id(), labels_level, svr_model.get_gradient_level(), chunk_ix,
+            dataset_id, svr_model.get_model_id(), labels_level, labels_step, svr_model.get_gradient_level(), chunk_ix,
             std::numeric_limits<double>::quiet_NaN(), labels_factor, std::numeric_limits<double>::quiet_NaN(), dc_offset_labels));
 
     // Features
-    OMP_LOCK(add_sf_l)
+    t_omp_lock add_sf_l;
     const auto lag = p_params->get_lag_count();
     const auto num_levels = features_t.n_rows / lag;
 #pragma omp parallel for num_threads(adj_threads(num_levels)) schedule(static, 1)
-    for (size_t i = 0; i < num_levels; ++i) {
-        const auto level_feats = features_t.rows(i * lag, (i + 1) * lag - 1);
+    for (size_t levix = 0; levix < num_levels; ++levix) {
+        const auto level_feats = features_t.rows(levix * lag, (levix + 1) * lag - 1);
         const auto dc_offset = calc_dc_offset(level_feats);
         const auto scaling_factor = calc_scaling_factor(level_feats - dc_offset);
         const auto p_sf = otr<datamodel::DQScalingFactor>(
-                dataset_id, svr_model.get_model_id(), i, svr_model.get_gradient_level(), chunk_ix, scaling_factor, std::numeric_limits<double>::quiet_NaN(), dc_offset);
-        omp_set_lock(&add_sf_l);
+                dataset_id, svr_model.get_model_id(), levix, labels_step, svr_model.get_gradient_level(), chunk_ix, scaling_factor, std::numeric_limits<double>::quiet_NaN(), dc_offset);
+        add_sf_l.set();
         add(res, p_sf);
-        omp_unset_lock(&add_sf_l);
+        add_sf_l.unset();
     }
 
     return res;
 }
 
-void DQScalingFactorService::scale_features(const size_t chunk_ix, const size_t grad_level, const size_t lag, const datamodel::dq_scaling_factor_container_t &sf,
-                                            arma::mat &features_t)
+void DQScalingFactorService::scale_features(const size_t chunk_ix, const size_t grad_level, const size_t step, const size_t lag,
+                                            const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t)
 {
     const auto num_levels = features_t.n_rows / lag;
 #pragma omp parallel for num_threads(adj_threads(num_levels)) schedule(static, 1)
-    for (size_t i = 0; i < num_levels; ++i) {
-        const auto row1 = i * lag;
-        const auto row2 = (i + 1) * lag - 1;
-        const auto p_sf = find(sf, 0, chunk_ix, grad_level, i, true, false);
+    for (size_t levix = 0; levix < num_levels; ++levix) {
+        const auto row1 = levix * lag;
+        const auto row2 = (levix + 1) * lag - 1;
+        const auto p_sf = find(sf, 0, chunk_ix, grad_level, step, levix, true, false);
         auto features_t_view = features_t.rows(row1, row2);
         features_t_view = common::scale<arma::mat>(features_t_view, p_sf->get_features_factor(), p_sf->get_dc_offset_features());
         if (features_t_view.has_nonfinite())
-            LOG4_THROW("Scaled features not sane, factors " << *p_sf << ", level " << i << ", feats " << features_t_view << ", start " << row1 << ", end " << row2 <<
+            LOG4_THROW("Scaled features not sane, factors " << *p_sf << ", level " << levix << ", feats " << features_t_view << ", start " << row1 << ", end " << row2 <<
                                                             ", lag " << lag << ", chunk " << chunk_ix << ", gradient " << grad_level);
     }
 }
@@ -152,21 +159,22 @@ void DQScalingFactorService::scale_features(const size_t chunk_ix, const size_t 
 void DQScalingFactorService::scale_features(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &features_t)
 {
     if (features_t.empty()) return;
-    const auto chunk_sf = slice(svr_model.get_scaling_factors(), chunk_ix, svr_model.get_gradient_level());
-    scale_features(chunk_ix, svr_model.get_gradient_level(), svr_model.get_params_ptr(chunk_ix)->get_lag_count(), chunk_sf, features_t);
+    const auto chunk_sf = slice(svr_model.get_scaling_factors(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_step());
+    scale_features(chunk_ix, svr_model.get_gradient_level(), svr_model.get_step(), svr_model.get_params_ptr(chunk_ix)->get_lag_count(), chunk_sf, features_t);
 }
 
 void
-DQScalingFactorService::scale_labels(const size_t chunk, const size_t gradient, const size_t level, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &labels)
+DQScalingFactorService::scale_labels(const size_t chunk, const size_t gradient, const size_t step, const size_t level, const datamodel::dq_scaling_factor_container_t &sf,
+                                     arma::mat &labels)
 {
-    const auto p_sf_labels = find(sf, 0, chunk, gradient, level, false, true);
+    const auto p_sf_labels = find(sf, 0, chunk, gradient, step, level, false, true);
     scale_labels(*p_sf_labels, labels);
 }
 
 void DQScalingFactorService::scale_labels(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &labels)
 {
     if (labels.empty()) return;
-    const auto p_sf_labels = find(svr_model.get_scaling_factors(), svr_model.get_model_id(), chunk_ix, svr_model.get_gradient_level(),
+    const auto p_sf_labels = find(svr_model.get_scaling_factors(), svr_model.get_model_id(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_step(),
                                   svr_model.get_decon_level(), false, true);
     scale_labels(*p_sf_labels, labels);
 }
@@ -215,11 +223,11 @@ bool DQScalingFactorService::match_n_set(datamodel::dq_scaling_factor_container_
 }
 
 datamodel::dq_scaling_factor_container_t
-DQScalingFactorService::slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient)
+DQScalingFactorService::slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient, const size_t step)
 {
     datamodel::dq_scaling_factor_container_t res;
-    std::copy_if(std::execution::par_unseq, sf.cbegin(), sf.cend(), std::inserter(res, res.end()), [&chunk, &gradient](const auto &p_sf) {
-        return p_sf->get_grad_depth() == gradient && p_sf->get_chunk_index() == chunk;
+    std::copy_if(std::execution::par_unseq, sf.cbegin(), sf.cend(), std::inserter(res, res.end()), [&chunk, &gradient, &step](const auto &p_sf) {
+        return p_sf->get_grad_depth() == gradient && p_sf->get_chunk_index() == chunk && p_sf->get_step() == step;
     });
     return res;
 }

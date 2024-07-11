@@ -216,8 +216,8 @@ std::vector<size_t> parse_string_range(const std::string &parameter_string)
     size_t ss{0};
 
     if (parameter_string.find(C_dd_separator) != std::string::npos) {
-        const int min{std::stoi(parameter_string, &ss)};
-        const int max{std::stoi(parameter_string.substr(ss + C_dd_separator.size()))};
+        const int min = std::stoi(parameter_string, &ss);
+        const int max = std::stoi(parameter_string.substr(ss + ARRAYLEN(C_dd_separator)));
 
         result.reserve(max - min + 1);
         for (int i = min; i <= max; ++i)
@@ -233,7 +233,7 @@ std::vector<size_t> parse_string_range(const std::string &parameter_string)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
             result.push_back(std::stoi(parameter_string.substr(ss_accumulator), &ss));
 #pragma GCC diagnostic pop
-            ss += C_cm_separator.size() + ss_accumulator;
+            ss += ARRAYLEN(C_cm_separator) + ss_accumulator;
         }
 
         return result;
@@ -252,7 +252,7 @@ parse_string_range(const std::string &parameter_string, const std::vector<std::s
 
     if (it_found != std::string::npos) {
         std::string token_first(parameter_string, 0, it_found);
-        std::string token_second(parameter_string, it_found + C_dd_separator.size());
+        std::string token_second(parameter_string, it_found + ARRAYLEN(C_dd_separator));
 
         // TODO: Check if improvement needed find here as it is linear complexity (find on small vector)
         auto it_wavelet_first = std::find(set_parameters.begin(), set_parameters.end(), token_first);

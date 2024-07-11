@@ -42,7 +42,7 @@ User::User(const bigint user_id,
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
-    LOG4_TRACE("User created: " << to_string());
+    LOG4_TRACE("User " << username << " created.");
 }
 
 

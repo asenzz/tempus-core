@@ -67,18 +67,30 @@ struct less_SVRParameters_ptr
 typedef std::set<datamodel::SVRParameters_ptr, less_SVRParameters_ptr> t_param_set;
 typedef std::shared_ptr<t_param_set> t_param_set_ptr; // TODO Convert to a new class
 
-enum class bound_type : int
-{
-    min = 0,
-    max = 1
-};
+// Default SVR parameters
+constexpr unsigned C_default_svrparam_decon_level = 0;
+constexpr unsigned C_default_svrparam_step = 0;
+constexpr unsigned C_default_svrparam_chunk_ix = 0;
+constexpr unsigned C_default_svrparam_grad_level = 0;
+constexpr double C_default_svrparam_svr_cost = 0;
+constexpr double C_default_svrparam_svr_epsilon = 0;
+constexpr double C_default_svrparam_kernel_param1 = 0;
+constexpr double C_default_svrparam_kernel_param2 = 0;
+constexpr unsigned C_default_svrparam_decrement_distance = common::C_default_kernel_max_chunk_size;
+constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
+constexpr svr::datamodel::kernel_type_e C_default_svrparam_kernel_type = svr::datamodel::kernel_type_e::PATH;
+constexpr unsigned C_default_svrparam_kernel_type_uint = unsigned(svr::datamodel::kernel_type_e::PATH);
+constexpr unsigned C_default_svrparam_lag_count = 1000;
+const unsigned C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
-typedef std::tuple<
-        std::string, /* input_queue_table_name; */
-        std::string, /* input_queue_column_name; */
-        size_t /* decon_level */,
-        size_t /* chunk ix */,
-        size_t /* grad level */> svr_parameters_index_t;
+struct t_feature_mechanics
+{
+    arma::Col<unsigned> quantization;
+    arma::vec stretches;
+    arma::uvec trims;
+
+    bool needs_tuning() const noexcept;
+};
 
 class SVRParameters : public Entity
 {
@@ -86,21 +98,23 @@ class SVRParameters : public Entity
 
     std::string input_queue_table_name; // TODO Replace with pointer to Input Queue
     std::string input_queue_column_name; // TODO Replace with pointer to Input Queue
-    size_t levels_ct = DEFAULT_SVRPARAM_DECON_LEVEL + 1;
-    size_t decon_level_ = DEFAULT_SVRPARAM_DECON_LEVEL;
-    size_t chunk_ix_ = DEFAULT_SVRPARAM_CHUNK_IX;
-    size_t grad_level_ = DEFAULT_SVRPARAM_GRAD_LEVEL;
+    size_t levels_ct = C_default_svrparam_decon_level + 1;
+    size_t decon_level_ = C_default_svrparam_decon_level;
+    size_t step_ = C_default_svrparam_step;
+    size_t chunk_ix_ = C_default_svrparam_chunk_ix;
+    size_t grad_level_ = C_default_svrparam_grad_level;
 
-    double svr_C = DEFAULT_SVRPARAM_SVR_COST;
-    double svr_epsilon = DEFAULT_SVRPARAM_SVR_EPSILON;
-    double svr_kernel_param = DEFAULT_SVRPARAM_KERNEL_PARAM_1;
-    double svr_kernel_param2 = DEFAULT_SVRPARAM_KERNEL_PARAM_2;
-    u_int64_t svr_decremental_distance = DEFAULT_SVRPARAM_DECREMENT_DISTANCE;
-    double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO;
+    double svr_C = C_default_svrparam_svr_cost;
+    double svr_epsilon = C_default_svrparam_svr_epsilon;
+    double svr_kernel_param = C_default_svrparam_kernel_param1;
+    double svr_kernel_param2 = C_default_svrparam_kernel_param2;
+    u_int64_t svr_decremental_distance = C_default_svrparam_decrement_distance;
+    double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio;
     std::set<size_t> adjacent_levels;
-    kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE;
-    size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT;
-    double feature_quantization = QUANTIZE_FIXED;
+    kernel_type_e kernel_type = C_default_svrparam_kernel_type;
+    size_t lag_count = C_default_svrparam_lag_count;
+
+    t_feature_mechanics feature_mechanics;
 
 public:
     explicit SVRParameters() : Entity(0) {}
@@ -112,17 +126,17 @@ public:
             const std::string &input_queue_column_name,
             const size_t level_ct,
             const size_t decon_level,
-            const size_t chunk_ix = DEFAULT_SVRPARAM_CHUNK_IX,
-            const size_t grad_level = DEFAULT_SVRPARAM_GRAD_LEVEL,
-            const double svr_C = DEFAULT_SVRPARAM_SVR_COST,
-            const double svr_epsilon = DEFAULT_SVRPARAM_SVR_EPSILON,
-            const double svr_kernel_param = DEFAULT_SVRPARAM_KERNEL_PARAM_1,
-            const double svr_kernel_param2 = DEFAULT_SVRPARAM_KERNEL_PARAM_2,
-            const u_int64_t svr_decremental_distance = DEFAULT_SVRPARAM_DECREMENT_DISTANCE,
-            const double svr_adjacent_levels_ratio = DEFAULT_SVRPARAM_ADJACENT_LEVELS_RATIO,
-            const kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE,
-            const size_t lag_count = DEFAULT_SVRPARAM_LAG_COUNT,
-            const double feature_quantization = QUANTIZE_FIXED,
+            const size_t step,
+            const size_t chunk_ix = C_default_svrparam_chunk_ix,
+            const size_t grad_level = C_default_svrparam_grad_level,
+            const double svr_C = C_default_svrparam_svr_cost,
+            const double svr_epsilon = C_default_svrparam_svr_epsilon,
+            const double svr_kernel_param = C_default_svrparam_kernel_param1,
+            const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
+            const u_int64_t svr_decremental_distance = C_default_svrparam_decrement_distance,
+            const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
+            const kernel_type_e kernel_type = C_default_svrparam_kernel_type,
+            const size_t lag_count = C_default_svrparam_lag_count,
             const std::set<size_t> &adjacent_levels = {});
 
     SVRParameters(const SVRParameters &o);
@@ -156,6 +170,10 @@ public:
     size_t get_decon_level() const;
 
     void set_decon_level(const size_t _decon_level);
+
+    size_t get_step() const;
+
+    void set_step(const size_t _step);
 
     size_t get_chunk_index() const;
 
@@ -208,9 +226,11 @@ public:
 
     void set_lag_count(const size_t _lag_count);
 
-    double get_feature_quantization() const;
+    t_feature_mechanics &get_feature_mechanics();
 
-    void set_feature_quantization(const double quantize);
+    t_feature_mechanics get_feature_mechanics() const;
+
+    void set_feature_mechanics(const t_feature_mechanics &f);
 
     std::string to_string() const override;
 
@@ -229,22 +249,32 @@ std::basic_ostream<T> &operator<<(std::basic_ostream<T> &os, const SVRParameters
 
 struct t_param_preds
 {
+    typedef std::array<arma::mat *, C_max_j> t_predictions, *t_predictions_ptr;
+
     double score = std::numeric_limits<double>::infinity();
     svr::datamodel::SVRParameters params{};
-    std::array<arma::mat *, C_emo_max_j> *p_predictions = nullptr;
+    t_predictions_ptr p_predictions = nullptr;
+
+    static void free_predictions(t_predictions_ptr &p_predictions_)
+    {
+        if (!p_predictions_) return;
+        for (size_t j = 0; j < C_max_j; ++j)
+            if (p_predictions_->at(j))
+                delete p_predictions_->at(j);
+        delete p_predictions_;
+        p_predictions_ = nullptr;
+    }
+
     void free()
     {
-        if (p_predictions) {
-            for (size_t j = 0; j < C_emo_max_j; ++j) delete p_predictions->at(j);
-            delete p_predictions;
-        }
+        free_predictions(p_predictions);
     }
 };
 typedef std::shared_ptr<t_param_preds> t_param_preds_ptr;
 
 struct t_parameter_predictions_set {
-    std::array<arma::mat, C_emo_max_j> labels;
-    std::array<arma::mat, C_emo_max_j> last_knowns;
+    std::array<arma::mat, C_max_j> labels;
+    std::array<arma::mat, C_max_j> last_knowns;
     std::array<t_param_preds, common::C_tune_keep_preds> param_pred;
 };
 

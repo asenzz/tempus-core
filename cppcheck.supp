@@ -1,0 +1,6 @@
+unmatchedSuppression
+preprocessorErrorDirective
+checkersReport
+missingIncludeSystem
+// unusedFunction
+*:/usr/*

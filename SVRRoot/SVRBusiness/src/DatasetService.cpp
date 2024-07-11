@@ -8,6 +8,7 @@
 #include <utility>
 #include <algorithm>
 #include <vector>
+#include "DeconQueueService.hpp"
 #include "EnsembleService.hpp"
 #include "IQScalingFactorService.hpp"
 #include "InputQueueService.hpp"
@@ -57,17 +58,17 @@ void DatasetService::load(datamodel::Dataset_ptr &p_dataset)
 {
     APP.input_queue_service.load(*p_dataset->get_input_queue());
     bpt::time_duration aux_res(boost::date_time::not_a_date_time);
-    OMP_LOCK(DatasetService_load)
+    t_omp_lock DatasetService_load;
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(p_dataset->get_aux_input_queues().size()))
     for (size_t i = 0; i < p_dataset->get_aux_input_queues().size(); ++i) {
         auto &iq = *p_dataset->get_aux_input_queue(i);
         APP.input_queue_service.load(iq);
-        omp_set_lock(&DatasetService_load);
+        DatasetService_load.set();
         if (aux_res.is_special())
             aux_res = iq.get_resolution();
         else if (aux_res != iq.get_resolution())
             LOG4_THROW("Auxiliary input queue " << iq.get_table_name() << " resolution " << iq.get_resolution() << " does not equal " << aux_res);
-        omp_unset_lock(&DatasetService_load);
+        DatasetService_load.unset();
     }
 
     if (!EnsembleService::check(p_dataset->get_ensembles(), p_dataset->get_input_queue()->get_value_columns()))
@@ -200,8 +201,8 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
 #pragma omp parallel for num_threads(adj_threads(processed_user_dataset_pairs.size())) schedule(static, 1)
     for (auto &pudp: processed_user_dataset_pairs) pudp.users.clear();
 
-    OMP_LOCK(emplace_dataset_t)
-    OMP_LOCK(emplace_user_t)
+    t_omp_lock emplace_dataset_t;
+    t_omp_lock emplace_user_t;
 #pragma omp parallel for num_threads(adj_threads(active_datasets.size())) schedule(static, 1)
     for (auto &dataset_pair: active_datasets) {
         auto iter = std::find_if(std::execution::par_unseq, processed_user_dataset_pairs.begin(), processed_user_dataset_pairs.end(),
@@ -212,13 +213,13 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
 
         if (iter == processed_user_dataset_pairs.end()) {
             load(dataset_pair.second);
-            omp_set_lock(&emplace_dataset_t);
+            emplace_dataset_t.set();
             processed_user_dataset_pairs.emplace_back(dataset_pair.second, std::deque{APP.user_service.get_user_by_user_name(dataset_pair.first)});
-            omp_unset_lock(&emplace_dataset_t);
+            emplace_dataset_t.unset();
         } else {
-            omp_set_lock(&emplace_user_t);
+            emplace_user_t.set();
             iter->users.emplace_back(APP.user_service.get_user_by_user_name(dataset_pair.first));
-            omp_unset_lock(&emplace_user_t);
+            emplace_user_t.unset();
         }
     }
 
@@ -242,41 +243,25 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
               });
 }
 
-datamodel::t_training_data DatasetService::prepare_training_data(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
-{
-    LOG4_BEGIN();
-
-    datamodel::t_training_data train_data;
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(dataset.get_transformation_levels()))
-    for (const auto &p_model: ensemble.get_models()) {
-        const auto levix = p_model->get_decon_level();
-        const auto [p_features, p_labels, p_last_knowns, times] = ModelService::get_training_data(dataset, ensemble, *p_model);
-        train_data.features[levix] = p_features;
-        train_data.labels[levix] = p_labels;
-        train_data.last_knowns[levix] = p_last_knowns;
-        if (!levix) train_data.last_row_time = times.back();
-    }
-    return train_data;
-}
-
 datamodel::t_predict_features
 DatasetService::prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &predict_times)
 {
     LOG4_BEGIN();
 
     datamodel::t_predict_features res;
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(dataset.get_transformation_levels())) ordered
-    for (size_t levix = 0; levix < dataset.get_transformation_levels(); levix += 2) {
-        const auto p_model = ensemble.get_model(levix);
-        const auto p_head_params = p_model->get_head_params();
-        const auto levels = p_head_params->get_adjacent_levels();
-        auto p_features = dataset.ccache.get_cached_features(
-                predict_times, ensemble.get_aux_decon_queues(), p_head_params->get_lag_count(), p_head_params->get_feature_quantization(), levels, dataset.get_max_lookback_time_gap(),
-                dataset.get_aux_input_queues().empty() ? dataset.get_input_queue()->get_resolution() : dataset.get_aux_input_queue()->get_resolution(),
-                dataset.get_input_queue()->get_resolution());
+#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(dataset.get_multistep() * dataset.get_transformation_levels())) ordered collapse(2)
+    for (size_t levix = 0; levix < dataset.get_transformation_levels(); levix += 2)
+        for (size_t stepix = 0; stepix < dataset.get_multistep(); ++stepix) {
+            const auto p_model = ensemble.get_model(levix, stepix);
+            auto p_features = ptr<arma::mat>();
+            ModelService::prepare_features(
+                    *p_features, predict_times, ensemble.get_aux_decon_queues(), *p_model->get_head_params(),
+                    dataset.get_max_lookback_time_gap(),
+                    dataset.get_aux_input_queues().empty() ? dataset.get_input_queue()->get_resolution() : dataset.get_aux_input_queue()->get_resolution(),
+                    dataset.get_input_queue()->get_resolution());
 #pragma omp ordered
-        res.emplace(levix, datamodel::t_level_predict_features{predict_times, p_features});
-    }
+            res.emplace(std::tuple{levix, stepix}, datamodel::t_level_predict_features{predict_times, p_features});
+        }
 
     LOG4_BEGIN();
 
@@ -289,12 +274,8 @@ void DatasetService::process(datamodel::Dataset &dataset)
     dataset.get_calc_cache().clear();
     InputQueueService::prepare_queues(dataset);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(dataset.get_ensembles().size()))
-    for (auto p_ensemble: dataset.get_ensembles()) {
-        datamodel::t_training_data ensemble_training_data;
-        PROFILE_EXEC_TIME(ensemble_training_data = prepare_training_data(dataset, *p_ensemble),
-                        "Prepare training data for ensemble " << p_ensemble->get_column_name());
-        PROFILE_EXEC_TIME(EnsembleService::train(*p_ensemble, ensemble_training_data), "Ensemble " << p_ensemble->get_column_name() << " train");
-    }
+    for (auto p_ensemble: dataset.get_ensembles())
+        PROFILE_EXEC_TIME(EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
     LOG4_END();
 }
 
@@ -363,7 +344,7 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
             LOG4_DEBUG("Saving reconstructed p_predictions from " << (**predicted_recon.cbegin()).get_value_time()
                                                                   << " until " << (**predicted_recon.crbegin()).get_value_time());
             std::for_each(std::execution::par_unseq, predicted_recon.cbegin(), predicted_recon.cend(),
-                          [&request_column, &p_request] (const auto &p_result_row) {
+                          [&request_column, &p_request](const auto &p_result_row) {
                               if (p_result_row->get_value_time() < p_request->value_time_start or p_result_row->get_value_time() > p_request->value_time_end) {
                                   LOG4_DEBUG("Skipping save response " << *p_result_row);
                                   return;

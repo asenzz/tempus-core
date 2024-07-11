@@ -94,11 +94,11 @@ std::deque<datamodel::SVRParameters_ptr> AsyncSVRParametersDAO::get_all_svrparam
 }
 
 std::deque<datamodel::SVRParameters_ptr>
-AsyncSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level)
+AsyncSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step)
 {
     pImpl.flush();
     const std::scoped_lock lg(pImpl.pgMutex);
-    std::deque<datamodel::SVRParameters_ptr> params = pImpl.pgDao.get_svrparams(dataset_id, input_queue_column_name, decon_level);
+    std::deque<datamodel::SVRParameters_ptr> params = pImpl.pgDao.get_svrparams(dataset_id, input_queue_column_name, decon_level, step);
     for (const auto &p: params) pImpl.cache_no_store(p);
     return params;
 }

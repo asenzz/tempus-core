@@ -15,7 +15,7 @@ THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsSVRParametersDAO, SVRParametersDAO)
     virtual int remove_by_dataset_id(const bigint dataset_id);
 
     virtual std::deque<datamodel::SVRParameters_ptr> get_all_svrparams_by_dataset_id(const bigint dataset_id);
-    virtual std::deque<datamodel::SVRParameters_ptr> get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level);
+    virtual std::deque<datamodel::SVRParameters_ptr> get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step);
     virtual size_t get_dataset_levels(const bigint dataset_id);
 };
 

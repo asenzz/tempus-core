@@ -29,8 +29,8 @@ cpu_thread_throttle::cpu_thread_throttle(const size_t hardware_concurrency)
 , running_threads{0}
 {
     if (!hardware_concurrency) {
-        LOG4_WARN("Hardware concurrency report zero, setting to default of " << DEFAULT_HARDWARE_CONCURRENCY);
-        this->hardware_concurrency = DEFAULT_HARDWARE_CONCURRENCY;
+        LOG4_WARN("Hardware concurrency report zero, setting to default of " << C_default_hardware_concurrency);
+        this->hardware_concurrency = C_default_hardware_concurrency;
     }
 }
 

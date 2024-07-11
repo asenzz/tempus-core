@@ -20,11 +20,24 @@
 
 #include "types.hpp"
 #include "defines.h"
+#include "util/string_utils.hpp"
 
 namespace bpt = boost::posix_time;
 
 #define dtype(T) std::decay_t<decltype(T)>
 #define release_cont(x) dtype((x)){}.swap((x));
+#define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
+
+template <typename T>
+struct return_type : return_type<decltype(&T::operator())>
+{};
+// For generic types, directly use the result of the signature of its 'operator()'
+
+template <typename ClassType, typename ReturnType, typename... Args>
+struct return_type<ReturnType(ClassType::*)(Args...) const>
+{
+    using type = ReturnType;
+};
 
 namespace boost {
 
@@ -45,6 +58,15 @@ namespace std {
 
 
 namespace svr {
+
+template <typename... T>
+constexpr auto make_array(T&&... values) ->
+        std::array<
+            typename std::decay<
+                typename std::common_type<T...>::type>::type,
+            sizeof...(T)> {
+    return {std::forward<T>(values)...};
+}
 
 template<typename T, typename Enable = void>
 struct is_smart_pointer
@@ -86,6 +108,7 @@ struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::re
 typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
 typedef std::shared_ptr<arma::mat> mat_ptr;
 typedef std::shared_ptr<arma::vec> vec_ptr;
+typedef std::shared_ptr<std::deque<bpt::ptime>> times_ptr;
 
 using mutex_ptr = std::shared_ptr<std::mutex>;
 
@@ -458,8 +481,8 @@ tovcl(const arma::Mat <T> &in, const viennacl::ocl::context &cx)
 }
 
 
-template<typename T> viennacl::matrix <T>
-tovcl(const arma::Mat <T> &in)
+template<typename T> viennacl::matrix<T>
+tovcl(const arma::Mat<T> &in)
 {
     auto hostbuf = (T *) malloc(in.n_elem * sizeof(T));
     viennacl::matrix<T> r(hostbuf, viennacl::MAIN_MEMORY, in.n_cols, in.n_rows);
@@ -473,7 +496,7 @@ toarmacol(const tbb::concurrent_vector <T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());
-    std::copy(std::execution::par_unseq, v.begin(), v.end(), r.begin());
+    std::copy(std::execution::par_unseq, v.cbegin(), v.cend(), r.begin());
     return r;
 }
 
@@ -482,7 +505,7 @@ toarmacol(const tbb::concurrent_unordered_set <T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());
-    std::copy(std::execution::par_unseq, v.begin(), v.end(), r.begin());
+    std::copy(std::execution::par_unseq, v.cbegin(), v.cend(), r.begin());
     return r;
 }
 

@@ -66,9 +66,95 @@ extern int SVR_LOG_LEVEL;
 
 #endif
 
+#define START_TIME__ TOKENPASTE2(__start_time_, __LINE__)
 #define PROFILE_EXEC_TIME(X, M_NAME)    \
 {                                       \
-    const bpt::ptime __start_time = bpt::microsec_clock::local_time(); (X);  \
-    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - __start_time) << " process memory RSS " << \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
+    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
     svr::common::memory_manager::get_process_resident_set() << " MB"); \
 }
+#define PROFILE_(X)    \
+{                                       \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
+    LOG4_INFO("Execution time of " #X " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
+    svr::common::memory_manager::get_process_resident_set() << " MB"); \
+}
+
+#include <cufft.h>
+#include <sstream>
+
+std::string cufft_get_error_string(const cufftResult s);
+
+#ifdef PRODUCTION_BUILD
+#define cf_errchk(cmd) (cmd)
+#define ma_errchk(cmd) (cmd)
+#define cu_errchk(cmd) (cmd)
+#define cb_errchk(cmd) (cmd)
+#define cs_errchk(cmd) (cmd)
+#define ip_errchk(cmd) (cmd)
+#define vs_errchk(cmd) (cmd)
+#define np_errchk(cmd) (cmd)
+#else
+
+#ifndef np_errchk
+#define np_errchk(cmd) { \
+    NppStatus __err;     \
+    if ((__err = cmd) != NPP_SUCCESS) \
+        LOG4_THROW("NVidia perfomance primitive call " #cmd " failed with error " << int(__err)); }
+#endif
+
+#ifndef vs_errchk
+#define vs_errchk(cmd) {       \
+    int __err;                 \
+    if ((__err = cmd) != VSL_STATUS_OK) \
+        LOG4_THROW("Intel VSL call " #cmd " failed with error " << __err); }
+#endif
+
+#ifndef ip_errchk
+#define ip_errchk(cmd) {               \
+    IppStatus __err;                 \
+    if ((__err = cmd) != ippStsNoErr) \
+        LOG4_THROW("Intel Performance Primitives call " #cmd " failed with error " << int(__err) << ", " << ippGetStatusString(__err)); \
+    }
+#endif
+
+#ifndef cf_errchk
+#define cf_errchk(cmd) {               \
+    cufftResult __err;                 \
+    if ((__err = cmd) != CUFFT_SUCCESS)  \
+        LOG4_THROW("CUDA FFT call " #cmd " failed with error " << int(__err) << ", " << cufft_get_error_string(__err)); \
+    }
+#endif
+
+#ifndef ma_errchk
+#define ma_errchk(cmd) {   \
+        magma_int_t __err; \
+        if ((__err = (cmd)) < MAGMA_SUCCESS) \
+            LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err)); \
+    }
+#endif
+
+#ifndef cu_errchk
+#define cu_errchk(cmd) {               \
+    cudaError_t __err = (cmd);                 \
+    if (__err != cudaSuccess && __err != cudaErrorHostMemoryAlreadyRegistered) \
+        LOG4_THROW("CUDA call " #cmd " failed with error " << int(__err) << " " << cudaGetErrorName(__err) << ", " << cudaGetErrorString(__err)); \
+    }
+#endif
+
+#ifndef cb_errchk
+#define cb_errchk(cmd) {      \
+        cublasStatus_t __err; \
+        if ((__err = (cmd)) != CUBLAS_STATUS_SUCCESS) \
+            LOG4_THROW("Cublas call " #cmd " failed with " << int(__err) << " " << cublasGetStatusName(__err) << ", " << cublasGetStatusString(__err)); \
+        }
+#endif
+
+#ifndef cs_errchk
+#define cs_errchk(cmd) {                                             \
+        cusolverStatus_t __err;                                      \
+        if ((__err = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
+            LOG4_THROW("Cusolver call " #cmd " failed with " << int(__err));  \
+}
+#endif
+#endif

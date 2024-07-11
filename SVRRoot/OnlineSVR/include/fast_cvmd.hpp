@@ -16,13 +16,13 @@
 #include "IQScalingFactorService.hpp"
 
 constexpr unsigned CVMD_INIT_LEN = 100'000; // Last N samples of the input queue used for calculating frequencies
-constexpr double TAU_FIDELITY = 1e3; // 1000 seems to yield best results
+constexpr double TAU_FIDELITY = 0; // 1e3; // 1000 seems to yield best results
 constexpr bool HAS_DC = false; // Has DC component is always false, it's removed during scaling
-constexpr double C_default_alpha_bins = 1600; // 2000 for EURUSD, 1600 for XAUUSD, Matlab examples use 50 on input length 1200 (CVMD_INIT_LEN * 50 / 1200 = 4166)
+constexpr double C_default_alpha_bins = 50; // 1600; // 2000 for EURUSD, 1600 for XAUUSD, Matlab examples use 50 on input length 1200 (CVMD_INIT_LEN * 50 / 1200 = 4166)
 constexpr unsigned MAX_VMD_ITERATIONS = 500;
 constexpr double DEFAULT_PHASE_STEP = 1; // Multiplies frequency by N, best so far 1e-1 for XAUUSD, 1/14 for EURUSD
 constexpr size_t C_freq_init_type = 1; // Type of initialization, let's use 1 for now.
-constexpr double CVMD_TOL = 5e-6; // std::numeric_limits<double>::epsilon();
+constexpr double CVMD_TOL = 1e-7;
 const auto C_arma_solver_opts = arma::solve_opts::refine + arma::solve_opts::equilibrate;
 // #define EMOS_OMEGAS
 

@@ -80,7 +80,7 @@ const std::deque<std::string> &InputQueue::get_value_columns() const
 void InputQueue::set_value_columns(const std::deque<std::string> &value_columns)
 { value_columns_ = value_columns; }
 
-const bool InputQueue::is_tick_queue() const
+bool InputQueue::is_tick_queue() const
 { return resolution_ < onesec; }
 
 bpt::time_duration const &InputQueue::get_missing_hours_retention() const

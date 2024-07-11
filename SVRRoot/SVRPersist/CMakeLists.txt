@@ -11,9 +11,7 @@ ENDIF()
 #Define project dependencies
 SET(DEPENDENCIES SVRCommon SVRModel OnlineSVR)
 
-FOREACH(DEP ${DEPENDENCIES})
-    INCLUDE_DIRECTORIES(../${DEP}/include)
-ENDFOREACH(DEP)
+INCLUDE(../../cmake/IncludeDependencies.cmake)
 
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system date_time system REQUIRED)
 FIND_PACKAGE(LibPQXX REQUIRED)

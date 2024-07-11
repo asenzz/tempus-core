@@ -18,7 +18,7 @@ public:
 
     void flush();
 
-    void addStoreBuffer(StoreBufferInterface & inst);
+    void addStoreBuffer(StoreBufferInterface & inst_);
 private:
     StoreBufferController();
     ~StoreBufferController();

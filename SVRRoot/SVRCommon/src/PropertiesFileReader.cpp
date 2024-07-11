@@ -11,13 +11,17 @@ int SVR_LOG_LEVEL;
 namespace svr {
 namespace common {
 
+const std::string PropertiesFileReader::FEATURE_QUANTIZATION = "FEATURE_QUANTIZATION";
+const std::string PropertiesFileReader::PREDICTION_OFFSET = "PREDICTION_OFFSET";
 const std::string PropertiesFileReader::TUNE_PARAMETERS = "TUNE_PARAMETERS";
+const std::string PropertiesFileReader::RECOMBINE_PARAMETERS = "RECOMBINE_PARAMETERS";
 const std::string PropertiesFileReader::SQL_PROPERTIES_DIR_KEY = "SQL_PROPERTIES_DIR";
 const std::string PropertiesFileReader::LOG_LEVEL_KEY = "LOG_LEVEL";
 const std::string PropertiesFileReader::DAO_TYPE_KEY = "DAO_TYPE";
 const std::string PropertiesFileReader::COMMENT_CHARS = "#";
 const std::string PropertiesFileReader::SET_THREAD_AFFINITY = "SET_THREAD_AFFINITY";
 const std::string PropertiesFileReader::MULTISTEP_LEN = "MULTISTEP_LEN";
+const std::string PropertiesFileReader::MULTIOUT = "MULTIOUT";
 const std::string PropertiesFileReader::ONLINE_LEARN_ITER_LIMIT = "ONLINE_LEARN_ITER_LIMIT";
 const std::string PropertiesFileReader::STABILIZE_ITERATIONS_COUNT = "STABILIZE_ITERATIONS_COUNT";
 const std::string PropertiesFileReader::ERROR_TOLERANCE = "ERROR_TOLERANCE";
@@ -89,21 +93,25 @@ PropertiesFileReader::PropertiesFileReader(const std::string& app_config_file, c
 	//__cilkrts_set_param("nworkers", "1");
 #endif
 	read_property_file(app_config_file);
-    tune_parameters_ = get_property<bool>(app_config_file, TUNE_PARAMETERS, DEFAULT_TUNE_PARAMETERS);
-	property_files_location = get_property<std::string>(app_config_file, SQL_PROPERTIES_DIR_KEY, DEFAULT_SQL_PROPERTIES_DIR_KEY);
-	set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, DEFAULT_LOG_LEVEL_KEY));
-	std::string sdao_type = get_property<std::string>(app_config_file, DAO_TYPE_KEY, DEFAULT_DAO_TYPE_KEY);
+    feature_quantization_ = get_property<size_t>(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str);
+    prediction_offset_ = get_property<double>(app_config_file, PREDICTION_OFFSET, C_default_prediction_offset_str);
+    recombine_parameters_ = get_property<bool>(app_config_file, RECOMBINE_PARAMETERS, C_default_recombine_parameters_str);
+    tune_parameters_ = get_property<bool>(app_config_file, TUNE_PARAMETERS, C_default_tune_parameters_str);
+	property_files_location = get_property<std::string>(app_config_file, SQL_PROPERTIES_DIR_KEY, C_default_sql_properties_dir);
+	set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, C_default_log_level));
+	std::string sdao_type = get_property<std::string>(app_config_file, DAO_TYPE_KEY, C_default_DAO_type);
 	if (sdao_type == "async") dao_type = ConcreteDaoType::AsyncDao;
     set_thread_affinity_ = get_property<bool>(app_config_file, SET_THREAD_AFFINITY, "0");
-    multistep_len = get_property<size_t>(app_config_file, MULTISTEP_LEN, DEFAULT_MULTISTEP_LEN);
-    online_learn_iter_limit_ = get_property<size_t>(app_config_file, ONLINE_LEARN_ITER_LIMIT, DEFAULT_ONLINE_ITER_LIMIT);
-    stabilize_iterations_count_ = get_property<size_t>(app_config_file, STABILIZE_ITERATIONS_COUNT, DEFAULT_STABILIZE_ITERATIONS_COUNT);
-    error_tolerance_ = get_property<double>(app_config_file, ERROR_TOLERANCE, DEFAULT_ERROR_TOLERANCE);
-    online_svr_log_file_ = get_property<std::string>(app_config_file, ONLINESVR_LOG_FILE, DEFAULT_ONLINESVR_LOG_FILE);
-    slide_count_ = get_property<size_t>(app_config_file, SLIDE_COUNT, DEFAULT_SLIDE_COUNT);
-	tune_run_limit_ = get_property<size_t>(app_config_file, TUNE_RUN_LIMIT, DEFAULT_TUNE_RUN_LIMIT);
-	scaling_alpha_ = get_property<double>(app_config_file, SCALING_ALPHA, DEFAULT_SCALING_ALPHA);
-    db_connection_string_ = get_property<std::string>(app_config_file, CONNECTION_STRING, DEFAULT_CONNECTION_STRING);
+    multistep_len = get_property<size_t>(app_config_file, MULTISTEP_LEN, C_default_multistep_len_str);
+    multiout = get_property<size_t>(app_config_file, MULTIOUT, C_default_multiout_str);
+    online_learn_iter_limit_ = get_property<size_t>(app_config_file, ONLINE_LEARN_ITER_LIMIT, C_default_online_iter_limit_str);
+    stabilize_iterations_count_ = get_property<size_t>(app_config_file, STABILIZE_ITERATIONS_COUNT, C_default_stabilize_iterations_count_str);
+    error_tolerance_ = get_property<double>(app_config_file, ERROR_TOLERANCE, C_default_error_tolerance_str);
+    online_svr_log_file_ = get_property<std::string>(app_config_file, ONLINESVR_LOG_FILE, C_default_onlinesvr_log_file);
+    slide_count_ = get_property<size_t>(app_config_file, SLIDE_COUNT, C_default_slide_count_str);
+	tune_run_limit_ = get_property<size_t>(app_config_file, TUNE_RUN_LIMIT, C_default_tune_run_limit_str);
+	scaling_alpha_ = get_property<double>(app_config_file, SCALING_ALPHA, C_default_scaling_alpha_str);
+    db_connection_string_ = get_property<std::string>(app_config_file, CONNECTION_STRING, C_default_connection_str);
 }
 
 ConcreteDaoType PropertiesFileReader::get_dao_type() const

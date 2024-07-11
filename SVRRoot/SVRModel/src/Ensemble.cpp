@@ -99,9 +99,9 @@ void Ensemble::set_dataset_id(const bigint dataset_id_)
     }
 }
 
-datamodel::Model_ptr Ensemble::get_model(const size_t levix) const
+datamodel::Model_ptr Ensemble::get_model(const size_t levix, const size_t stepix) const
 {
-    return business::ModelService::find(models, levix);
+    return business::ModelService::find(models, levix, stepix);
 }
 
 bigint Ensemble::get_dataset_id() const

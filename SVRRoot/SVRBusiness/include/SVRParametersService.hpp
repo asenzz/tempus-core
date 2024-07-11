@@ -33,7 +33,7 @@ public:
     int remove_by_dataset(const bigint dataset_id);
 
     std::deque<datamodel::SVRParameters_ptr> get_all_by_dataset_id(const bigint dataset_id);
-    std::deque<datamodel::SVRParameters_ptr> get_by_dataset_column_level(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level);
+    std::deque<datamodel::SVRParameters_ptr> get_by_dataset_column_level(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step);
 
     static datamodel::t_param_set slice(
             const datamodel::t_param_set &params,
@@ -43,10 +43,13 @@ public:
             const std::deque<datamodel::SVRParameters_ptr> &params,
             const size_t chunk_ix = std::numeric_limits<size_t>::max(),
             const size_t grad_ix = std::numeric_limits<size_t>::max());
-    static datamodel::SVRParameters_ptr find(
+
+    static datamodel::t_param_set::iterator find(datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix);
+    static datamodel::t_param_set::const_iterator find(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix);
+    static datamodel::SVRParameters_ptr find_ptr(
             const datamodel::t_param_set &params,
             const size_t chunk_ix = std::numeric_limits<size_t>::max(),
-            const size_t grad_level = std::numeric_limits<size_t>::max());
+            const size_t grad_ix = std::numeric_limits<size_t>::max());
 
     static bool check(const datamodel::t_param_set &params, const size_t num_chunks);
 

@@ -23,9 +23,10 @@ public:
         return ptr<datamodel::Model>(
                 row_set["id"].as<bigint>(0),
                 row_set["ensemble_id"].as<bigint>(0),
-                row_set["decon_level"].as<size_t>(DEFAULT_SVRPARAM_DECON_LEVEL),
-                PROPS.get_multistep_len(),
-                row_set["gradients"].as<size_t>(DEFAULT_SVRPARAM_GRAD_LEVEL + 1),
+                row_set["decon_level"].as<size_t>(datamodel::C_default_svrparam_decon_level),
+                row_set["step"].as<size_t>(datamodel::C_default_svrparam_step),
+                PROPS.get_multiout(),
+                row_set["gradients"].as<size_t>(datamodel::C_default_svrparam_grad_level + 1),
                 common::C_default_kernel_max_chunk_size,
                 std::deque<datamodel::OnlineMIMOSVR_ptr>{},
                 row_set["last_modified_time"].is_null() ? bpt::not_a_date_time : bpt::time_from_string(

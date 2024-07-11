@@ -7,6 +7,7 @@
 #include "common/defines.h"
 #include "optimizer.hpp"
 #include "common/compatibility.hpp"
+#include "common/constants.hpp"
 
 
 #ifndef SVR_FIREFLY_HPP
@@ -42,9 +43,9 @@ class firefly {
     const arma::vec lb;	        // upper bound
     const arma::vec ub;         // lower bound
 
-    double alpha = FFA_ALPHA;	    // alpha parameter
-    const double betamin = FFA_BETAMIN;  // beta parameter
-    const double gamma = FFA_GAMMA;	   // gamma parameter
+    double alpha = common::C_FFA_alpha;	    // alpha parameter
+    const double betamin = common::C_FFA_betamin;  // beta parameter
+    const double gamma = common::C_FFA_gamma;	   // gamma parameter
 
     double delta = 0; // delta parameter for calculating alpha_new
     arma::mat ffa;	    // firefly agents

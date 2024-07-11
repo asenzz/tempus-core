@@ -78,7 +78,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
         double mae = 0, mae_ohlc = 0, last_known_mae = 0, last_known_ohlc = 0;
         std::tie( mae, mae_ohlc, last_known_mae, last_known_ohlc) = svr::verify_results(pred_time, new_iq, new_iq_aux);
 
-        if (mae != C_bad_validation and mae_ohlc != C_bad_validation) {
+        if (mae != common::C_bad_validation and mae_ohlc != common::C_bad_validation) {
             total_mae += mae;
             total_mae_ohlc += mae_ohlc;
             total_last_known_mae += last_known_mae;
@@ -127,7 +127,7 @@ prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &
             start_predict_time,
             start_predict_time + iq->get_resolution() * FORECAST_COUNT,
             iq->get_resolution().total_seconds(),
-            "{" PRIMARY_COLUMN "}");
+            common::formatter() << "{" << common::C_test_primary_column << "}");
     APP.request_service.save(p_request);
 
     APP.flush_dao_buffers();
@@ -180,7 +180,7 @@ compare_by_value_mean_error(
         ++n_items;
     }
     if (n_items > 0) res /= double(n_items);
-    else res = C_bad_validation;
+    else res = common::C_bad_validation;
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << res << " column " << etalon_col);
     return {res, 0};
@@ -204,8 +204,8 @@ compare_by_value_mean_erroraux(
         }
 
         const auto it_label_start = lower_bound_back(etalon, forecast_time);
-        const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * OFFSET_PRED_MUL);
-        const double last_known = last_known_iter == etalon.end() ? C_bad_validation : std::prev(last_known_iter)->get()->get_value(0);
+        const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * PROPS.get_prediction_offset());
+        const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : std::prev(last_known_iter)->get()->get_value(0);
         const auto last_known_time = std::prev(last_known_iter)->get()->get_value_time();
         const auto etalon_val = 0;// TODO Port generate_twap(std::prev(it_label_start), etalon.end(), forecast_time, forecast_time + forecast_resolution, onesec, 0);
         const auto forecast_val = forecast_row->get()->get_value(0);
@@ -221,8 +221,8 @@ compare_by_value_mean_erroraux(
         mae /= double(n_items);
         last_known_mae /= double(n_items);
     } else {
-        mae = C_bad_validation;
-        last_known_mae = C_bad_validation;
+        mae = common::C_bad_validation;
+        last_known_mae = common::C_bad_validation;
     }
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << mae << " last known mean absolute error is " << last_known_mae);
@@ -258,7 +258,7 @@ compare_by_value_error_ohlc(
         LOG4_INFO("Time " << forecast_row->get()->get_value_time() << ", position " << n_items << ", error " << err << ", predicted " << forecast_val << ", etalon high " << etalon_max << ", etalon low " << etalon_min);
         ++n_items;
     }
-    if (n_items > 0) mae /= double(n_items); else mae = C_bad_validation;
+    if (n_items > 0) mae /= double(n_items); else mae = common::C_bad_validation;
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << mae);
     return {mae, 0};
@@ -293,9 +293,9 @@ compare_by_value_error_ohlcaux(
         const auto etalon_max = *std::max_element(etalon_aux_vals.begin(), etalon_aux_vals.end());
         const auto etalon_min = *std::min_element(etalon_aux_vals.begin(), etalon_aux_vals.end());
 
-        const auto last_known_time = forecast_row->get()->get_value_time() - forecast_resolution * OFFSET_PRED_MUL;
+        const auto last_known_time = forecast_row->get()->get_value_time() - forecast_resolution * PROPS.get_prediction_offset();
         const auto last_known_iter = lower_bound_back_before(etalon, etalon_iter, last_known_time);
-        const double last_known = last_known_iter == etalon.end() ? C_bad_validation : last_known_iter->get()->get_value(0);
+        const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : last_known_iter->get()->get_value(0);
 
         const auto forecast_val = forecast_row->get()->get_value(0);
         double err = 0, last_known_err = 0;
@@ -316,8 +316,8 @@ compare_by_value_error_ohlcaux(
         last_known_mae /= double(n_items);
     }
     else {
-        mae = C_bad_validation;
-        last_known_mae = C_bad_validation;
+        mae = common::C_bad_validation;
+        last_known_mae = common::C_bad_validation;
     }
 
     LOG4_DEBUG("Compared " << n_items << " values, mean absolute error is " << mae);
@@ -331,16 +331,16 @@ verify_results(
         const datamodel::InputQueue_ptr &new_iq,
         const datamodel::InputQueue_ptr &new_iq_ohlc_aux)
 {
-    const auto forecasts = get_results(forecast_start_time, new_iq, PRIMARY_COLUMN);
+    const auto forecasts = get_results(forecast_start_time, new_iq, common::C_test_primary_column);
     if (forecasts.empty()) {
         LOG4_ERROR("Forecasted data for column xauusd_avg_bid is zero!");
-        return {C_bad_validation, C_bad_validation, C_bad_validation, C_bad_validation};
+        return {common::C_bad_validation, common::C_bad_validation, common::C_bad_validation, common::C_bad_validation};
     }
     LOG4_TRACE("Forecasted data is of size " << forecasts.size());
     double mae, mae_ohlc, last_known_mae, last_known_ohlc;
     std::tie(mae, last_known_mae) = compare_by_value_mean_erroraux(forecasts, new_iq_ohlc_aux->get_data(), new_iq->get_resolution());
     std::tie(mae_ohlc, last_known_ohlc) = compare_by_value_error_ohlcaux(forecasts, new_iq_ohlc_aux->get_data(), new_iq->get_resolution());
-    LOG4_INFO("Mean absolute error to OHLC " << mae_ohlc << ", mean absolute error to average " << mae << ", last known OHLC " << last_known_ohlc << ", last known MAE " << last_known_mae << ", column " << PRIMARY_COLUMN << ", time " << forecast_start_time);
+    LOG4_INFO("Mean absolute error to OHLC " << mae_ohlc << ", mean absolute error to average " << mae << ", last known OHLC " << last_known_ohlc << ", last known MAE " << last_known_mae << ", column " << common::C_test_primary_column << ", time " << forecast_start_time);
 
     return {mae, mae_ohlc, last_known_mae, last_known_ohlc};
 }

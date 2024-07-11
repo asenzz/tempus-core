@@ -12,6 +12,7 @@ void DQScalingFactor::init_id()
 {
     if (!id) {
         boost::hash_combine(id, decon_level_);
+        boost::hash_combine(id, step_);
         boost::hash_combine(id, grad_depth_);
         boost::hash_combine(id, chunk_ix_);
         boost::hash_combine(id, model_id_);
@@ -24,6 +25,7 @@ std::string DQScalingFactor::to_string() const
     str << std::setprecision(std::numeric_limits<double>::max_digits10) << "Decon queue scaling factor ID " << id <<
         ", model ID " << model_id_ <<
         ", level " << decon_level_ <<
+        ", step " << step_ <<
         ", gradient " << grad_depth_ <<
         ", chunk " << chunk_ix_ <<
         ", labels factor " << scaling_factor_labels <<
@@ -46,6 +48,7 @@ bool DQScalingFactor::operator^=(const DQScalingFactor &o) const
 {
     return (!o.model_id_ || !model_id_ || o.model_id_ == model_id_)
            && o.decon_level_ == decon_level_
+           && o.step_ == step_
            && o.grad_depth_ == grad_depth_
            && o.chunk_ix_ == chunk_ix_;
 }
@@ -60,6 +63,9 @@ bool DQScalingFactor::operator<(const DQScalingFactor &o) const
 
     if (grad_depth_ < o.grad_depth_) return true;
     if (grad_depth_ > o.grad_depth_) return false;
+
+    if (step_ < o.step_) return true;
+    if (step_ > o.step_) return false;
 
     return decon_level_ < o.decon_level_;
 }
@@ -77,11 +83,12 @@ bool operator<(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs)
 
 DQScalingFactor::DQScalingFactor(
         const bigint id, const bigint model_id,
-        const size_t decon_level, const size_t grad_depth, const size_t chunk_index,
+        const size_t decon_level, const size_t step, const size_t grad_depth, const size_t chunk_index,
         const double scale_feat, const double scale_labels, const double dc_offset_feat, const double dc_offset_labels) :
         Entity(id),
         model_id_(model_id),
         decon_level_(decon_level),
+        step_(step),
         grad_depth_(grad_depth),
         chunk_ix_(chunk_index),
         scaling_factor_features(scale_feat),
@@ -112,6 +119,16 @@ size_t DQScalingFactor::get_decon_level() const
 void DQScalingFactor::set_decon_level(const size_t decon_level)
 {
     decon_level_ = decon_level;
+}
+
+size_t DQScalingFactor::get_step() const
+{
+    return step_;
+}
+
+void DQScalingFactor::set_step(const size_t step)
+{
+    step_ = step;
 }
 
 size_t DQScalingFactor::get_grad_depth() const

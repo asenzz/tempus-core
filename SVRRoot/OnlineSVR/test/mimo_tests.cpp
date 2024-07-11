@@ -55,7 +55,7 @@ TEST(mimo_train_predict, batch_train)
     // Throw away all data from the online_svr object, except the parameters themselves.
     svr::datamodel::OnlineMIMOSVR online_svr_(0, 0, mimo_model->get_param_set());
 
-    LOG4_DEBUG("multistep_len is " << mimo_model->get_multistep_len());
+    LOG4_DEBUG("multistep_len is " << mimo_model->get_multiout());
 
     arma::mat x_train = mimo_model->get_features();
     arma::mat y_train = mimo_model->get_labels();
@@ -89,7 +89,7 @@ TEST(mimo_train_predict, chunk_train)
     // Throw away all data from the online_svr object, except the parameters themselves.
     svr::datamodel::OnlineMIMOSVR online_svr_(0, 0, mimo_model->get_param_set());
 
-    LOG4_DEBUG("multistep_len is " << mimo_model->get_multistep_len());
+    LOG4_DEBUG("multistep_len is " << mimo_model->get_multiout());
 
     arma::mat x_train = mimo_model->get_features();
     arma::mat y_train = mimo_model->get_labels();
@@ -479,7 +479,7 @@ TEST(mimo_online_train, batch_train_forget_learn)
     LOG4_DEBUG("sizes of k are " << k.n_rows << " " << k.n_cols);
     LOG4_DEBUG("sizes of r_matrix are " << r.n_rows << " " << r.n_cols);
 
-    const double correction = 1. / (2. * mimo_model_.get_svr_parameters().get_svr_C());
+    const double correction = 1 / mimo_model_.get_svr_parameters().get_svr_C();
     LOG4_DEBUG("before forget " << error_mult(k + arma::eye(k.n_rows,k.n_cols) * correction, r));
 
     mimo_model_.forget(0, 0);
@@ -531,8 +531,8 @@ TEST(mimo_online_train, batch_train_forget_learn)
 
 
 
-    arma::mat new_i = (k_l + arma::eye(size(k_l,0),size(k_l,1))*1./(2*mimo_model_.get_svr_parameters().get_svr_C()))  * r_l;
-    arma::mat old_i = (k +  arma::eye(size(k,0),size(k,1))*1./(2*mimo_model_.get_svr_parameters().get_svr_C()))  * r;
+    arma::mat new_i = (k_l + arma::eye(size(k_l,0),size(k_l,1))*1/mimo_model_.get_svr_parameters().get_svr_C())  * r_l;
+    arma::mat old_i = (k +  arma::eye(size(k,0),size(k,1))*1./mimo_model_.get_svr_parameters().get_svr_C())  * r;
     LOG4_DEBUG("singular matrix sizes are " << new_i.n_rows << " " << new_i.n_cols);
     LOG4_DEBUG("singular values values are 0,1 5,22 54,8 " << new_i(0, 1) << " and " << old_i(0, 1) << " " << new_i(5, 23) << " and " << old_i(5, 23) << " " << new_i(54, 8) << " and " << old_i(54, 8));
     arma::mat sing(new_i.n_rows, new_i.n_cols, arma::fill::eye);
@@ -618,7 +618,7 @@ TEST(mimo_online_train, multiple_forget_learn)
     const auto final_k = mimo_model_.get_kernel_matrix();
     const auto final_r = mimo_model_.get_r_matrix();
 
-    const double correction = 1. / (2. * mimo_model_.get_param_set().get_svr_C());
+    const double correction = 1 / mimo_model_.get_param_set().get_svr_C();
 //    arma::mat test = final_k * final_r;
 //    LOG4_DEBUG("some values are " << test(0, 0) << " " << test(12, 2) << " " << test(44, 11));
     const auto error = error_mult(final_k + arma::eye(k.n_rows,k.n_cols) * correction, final_r);

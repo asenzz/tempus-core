@@ -15,8 +15,9 @@ namespace datamodel {
 class Model : public Entity
 {
     ensemble_relation ensemble;
-    size_t decon_level = DEFAULT_SVRPARAM_DECON_LEVEL; // This model's prediction level
-    size_t multiout = common::C_default_multistep_len;
+    size_t decon_level = C_default_svrparam_decon_level; // This model's prediction level
+    size_t step = C_default_svrparam_step;
+    size_t multiout = common::C_default_multiout;
     size_t gradient_ct = common::C_default_gradient_count;
     size_t max_chunk_size = common::C_default_gradient_count;
     std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
@@ -27,7 +28,7 @@ class Model : public Entity
 public:
     Model() = default;
 
-    Model(const bigint id, const bigint ensemble_id, const size_t decon_level, const size_t multiout_, const size_t gradient_ct, const size_t chunk_size,
+    Model(const bigint id, const bigint ensemble_id, const size_t decon_level, const size_t step, const size_t multiout_, const size_t gradient_ct, const size_t chunk_size,
           std::deque<OnlineMIMOSVR_ptr> svr_models = {}, const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time);
 
     OnlineMIMOSVR_ptr get_gradient(const size_t i = 0) const;
@@ -61,6 +62,10 @@ public:
     size_t get_decon_level() const;
 
     void set_decon_level(const size_t _decon_level);
+
+    size_t get_step() const;
+
+    void set_step(const size_t step);
 
     bpt::ptime const &get_last_modified() const;
 

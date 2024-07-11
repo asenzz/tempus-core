@@ -14,14 +14,14 @@ struct t_level_predict_features
     std::deque<bpt::ptime> times;
     mat_ptr p_features;
 };
-using t_predict_features = std::unordered_map<size_t /* level */, t_level_predict_features>;
+using t_predict_features = std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, t_level_predict_features>;
 
 struct t_training_data
 {
-    std::unordered_map<size_t /* level */, mat_ptr> labels;
-    std::unordered_map<size_t /* level */, mat_ptr> features;
+    std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, mat_ptr> labels;
+    std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, mat_ptr> features;
     std::unordered_map<size_t /* level */, vec_ptr> last_knowns;
-    bpt::ptime last_row_time;
+    bpt::ptime last_row_time = bpt::not_a_date_time;
 };
 
 class Ensemble : public Entity
@@ -52,7 +52,7 @@ public:
 
     std::deque<datamodel::Model_ptr> &get_models();
 
-    datamodel::Model_ptr get_model(const size_t levix = 0) const;
+    datamodel::Model_ptr get_model(const size_t levix, const size_t stepix) const;
 
     const std::deque<datamodel::Model_ptr> &get_models() const;
 

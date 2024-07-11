@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 #include "matmul.cuh"
 #include "common/cuda_util.cuh"
-
+#include "common/constants.hpp"
 
 namespace svr {
 /*
@@ -23,8 +23,8 @@ parameters:
 
 Note:
     grid and block should be configured as:
-        dim3 dimGrid((k + CUDA_TILE_WIDTH - 1) / CUDA_TILE_WIDTH, (m + CUDA_TILE_WIDTH - 1) / CUDA_TILE_WIDTH);
-        dim3 dimBlock(CUDA_TILE_WIDTH, CUDA_TILE_WIDTH);
+        dim3 dimGrid((k + common::C_cu_tile_width - 1) / common::C_cu_tile_width, (m + common::C_cu_tile_width - 1) / common::C_cu_tile_width);
+        dim3 dimBlock(common::C_cu_tile_width, common::C_cu_tile_width);
 
     further sppedup can be obtained by using shared memory to decrease global memory access times
 return: none
@@ -56,36 +56,36 @@ parameters:
 Note:
     grid and block should be configured as:
 
-        dim3 dim_grid((n - 1) / CUDA_TILE_WIDTH + 1, (n - 1) / CUDA_TILE_WIDTH + 1, 1);
-        dim3 dim_block(CUDA_TILE_WIDTH, CUDA_TILE_WIDTH, 1);
+        dim3 dim_grid((n - 1) / common::C_cu_tile_width + 1, (n - 1) / common::C_cu_tile_width + 1, 1);
+        dim3 dim_block(common::C_cu_tile_width, common::C_cu_tile_width, 1);
 
 return: none
 *********************************************************************
 */
 __global__ void gpu_square_matrix_mult(const double *__restrict__ d_a, const double *__restrict__ d_b, double *__restrict__ d_result, const unsigned n)
 {
-    __shared__ double tile_a[CUDA_TILE_WIDTH][CUDA_TILE_WIDTH];
-    __shared__ double tile_b[CUDA_TILE_WIDTH][CUDA_TILE_WIDTH];
+    __shared__ double tile_a[common::C_cu_tile_width][common::C_cu_tile_width];
+    __shared__ double tile_b[common::C_cu_tile_width][common::C_cu_tile_width];
 
-    const auto row = blockIdx.y * CUDA_TILE_WIDTH + threadIdx.y;
-    const auto col = blockIdx.x * CUDA_TILE_WIDTH + threadIdx.x;
+    const auto row = blockIdx.y * common::C_cu_tile_width + threadIdx.y;
+    const auto col = blockIdx.x * common::C_cu_tile_width + threadIdx.x;
     double tmp = 0;
     unsigned idx;
 #ifndef __GNUC__
 #pragma unroll
 #endif
     for (unsigned sub = 0; sub < gridDim.x; ++sub) {
-        idx = row * n + sub * CUDA_TILE_WIDTH + threadIdx.x;
+        idx = row * n + sub * common::C_cu_tile_width + threadIdx.x;
         tile_a[threadIdx.y][threadIdx.x] = idx >= n * n ? 0 : d_a[idx];
 
-        idx = (sub * CUDA_TILE_WIDTH + threadIdx.y) * n + col;
+        idx = (sub * common::C_cu_tile_width + threadIdx.y) * n + col;
         tile_b[threadIdx.y][threadIdx.x] = idx >= n * n ? 0 : d_b[idx];
 
         __syncthreads();
 #ifndef __GNUC__
 #pragma unroll
 #endif
-        for (unsigned k = 0; k < CUDA_TILE_WIDTH; ++k)
+        for (unsigned k = 0; k < common::C_cu_tile_width; ++k)
             tmp += tile_a[threadIdx.y][k] * tile_b[k][threadIdx.x];
 
         __syncthreads();
@@ -106,8 +106,8 @@ parameters:
             to store the result
 Note:
     grid and block should be configured as:
-        dim3 dim_grid((n - 1) / CUDA_TILE_WIDTH + 1, (n - 1) / CUDA_TILE_WIDTH + 1, 1);
-        dim3 dim_block(CUDA_TILE_WIDTH, CUDA_TILE_WIDTH, 1);
+        dim3 dim_grid((n - 1) / common::C_cu_tile_width + 1, (n - 1) / common::C_cu_tile_width + 1, 1);
+        dim3 dim_block(common::C_cu_tile_width, common::C_cu_tile_width, 1);
 
 return: none
 *********************************************************************
@@ -150,10 +150,10 @@ void cpu_matrix_mult(int *h_a, int *h_b, int *h_result, int m, int n, int k)
 
 void matmul(const double *d_a, const double *d_b, double *d_c, const unsigned m, const unsigned n, const unsigned k, const cudaStream_t &strm)
 {
-    const auto grid_rows = (m + CUDA_TILE_WIDTH - 1) / CUDA_TILE_WIDTH;
-    const auto grid_cols = (k + CUDA_TILE_WIDTH - 1) / CUDA_TILE_WIDTH;
+    const auto grid_rows = (m + common::C_cu_tile_width - 1) / common::C_cu_tile_width;
+    const auto grid_cols = (k + common::C_cu_tile_width - 1) / common::C_cu_tile_width;
     const dim3 dimGrid(grid_cols, grid_rows);
-    constexpr dim3 dimBlock(CUDA_TILE_WIDTH, CUDA_TILE_WIDTH);
+    constexpr dim3 dimBlock(common::C_cu_tile_width, common::C_cu_tile_width);
     if (m == n && n == k)
         gpu_square_matrix_mult<<<dimGrid, dimBlock>>>(d_a, d_b, d_c, n);
     else

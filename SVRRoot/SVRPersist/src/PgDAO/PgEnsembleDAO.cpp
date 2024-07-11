@@ -48,9 +48,7 @@ int PgEnsembleDAO::save(const datamodel::Ensemble_ptr &ensemble) {
     } else {
         return data_source.update(get_sql("update"),
                                   ensemble->get_dataset_id(),
-                                  ensemble->get_decon_queue() != nullptr
-                                      ? ensemble->get_decon_queue()->get_table_name()
-                                      : nullptr,
+                                  ensemble->get_decon_queue() ? ensemble->get_decon_queue()->get_table_name() : "",
                                   ensemble->get_aux_decon_table_names(),
                                   ensemble->get_id()
         );

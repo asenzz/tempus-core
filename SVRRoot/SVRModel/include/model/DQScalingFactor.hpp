@@ -4,6 +4,7 @@
 #include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
 #include "model/Entity.hpp"
 #include "util/string_utils.hpp"
+#include "SVRParameters.hpp"
 
 
 namespace svr {
@@ -25,9 +26,10 @@ class DQScalingFactor : public Entity
 private:
     bigint model_id_ = 0;  // TODO Replace with pointer to Dataset
 
-    size_t decon_level_ = DEFAULT_SVRPARAM_DECON_LEVEL;
-    size_t grad_depth_ = DEFAULT_SVRPARAM_GRAD_LEVEL;
-    size_t chunk_ix_ = DEFAULT_SVRPARAM_CHUNK_IX;
+    size_t decon_level_ = C_default_svrparam_decon_level;
+    size_t step_ = C_default_svrparam_step;
+    size_t grad_depth_ = C_default_svrparam_grad_level;
+    size_t chunk_ix_ = C_default_svrparam_chunk_ix;
 
     double scaling_factor_features = std::numeric_limits<double>::quiet_NaN();
     double scaling_factor_labels = std::numeric_limits<double>::quiet_NaN();
@@ -37,7 +39,7 @@ private:
 public:
     DQScalingFactor(
             const bigint id, const bigint model_id,
-            const size_t decon_level, const size_t grad_depth, const size_t chunk_index,
+            const size_t decon_level, const size_t step, const size_t grad_depth, const size_t chunk_index,
             const double scale_feat = std::numeric_limits<double>::quiet_NaN(),
             const double scale_labels = std::numeric_limits<double>::quiet_NaN(),
             const double dc_offset_feat = std::numeric_limits<double>::quiet_NaN(),
@@ -58,6 +60,10 @@ public:
     size_t get_decon_level() const;
 
     void set_decon_level(const size_t decon_level);
+
+    size_t get_step() const;
+
+    void set_step(const size_t step);
 
     size_t get_grad_depth() const;
 

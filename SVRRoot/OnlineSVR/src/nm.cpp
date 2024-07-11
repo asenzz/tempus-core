@@ -272,10 +272,8 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
         __omp_pfor_i (0, n, xmin[i] = p[i + ilo * n])
         ynewlo = y[ilo];
 
-        if (nm_parameters.max_iteration_number_ < icount) {
-            ifault = 2;
+        if (nm_parameters.max_iteration_number_ < icount)
             break;
-        }
 
         ifault = 0;
 

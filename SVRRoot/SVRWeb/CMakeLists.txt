@@ -8,9 +8,7 @@ LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/loc
 #Define project dependencies
 SET(DEPENDENCIES SVRBusiness SVRPersist SVRCommon SVRModel OnlineSVR)
 
-FOREACH(DEP ${DEPENDENCIES})
-    INCLUDE_DIRECTORIES(../${DEP}/include)
-ENDFOREACH(DEP)
+INCLUDE(../../cmake/IncludeDependencies.cmake)
 
 ADD_SUBDIRECTORY(template)
 

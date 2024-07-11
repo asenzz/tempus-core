@@ -89,7 +89,7 @@ int PgDeconQueueDAO::save_metadata(datamodel::DeconQueue_ptr const &p_decon_queu
         {
             LOG4_WARN("Recreating " << existing->to_string() << " with " << p_decon_queue->to_string());
             remove_decon_table_no_trx(p_decon_queue);
-            ret = update_metadata_no_trx(p_decon_queue);
+            (void) update_metadata_no_trx(p_decon_queue);
             create_decon_table_no_trx(p_decon_queue);
             ret = 100;
         } else if (existing->get_input_queue_table_name() != p_decon_queue->get_input_queue_table_name() or

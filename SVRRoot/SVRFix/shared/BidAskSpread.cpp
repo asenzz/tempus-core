@@ -18,8 +18,8 @@ bool bid_ask_spread::operator==(bid_ask_spread const & other) const
     return bid_qty == other.bid_qty
         && ask_qty == other.ask_qty
         && time == other.time
-        && fabs(bid_px - other.bid_px) < std::numeric_limits<double>::epsilon()
-        && fabs(ask_px - other.ask_px) < std::numeric_limits<double>::epsilon();
+        && std::abs(bid_px - other.bid_px) < std::numeric_limits<double>::epsilon()
+        && std::abs(ask_px - other.ask_px) < std::numeric_limits<double>::epsilon();
 }
 
 

@@ -117,7 +117,7 @@ char *shrFindFilePath(const char *filename, const char *executable_path)
             #ifdef _WIN32
             strcpy_s(file_path, path.length() + 1, path.c_str());
             #else
-            strcpy(file_path, path.c_str());
+            strlcpy(file_path, path.c_str(), path.length() + 1);
             #endif
             return file_path;
         }
