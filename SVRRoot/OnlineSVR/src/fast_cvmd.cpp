@@ -2,7 +2,7 @@
 // Created by zarko on 7/5/22.
 //
 
-#define ORIG_VMD
+// #define ORIG_VMD
 
 #ifdef ORIG_VMD
 
@@ -27,13 +27,18 @@
 namespace svr {
 namespace vmd {
 
+tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> fast_cvmd::get_vmd_frequencies() const
+{
+    return vmd_frequencies;
+}
 
-inline namespace {
+void fast_cvmd::set_vmd_frequencies(const tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> &_vmd_frequencies)
+{
+    vmd_frequencies = _vmd_frequencies;
+}
 
-auto
-compute_cos_sin(
-        const arma::vec &omega,
-        const double step = DEFAULT_PHASE_STEP)
+
+fcvmd_frequency_outputs fast_cvmd::compute_cos_sin(const arma::vec &omega, const double step)
 {
     const auto step_omega = 2. * M_PI * step * omega;
     const arma::vec phase_cos = arma::cos(step_omega);
@@ -41,24 +46,22 @@ compute_cos_sin(
     LOG4_DEBUG("Omega " << omega << ", phase cos " << phase_cos << ", phase sin " << phase_sin << ", step " << step << ", alpha bins " << C_default_alpha_bins
                         << ", tau fidelity "
                         << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL);
-    return std::tuple{phase_cos, phase_sin};
-}
-
+    return {phase_cos, phase_sin};
 }
 
 const business::t_iqscaler fast_cvmd::C_no_scaler = [](const double v) -> double { return v; };
 
-fast_cvmd::fast_cvmd(const size_t _levels) :
-        spectral_transform(std::string("cvmd"), _levels),
-        levels(_levels),
-        K(_levels / 2),
-        A(_levels),
-        H(arma::eye(_levels, _levels)),
-        even_ixs(arma::regspace<arma::uvec>(0, 2, _levels - 2)),
-        odd_ixs(arma::regspace<arma::uvec>(1, 2, _levels - 1)),
-        f(_levels),
-        row_values(_levels * 2),
-        soln(row_values.memptr() + _levels, _levels, false, true),
+fast_cvmd::fast_cvmd(const size_t levels_) :
+        spectral_transform(std::string("cvmd"), levels_),
+        levels(levels_),
+        K(levels_ / 2),
+        A(levels_),
+        H(arma::eye(levels_, levels_)),
+        even_ixs(arma::regspace<arma::uvec>(0, 2, levels_ - 2)),
+        odd_ixs(arma::regspace<arma::uvec>(1, 2, levels_ - 1)),
+        f(levels_),
+        row_values(levels_ * 2),
+        soln(row_values.memptr() + levels_, levels_, false, true),
         timenow(boost::posix_time::second_clock::local_time())
 {
     if (levels < 2 or levels % 2) LOG4_THROW("Invalid number of levels " << levels);
@@ -80,6 +83,8 @@ calc_omega(arma::vec &omega, const size_t k, const arma::vec &freqs, const arma:
     omega[k] = arma::accu(freqs.rows(T / 2, T - 1) % norm_u_hat_plus) / arma::accu(norm_u_hat_plus);
 }
 
+#if 1
+
 void
 fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name,
                       const business::t_iqscaler &scaler)
@@ -99,8 +104,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::vec omega(K);
     const size_t ratio_K = emos_omega.size() / K;
     for (size_t i = 0; i < emos_omega.size(); i += ratio_K) omega[i / ratio_K] = emos_omega[i];
-    const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
-    vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
+    vmd_frequencies.emplace(freq_key, compute_cos_sin(omega, DEFAULT_PHASE_STEP));
 #else
     //Initialize u, w, lambda, n
     const size_t save_T = input.distance();
@@ -154,13 +158,10 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::cx_vec lambda_hat(freqs.n_elem); // keeping track of the evolution of lambda_hat with the iterations
     arma::cx_mat u_hat_plus(T, K);
     arma::cx_mat u_hat_plus_old(arma::size(u_hat_plus));
-    double uDiff = CVMD_TOL + std::numeric_limits<double>::epsilon(); // tol + eps must be different from just tol, that is why eps should not be too small
+    double uDiff = CVMD_TOL + CVMD_EPS; // tol + eps must be different from just tol, that is why eps should not be too small
     arma::cx_vec sum_uk(T);
 
     size_t n_iter = 0;
-#ifndef __GNUC__
-#pragma unroll
-#endif
     while (n_iter < MAX_VMD_ITERATIONS && uDiff > CVMD_TOL) {
         //% update first mode accumulator
         sum_uk += u_hat_plus_old.col(K - 1) - u_hat_plus_old.col(0);
@@ -191,7 +192,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
         u_hat_plus_old = u_hat_plus;
     }
 
-#ifdef FAST_CVMD_POSTPROCESSING_AND_CLEANUP
+#ifdef CVMD_POSTPROCESSING_AND_CLEANUP
     //%------ Postprocessing and cleanup
     //% discard empty space if converged early - this step is not used here
     //N = min(N,n);
@@ -203,7 +204,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     u_hat.rows(T / 2, T - 1) = u_hat_plus.rows(T / 2, T - 1);
 
     // here it is not clear why, but T/2 is set both above and below. Instead, the 0 is set to conj of T-1
-#pragma omp parallel for collapse(2) num_threads(adj_threads(K * T / 2)) schedule(static, 1 + K * T / (2 * std::thread::hardware_concurrency()))
+#pragma omp parallel for collapse(2) num_threads(adj_threads(K * T / 2)) schedule(static, 1 + K * T / (2 * C_n_cpu))
     for (size_t i = 0; i < T / 2; ++i)
         for (size_t k = 0; k < K; ++k)
             u_hat(T / 2 - i, k) = std::conj(u_hat_plus(T / 2 + i, k));
@@ -215,7 +216,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     for (size_t k = 0; k < K; ++k)
         u_big.row(k) = arma::trans(arma::real(common::matlab_ifft(common::ifftshift(u_hat.col(k)))));
     u = arma::zeros(K, T / 2);
-OMP_ADJFOR(K * T / 2)
+    OMP_FOR(K * T / 2)
     for (size_t i = 0; i < T / 2; ++i)
         for (size_t k = 0; k < K; ++k)
             u(k, i) = u_big(k, T / 4 + i);
@@ -225,10 +226,11 @@ OMP_ADJFOR(K * T / 2)
 #pragma omp parallel for num_threads(adj_threads(K)) schedule(static, 1)
     for (size_t k = 0; k < K; ++k) u_hat.row(k) = common::fftshift(common::matlab_fft(u.row(k)));
 #endif
-    const auto [phase_cos, phase_sin] = compute_cos_sin(omega, DEFAULT_PHASE_STEP);
-    vmd_frequencies.emplace(freq_key, fcvmd_frequency_outputs{phase_cos, phase_sin});
+    vmd_frequencies.emplace(freq_key, compute_cos_sin(omega, DEFAULT_PHASE_STEP));
 #endif
 }
+
+#endif
 
 void
 fast_cvmd::transform(
@@ -264,7 +266,9 @@ fast_cvmd::transform(
     OMP_FOR(in_ct)
     for (ssize_t t = 0; t < in_ct; ++t) {
         const auto p_in_row = *(iterin + t - prev_decon_ct);
-        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), u.col(t).data(), u.rows());
+        const auto p_row = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), 2 * levels);
+        decon[prev_decon_ct + t] = p_row;
+        for (unsigned l = 0; l < levels; ++l) p_row->at(levels + l) = u(l, t);
     }
 
 #else
@@ -276,11 +280,10 @@ fast_cvmd::transform(
 
     // VMD
     if (!initialized(decon.get_table_name())) {
-        auto start_cvmd_init = input.begin() + std::max<ssize_t>(0, input.size() - CVMD_INIT_LEN - test_offset);
-        auto end_cvmd_init = input.end() - test_offset;
+        auto start_cvmd_init = input.cbegin() + std::max<ssize_t>(0, input.size() - CVMD_INIT_LEN - test_offset);
+        auto end_cvmd_init = input.cend() - test_offset;
         if (std::distance(start_cvmd_init, end_cvmd_init) % 2) ++start_cvmd_init; // Ensure even distance
-        PROFILE_EXEC_TIME(initialize(
-                datamodel::datarow_crange{start_cvmd_init, end_cvmd_init, input}, in_colix, decon.get_table_name(), scaler), "CVMD init");
+        PROFILE_EXEC_TIME(initialize(datamodel::datarow_crange{start_cvmd_init, end_cvmd_init, input}, in_colix, decon.get_table_name(), scaler), "CVMD init");
     }
 
     const auto found_freqs = vmd_frequencies.find({decon.get_table_name(), levels});
@@ -292,7 +295,7 @@ fast_cvmd::transform(
     if (K != phase_sin.size() || K != phase_cos.size())
         LOG4_THROW("Invalid phase cos size " << phase_cos.size() << " or phase sin size " << phase_sin.size() << ", should be " << K);
 
-    const size_t levels_size = levels * sizeof(double);
+    const auto levels_size = levels * sizeof(double);
     data_row_container::const_iterator iterin;
     if (decon.empty()) {
         iterin = input.cbegin();
@@ -310,10 +313,11 @@ fast_cvmd::transform(
     const auto in_ct = std::distance(iterin, input.cend());
     const auto prev_decon_ct = decon.size();
     decon.get_data().resize(prev_decon_ct + in_ct);
-    OMP_ADJFOR(in_ct)
+    const auto levels_2 = levels * 2;
+    OMP_FOR_(in_ct, simd firstprivate(in_ct, prev_decon_ct, levels_2))
     for (ssize_t t = 0; t < in_ct; ++t) {
         const auto p_in_row = *(iterin + t - prev_decon_ct);
-        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels * 2);
+        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels_2);
     }
 
     auto f_even = f.rows(even_ixs);
@@ -324,7 +328,7 @@ fast_cvmd::transform(
     f_even = -phase_cos % sl_even + phase_sin % sl_odd;
     f_odd = -phase_sin % sl_even - phase_cos % sl_odd;
 #define ASOLVE(M, N) arma::solve(M, (N), C_arma_solver_opts)
-#pragma omp unroll
+#pragma omp simd
     for (size_t t = prev_decon_ct; t < decon.size(); ++t) {
         soln = ASOLVE(H, -A_t * (-ASOLVE(A * ASOLVE(H, A_t), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
         memcpy(decon[t]->p(levels), soln.mem, levels_size);
@@ -332,7 +336,7 @@ fast_cvmd::transform(
         f_odd = -phase_sin % sl_even - phase_cos % sl_odd;
         ++iterin;
     }
-#endif
+#endif // ORIG_VMD
 }
 
 
@@ -356,12 +360,17 @@ fast_cvmd::inverse_transform(
 }
 
 
-size_t
-fast_cvmd::get_residuals_length(const std::string &decon_queue_table_name)
+size_t fast_cvmd::get_residuals_length(const std::string &decon_queue_table_name)
 {
     LOG4_DEBUG("Getting residuals length for " << decon_queue_table_name << " " << levels << " levels.");
     const auto vmd_freq_iter = vmd_frequencies.find({decon_queue_table_name, levels});
     return vmd_freq_iter == vmd_frequencies.end() || vmd_freq_iter->second.phase_cos.empty() ? (size_t) std::pow(levels / 2, 4) : 0;
+}
+
+size_t fast_cvmd::get_residuals_length(const unsigned levels)
+{
+    LOG4_DEBUG("Getting residuals length for " << levels << " levels.");
+    return (size_t) std::pow(levels / 2, 4);
 }
 
 }

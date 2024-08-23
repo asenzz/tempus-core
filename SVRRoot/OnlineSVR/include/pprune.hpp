@@ -5,59 +5,42 @@
 #ifndef SVR_PPRUNE_HPP
 #define SVR_PPRUNE_HPP
 
-#include <condition_variable>
-#include <deque>
-#include <memory>
 #include <armadillo>
-#include <prima/prima.h>
-
+#include "common/constants.hpp"
+#include "common/compatibility.hpp"
 
 namespace svr {
 namespace optimizer {
 
-constexpr unsigned C_elect_threshold = 10;
+constexpr unsigned C_biteopt_depth = 1;
 
 struct t_pprune_res {
     double best_score = std::numeric_limits<double>::infinity();
     arma::vec best_parameters;
-    size_t total_iterations = 0;
+    unsigned total_iterations = 0;
 };
 
-typedef std::function<void(const double x[], double *const f)> t_pprune_cost_fun, *t_pprune_cost_fun_ptr;
+typedef std::function<void(CPTR(double) x, double *const f)> t_pprune_cost_fun, *t_pprune_cost_fun_ptr;
 
-struct t_calfun_data
-{
-    bool no_elect = true;
-    std::shared_ptr<std::condition_variable> elect_ready;
-    std::shared_ptr<std::mutex> elect_mx;
-    std::shared_ptr<std::deque<t_calfun_data *>> f_score;
-    const t_pprune_cost_fun cost_fun;
-    const size_t particle_index = 0;
-    const size_t maxfun = 0;
-    double best_f = std::numeric_limits<double>::infinity();
-    size_t nf = 0;
-    bool zombie = false;
-    bool drop(const size_t keep_particles);
-};
-
+struct t_calfun_data;
 using t_calfun_data_ptr = t_calfun_data *;
 
-
 class pprune {
-    const size_t n, D;
+    const unsigned n, D;
     const arma::mat bounds;
     const arma::vec pows, ranges;
     t_pprune_res result;
 
 public:
-    pprune(const prima_algorithm_t type, const size_t n_particles, const arma::mat &bounds,
+    pprune(const unsigned algo_type, const unsigned n_particles, const arma::mat &bounds,
            const t_pprune_cost_fun &cost_f,
-           const size_t maxfun = 50,
-           const double rhobeg = std::numeric_limits<double>::quiet_NaN(),
-           const double rhoend = std::numeric_limits<double>::quiet_NaN(),
-           const arma::mat &x0_ = {}, const arma::vec &pows = {});
+           const unsigned maxfun = 50,
+           double rhobeg = 0,
+           double rhoend = 0,
+           arma::mat x0 = {}, const arma::vec &pows = {},
+           const unsigned depth = C_biteopt_depth);
 
-    static void calfun(const double x[], double *const f, t_calfun_data_ptr const calfun_data);
+    static void calfun(CPTR(double) x, double *const f, t_calfun_data_ptr const calfun_data);
 
     static arma::vec ensure_bounds(const double *x, const arma::mat &bounds);
 

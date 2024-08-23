@@ -4,9 +4,9 @@
 
 namespace svr {
 namespace datamodel {
-class MultivalRequest;
-class MultivalResponse;
-class ValueRequest;
+struct MultivalRequest;
+struct MultivalResponse;
+struct ValueRequest;
 class User;
 class Dataset;
 using MultivalRequest_ptr = std::shared_ptr<MultivalRequest>;

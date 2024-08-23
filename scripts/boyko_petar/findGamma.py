@@ -66,7 +66,7 @@ def get_numpy_x_from_svm(svm_x):
     return numpy_x;
 
 def findGamma(svm_filename, trimmed_ratio = 0, meanOrMedian = 'mean'):
-    os.chdir('/home/peters/Work/gitfolder/tempus-core/libs/libsvm-modified/python/')
+    os.chdir('/home/peters/Work/gitfolder/tempus-core/lib/libsvm-modified/python/')
     import svmutil
     y_init, x_init = svmutil.svm_read_problem(svm_filename);
     x = x_init[0:200]

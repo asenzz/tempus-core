@@ -31,11 +31,12 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 
 #include "firefly.hpp"
 #include "common/compatibility.hpp"
-#include "sobolvec.h"
+#include "sobol.hpp"
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "util/math_utils.hpp"
 #include "common/gpu_handler.tpp"
+
 #ifdef FIREFLY_CUDA
 #include "firefly.cuh"
 #endif
@@ -50,27 +51,22 @@ std::basic_ostream<char> &operator<<(std::basic_ostream<char> &s, const ffa_part
 }
 
 
-firefly::firefly(
-        const size_t D,
-        const size_t n,
-        const size_t MaxGeneration,
-        const double alpha,
-        const double betamin,
-        const double gamma,
-        const arma::vec &lb,
-        const arma::vec &ub,
-        const arma::vec &pows,
-        const loss_callback_t function) :
+firefly::firefly(const unsigned D, const unsigned n, const unsigned MaxGeneration, const double alpha, const double betamin, const double gamma, const arma::mat &bounds,
+                 const arma::vec &pows, const loss_callback_t function) :
         levy_random(common::levy(D)), D(D), n(n), MaxGeneration(MaxGeneration),
-        sobol_ctr(common::init_sobol_ctr()),
-        range(ub - lb), lb(lb), ub(ub), alpha(alpha), betamin(betamin), gamma(gamma), ffa(D, n), particles(n), best_parameters(D), function(function)
+        sobol_ctr(init_sobol_ctr()),
+        range(bounds.col(1) - bounds.col(0)), lb(bounds.col(0)), ub(bounds.col(1)), alpha(alpha), betamin(betamin), gamma(gamma), ffa(D, n), particles(n),
+        best_parameters(D), function(function)
 {
     LOG4_DEBUG(
-            "Init, particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma); // <<
+            "Init, particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha << ", betamin " << betamin << ", gamma " << gamma);
 
+#if 1
+    common::equispaced(ffa, bounds, pows);
+
+#else
     // Firefly algorithm optimization loop
     // determine the starting point of random generator
-    do_sobol_init();
 #pragma omp parallel for num_threads(adj_threads(n * D)) collapse(2)
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < D; ++j) {
@@ -82,17 +78,19 @@ firefly::firefly(
                 ffa(j, i) = std::pow(sobolnum(j, sobol_ctr + i), pows[j]);
         }
     }
-
+#endif
 #pragma omp parallel for num_threads(adj_threads(n))
     for (size_t i = 0; i < n; ++i) {
+#if 0
         ffa.col(i) = ffa.col(i) % range + lb;
+#endif
         particles[i].I = particles[i].f = 1;  // initialize attractiveness
-        if (D < 5 && i < 5) LOG4_DEBUG("Particle " << i << ", parameters " << ffa.col(i));
+        if (D < 5 && i < 5) LOG4_TRACE("Particle " << i << ", parameters " << ffa.col(i));
     }
 
     PROFILE_EXEC_TIME(
-          ffa_main(), "FFA with particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha <<
-                        ", betamin " << betamin << ", gamma " << gamma << ", final score " << best_score);
+            ffa_main(), "FFA with particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha <<
+                                              ", betamin " << betamin << ", gamma " << gamma << ", final score " << best_score);
 }
 
 // optionally recalculate the new alpha value
@@ -106,8 +104,9 @@ double firefly::alpha_new(const double old_alpha, const double NGen)
 void firefly::sort_ffa()
 {
     // initialization of indexes
-    for (size_t i = 0; i < particles.size(); ++i) particles[i].Index = i;
-    std::sort(std::execution::par_unseq, particles.begin(), particles.end(), [](const auto &lhs, const auto &rhs) { return lhs.I < rhs.I; });
+#pragma omp simd
+    for (unsigned i = 0; i < particles.size(); ++i) particles[i].Index = i;
+    std::sort(C_default_exec_policy, particles.begin(), particles.end(), [](const auto &lhs, const auto &rhs) { return lhs.I < rhs.I; });
 }
 
 // replace the old population according the new Index values
@@ -117,25 +116,7 @@ void firefly::replace_ffa()
     const arma::mat ffa_tmp = ffa;
     // generational selection in sense of EA
 #pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
-    for (size_t i = 0; i < n; ++i) ffa.col(i) = ffa_tmp.col(particles[i].Index);
-}
-
-void firefly::findlimits(const size_t k)
-{
-#ifdef FFA_HARD_WALL
-    __omp_pfor_i(0, D,
-        if (ffa[k][i] < lb[i])
-            ffa[k][i] = lb[i];
-        else if (ffa[k][i] > ub[i])
-            ffa[k][i] = ub[i];
-    )
-#else // Bounce
-#pragma omp parallel for num_threads(adj_threads(D)) schedule(static, 1)
-    for (size_t i = 0; i < D; ++i) {
-        if (ffa(i, k) < lb[i]) ffa(i, k) = lb[i] + std::fmod(lb[i] - ffa(i, k), range[i]);
-        if (ffa(i, k) > ub[i]) ffa(i, k) = ub[i] - std::fmod(ffa(i, k) - ub[i], range[i]);
-    }
-#endif
+    for (unsigned i = 0; i < n; ++i) ffa.col(i) = ffa_tmp.col(particles[i].Index);
 }
 
 // Better, adaptive Firefly algorithm as described in
@@ -147,31 +128,40 @@ void firefly::move_ffa_adaptive(const double rate)
 #else
     const auto ffa_prev = ffa;
     const auto beta0_betamin = beta0 - betamin;
-    levy_random = common::levy(D);
-#pragma omp parallel for num_threads(adj_threads(n * n)) schedule(static, 1 + n * n / std::thread::hardware_concurrency()) collapse(2)
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < n; ++j) {
-            if (i != j && particles[i].I > particles[j].I) {
-	        // brighter and more attractive
-	        const double r = arma::accu(arma::abs(ffa.col(i) - ffa_prev.col(j)));
-	        const double beta = beta0_betamin * std::exp(-gamma * r * r) + betamin;
-	        const double l = -1. + 2. * drand48();
-	        if (drand48() > rate)
-	            ffa.col(i) = ffa.col(i) * (1. - beta) + ffa_prev.col(j) * beta + alpha * std::copysign(1., (drand48() - .5)) * levy_random % range;
-	        else
-        	    ffa.col(i) = (ffa_prev.col(j) - ffa.col(i)) * beta * std::exp(l * b_1) * std::cos(2. * M_PI * -1. + 2. * drand48());
-	    }
+    const arma::vec levy_random_range = common::levy(D) % range;
+    const auto m_2_pi = -2. * M_PI;
+#pragma omp parallel num_threads(C_n_cpu)
+#pragma omp single
+    {
+#pragma omp taskloop NGRAIN(n) default(shared) mergeable
+        for (unsigned i = 0; i < n; ++i) {
+#pragma omp taskloop simd NGRAIN(n * n) firstprivate(beta0_betamin, alpha, b_1, m_2_pi) default(shared) mergeable
+            for (unsigned j = 0; j < n; ++j) {
+                if (i != j && particles[i].I > particles[j].I) {
+                    // brighter and more attractive
+                    const double r = arma::accu(arma::abs(ffa.col(i) - ffa_prev.col(j)));
+                    const double beta = beta0_betamin * std::exp(-gamma * r * r) + betamin;
+                    const double l = -1. + 2. * drand48();
+                    if (drand48() > rate)
+                        ffa.col(i) = ffa.col(i) * (1. - beta) + ffa_prev.col(j) * beta + alpha * std::copysign(1., (drand48() - .5)) * levy_random_range;
+                    else
+                        ffa.col(i) = (ffa_prev.col(j) - ffa.col(i)) * beta * std::exp(l * b_1) * std::cos(m_2_pi + 2. * drand48());
+                }
+            }
+#pragma omp taskloop simd NGRAIN(n * D) firstprivate(D) default(shared) mergeable
+            for (unsigned j = 0; j < D; ++j) {
+                if (ffa(j, i) < lb[j]) ffa(j, i) = lb[j] + std::fmod(lb[j] - ffa(j, i), range[j]);
+                if (ffa(j, i) > ub[j]) ffa(j, i) = ub[j] - std::fmod(ffa(j, i) - ub[j], range[j]);
+            }
         }
-    }
-#pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
-    for (size_t i = 0; i < n; ++i) findlimits(i);
 #endif
+    }
 }
 
 void firefly::run_iteration()
 {
 #pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
-    for (size_t i = 0; i < n; ++i)
+    for (unsigned i = 0; i < n; ++i)
         particles[i].I = particles[i].f = function(common::wrap_vector(const_cast<double *>(ffa.col(i).colmem), ffa.n_rows));
 }
 
@@ -183,7 +173,7 @@ void firefly::ffa_main()
 #ifdef DUMP
     dump_ffa(t);
 #endif
-    size_t t = 1;        // generation  counter
+    unsigned t = 1;        // generation  counter
     while (true) {
         // this line of reducing alpha is optional
         alpha = alpha_new(alpha, MaxGeneration);
@@ -217,7 +207,8 @@ void firefly::ffa_main()
             rate = 1. / (1. + std::exp(-a / b));
         }
         if (this_fbest < best_score) {
-            LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << this_fbest << ", previous best score " << best_score << ", improvement "
+            LOG4_DEBUG("Firefly iteration " << t << ", alpha " << alpha << ", new best score " << this_fbest << ", previous best score " << best_score
+                                            << ", improvement "
                                             << 100. * (1. - this_fbest / best_score) << "pc");
             best_parameters = nbest;
             best_score = this_fbest;

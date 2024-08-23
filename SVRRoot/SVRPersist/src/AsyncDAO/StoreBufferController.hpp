@@ -11,10 +11,10 @@ public:
     static void initInstance();
     static void destroyInstance();
 
-    static StoreBufferController& getInstance();
+    static StoreBufferController& get_instance();
 
-    void startPolling();
-    void stopPolling();
+    void start_polling();
+    void stop_polling();
 
     void flush();
 

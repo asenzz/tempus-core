@@ -18,15 +18,11 @@ namespace common {
 
 std::string exec(const char *cmd)
 {
-    std::array<char, 128> buffer;
+    std::array<char, BUFSIZ> buffer;
     std::string result;
     std::unique_ptr<FILE, dtype(&pclose)> pipe(popen(cmd, "r"), pclose);
-    if (!pipe) {
-        throw std::runtime_error("popen() failed!");
-    }
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-        result += buffer.data();
-    }
+    if (!pipe) LOG4_THROW("popen() failed!");
+    while (fgets(buffer.data(), buffer.size(), pipe.get())) result += buffer.data();
     return result;
 }
 
@@ -66,7 +62,7 @@ bool memory_manager::threads_available()
     // if (level_todo != "ALL") return true;
 
     const auto num_of_threads = read_threads();
-    const auto num_of_cores = std::thread::hardware_concurrency();
+    const auto num_of_cores = C_n_cpu;
     LOG4_TRACE("Number of cores " << num_of_cores << ", number of threads " << num_of_threads);
     if (num_of_cores < 1 || num_of_threads < 1)
         throw std::runtime_error("Number of cores or number of threads cannot be zero!");
@@ -77,8 +73,8 @@ bool memory_manager::threads_available()
 
 void memory_manager::check_memory()
 {
-    static const auto sleep_interval = SLEEP_INTERVAL;
-    static const size_t sleep_iterations = SLEEP_ITERATIONS;
+    constexpr auto sleep_interval = SLEEP_INTERVAL;
+    constexpr unsigned sleep_iterations = SLEEP_ITERATIONS;
     while (!finished) {
         memory_info_t mem_info;
         read_memory(mem_info);
@@ -87,12 +83,14 @@ void memory_manager::check_memory()
         const auto prev_mem_available = mem_available_;
         mem_available_ = (ram_left >= FREE_RAM_THRESHOLD) && true;//threads_available();
         if (mem_available_ != prev_mem_available) {
-            LOG4_DEBUG("Changed mem_available to " << mem_available_ << " RAM left, " << 100. * ram_left << "pc, free ram " << static_cast<double>(ram_free) / GB_RAM_UNIT_DIVIDER <<
+            LOG4_DEBUG("Changed mem_available to " << mem_available_ << ", RAM left, " << 100. * ram_left << "pc, free ram " << static_cast<double>(ram_free) / GB_RAM_UNIT_DIVIDER <<
                         " GB" << ", total ram " << static_cast<double>(mem_info.mem_total) / GB_RAM_UNIT_DIVIDER << " GB");
             cv_.notify_all();
             trigger = true;
         }
-        for (size_t i = 0; i < sleep_iterations; ++i) {
+
+        UNROLL(sleep_iterations)
+        for (unsigned i = 0; i < sleep_iterations; ++i) {
             if (finished) return;
             if (trigger) {
                 trigger = false;
@@ -204,7 +202,7 @@ read_contents(const char *fpath, const struct stat *sb, int tflag, struct FTW *f
 {
     char status_file_name[64];
     snprintf(status_file_name, sizeof(status_file_name), "%s/status", fpath);
-    if (tflag == FTW_D) parse_task_stats(&status_file_name[0]);
+    if (tflag == FTW_D) parse_task_stats(status_file_name);
     return 0;
 }
 

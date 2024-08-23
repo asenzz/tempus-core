@@ -54,14 +54,14 @@ TEST_F(DaoTestFixture, ModelWorkflow)
     aci.ensemble_service.save(ensemble);
 
     auto test_model = std::make_shared<Model>(
-            bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_multistep_len(), 1, common::C_default_kernel_max_chunk_size,
+            bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_multistep_len(), 1, common::C_default_kernel_max_chunk_len,
             std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     datamodel::Model_ptr test_model_0 = std::make_shared<Model>(
-            bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_multistep_len(), 1, common::C_default_kernel_max_chunk_size,
+            bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_multistep_len(), 1, common::C_default_kernel_max_chunk_len,
             std::deque{svr_model}, last_modified, last_modeled_value_time);
 
-    ASSERT_FALSE(aci.model_service.exists(test_model));
+    ASSERT_FALSE(aci.model_service.exists(*test_model));
 
     ASSERT_EQ(0UL, aci.model_service.get_all_models_by_ensemble_id(test_model->get_ensemble_id()).size());
 
@@ -77,7 +77,7 @@ TEST_F(DaoTestFixture, ModelWorkflow)
 
     ASSERT_NE(bigint(0), test_model_0->get_id());
 
-    ASSERT_TRUE(aci.model_service.exists(test_model));
+    ASSERT_TRUE(aci.model_service.exists(*test_model));
 
     auto models = aci.model_service.get_all_models_by_ensemble_id(ensemble->get_id());
 
@@ -90,9 +90,9 @@ TEST_F(DaoTestFixture, ModelWorkflow)
 
     ASSERT_EQ(1, aci.model_service.remove_by_ensemble_id(ensemble->get_id()));
 
-    ASSERT_FALSE(aci.model_service.exists(test_model));
+    ASSERT_FALSE(aci.model_service.exists(*test_model));
 
-    ASSERT_FALSE(aci.model_service.exists(test_model_0));
+    ASSERT_FALSE(aci.model_service.exists(*test_model_0));
 
     ASSERT_EQ(0UL, aci.model_service.get_all_models_by_ensemble_id(ensemble->get_id()).size());
 

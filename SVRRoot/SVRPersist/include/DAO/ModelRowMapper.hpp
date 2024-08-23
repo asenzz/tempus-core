@@ -27,7 +27,7 @@ public:
                 row_set["step"].as<size_t>(datamodel::C_default_svrparam_step),
                 PROPS.get_multiout(),
                 row_set["gradients"].as<size_t>(datamodel::C_default_svrparam_grad_level + 1),
-                common::C_default_kernel_max_chunk_size,
+                common::C_default_kernel_max_chunk_len,
                 std::deque<datamodel::OnlineMIMOSVR_ptr>{},
                 row_set["last_modified_time"].is_null() ? bpt::not_a_date_time : bpt::time_from_string(
                         row_set["last_modified_time"].as<std::string>("")),

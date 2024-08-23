@@ -7,6 +7,7 @@
 
 #include "util/string_utils.hpp"
 #include "common/logging.hpp"
+#include "util/math_utils.hpp"
 #include <common/constants.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
@@ -133,7 +134,7 @@ std::string demangle(const char *mangled)
 
 std::string sanitize_db_table_name(std::string where, char replace_char)
 {
-    std::transform(std::execution::par_unseq, where.begin(), where.end(), where.begin(), [replace_char](const char &c)
+    std::transform(C_default_exec_policy, where.begin(), where.end(), where.begin(), [replace_char](const char &c)
     {
         if (isalnum(c)) {
             return c;
@@ -218,11 +219,8 @@ std::vector<size_t> parse_string_range(const std::string &parameter_string)
     if (parameter_string.find(C_dd_separator) != std::string::npos) {
         const int min = std::stoi(parameter_string, &ss);
         const int max = std::stoi(parameter_string.substr(ss + ARRAYLEN(C_dd_separator)));
-
-        result.reserve(max - min + 1);
-        for (int i = min; i <= max; ++i)
-            result.push_back(i);
-
+        result.resize(max - min + 1);
+        std::iota(result.begin(), result.end(), min);
         return result;
     }
 

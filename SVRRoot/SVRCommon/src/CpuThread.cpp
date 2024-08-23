@@ -21,7 +21,7 @@ task_future::task_future(task_base_ptr const & task, future_base_ptr const &fut)
 
 
 cpu_thread_throttle::cpu_thread_throttle()
-: cpu_thread_throttle(std::thread::hardware_concurrency())
+: cpu_thread_throttle(C_n_cpu)
 {}
 
 cpu_thread_throttle::cpu_thread_throttle(const size_t hardware_concurrency)

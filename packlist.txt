@@ -10,7 +10,7 @@ config
 configure.sh
 doc
 host_config
-libs
+lib
 packlist.txt
 scripts
 venv

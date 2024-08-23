@@ -49,19 +49,19 @@ class DeconQueueService
     svr::dao::DeconQueueDAO &decon_queue_dao;
 
 public:
-    DeconQueueService(svr::dao::DeconQueueDAO &deconQueueDao);
+    DeconQueueService(svr::dao::DeconQueueDAO &decon_queue_dao);
 
     datamodel::DeconQueue_ptr get_by_table_name(const std::string &table_name);
 
     datamodel::DeconQueue_ptr get_by_table_name(const std::string &input_queue_table_name, const bigint dataset_id, const std::string &input_queue_column_name);
 
     void load_latest(
-            const datamodel::DeconQueue_ptr &p_decon_queue,
+            datamodel::DeconQueue &decon_queue,
             const bpt::ptime &time_to = bpt::max_date_time,
             const size_t limit = 0);
 
     void load(
-            const datamodel::DeconQueue_ptr &p_decon_queue,
+            datamodel::DeconQueue &decon_queue,
             const bpt::ptime &time_from = bpt::min_date_time,
             const bpt::ptime &time_to = bpt::max_date_time,
             const size_t limit = 0);
@@ -90,8 +90,8 @@ public:
 
     datamodel::DeconQueue_ptr
     deconstruct(
-            const datamodel::Dataset_ptr &p_dataset,
-            const datamodel::InputQueue_ptr &p_input_queue,
+            datamodel::Dataset &dataset,
+            const datamodel::InputQueue &input_queue,
             const std::string &column_name);
 
     static void deconstruct(

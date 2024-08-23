@@ -15,5 +15,5 @@ read -r -d '' BACKUP_FILES << EOM
 /etc/rc0.d/K01preparegpus
 EOM
 
-tar -cvf - ${BACKUP_FILES} | bzip2 -9cvf - > ../libs/env_backup.tar.bz2
+tar -cvf - ${BACKUP_FILES} | bzip2 -9cvf - > ../lib/env_backup.tar.bz2
 

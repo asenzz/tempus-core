@@ -10,7 +10,7 @@
 #include <sys/types.h>
 #include <condition_variable>
 #include <atomic>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/mutex.h>
+#include <oneapi/tbb/mutex.h>
 
 namespace svr {
 

@@ -20,4 +20,3 @@ ENDIF (ENABLE_OPENCL)
 SET(TEST_DEPENDENCIES "SVRCommon")
 
 INCLUDE("../../cmake/UnitTester.cmake")
-

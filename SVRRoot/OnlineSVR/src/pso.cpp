@@ -27,7 +27,7 @@
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
 #include "optimizer.hpp"
-#include "sobolvec.h"
+#include "sobol.hpp"
 
 namespace svr {
 namespace optimizer {
@@ -545,10 +545,6 @@ pso_solve(
     // haven't loaded state
     if (!loaded_state) {
         step = 0;
-        // SWARM INITIALIZATION
-        // for each particle
-        do_sobol_init();
-
         //TODO - Emanouil - when using MPI, it should be
         //static thread_local unsigned long Sobol_counter = (unsigned long) mpi_rank * 78786876896ULL ;
         //Using different counters for different threads is desirable, but not required.
@@ -574,7 +570,7 @@ pso_solve(
         }
     }
     if (step == 0) {
-        __omp_pfor_i(0, settings->size,
+        omp_pfor_i__(0, settings->size,
                      if (!particles_ready[i]) {
                          auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
                          fit[i] = f(vpos);
@@ -641,7 +637,7 @@ pso_solve(
             std::fill(particles_ready.begin(), particles_ready.end(), false);
 
             // Update all particles
-        __omp_pfor_i(0, settings->size,
+        omp_pfor_i__(0, settings->size,
                      if (!particles_ready[i]) {
                          // for each dimension
                          for (int d = 0; d < settings->dim; ++d) {

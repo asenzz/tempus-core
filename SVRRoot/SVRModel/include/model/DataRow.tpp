@@ -5,6 +5,9 @@
 #ifndef SVR_DATAROW_TPP
 #define SVR_DATAROW_TPP
 
+#include "util/time_utils.hpp"
+#include "common/parallelism.hpp"
+
 namespace svr {
 namespace datamodel {
 
@@ -122,6 +125,16 @@ C_range_iter container_range<C, C_range_iter, T>::end() const
 }
 
 template<typename C, typename C_range_iter, typename T>
+typename container_range<C, C_range_iter, T>::C_citer container_range<C, C_range_iter, T>::cbegin() const
+{ return begin_; }
+
+template<typename C, typename C_range_iter, typename T>
+typename container_range<C, C_range_iter, T>::C_citer container_range<C, C_range_iter, T>::cend() const
+{
+    return end_;
+}
+
+template<typename C, typename C_range_iter, typename T>
 typename container_range<C, C_range_iter, T>::C_riter container_range<C, C_range_iter, T>::rbegin() const
 {
     return end_ == container_.end() ? container_.rbegin() : std::make_reverse_iterator(end_);
@@ -213,6 +226,49 @@ size_t container_range<C, C_range_iter, T>::levels() const
 }
 
 }
+
+// [start_it, it_end)
+// [start_time, end_time)
+template<typename C> inline void
+generate_twap(
+        const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
+        const datamodel::DataRow::container::const_iterator &it_end, // At end time or after
+        const bpt::ptime &start_time, // Exact start time
+        const boost::posix_time::ptime &end_time, // Exact end time
+        const bpt::time_duration &hf_resolution, // Aux input queue resolution
+        const size_t colix, // Input column index
+        C &out) // Output vector needs to be zeroed out before submitting to this function
+{
+    assert(it_end >= start_it);
+    assert(end_time >= start_time);
+    auto valit = start_it;
+    const unsigned inlen = (end_time - start_time) / hf_resolution;
+    // arma::rowvec price_div(out.n_elem);
+    unsigned inctr = 0;
+    const auto inout_ratio = double(out.n_elem) / double(inlen);
+    auto last_price = (**start_it)[colix];
+UNROLL()
+    for (auto time_iter = start_time; time_iter < end_time; time_iter += hf_resolution) {
+        while (valit != it_end && (**valit).get_value_time() <= time_iter) {
+            last_price = (**valit)[colix];
+            ++valit;
+        }
+        // const unsigned outctr = inctr * inout_ratio;
+        out[/*outctr*/inctr * inout_ratio] += last_price;
+        // price_div[outctr] += 1;
+        ++inctr;
+    }
+    out *= inout_ratio;
+#ifndef NDEBUG
+    const unsigned dist_it = std::distance(start_it, valit);
+    if (inctr != inlen || dist_it < 1)
+        LOG4_THROW("Could not calculate TWAP for " << start_time << ", column " << colix << ", HF resolution " << hf_resolution);
+    if (dist_it != inlen) LOG4_TRACE("HF price rows " << dist_it << " different than expected " << inlen);
+    if (out.has_nonfinite()) LOG4_THROW(
+            "Out " << out << ", hf_resolution " << hf_resolution << ", inlen " << inlen << ", inout_ratio " << inout_ratio << ", inctr " << inctr);
+#endif
 }
 
-#endif //SVR_DATAROW_TPP
+}
+
+#endif // SVR_DATAROW_TPP

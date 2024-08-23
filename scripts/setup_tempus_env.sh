@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-export NICENESS=-5
+export NICENESS=0
+export CUBLAS_WORKSPACE_CONFIG=:4096:8 
+# export CUBLAS_LOGINFO_DBG=1 CUBLAS_LOGDEST_DBG=cublas.log
+# export CUBLASLT_LOG_LEVEL=5 CUBLASLT_LOG_FILE=cublasLt.log
 
 if [[ -z "${SETVARS_COMPLETED}" ]]; then
   source /opt/intel/oneapi/setvars.sh --include-intel-llvm intel64 lp64
@@ -12,11 +15,11 @@ export ASAN_OPTIONS=protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_
 # export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 
 export VGRIND=/usr/local/bin/valgrind
-
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib"
 # Debugger
 # export DBG=/usr/bin/gdb # GNU debugger for GCC builds
-export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
-# export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
+# export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
+export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
 
 # export PERF=/opt/intel/oneapi/vtune/2024.1/bin64/amplxe-perf
 export PERF=/usr/bin/perf
@@ -43,8 +46,8 @@ then
 	#exit 1
 fi
 
-if [ ! -d "../libs/oemd_fir_masks_xauusd_1s_backtest/" ]; then mkdir "../libs/oemd_fir_masks_xauusd_1s_backtest/"; fi
-if [ ! -d "../libs/oemd_fir_masks_xauusd_1s/" ]; then mkdir "../libs/oemd_fir_masks_xauusd_1s/"; fi
+if [ ! -d "../lib/oemd_fir_masks_xauusd_1s_backtest/" ]; then mkdir "../lib/oemd_fir_masks_xauusd_1s_backtest/"; fi
+if [ ! -d "../lib/oemd_fir_masks_xauusd_1s/" ]; then mkdir "../lib/oemd_fir_masks_xauusd_1s/"; fi
 
 NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Default thread pool size is ${NUM_THREADS} threads.${NC}\n\n"
@@ -58,12 +61,12 @@ export OMP_NESTED=true
 # export KMP_HW_SUBSET=2s,10c,2t # Slows down noticeably, find better values
 export OMP_WAIT_POLICY=PASSIVE                            # Sets spincount to zero
 # export OMP_SCHEDULE=dynamic,1                           # May disable nesting (bug in OMP?)
-export MAX_ACTIVE_LEVELS=$(( 100 * $NUM_THREADS ))         # Nested depth
-export OMP_THREAD_LIMIT=$(( 100 * $NUM_THREADS ))       # Increase with RAM size
+export MAX_ACTIVE_LEVELS=1000                             # Nested depth
+export OMP_THREAD_LIMIT=10000 # $(( 10 * $NUM_THREADS ))   # Increase with RAM size
 export OMP_NUM_THREADS=2 # ${NUM_THREADS}
 # export CILK_NWORKERS=${NUM_THREADS}
-export MKL_NUM_THREADS=6 # ${NUM_THREADS}
-export MAGMA_NUM_THREADS=6 # ${NUM_THREADS}
+export MKL_NUM_THREADS=4 # ${NUM_THREADS}
+export MAGMA_NUM_THREADS=4 # ${NUM_THREADS}
 export MKL_DYNAMIC="FALSE"
 # export VISIBLE_GPUS="0" # Disable GPUs
 # export CUDA_VISIBLE_DEVICES=VISIBLE_GPUS
@@ -82,6 +85,12 @@ then
   echo 1073741 > /proc/sys/kernel/pid_max
   echo 0 > /proc/sys/kernel/kptr_restrict
   echo -1 > /proc/sys/kernel/perf_event_paranoid
+  #echo 1 > /sys/bus/pci/devices/0000:82:00.0/remove
+  #echo 1 > /sys/bus/pci/devices/0000:04:00.0/remove
+  /usr/bin/nvidia-smi -pl 100
+  /usr/bin/nvidia-smi -pm 1 
+  /usr/bin/nvidia-smi -c 0
+  echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 fi
 
 

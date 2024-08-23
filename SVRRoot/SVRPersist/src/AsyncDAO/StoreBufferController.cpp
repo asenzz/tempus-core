@@ -63,18 +63,18 @@ void StoreBufferController::destroyInstance()
     delete inst;
 }
 
-StoreBufferController& StoreBufferController::getInstance()
+StoreBufferController& StoreBufferController::get_instance()
 {
     return *inst;
 }
 
-void StoreBufferController::startPolling()
+void StoreBufferController::start_polling()
 {
     pImpl.poll = true;
     pImpl.poller = new std::thread(StoreBufferController::StoreBufferControllerImpl::polling, std::ref(pImpl));
 }
 
-void StoreBufferController::stopPolling()
+void StoreBufferController::stop_polling()
 {
     pImpl.poll = false;
 

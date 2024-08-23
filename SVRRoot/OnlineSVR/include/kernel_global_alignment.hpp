@@ -459,7 +459,7 @@ kernel_global_alignment<scalar_type>::operator()(
 
     vmatrix<scalar_type> result(features.size1(), features.size1());
     LOG4_WARN("Kernel matrix computation on CPU is very slow!");
-    __omp_tpfor(ssize_t, row, 0, features_cpu.get_length_rows(),
+    omp_tpfor__(ssize_t, row, 0, features_cpu.get_length_rows(),
                 for (ssize_t row2 = 0; row2 <= row; ++row2) {
             scalar_type val = this->operator()(features_cpu[row], features_cpu[row2]);
             result.set_value(row, row2, val);
@@ -511,7 +511,7 @@ kernel_global_alignment<scalar_type>::operator()(
 
     //for stability, not critical part. will replace and test it later with vmatrix::vienna_clone().
     std::vector<double> temp_copy_vector(features_gpu.internal_size());
-    __omp_pfor_i(0, learning.get_length_rows(),
+    omp_pfor_i__(0, learning.get_length_rows(),
                  for (unsigned j = 0; j < learning.get_length_cols(); ++j)
             temp_copy_vector[i * features_gpu.internal_size2() + j] = learning.get_value(i, j);
     )
@@ -768,13 +768,10 @@ kernel_global_alignment<scalar_type>::operator()(
     err = cq_command_queue.finish();
     CL_CHECK(err);
 
-    const size_t memory_acceptable =
+    const auto memory_acceptable =
             svr::common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
-    size_t num_kernels = std::min(std::min(
-            size_t(0.5 * memory_acceptable / cl),
-            svr::common::gpu_handler_hid::get().get_max_gpu_kernels()),
-                                  size1_sqr);
-    cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
+    const auto num_kernels = std::min<size_t>(std::min<size_t>(0.5 * memory_acceptable / cl, svr::common::gpu_handler_hid::get().get_max_gpu_kernels()), size1_sqr);
+    const cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
     CL_CHECK(err);
 
     flagxxxyyy = 1;
@@ -991,10 +988,7 @@ kernel_global_alignment<scalar_type>::operator()(
 
     const size_t memory_acceptable =
             svr::common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
-    size_t num_kernels = std::min(std::min(
-            size_t(0.5 * memory_acceptable / cl),
-            svr::common::gpu_handler_hid::get().get_max_gpu_kernels()),
-                                  size1_sqr);
+    size_t num_kernels = std::min<size_t>(std::min<size_t>(0.5 * memory_acceptable / cl, svr::common::gpu_handler_hid::get().get_max_gpu_kernels()), size1_sqr);
     cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
     CL_CHECK(err);
     // put results from diagonal compute back into GPU.

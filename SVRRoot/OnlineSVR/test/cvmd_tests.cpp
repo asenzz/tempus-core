@@ -116,13 +116,18 @@ TEST_F(cvmd_transform_test, test_transform_correctness)
     }
 
     data_row_container recon(decon.size());
-#pragma omp parallel for num_threads(adj_threads(decon.size())) schedule(static, 1 + decon.size() / std::thread::hardware_concurrency())
+    double min_v = 0;
+#pragma omp parallel for num_threads(adj_threads(decon.size())) schedule(static, 1 + decon.size() / C_n_cpu)
     for (ssize_t i = 0; i < decon.size(); ++i) {
         const auto &d = *decon[i];
         double v = 0;
         for (size_t l = 0; l < DECON_LEVELS; l += 2) v += d[DECON_LEVELS + l];
         recon[i] = ptr<datamodel::DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{unscaler(v)});
+        if (v < min_v) min_v = v;
     }
+    /*if (min_v != 0)
+        for (const auto &r: recon)
+            r->at(0) -= min_v;*/
 
     double total_diff = 0;
     double highest_diff = 0;

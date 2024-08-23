@@ -2,9 +2,13 @@
 
 #include <boost/format.hpp>
 #include <boost/date_time.hpp>
+
 #define BOOST_STACKTRACE_USE_ADDR2LINE
+
 #include <boost/stacktrace.hpp>
+
 #define BOOST_LOG_DYN_LINK 1
+
 #include <boost/log/trivial.hpp>
 #include <boost/timer/timer.hpp>
 
@@ -17,7 +21,9 @@ namespace bpt = boost::posix_time;
 #define FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
 #define OUTPUT_FORMAT std::setprecision(std::numeric_limits<double>::max_digits10) << boost::format("%|_15|:%|-4| [%|-15|] %s")
-enum LOG_LEVEL_T{TRACE=1, DEBUG=2, INFO=3, WARN=4, ERR=5, FATAL=6};
+enum LOG_LEVEL_T {
+    TRACE = 1, DEBUG = 2, INFO = 3, WARN = 4, ERR = 5, FATAL = 6
+};
 extern int SVR_LOG_LEVEL;
 
 #ifdef SVR_ENABLE_DEBUGGING
@@ -135,11 +141,23 @@ std::string cufft_get_error_string(const cufftResult s);
 #endif
 
 #ifndef cu_errchk
+
+constexpr unsigned C_cu_alloc_retries = 1e2;
+
 #define cu_errchk(cmd) {               \
     cudaError_t __err = (cmd);                 \
+    if (__err == cudaErrorMemoryAllocation) {        \
+        unsigned __retries = 0;                                             \
+        while (__err == cudaErrorMemoryAllocation && __retries < C_cu_alloc_retries) {     \
+            LOG4_ERROR("CUDA call " #cmd " failed with error " << int(__err) << " " << cudaGetErrorName(__err) << ", " << cudaGetErrorString(__err) << ", retrying."); \
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));                                         \
+            __err = (cmd);                               \
+        }                                                \
+    }                                                \
     if (__err != cudaSuccess && __err != cudaErrorHostMemoryAlreadyRegistered) \
         LOG4_THROW("CUDA call " #cmd " failed with error " << int(__err) << " " << cudaGetErrorName(__err) << ", " << cudaGetErrorString(__err)); \
     }
+
 #endif
 
 #ifndef cb_errchk

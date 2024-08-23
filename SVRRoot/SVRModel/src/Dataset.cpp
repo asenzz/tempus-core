@@ -19,7 +19,7 @@ namespace datamodel {
 void Dataset::init_transform()
 {
     if (transformation_levels_ < 8) return;
-    p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(transformation_levels_ / 4, OEMD_STRETCH_COEF);
+    p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(transformation_levels_ / 4);
     p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(transformation_levels_ / 2);
 }
 
@@ -27,7 +27,7 @@ Dataset::Dataset() :
         Entity(),
         ccache(),
         gradients_(common::C_default_gradient_count),
-        max_chunk_size_(common::C_default_kernel_max_chunk_size),
+        max_chunk_size_(common::C_default_kernel_max_chunk_len),
         multistep_(common::C_default_multistep_len),
         transformation_levels_(common::C_default_level_count),
         is_active_(false)
@@ -369,7 +369,7 @@ datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &column_name)
 
 datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &table_name, const std::string &column_name)
 {
-    const auto res = std::find_if(std::execution::par_unseq, ensembles_.begin(), ensembles_.end(), [&](const auto &p_ensemble) {
+    const auto res = std::find_if(C_default_exec_policy, ensembles_.begin(), ensembles_.end(), [&](const auto &p_ensemble) {
         return p_ensemble->get_decon_queue()->get_input_queue_column_name() == column_name &&
                p_ensemble->get_decon_queue()->get_input_queue_table_name() == table_name;
     });
@@ -415,12 +415,12 @@ void Dataset::clear_data()
         p_input_queue.get_obj()->get_data().clear();
 }
 
-datamodel::DeconQueue_ptr Dataset::get_decon_queue(const datamodel::InputQueue_ptr &p_input_queue, const std::string &column_name)
+datamodel::DeconQueue_ptr Dataset::get_decon_queue(const datamodel::InputQueue &input_queue, const std::string &column_name) const
 {
-    return get_decon_queue(p_input_queue->get_table_name(), column_name);
+    return get_decon_queue(input_queue.get_table_name(), column_name);
 }
 
-datamodel::DeconQueue_ptr Dataset::get_decon_queue(const std::string &table_name, const std::string &column_name)
+datamodel::DeconQueue_ptr Dataset::get_decon_queue(const std::string &table_name, const std::string &column_name) const
 {
     for (const auto &p_ensemble: ensembles_) {
         if (p_ensemble->get_decon_queue()->get_input_queue_table_name() == table_name and p_ensemble->get_decon_queue()->get_input_queue_column_name() == column_name)
@@ -514,12 +514,10 @@ void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor
     }
 }
 
-size_t Dataset::get_max_lag_count() const
+unsigned Dataset::get_max_lag_count() const
 {
-    std::atomic<size_t> max_lag_count = 0;
-#pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
+    size_t max_lag_count = 0;
     for (const auto &e: ensembles_)
-#pragma omp parallel for num_threads(adj_threads(e->get_models().size()))
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
                 for (const auto &p: svr->get_param_set())
@@ -529,25 +527,30 @@ size_t Dataset::get_max_lag_count() const
     return max_lag_count;
 }
 
-size_t Dataset::get_max_decrement()
+unsigned Dataset::get_max_quantise() const
 {
-    if (max_decremental_distance_cache_) return max_decremental_distance_cache_;
-    max_decremental_distance_cache_ = 0;
-    t_omp_lock max_decrement_l;
-#pragma omp parallel for num_threads(adj_threads(ensembles_.size()))
+    unsigned res = 0;
     for (const auto &e: ensembles_)
-#pragma omp parallel for num_threads(adj_threads(e->get_models().size()))
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
                 for (const auto &p: svr->get_param_set())
-                    if (p) {
-                        max_decrement_l.set();
-                        max_decremental_distance_cache_ = std::max(max_decremental_distance_cache_, p->get_svr_decremental_distance());
-                        max_decrement_l.unset();
-                    }
+                    if (p && !p->get_feature_mechanics().needs_tuning()) res = std::max(res, p->get_feature_mechanics().quantization.max());
+    if (!res) res = business::ModelService::C_max_quantisation;
+    LOG4_DEBUG("Returning  " << res);
+    return res;
+}
 
-    LOG4_DEBUG("Returning non-cached value " << max_decremental_distance_cache_);
-    return max_decremental_distance_cache_;
+unsigned Dataset::get_max_decrement() const
+{
+    unsigned res = 0;
+    for (const auto &e: ensembles_)
+        for (const auto &m: e->get_models())
+            for (const auto &svr: m->get_gradients())
+                for (const auto &p: svr->get_param_set())
+                    if (p) _MAXAS(res, p->get_svr_decremental_distance());
+
+    LOG4_DEBUG("Returning  " << res);
+    return res;
 }
 
 size_t Dataset::get_max_residuals_length() const
@@ -580,9 +583,14 @@ size_t Dataset::get_max_possible_residuals_length() const
 
 size_t Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
 {
-    return std::max(
+    return std::max<size_t>(
             p_cvmd_transformer ? p_cvmd_transformer->get_residuals_length(decon_queue_table_name) : 0,
             p_oemd_transformer_fat ? p_oemd_transformer_fat->get_residuals_length(decon_queue_table_name) : 0);
+}
+
+size_t Dataset::get_residuals_length(const unsigned levels)
+{
+    return std::max<size_t>(vmd::fast_cvmd::get_residuals_length(levels / 2), oemd::online_emd::get_residuals_length());
 }
 
 bpt::ptime Dataset::get_last_modeled_time() const

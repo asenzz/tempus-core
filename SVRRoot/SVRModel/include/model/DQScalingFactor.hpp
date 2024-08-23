@@ -1,7 +1,7 @@
 #pragma once
 
 #include <execution>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_set.h>
 #include "model/Entity.hpp"
 #include "util/string_utils.hpp"
 #include "SVRParameters.hpp"

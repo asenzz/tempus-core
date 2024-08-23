@@ -22,7 +22,7 @@ TEST_F(DaoTestFixture, DeconQueueWorkflow)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>
-            (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 4, "sym7");
+            (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -102,7 +102,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     aci.input_queue_service.save(p_all_data_inputqueue_1h);
     auto p_inputq = p_all_data_inputqueue->clone_empty();
     datamodel::Dataset_ptr p_dataset = std::make_shared<svr::datamodel::Dataset>(
-            bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal, "dsDescription", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
+            bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal, "dsDescription", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
     APP.ensemble_service.init_ensembles(p_dataset);
     p_dataset->set_is_active(true);
     aci.dataset_service.save(p_dataset);
@@ -159,7 +159,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     LOG4_DEBUG("Residuals length " << residuals_length);
     APP.input_queue_service.clear(p_inputq);
     APP.input_queue_service.save(p_inputq);
-    PROFILE_EXEC_TIME(p_online_decon_queue = aci.decon_queue_service.deconstruct(p_dataset, p_inputq, "EURUSD1S"),
+    PROFILE_EXEC_TIME(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
                       "Deconstruction of single column containing " << p_inputq->size() << " rows.");
 
     ASSERT_EQ(p_online_decon_queue->size(), p_inputq->size() % 2 ? p_inputq->size() - 1 : p_inputq->size()) << "InputQueue size and deconstracted data size aren't equal";
@@ -174,7 +174,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
             row_iter != p_all_data_inputqueue->end(); ++row_iter) {
         p_inputq->get_data().push_back(*row_iter);
         if (++ctr < ONLINE_BATCH_LEN) continue;
-        PROFILE_EXEC_TIME(p_online_decon_queue = aci.decon_queue_service.deconstruct(p_dataset, p_inputq, "EURUSD1S"),
+        PROFILE_EXEC_TIME(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
                           "Deconstruction of single column containing " << (ctr == ONLINE_BATCH_LEN ? ONLINE_BATCH_LEN : 1) << " rows.");
         svr::business::EnsembleService::update_ensemble_decon_queues(p_dataset->get_ensembles(), {p_online_decon_queue});
     }
@@ -188,7 +188,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
 #endif
     APP.input_queue_service.clear(p_inputq);
     APP.input_queue_service.save(p_inputq);
-    auto p_batch_decon_queue = aci.decon_queue_service.deconstruct(p_dataset, p_inputq, "bid");
+    auto p_batch_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "bid");
     size_t row_ix = 0;
     double time_variance = 0;
     auto batch_decon_data = p_batch_decon_queue->get_data();
@@ -247,11 +247,11 @@ TEST_F(DaoTestFixture, testDeconRecon)
 
     LOG4_DEBUG("Average diff is " << avg_diff << " total diff is " << total_diff << " compared rows count " << diff_ct - residuals_length);
     ASSERT_LE(avg_diff, TEST_MAX_RECON_DIFF);
-    LOG4_DEBUG("p_undelta_online_dq->begin()->second->get_values().size() " << p_online_decon_queue->begin()->get()->get_values().size());
+    LOG4_DEBUG("p_undelta_online_dq->begin()->second->get_values().size() " << p_online_decon_queue->front()->get_values().size());
     aci.decon_queue_service.save(p_online_decon_queue);
     datamodel::DeconQueue_ptr p_deconqueue2 = aci.decon_queue_service.get_by_table_name(p_online_decon_queue->get_table_name());
 
-    aci.decon_queue_service.load(p_deconqueue2);
+    aci.decon_queue_service.load(*p_deconqueue2);
 
     ASSERT_EQ(*p_online_decon_queue, *p_deconqueue2);
 
@@ -277,7 +277,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
             "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 2, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -298,7 +298,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
 
     datamodel::DeconQueue_ptr dq1 = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
 
-    aci.decon_queue_service.load(dq1, nw - bpt::hours(1), nw + bpt::hours(1), 1000);
+    aci.decon_queue_service.load(*dq1, nw - bpt::hours(1), nw + bpt::hours(1), 1000);
 
     ASSERT_EQ(1UL, dq1->size());
 
@@ -323,7 +323,7 @@ TEST_F(DaoTestFixture, TestDQUpdates)
             bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), 2, "sym7");
+    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 2, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -346,10 +346,10 @@ TEST_F(DaoTestFixture, TestDQUpdates)
     aci.decon_queue_service.save(dq);
 
     datamodel::DeconQueue_ptr dq_test1 = aci.decon_queue_service.get_by_table_name(dq->get_table_name());
-    aci.decon_queue_service.load(dq_test1, nw, nw + bpt::seconds(61), 10);
+    aci.decon_queue_service.load(*dq_test1, nw, nw + bpt::seconds(61), 10);
 
     ASSERT_EQ(2UL, dq_test1->size());
-    ASSERT_EQ(3UL, dq_test1->begin()->get()->get_values().size());
+    ASSERT_EQ(3UL, dq_test1->front()->get_values().size());
 
     ///////////// Table should be recreated;
 
@@ -362,10 +362,10 @@ TEST_F(DaoTestFixture, TestDQUpdates)
     aci.decon_queue_service.save(dq);
 
     datamodel::DeconQueue_ptr dq_test2 = aci.decon_queue_service.get_by_table_name(dq->get_table_name());
-    aci.decon_queue_service.load(dq_test2, nw, nw + bpt::seconds(2 * 60 + 1), 10);
+    aci.decon_queue_service.load(*dq_test2, nw, nw + bpt::seconds(2 * 60 + 1), 10);
 
     ASSERT_EQ(3UL, dq_test2->size());
-    ASSERT_EQ(3UL, dq_test2->begin()->get()->get_values().size() );
+    ASSERT_EQ(3UL, dq_test2->front()->get_values().size() );
 
     aci.dataset_service.remove(ds);
 

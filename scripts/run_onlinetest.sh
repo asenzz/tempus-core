@@ -10,11 +10,11 @@ rm -f /dev/shm/sem.svrwave_gpu_sem
 
 if [[ $1 == "-d" ]]; then # Debug
   echo "TBB does exception testing on start, ignore the first exception!"
-	${DBG} --ex 'catch throw' --ex run --directory=${PWD}/../ --se ./${BIN} --args ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"
+	${DBG} --ex 'catch throw' --ex run --directory=${PWD}/../SVRRoot --se ./${BIN} --args ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"
 elif [[ $1 == "-v" ]]; then # Valgrind
   export SVRWAVE_TEST_WINDOW=1
-  # ${VGRIND} --max-threads=100000 --track-origins=yes --error-limit=no --log-file=./${BIN}.valgrind.log --leak-check=full --tool=memcheck --expensive-definedness-checks=yes --show-leak-kinds=definite --vgdb=full --vgdb-error=1 --max-stackframe=115062830400 ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}" # Enable to start GDB server on first error: --vgdb=full --vgdb-error=1
-  /usr/local/cuda/bin/compute-sanitizer --log-file=/tmp/${BIN}.compute-sanitizer.log --check-device-heap=yes --demangle=full --force-blocking-launches --check-warpgroup-mma=yes --tool=memcheck --check-cache-control --require-cuda-init=no --leak-check=full --track-unused-memory --check-api-memory-access=yes --missing-barrier-init-is-fatal=yes ./${BIN} --gtest_filter="$2"
+  ${VGRIND} --max-threads=100000 --track-origins=yes --error-limit=no --log-file=./${BIN}.valgrind.log --leak-check=full --tool=memcheck --expensive-definedness-checks=yes --show-leak-kinds=definite --vgdb=full --vgdb-error=1 --max-stackframe=115062830400 ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}" # Enable to start GDB server on first error: --vgdb=full --vgdb-error=1
+  # /usr/local/cuda/bin/compute-sanitizer --max-connections=1000 --target-processes=all --log-file=/tmp/${BIN}.compute-sanitizer.log --check-device-heap=yes --demangle=full --port=16000 --tool=memcheck --require-cuda-init=no --leak-check=full --check-api-memory-access=yes --missing-barrier-init-is-fatal=yes ./${BIN} --gtest_filter="$2" --launch-timeout=0 # --track-unused-memory --force-blocking-launches --check-warpgroup-mma=yes --check-cache-control
 elif [[ $1 == "-p" ]]; then # Profile CPU
   PERF_DATA=${BIN}.perf.data
   ${PERF} record -b -e BR_INST_RETIRED.NEAR_TAKEN:uppp,BR_MISP_RETIRED.ALL_BRANCHES:upp -c 1000003 -o $PERF_DATA -- ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"

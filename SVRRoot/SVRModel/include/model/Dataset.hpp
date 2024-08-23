@@ -38,8 +38,6 @@ class Dataset : public Entity
     void init_transform();
 
     bool initialized = false;
-    size_t max_decremental_distance_cache_ = 0;
-
 
     std::string dataset_name_; // Dataset name
     std::string user_name_; // Owner of the dataset
@@ -48,7 +46,7 @@ class Dataset : public Entity
     Priority priority_ = Priority::Normal;
     std::string description_; // Textual description of the dataset
     size_t gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
-    size_t max_chunk_size_ = common::C_default_kernel_max_chunk_size; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
+    size_t max_chunk_size_ = common::C_default_kernel_max_chunk_len; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
     size_t multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<svr::oemd::online_emd> p_oemd_transformer_fat;
@@ -77,7 +75,7 @@ public:
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
             const size_t gradients = common::C_default_gradient_count,
-            const size_t chunk_size = common::C_default_kernel_max_chunk_size,
+            const size_t chunk_size = common::C_default_kernel_max_chunk_len,
             const size_t multiout = common::C_default_multistep_len,
             const size_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
@@ -95,7 +93,7 @@ public:
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
             const size_t gradients = common::C_default_gradient_count,
-            const size_t chunk_size = common::C_default_kernel_max_chunk_size,
+            const size_t chunk_size = common::C_default_kernel_max_chunk_len,
             const size_t multiout = common::C_default_multistep_len,
             const size_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
@@ -184,9 +182,9 @@ public:
 
     void set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensembles, const bool overwrite);
 
-    datamodel::DeconQueue_ptr get_decon_queue(const datamodel::InputQueue_ptr &p_input_queue, const std::string &column_name);
+    datamodel::DeconQueue_ptr get_decon_queue(const datamodel::InputQueue &input_queue, const std::string &column_name) const;
 
-    datamodel::DeconQueue_ptr get_decon_queue(const std::string &table_name, const std::string &column_name);
+    datamodel::DeconQueue_ptr get_decon_queue(const std::string &table_name, const std::string &column_name) const;
 
     std::unordered_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr> get_decon_queues() const;
 
@@ -212,11 +210,13 @@ public:
 
     std::deque<std::string> get_aux_input_table_names() const;
 
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 
-    size_t get_max_lag_count() const;
+    unsigned get_max_lag_count() const;
 
-    size_t get_max_decrement();
+    unsigned get_max_decrement() const;
+
+    unsigned get_max_quantise() const;
 
     size_t get_max_residuals_length() const;
 
@@ -224,11 +224,13 @@ public:
 
     size_t get_residuals_length(const std::string &decon_queue_table_name = {}) const;
 
+    static size_t get_residuals_length(const unsigned levels);
+
     bpt::ptime get_last_modeled_time() const;
 
     business::calc_cache &get_calc_cache();
 
-    virtual void init_id() override;
+    void init_id() override;
 };
 
 template<typename T>

@@ -13,27 +13,16 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include "wavelet_coefs.hpp"
 
 namespace svr {
 
-static const std::deque<std::string> transformation_names {
-        // 0 - 14
-        "db1", "db2", "db3", "db4", "db5", "db6", "db7", "db8", "db9", "db10", "db11", "db12", "db13", "db14", "db15",
-        // 15 - 29
-        "bior1.1", "bior1.3", "bior1.5", "bior2.2", "bior2.4", "bior2.6", "bior2.8",
-        "bior3.1", "bior3.3", "bior3.5", "bior3.7", "bior3.9", "bior4.4", "bior5.5", "bior6.8",
-        // 30 - 34
-        "coif1", "coif2", "coif3", "coif4", "coif5",
-        // 35 - 44
-        "sym1", "sym2", "sym3", "sym4", "sym5", "sym6", "sym7", "sym8", "sym9", "sym10",
-        // 45 - 55
-        "sym11", "sym12", "sym13", "sym14", "sym15", "sym16", "sym17", "sym18", "sym19", "sym20",
-        "stft", "oemd", "cvmd"
-};
-
-
 class spectral_transform {
-
+protected:
+    std::string transformation_name_;
+    size_t wavelet_order_;
+    size_t levels_;
+    size_t filter_order_;
 
 public:
     static size_t modwt_levels_to_frame_length(const size_t modwt_levels, const size_t wavelet_order);
@@ -66,21 +55,6 @@ public:
     // TODO: extract wavelet-specific symbols to the corresponding class.
     class wavelet
     {
-    public:
-        explicit wavelet(std::string name);
-        ~wavelet();
-
-        inline size_t rec_len() const { return rec_len_; };
-        inline size_t dec_len() const { return dec_len_; };
-        inline double* dec_hi_double() const { return dec_hi_double_; };
-        inline double* dec_lo_double() const { return dec_lo_double_; };
-        inline double* rec_hi_double() const { return rec_hi_double_; };
-        inline double* rec_lo_double() const { return rec_lo_double_; };
-        std::string name() const { return name_; };
-        size_t order() const { return order_; };
-        void print() const;
-
-
     protected:
         std::string name_;
         size_t order_;
@@ -96,17 +70,21 @@ public:
 
         static wavelet blank_discrete_wavelet(int filters_length);
         wavelet() { };
+
+    public:
+        explicit wavelet(std::string name);
+        ~wavelet();
+
+        inline size_t rec_len() const { return rec_len_; };
+        inline size_t dec_len() const { return dec_len_; };
+        inline double* dec_hi_double() const { return dec_hi_double_; };
+        inline double* dec_lo_double() const { return dec_lo_double_; };
+        inline double* rec_hi_double() const { return rec_hi_double_; };
+        inline double* rec_lo_double() const { return rec_lo_double_; };
+        std::string name() const { return name_; };
+        size_t order() const { return order_; };
+        void print() const;
     };
-
-protected:
-
-    std::string transformation_name_;
-    size_t wavelet_order_;
-    size_t levels_;
-    size_t filter_order_;
-
 };
 
 }
-
-

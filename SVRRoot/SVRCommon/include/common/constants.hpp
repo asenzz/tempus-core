@@ -1,36 +1,33 @@
 #pragma once
 
-#include <boost/date_time/posix_time/posix_time_config.hpp> // TODO Port all boost::date_time code to std::chrono
+#include <boost/date_time/posix_time/posix_time.hpp> // TODO Port all boost::date_time code to std::chrono
 #include <cstdlib>
 #include <string>
 #include <array>
 #include <algorithm>
+#include <execution>
 #include <cmath>
 #include <deque>
 #include "defines.h"
-#include "util/math_utils.hpp"
 
 namespace svr {
+
+constexpr auto C_default_exec_policy = std::execution::par_unseq;
+const auto C_n_cpu = std::thread::hardware_concurrency();
 
 #ifdef VALGRIND_BUILD
 constexpr unsigned C_slide_skip = 1;
 constexpr unsigned C_max_j = 1;
 constexpr unsigned C_test_len = 1;
 #else
-/* best
-constexpr unsigned C_slide_skip = 6; // Try 12/15
-constexpr unsigned C_max_j = 30;
-constexpr unsigned C_test_len = 4 * 115;
-*/
-constexpr unsigned C_slide_skip = 12;
-constexpr unsigned C_max_j = 12;
+constexpr unsigned C_slide_skip = 10;
+constexpr unsigned C_max_j = 10;
 constexpr unsigned C_test_len = 500;
 #endif
 constexpr unsigned C_tune_min_validation_window = C_test_len - C_slide_skip * (C_max_j - 1);
 constexpr double C_slides_len = [](){
     double r = 0;
-    for (unsigned j = 0; j < C_max_j; ++j)
-        r += C_test_len - C_slide_skip * (C_max_j - j - 1);
+    for (unsigned j = 0; j < C_max_j; ++j) r += C_test_len - C_slide_skip * (C_max_j - j - 1);
     return r;
 } ();
 
@@ -59,18 +56,18 @@ constexpr double C_kernel_path_tau = .25;
 
 const unsigned C_omp_max_active_levels = []() {
     const auto p_env_max_active_levels = getenv("MAX_ACTIVE_LEVELS");
-    return p_env_max_active_levels ? strtoul(p_env_max_active_levels, nullptr, 10) : 10 * std::thread::hardware_concurrency();
+    return p_env_max_active_levels ? strtoul(p_env_max_active_levels, nullptr, 10) : 10 * C_n_cpu;
 } ();
 const unsigned C_omp_teams_thread_limit = []() {
     const auto p_env_teams_thread_limit = getenv("OMP_THREAD_LIMIT");
-    return p_env_teams_thread_limit ? strtoul(p_env_teams_thread_limit, nullptr, 10) : 100 * std::thread::hardware_concurrency();
+    return p_env_teams_thread_limit ? strtoul(p_env_teams_thread_limit, nullptr, 10) : 100 * C_n_cpu;
 } ();
 
 #ifdef INTEGRATION_TEST
-const unsigned C_integration_test_validation_window = []() {
+const auto C_integration_test_validation_window = []() {
     constexpr unsigned test_offset_default = 345;
     const auto p = getenv("SVRWAVE_TEST_WINDOW");
-    return p ? strtoul(p, nullptr, 10) : test_offset_default;
+    return p ? (unsigned) strtoul(p, nullptr, 10) : test_offset_default;
 }();
 #endif
 
@@ -81,9 +78,6 @@ constexpr double C_bad_validation = 1e6;
 constexpr unsigned C_cu_tile_width = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
 constexpr unsigned C_cu_block_size = C_cu_tile_width * C_cu_tile_width;
 constexpr unsigned C_cu_clamp_n = C_cu_block_size * C_cu_block_size;
-
-#define DEFAULT_ONLINE_ITER_LIMIT 5
-#define DEFAULT_STABILIZE_ITERATIONS_COUNT 40
 
 constexpr unsigned C_default_online_iter_limit = DEFAULT_ONLINE_ITER_LIMIT;
 constexpr unsigned C_default_stabilize_iterations_count = DEFAULT_STABILIZE_ITERATIONS_COUNT;
@@ -107,7 +101,7 @@ constexpr char C_default_multistep_len_str[] = "1";
 constexpr char C_default_multiout_str[] = "1";
 
 constexpr unsigned C_max_csv_token_size = 0xFF;
-constexpr unsigned C_default_kernel_max_chunk_size = 4000; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernel updated
+constexpr unsigned C_default_kernel_max_chunk_len = 4000; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernel updated
 const unsigned C_default_multistep_len = std::stoul(C_default_multistep_len_str);
 const unsigned C_default_multiout = std::stoul(C_default_multiout_str);
 constexpr unsigned C_default_gradient_count = 1;
@@ -123,4 +117,5 @@ constexpr double C_FFA_gamma = 1.;   // Visibility
 constexpr char C_test_primary_column[] = "xauusd_avg_bid"; // Ignore tuning or validating other input queue columns in case of aux columns
 
 }
+
 }

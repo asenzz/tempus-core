@@ -8,8 +8,8 @@ PROJECT_DIR=$(cd `dirname "${BASH_SOURCE[0]}"`; pwd)
 
 cd $PROJECT_DIR
 
-libs/configure_gtest.sh
-libs/configure_wavelib.sh
+lib/configure_gtest.sh
+lib/configure_wavelib.sh
 
 if [ -d $BUILD_DIR ]
 then
@@ -25,8 +25,8 @@ HOST_NAME=`hostname -f`
 if [[ $HOST_NAME == sl* ]] 
 then
     HOST_TARGET="paramtune"
-    HOST_INCLUDE_OPTIONS="-I/opt/soft/boost-${TEMPUS_BOOST_VERSION}/include/ -I/opt/soft/lz4/include -I/home/jarko/lib/ViennaCL-1.7.0/ -I/opt/intel/opencl-sdk/include -I$PROJECT_DIR/libs"
-    HOST_LINKER_OPTIONS="-L/opt/soft/boost-${TEMPUS_BOOST_VERSION}/lib/ -L/opt/soft/lz4/lib -L/opt/intel/opencl-sdk/lib64 -L$PROJECT_DIR/libs/wavelib/build/Bin/"
+    HOST_INCLUDE_OPTIONS="-I/opt/soft/boost-${TEMPUS_BOOST_VERSION}/include/ -I/opt/soft/lz4/include -I/home/jarko/lib/ViennaCL-1.7.0/ -I/opt/intel/opencl-sdk/include -I$PROJECT_DIR/lib"
+    HOST_LINKER_OPTIONS="-L/opt/soft/boost-${TEMPUS_BOOST_VERSION}/lib/ -L/opt/soft/lz4/lib -L/opt/intel/opencl-sdk/lib64 -L$PROJECT_DIR/lib/wavelib/build/Bin/"
     HOST_SPECIFIC_LIBRARIES="/opt/soft/glibc-2.18/lib/libc.so"
 
     cmake -DCMAKE_MODULE_PATH="$PROJECT_DIR/host_config/sl/cmake/" -DMODULES=$HOST_TARGET \

@@ -51,7 +51,7 @@ public:
 
 private:
     static AppContext *p_instance;
-    AppContext(const std::string& config_path, bool use_threadsafe_dao);
+    AppContext(const std::string& config_path, const bool use_threadsafe_dao);
     ~AppContext();
     AppContext(AppContext&)=delete;
     AppContext(AppContext&&)=delete;

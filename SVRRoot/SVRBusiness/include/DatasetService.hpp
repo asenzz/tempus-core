@@ -7,7 +7,7 @@
 #include "model/Model.hpp"
 #include "model/User.hpp"
 #include "EnsembleService.hpp"
-#include </opt/intel/oneapi/tbb/latest/include/oneapi/tbb/concurrent_unordered_map.h>
+#include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/date_time/posix_time/time_period.hpp>
 
 // #define TRIM_DATA
@@ -75,8 +75,6 @@ public:
     bool unlink_user_from_dataset(User_ptr const &user, const datamodel::Dataset_ptr &dataset);
 
     void update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs);
-
-    static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &predict_times);
 
     static void process(datamodel::Dataset &dataset);
 

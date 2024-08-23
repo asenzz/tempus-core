@@ -1,4 +1,117 @@
-#if 0
+#if 0 // Implementation according to ChatGPT :)
+
+The Global Alignment Kernel (GAK) is a kernel method for time series analysis introduced by Marco Cuturi. It computes the similarity between two time series using dynamic time warping (DTW). Implementing GAK in CUDA can significantly accelerate the computations, especially for large datasets.
+
+Below is an implementation of the Global Alignment Kernel in CUDA.
+
+CUDA Implementation of the Global Alignment Kernel
+1. Include Libraries and Define Constants
+cpp
+Copy code
+#include <cuda_runtime.h>
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+#define THREADS_PER_BLOCK 256
+#define EPSILON 1e-6
+2. Define CUDA Kernel for DTW Calculation
+The first step is to define the CUDA kernel that will compute the DTW matrix.
+
+cpp
+Copy code
+__global__ void dtw_kernel(const float* d_X, const float* d_Y, float* d_D, int m, int n, float gamma) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (tid < m * n) {
+        int i = tid / n;
+        int j = tid % n;
+
+        float cost = expf(-gamma * fabsf(d_X[i] - d_Y[j]));
+        if (i == 0 && j == 0) {
+            d_D[tid] = cost;
+        } else if (i == 0) {
+            d_D[tid] = cost + d_D[i * n + (j - 1)];
+        } else if (j == 0) {
+            d_D[tid] = cost + d_D[(i - 1) * n + j];
+        } else {
+            d_D[tid] = cost + fminf(fminf(d_D[(i - 1) * n + j], d_D[i * n + (j - 1)]), d_D[(i - 1) * n + (j - 1)]);
+        }
+    }
+}
+3. Host Function to Manage Memory and Kernel Launch
+Next, write the host function that will allocate memory, copy data to the GPU, launch the kernels, and retrieve the results.
+
+cpp
+Copy code
+void compute_gak(const std::vector<float>& X, const std::vector<float>& Y, float& similarity, int m, int n, float gamma) {
+    float *d_X, *d_Y, *d_D;
+    size_t size_X = m * sizeof(float);
+    size_t size_Y = n * sizeof(float);
+    size_t size_D = m * n * sizeof(float);
+
+    cudaMalloc(&d_X, size_X);
+    cudaMalloc(&d_Y, size_Y);
+    cudaMalloc(&d_D, size_D);
+
+    cudaMemcpy(d_X, X.data(), size_X, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Y, Y.data(), size_Y, cudaMemcpyHostToDevice);
+
+    int num_blocks = (m * n + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+
+    dtw_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(d_X, d_Y, d_D, m, n, gamma);
+    cudaDeviceSynchronize();
+
+    std::vector<float> D(m * n);
+    cudaMemcpy(D.data(), d_D, size_D, cudaMemcpyDeviceToHost);
+
+    similarity = D[m * n - 1];
+
+    cudaFree(d_X);
+    cudaFree(d_Y);
+    cudaFree(d_D);
+}
+
+int main() {
+    std::vector<float> X = {1.0, 2.0, 3.0, 4.0};
+    std::vector<float> Y = {1.0, 3.0, 4.0, 2.0};
+    float gamma = 1.0;
+
+    float similarity;
+    compute_gak(X, Y, similarity, X.size(), Y.size(), gamma);
+
+    std::cout << "Similarity: " << similarity << std::endl;
+
+    return 0;
+}
+Explanation
+CUDA Kernel dtw_kernel:
+
+This kernel computes the dynamic time warping (DTW) matrix. It uses an exponential similarity measure, exp(-gamma * |x_i - y_j|), to fill in the DTW matrix.
+The DTW matrix is computed in a parallel fashion by considering the three possible preceding points.
+Host Function compute_gak:
+
+This function manages memory allocation and deallocation, copies data between host and device, and launches the CUDA kernel to compute the DTW matrix.
+The final similarity score is extracted from the DTW matrix and returned.
+Main Function:
+
+Initializes example time series, calls the compute_gak function to calculate the global alignment kernel similarity, and prints the resulting similarity score.
+Adjustments and Optimizations
+This implementation provides a basic framework. For practical use, you may need to:
+
+Handle larger time series more efficiently.
+Optimize memory access patterns.
+Consider edge cases and numerical stability.
+This implementation follows the principles outlined in Cuturi's paper and adapts them for CUDA to leverage GPU acceleration for time series similarity computation.
+
+
+
+
+
+
+#endif
+
+#if 0 // Old GAK implementation by Emo
 #include "../include/kernel_global_alignment.hpp"
 
 using namespace svr::datamodel;
@@ -631,4 +744,4 @@ kernel_global_alignment<scalar_type>::operator()(
 #endif /* #ifdef VIENNACL_WITH_OPENCL */
 
 }
-#endif // 0
+#endif

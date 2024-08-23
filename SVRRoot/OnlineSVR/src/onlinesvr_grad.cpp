@@ -115,7 +115,7 @@ arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::pti
 
     std::mutex mx;
     std::vector<double> mae_total(ixs.size(), 0.);
-    for (auto &kv: main_components) __tbb_pfor_i(0, mae_total.size(), mae_total[i] += kv.second.mae_chunk_values[i])
+    for (auto &kv: main_components) tbb_pfor_i__(0, mae_total.size(), mae_total[i] += kv.second.mae_chunk_values[i])
     auto sorted_ix = sort_indexes(mae_total);
     std::unordered_set<size_t> best_ixs(sorted_ix.begin(), sorted_ix.size() < 2 ? sorted_ix.end() : sorted_ix.begin() + std::round(sorted_ix.size() / BEST_PREDICT_CHUNKS_DIVISOR));
     for (auto &kv: main_components) {
@@ -137,7 +137,7 @@ arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::pti
         }
 
         arma::mat sum_steps = arma::zeros(x_predict.n_rows, chunk_predicted.size());
-        __tbb_pfor_i(0, chunk_predicted.size(),
+        tbb_pfor_i__(0, chunk_predicted.size(),
             // last_step.col(i) = chunk_predicted[i].col(multistep_len - 1);
             // Replacing last column check only for sum of all columns
             //arma::colvec sum_of_multistep_predictions = arma::sum(chunk_predicted[i], 1);

@@ -80,7 +80,7 @@ protected:
 
     void InitDataset(){
         testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, userName, testQueue, std::deque<datamodel::InputQueue_ptr>{},
-                                                                priority, "description", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
+                                                                priority, "description", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
                                                                 max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
     }
@@ -103,8 +103,8 @@ protected:
     }
 
     void InitDeconQueueData(){
-        bpt::ptime startTime = testQueue->begin()->get()->get_value_time();
-        bpt::ptime endTime = testQueue->get_data().rbegin()->get()->get_value_time();
+        bpt::ptime startTime = testQueue->front()->get_value_time();
+        bpt::ptime endTime = testQueue->get_data().back()->get_value_time();
 
         ASSERT_FALSE(startTime.is_special());
         ASSERT_FALSE(endTime.is_special());
@@ -132,8 +132,8 @@ protected:
         ASSERT_TRUE(aci.input_queue_service.save(testQueue) > 0);
 
         LOG4_INFO(testQueue->get_table_name() << " is having data: "
-                 << bpt::to_simple_string(testQueue->begin()->get()->get_value_time()) << " - "
-                 << bpt::to_simple_string(testQueue->get_data().rbegin()->get()->get_value_time()));
+                 << bpt::to_simple_string(testQueue->front()->get_value_time()) << " - "
+                 << bpt::to_simple_string(testQueue->get_data().back()->get_value_time()));
 
         LOG4_TRACE("Saving test dataset");
         ASSERT_TRUE(aci.dataset_service.save(testDataset) == 1);

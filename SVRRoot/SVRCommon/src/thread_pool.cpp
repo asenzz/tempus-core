@@ -15,7 +15,7 @@ namespace common {
 
 struct cpu_thread_pool::Impl
 {
-    size_t const cpu_number{std::thread::hardware_concurrency()};
+    size_t const cpu_number{C_n_cpu};
     std::mutex mtx;
 
     std::vector<threading::cpu_thread_ptr> cpu_threads, spare_threads, finished_threads;

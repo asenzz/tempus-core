@@ -6,7 +6,8 @@
 #define SVR_CALC_CACHE_HPP
 
 #include <condition_variable>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_unordered_map.h>
+#include <oneapi/tbb/concurrent_unordered_map.h>
+#include <oneapi/tbb/mutex.h>
 #include <functional>
 #include <memory>
 #include <set>

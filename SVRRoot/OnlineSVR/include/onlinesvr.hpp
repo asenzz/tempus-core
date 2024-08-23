@@ -20,7 +20,6 @@ namespace business {
 class calc_cache;
 }
 
-
 namespace datamodel {
 
 constexpr unsigned C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
@@ -34,7 +33,7 @@ constexpr size_t C_predict_chunks = 1; // TODO Review. Best chunks used for pred
 constexpr size_t C_end_chunks = 1; // [1..1/offlap]
 constexpr double C_gamma_variance = 6e4;
 constexpr magma_int_t C_rbt_iter = 40; // default 30
-constexpr double C_rbt_threshold = 0; // (0..1] default 1
+constexpr double C_rbt_threshold = 0; // [0..1] default 1
 constexpr double C_features_superset_coef = 1e2; // [1..+inf)
 
 #define USE_MAGMA
@@ -89,7 +88,7 @@ class OnlineMIMOSVR final : public Entity
     std::deque<std::pair<double, double>> chunks_score;
     arma::mat all_weights;
     size_t multiout = common::C_default_multiout;
-    size_t max_chunk_size = common::C_default_kernel_max_chunk_size;
+    size_t max_chunk_size = common::C_default_kernel_max_chunk_len;
     size_t gradient = C_default_svrparam_grad_level;
     size_t level = C_default_svrparam_decon_level;
     size_t step = C_default_svrparam_step;
@@ -111,12 +110,12 @@ class OnlineMIMOSVR final : public Entity
 
 public:
     static std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
-    cuvalidate(const double lambda, const double gamma_param, const size_t lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
+    cuvalidate(const double lambda, const double gamma_param, const unsigned lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
                const arma::mat &tune_label_chunk, const mmm_t &train_L_m, const double labels_sf, magma_queue_t ma_queue);
 
-    static std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
-    cuvalidate_batched(const double lambda, const double gamma_param, const size_t lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
-               const arma::mat &tune_label_chunk, const mmm_t &train_L_m, const double labels_sf, magma_queue_t ma_queue);
+    std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
+    cuvalidate_batched(const double lambda, const double gamma_param, const unsigned lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
+                              const arma::mat &tune_label_chunk, const mmm_t &train_L_m, const double labels_sf, magma_queue_t ma_queue);
 
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
@@ -163,9 +162,9 @@ public:
     void set_dataset(const Dataset_ptr &p_dataset);
 
     // Move to solver module
-    static void solve_opt(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved);
+    static void solve_opt(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const unsigned iters);
 
-    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const size_t iters);
+    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const unsigned iters);
 
     static std::deque<arma::mat> solve_batched_irwls(
             const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
@@ -292,6 +291,9 @@ public:
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+
+__global__ void G_div_inplace(double *__restrict__ const x, const double a, const unsigned n);
+
 
 } // datamodel
 } // svr

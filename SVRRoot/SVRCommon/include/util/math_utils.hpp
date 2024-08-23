@@ -21,6 +21,7 @@
 namespace svr {
 
 #define ARRAYLEN(X) (sizeof(X) / sizeof((X)[0]))
+#define ARMASIZEOF(X) (X).n_elem * sizeof((X)[0])
 
 #define _ABS(X) ((X) >= 0 ? (X) : (-X))
 #define _ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
@@ -29,7 +30,11 @@ namespace svr {
 #define _MAX(X, Y) (((X) < (Y)) ? (Y) : (X)) // X returned if larger or equal
 #define _MAXAS(X, Y) if ((X) < (Y)) (X) = (Y) // (((X) < (Y)) && ((X) = (Y))) // Y assigned to X only if Y larger than X
 #define _MINAS(X, Y) if ((X) > (Y)) (X) = (Y) // (((X) > (Y)) && ((X) = (Y))) // Y assigned to X only if Y smaller than X
-#define _CEILDIV(X, Y) std::ceil(double(X) / double(Y))
+#define CDIV(X, Y) std::ceil(double(X) / double(Y))
+#define CDIVI(X, Y) ((X) / (Y) + (((X) % (Y)) ? 1 : 0))
+#define LDi(i, m, ld) (((i) % (m)) + ((i) / (m)) * (ld))
+
+template<typename T1, typename T2> inline T1 cdiv(const T1 l, const T2 r) { return CDIV((l), (r)); }
 
 std::vector<double> operator*(const std::vector<double> &v1, const double &m);
 
@@ -72,6 +77,8 @@ std::atomic<T> &operator&=(std::atomic<T> &lhs, const T &rhs)
 
 
 namespace common {
+
+size_t to_fft_len(const size_t input_len);
 
 arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &v2);
 
@@ -175,6 +182,16 @@ arma::cx_mat matlab_ifft(const arma::cx_mat &input);
 
 arma::cx_mat ifftshift(const arma::cx_mat &input);
 
+void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, uint64_t sobol_ctr = 0);
+
+double alpha(const double reference_error, const double prediction_error);
+
+double mape(const double absolute_error, const double absolute_label);
+
+template<typename T, typename U> double imprv(const T newv, const U oldv)
+{
+    return 100. * (1. - double(newv) / double(oldv));
+}
 
 template<typename T> bool
 equal_to(const T v1, const T v2, const T eps = std::numeric_limits<T>::epsilon())
@@ -208,6 +225,7 @@ is_zero(const T v, const T eps = std::numeric_limits<T>::epsilon())
     return std::abs(v) < eps;
 }
 
+double fdsum(CPTR(float) v, const unsigned len);
 
 template<typename scalar_t> scalar_t
 sum(const std::vector<scalar_t> &v)
@@ -239,11 +257,24 @@ template<> double sumabs(const arma::Mat<double> &m);
 
 template<> float sumabs(const arma::Mat<float> &m);
 
-template<typename T> arma::subview<T> &normalize_cols_I(arma::subview<T> &&m)
+template<typename T>
+arma::uvec find(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
+{
+    arma::uvec r;
+OMP_FOR_(m2.n_elem, ordered)
+    for (const auto e: m2) {
+        const arma::uvec r_e = arma::find(m1 == e);
+#pragma omp ordered
+        r.insert_rows(r.n_rows, r_e);
+    }
+    return r;
+}
+
+template<typename T> arma::Mat<T> &normalize_cols_I(arma::Mat<T> &m)
 {
     const arma::Row<T> means = arma::mean(m);
     OMP_FOR(m.n_cols)
-    for (size_t c = 0; c < m.n_cols; ++c) {
+    for (unsigned c = 0; c < m.n_cols; ++c) {
         m.col(c) -= means[c];
         m.col(c) /= arma::median(m.col(c));
     }
@@ -260,6 +291,22 @@ template<typename T> arma::Mat<T> normalize_cols(const arma::Mat<T> &m)
         r.col(c) /= m.n_rows > 10 ? arma::median(r.col(c)) : arma::mean(r.col(c));
     }
     return r;
+}
+
+template<typename T> arma::Col<T> &normalize_I(arma::Col<T> &v)
+{
+    const auto mean = arma::mean(v);
+    v -= mean;
+    v /= arma::median(v);
+    return v;
+}
+
+template<typename T> arma::Mat<T> &normalize_I(arma::Mat<T> &m)
+{
+    const auto mean = arma::accu(m) / double(m.n_elem);
+    m -= mean;
+    m /= arma::median(arma::vectorise(m));
+    return m;
 }
 
 template<typename scalar_t> void
@@ -333,14 +380,12 @@ template<typename T> inline auto &shift_I(arma::Mat<T> &m, const arma::Col<unsig
     return m;
 }
 
-template<typename T> inline auto shift(const arma::Mat<T> &m, const arma::Col<unsigned> &shiftings)
+template<typename T> inline arma::Mat<T> shift(const arma::Mat<T> &m, const arma::Col<unsigned> &shiftings)
 {
     arma::Mat<T> v(arma::size(m), arma::fill::none);
     if (shiftings.n_elem != m.n_cols) LOG4_THROW("Shiftings " << arma::size(shiftings) << " not compatible with matrix " << arma::size(m));
     OMP_FOR(m.n_cols)
-    for (size_t i = 0; i < m.n_cols; ++i)
-        if (shiftings[i])
-            v.col(i) = arma::shift(m.col(i), shiftings[i]);
+    for (size_t i = 0; i < m.n_cols; ++i) v.col(i) = shiftings[i] ? arma::shift(m.col(i), shiftings[i]).eval() : m.col(i);
     return v;
 }
 
@@ -350,7 +395,7 @@ template<typename T> arma::Col<T> inline stretch_crop(const arma::subview<T> &v,
     if (!n) n = v.n_elem;
     arma::Col<T> r(n);
     arma::uvec div(n);
-#pragma omp unroll
+UNROLL()
     for (size_t out_i = 0; out_i < r.n_elem; ++out_i) {
         r[out_i] += v[size_t(out_i / f) % v.n_elem];
         ++div[out_i];
@@ -364,7 +409,7 @@ template<typename T> arma::Col<T> stretch(const arma::Col<T> &v, const double f)
 
     arma::Col<T> r(v.n_elem * f);
     arma::uvec div(r.n_elem);
-#pragma omp unroll
+UNROLL()
     for (unsigned out_i = 0; out_i < r.n_elem; ++out_i) {
         r[out_i] += v[double(out_i) / f];
         ++div[out_i];
@@ -452,9 +497,7 @@ void keep_indices(T &d, const std::deque<size_t> &indices)
 {
     if (d.size() <= indices.size() || d.size() <= max(indices) || d.empty()) return;
     size_t last = 0;
-#ifndef __GNUC__
-#pragma unroll
-#endif
+UNROLL()
     for (size_t i = 0; i < d.size(); ++i, ++last) {
         while (std::find(indices.cbegin(), indices.cend(), i) == indices.cend() && i < d.size()) ++i;
         if (i >= d.size()) break;
@@ -485,14 +528,19 @@ template<typename T> T scale(const T &v, const double sf, const double dc)
     return (v - dc) / sf;
 }
 
+template<typename T> T &scale_I(T &v, const double sf, const double dc)
+{
+    return v = (v - dc) / sf;
+}
+
 template<typename T> T unscale(const T &v, const double sf, const double dc)
 {
     return v * sf + dc;
 }
 
-template<typename T> void unscale_I(T &v, const double sf, const double dc)
+template<typename T> T &unscale_I(T &v, const double sf, const double dc)
 {
-    v = v * sf + dc;
+    return v = v * sf + dc;
 }
 
 arma::mat unscale(const arma::mat &m, const double sf, const double dc);
@@ -501,7 +549,7 @@ template<typename T> arma::Mat<T>
 norm(const arma::subview<std::complex<T>> &cxm)
 {
     arma::Mat<T> norm_cxm(arma::size(cxm));
-#pragma omp parallel for num_threads(adj_threads(cxm.n_elem)) schedule(static, 1 + cxm.n_elem / std::thread::hardware_concurrency())
+#pragma omp parallel for num_threads(adj_threads(cxm.n_elem)) schedule(static, 1 + cxm.n_elem / C_n_cpu)
     for (size_t i = 0; i < cxm.n_elem; ++i) norm_cxm[i] = std::norm(cxm[i]);
     return norm_cxm;
 }
@@ -511,7 +559,7 @@ template<typename T> arma::Mat<T>
 norm(const arma::Mat<std::complex<T>> &cxm)
 {
     arma::Mat<T> norm_cxm(arma::size(cxm));
-#pragma omp parallel for num_threads(adj_threads(cxm.n_elem)) schedule(static, 1 + cxm.n_elem / std::thread::hardware_concurrency())
+#pragma omp parallel for num_threads(adj_threads(cxm.n_elem)) schedule(static, 1 + cxm.n_elem / C_n_cpu)
     for (size_t i = 0; i < cxm.n_elem; ++i) norm_cxm[i] = std::norm(cxm[i]);
     return norm_cxm;
 }
@@ -538,11 +586,11 @@ medianabs(const arma::Mat<T> &m)
 }
 
 
-template<typename T> T
+template<typename T> inline T
 meanabs(const std::vector<T> &v)
 {
     double res = 0;
-#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none) num_threads(adj_threads(v.size()))
+OMP_FOR_(v.size(), reduction(+:res))
     for (const auto _v: v) res += std::abs(_v);
     return res / double(v.size());
 }
@@ -666,8 +714,6 @@ inv_diff_return(
 }
 
 double get_uniform_random_value();
-
-unsigned long long init_sobol_ctr();
 
 std::vector<double> get_uniform_random_vector(const size_t size);
 

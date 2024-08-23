@@ -1,9 +1,13 @@
+INCLUDE(cmake/Util.cmake)
+
+UNSET(ENV{CUDAHOSTCXX} CACHE)
+UNSET(ENV{CUDAFLAGS} CACHE)
 UNSET(ENV{CFLAGS} CACHE)
 UNSET(ENV{CXXFLAGS} CACHE)
 UNSET(ENV{LDFLAGS} CACHE)
 SET_PROPERTY(GLOBAL PROPERTY COMPILE_OPTIONS "")
 SET_PROPERTY(GLOBAL PROPERTY LINK_OPTIONS "")
-
+SET(ONEAPI_ROOT "$ENV{ONEAPI_ROOT}" CACHE STRING "Intel ONEAPI root directory")
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 ENABLE_LANGUAGE(CUDA)
 FIND_PROGRAM(PROGRAM_CCACHE ccache)
@@ -24,7 +28,17 @@ IF (PROGRAM_ICPX AND USE_INTEL_COMPILER)
     SET(CMAKE_C_COMPILER ${PROGRAM_ICX} CACHE STRING "CMAKE_C_COMPILER")
     CMAKE_PATH(GET PROGRAM_ICX PARENT_PATH ICX_DIR)
     SET(CMAKE_LINKER "${ICX_DIR}/compiler/ld.lld" CACHE STRING "CMAKE_LINKER")
+ELSE()
+    SET(CMAKE_CXX_COMPILER g++ CACHE STRING "CMAKE_CXX_COMPILER")
+    SET(CMAKE_C_COMPILER gcc CACHE STRING "CMAKE_C_COMPILER")
 ENDIF ()
+
+FIND_PROGRAM(PROGRAM_MOLD mold)
+IF(PROGRAM_MOLD)
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -fuse-ld=mold) # Mold doesn't work with Intel
+ELSE()
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -fuse-ld=lld)
+ENDIF()
 
 IF (USE_CUDA)
     PROJECT(SVR LANGUAGES CXX CUDA)
@@ -35,7 +49,7 @@ ENDIF ()
 SET(POSITION_INDEPENDENT_CODE ON)
 
 INCLUDE(ProcessorCount)
-ProcessorCount(NCPU)
+PROCESSORCOUNT(NCPU)
 # SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "CMAKE_BUILD_TYPE")
 SET(CXX_STANDARD "17" CACHE STRING "C++ standard")
 SET(C_STANDARD "17" CACHE STRING "C standard")
@@ -44,51 +58,53 @@ SET(CMAKE_C_STANDARD ${C_STANDARD})
 SET(CMAKE_PEDANTIC_FLAGS -pedantic -Wall -Werror)
 
 IF (WIN32 OR CYGWIN)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_OS_CYGWIN=1")
+    ADD_COMPILE_DEFINITIONS(DGTEST_OS_CYGWIN=1)
 ENDIF ()
 
 SET(COMPILER_EXTENSIONS -std=c++${CXX_STANDARD})
 SET(COMPILER_EXTENSIONS_CC -std=c${C_STANDARD}) # Deprecated -fcilkplus -lcilkrts
-SET(COMPILER_EXTENSIONS_ICX -pc80 -static -Wno-pass-failed -Wno-unsupported-floating-point-opt -fdiagnostics-show-option) # ,nvptx64-nvidia-cuda -qnextgen-diag -fimf-precision=high
-SET(COMPILER_EXTENSIONS_GCC -fopenmp -ggdb)
+SET(COMPILER_EXTENSIONS_ICX -qopenmp -fopenmp-version=51 -fopenmp=libiomp5 -stdlib=libstdc++ -pc80 -Wno-embedded-directive -Wno-pass-failed -Wno-unsupported-floating-point-opt -fdiagnostics-show-option -no-ftz -fhonor-infinities -fhonor-nan-compares -fhonor-nans) # Crash ,nvptx64-nvidia-cuda -funified-lto # -qnextgen-diag -fimf-precision=high
+SET(COMPILER_EXTENSIONS_GCC -fopenmp -ggdb -mno-daz-ftz)
+
+SET(CPU_VECTOR_WIDTH 128 CACHE STRING "ICX mprefer-vector-width option argument, 128 for AVX2 and 256 for AVX512")
+SET(INLINE_INSTR_LIMIT 6000 CACHE STRING "Inline instructions limit for GCC")
 
 IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-    # SET(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON) # ICXP segfaults
-    SET(CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -ffp-contract=fast -fPIC -O3 -foptimize-sibling-calls) # speed test with -fsplit-stack, incompatible with spir64 -mcmodel=large
-    SET(COMMON_OPTIMIZATION_FLAGS_GCC -flto -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -funswitch-loops -finline-limit=6000 -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited) # Kills a bit of precision -funsafe-math-optimizations
-    SET(COMMON_OPTIMIZATION_FLAGS_ICX -mprefer-vector-width=256 -fopenmp-targets=spir64_x86_64 -fslp-vectorize -fjump-tables -qopt-mem-layout-trans=4 -fma -Wno-overriding-option -fp-model=precise -fp-speculation=safe -fimf-use-svml=true -mbranches-within-32B-boundaries -inline-level=2 -qopt-multiple-gather-scatter-by-shuffles -vec-threshold=0 -vec -fvec-peel-loops -fvec-remainder-loops -fvec-with-mask -qopenmp -fopenmp=libiomp5 -fopenmp-target-loopopt -fopenmp-target-buffers=4GB -fopenmp-concurrent-host-device-compile -finline -qopt-matmul -qopt-dynamic-align -qopt-jump-tables -qopt-prefetch) # LTO crashes linker -funified-lto -flto=full
-    SET(CXX_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -fopenmp-target-simd -O3) # -ffp-eval-method=extended
+    SET(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    SET(CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -fassociative-math -ffp-contract=fast -fPIC -O3 -mcmodel=large) # Intel linker crash with -fsplit-stack
+    SET(COMMON_OPTIMIZATION_FLAGS_GCC -flto -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -finline-limit=${INLINE_INSTR_LIMIT} -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited) # Kills a bit of precision -funsafe-math-optimizations
+    SET(COMMON_OPTIMIZATION_FLAGS_ICX -fdiagnostics-show-option -mprefer-vector-width=${CPU_VECTOR_WIDTH} -fslp-vectorize -fjump-tables -qopt-mem-layout-trans=4 -fma -Wno-overriding-option -fp-model=precise -fp-speculation=safe -fimf-use-svml=true -mbranches-within-32B-boundaries -qopt-multiple-gather-scatter-by-shuffles -vec-threshold=0 -vec -fvec-peel-loops -fvec-remainder-loops -fvec-with-mask -fopenmp-target-loopopt -fopenmp-target-buffers=4GB -finline -qopt-matmul -qopt-dynamic-align -qopt-jump-tables -qopt-prefetch -fopenmp-targets=spir64_x86_64 -fopenmp-concurrent-host-device-compile -flto=full) # Crashes linker -fopenmp-target-simd
+    SET(CXX_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -inline-level=2) # -ffp-eval-method=extended
     SET(CXX_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC})
-    SET(LINKER_OPTIMIZATION_FLAGS -Wl,--icf=safe -O3)
-    SET(LINKER_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -qopenmp-link=static -fuse-ld=lld -Wl,--apply-dynamic-relocs -Wl,-z,muldefs -fdiagnostics-show-option -qopenmp -fopenmp=libiomp5 -fopenmp-targets=spir64_x86_64 --offload-arch=native -Xopenmp-target-backend=spir64_x86_64 "-device=cpu -march=sse4.2"  -stdlib=libstdc++) # Crash with -fopenmp-target-simd -Wl,--lto-O3 -Wl,--lto-whole-program-visibility -Wl,--no-lto-legacy-pass-manager -Wl,--no-fat-lto-objects -Wl,--lto-CGO3 -flto -funified-lto -Wl,--lto=full
-    SET(LINKER_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC} -fwhole-program -flto-partition=one)
+    SET(LINKER_OPTIMIZATION_FLAGS -O3)
+    SET(LINKER_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC} -fwhole-program -flto-partition=one -liomp5)
+    SET(LINKER_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -Wl,--icf=safe -qopenmp-link=static -fuse-ld=lld -Wl,--apply-dynamic-relocs -Wl,-z,muldefs -Wl,--lto-O3 -Wl,--lto-whole-program-visibility -Wl,--lto-CGO3 -Wl,--no-fat-lto-objects -Wl,--no-lto-legacy-pass-manager --offload-arch=native -static-intel ) #  Crash with -Wl,--lto=full; -static-libstdc++ not supported with -fsycl; -Xopenmp-target-backend=spir64_x86_64 "-device=cpu -march=sse4.2" not supported with MKL ENABLE_OMP_OFFLOAD
     SET($ENV {MKL_ENABLE_INSTRUCTIONS} "AVX2")
-ENDIF ()
-
-IF (CMAKE_BUILD_TYPE MATCHES "Debug")
+ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
     # SET(LSAN_BLACKLIST "lsan-blacklist.txt" CACHE STRING "")
     # SET(UBSAN_BLACKLIST "ubsan-blacklist.txt" CACHE STRING "")
     SET(SANITIZE address CACHE STRING address)
     SET_PROPERTY(CACHE SANITIZE PROPERTY STRINGS address thread undefined "")
     SET(CXX_OPTIMIZATION_FLAGS -DDEBUG_BUILD -ggdb -fno-omit-frame-pointer -fstack-protector-all -fstack-clash-protection) # -fsanitize-blacklist=${LSAN_BLACKLIST}
-    SET(CXX_OPTIMIZATION_FLAGS_ICX -debug extended -g3 -fp-model=strict -pc80 -fimf-precision=high -fimf-use-svml=false -qopenmp -fstack-security-check)
-    SET(CXX_OPTIMIZATION_FLAGS_GCC -fharden-compares -fharden-conditional-branches -fopenmp -finstrument-functions) # -fvtv-debug -fvtable-verify=std
+    SET(CXX_OPTIMIZATION_FLAGS_ICX -debug extended -g3 -fp-model=strict -pc80 -fimf-precision=high -fimf-use-svml=false -fstack-security-check)
+    SET(CXX_OPTIMIZATION_FLAGS_GCC -fharden-compares -fharden-conditional-branches -finstrument-functions) # -fvtv-debug -fvtable-verify=std
     SET(LINKER_OPTIMIZATION_FLAGS) # Memory profilers -lduma -ldmallocthcxx -ldmallocthcxx
-    SET(LINKER_OPTIMIZATION_FLAGS_ICX -debug extended -g3  -stdlib=libstdc++ -fuse-ld=lld -qopenmp -fopenmp=libiomp5)
-    SET(LINKER_OPTIMIZATION_FLAGS_GCC -fopenmp -liomp5)
+    SET(LINKER_OPTIMIZATION_FLAGS_ICX -debug extended -g3 -fuse-ld=lld)
+    SET(LINKER_OPTIMIZATION_FLAGS_GCC -liomp5)
 ENDIF ()
 
 IF (SANITIZE)
-    LIST(APPEND CXX_OPTIMIZATION_FLAGS -fno-common -fsanitize=${SANITIZE} -fno-sanitize-recover=all -DSANITIZE)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS -fno-common -fsanitize=${SANITIZE} -fno-sanitize-recover=all)
     LIST(APPEND CXX_OPTIMIZATION_FLAGS_GCC --param=max-vartrack-size=100000000)
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS -fsanitize=${SANITIZE})
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -static-libsan)
     SET($ENV{ASAN_OPTIONS} "protect_shadow_gap=0:replace_intrin=1:detect_leaks=1")
+    ADD_COMPILE_DEFINITIONS(SANITIZE=${SANITIZE})
 ENDIF ()
 
 OPTION(USE_CLANG_TIDY OFF)
 IF(USE_CLANG_TIDY)
-    SET(CMAKE_CXX_CLANG_TIDY clang-tidy;-format-style='file';-header-filter=${CMAKE_CURRENT_SOURCE_DIR})
+    SET(CMAKE_CXX_CLANG_TIDY ${ONEAPI_ROOT}/compiler/latest/bin/compiler/clang-tidy;--use-color;-format-style='file';-header-filter=${CMAKE_CURRENT_SOURCE_DIR};-checks=boost-*,modernize-*,mpi-*,openmp-*,performance-*,misc-*,concurrency-*,clang-analyzer-*,cert-*,bugprone-*,cppcoreguidelines-*;--export-fixes=${CMAKE_CURRENT_SOURCE_DIR}/build-fixes.yaml)
 ENDIF()
 
 OPTION(CPPCHECK "Run CppCheck static code analysis")
@@ -97,7 +113,7 @@ IF (CPPCHECK)
     STRING(REGEX REPLACE ".*search starts here:([^:]+)\nEnd of search.*" "\\1" BUILTIN_INCLUDES ${BUILTIN_INCLUDES})
     STRING(REGEX REPLACE "\n *" " -I" BUILTIN_INCLUDES ${BUILTIN_INCLUDES})
     SEPARATE_ARGUMENTS(BUILTIN_INCLUDES)
-    FILE(GLOB_RECURSE FOUND_INCLUDES LIST_DIRECTORIES true "/usr/include/c++" "/usr/include/clang")
+    FILE(GLOB_RECURSE FOUND_INCLUDES LIST_DIRECTORIES true "/usr/include/c++" "/usr/include/clang" "/opt/intel/oneapi/compiler/latest/opt/compiler/include")
     FOREACH (FF ${FOUND_INCLUDES})
         IF (IS_DIRECTORY ${FF})
             LIST(APPEND BUILTIN_INCLUDES "-I${FF}")
@@ -111,12 +127,7 @@ IF (CPPCHECK)
 ENDIF ()
 
 
-SET(POSITION_INDEPENDENT_CODE ON)
-#FIND_PROGRAM(PROGRAM_MOLD mold)
-#IF(PROGRAM_MOLD)
-#    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -fuse-ld=mold)
-#ENDIF()
-ADD_COMPILE_DEFINITIONS(ARMA_USE_FFTW3 ARMA_ALLOW_FAKE_GCC SVR_ENABLE_DEBUGGING BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS=1 MAGMA_NOWARNING EIGEN_USE_MKL_ALL)
+ADD_COMPILE_DEFINITIONS(ARMA_ALLOW_FAKE_GCC SVR_ENABLE_DEBUGGING BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS=1 MAGMA_NOWARNING EIGEN_USE_MKL_ALL) # ARMA_USE_FFTW3
 
 OPTION(VALGRIND_BUILD "Build for testing with Valgrind")
 IF (VALGRIND_BUILD)
@@ -148,10 +159,10 @@ IF (USE_INTEL_COMPILER)
     FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS_CC COMPILER_EXTENSIONS_ICX CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_ICX)
         ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:${OPT}>")
     ENDFOREACH ()
-    FOREACH (OPT IN LISTS LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_ICX CXX_OPTIMIZATION_FLAGS COMPILER_EXTENSIONS)
+    FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_ICX LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_ICX CXX_OPTIMIZATION_FLAGS)
         ADD_LINK_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:${OPT}>")
     ENDFOREACH ()
-    FOREACH (OPT IN LISTS LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_ICX CXX_OPTIMIZATION_FLAGS COMPILER_EXTENSIONS)
+    FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS_CC COMPILER_EXTENSIONS_ICX LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_ICX CXX_OPTIMIZATION_FLAGS)
         ADD_LINK_OPTIONS("$<$<COMPILE_LANGUAGE:C>:${OPT}>")
     ENDFOREACH ()
 ELSE ()
@@ -161,10 +172,10 @@ ELSE ()
     FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS_CC COMPILER_EXTENSIONS_GCC CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_GCC)
         ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:${OPT}>")
     ENDFOREACH ()
-    FOREACH (OPT IN LISTS LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC CXX_OPTIMIZATION_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC)
+    FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC CXX_OPTIMIZATION_FLAGS)
         ADD_LINK_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:${OPT}>")
     ENDFOREACH ()
-    FOREACH (OPT IN LISTS LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC C_OPTIMIZATION_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_CC COMPILER_EXTENSIONS_GCC)
+    FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS_CC COMPILER_EXTENSIONS_GCC LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC C_OPTIMIZATION_FLAGS)
         ADD_LINK_OPTIONS("$<$<COMPILE_LANGUAGE:C>:${OPT}>")
     ENDFOREACH ()
 ENDIF ()
@@ -192,18 +203,21 @@ FOREACH (PERF_DATA IN LISTS PERF_DATA_FILES)
     ENDIF ()
 ENDFOREACH ()
 SET(IPP_SHARED OFF)
-FIND_PACKAGE(IPP REQUIRED) # Do not double link or freeze on init
+FIND_PACKAGE(IPP REQUIRED) # Do not double link in multiple so's or freeze on init
 
 OPTION(USE_CUDA "Compile for CUDA system." ON)
 if (USE_CUDA)
     FIND_PACKAGE(CUDAToolkit)
     ADD_COMPILE_DEFINITIONS(USE_CUDA)
+    SET(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
     # ADD_DEFINITIONS(-DVIENNACL_WITH_CUDA) # ViennaCL is DEPRECATED and to be removed
     SET(CUDA_ARCH_LIST "70" CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
                                         compute capability versions (6.1, 7.0, etc) to generate code for. \
                                         Set to Auto for automatic detection (default)."
     )
-    SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST} CACHE STRING "")
+    IF (CUDA_ARCH_LIST)
+        SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST} CACHE STRING "")
+    ENDIF()
     LINK_DIRECTORIES(${CUDAToolkit_LIBRARY_DIR})
     INCLUDE_DIRECTORIES(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} ${CUDAToolkit_INCLUDE_DIRS})
 
@@ -211,10 +225,12 @@ if (USE_CUDA)
     SET(CMAKE_CUDA_HOST_COMPILER "g++" CACHE STRING "CUDA host compiler")
     SET(CUDA_HOST_COMPILER ${CMAKE_CUDA_HOST_COMPILER} CACHE STRING "CUDA_HOST_COMPILER")
     SET(CUDA_USE_STATIC_RUNTIME ON)
-    SET(COMPILER_EXTENSIONS_CUDA -ccbin=${CMAKE_CUDA_HOST_COMPILER} --expt-relaxed-constexpr -DCUDACC --forward-unknown-opts -lineinfo --use-local-env -allow-unsupported-compiler --extended-lambda --threads=${NCPU} --default-stream=per-thread --std=c++${CXX_STANDARD})
+    SET(COMPILER_EXTENSIONS_CUDA -ccbin=${CMAKE_CUDA_HOST_COMPILER} --expt-relaxed-constexpr --forward-unknown-opts --use-local-env -allow-unsupported-compiler --extended-lambda --threads=${NCPU} --default-stream=per-thread --std=c++${CXX_STANDARD} -split-compile=${NCPU}) # -ftz=true)
+    LIST(APPEND LINK_FLAGS_CUDA -Wnvlink,-w)
     IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-        LIST(APPEND COMPILER_EXTENSIONS_CUDA -O3 --extra-device-vectorization --gen-opt-lto --fmad=true)
-        LIST(APPEND LINK_FLAGS_CUDA -Wnvlink,-w)
+        LIST(APPEND COMPILER_EXTENSIONS_CUDA -O3 --dopt=on -lineinfo --extra-device-vectorization --fmad=true --gen-opt-lto --prec-div=true --prec-sqrt=true --ftz=true) # --gpu-architecture=lto_${CMAKE_CUDA_ARCHITECTURES}
+    ELSEIF(CMAKE_BUILD_TYPE MATCHES "Debug")
+        LIST(APPEND COMPILER_EXTENSIONS_CUDA -G -g)
     ENDIF ()
     FOREACH (OPT IN LISTS COMPILER_EXTENSIONS_CUDA)
         ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:${OPT}>")
@@ -229,8 +245,7 @@ if (USE_CUDA)
         FOREACH (OPT IN LISTS LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_ICPX CXX_OPTIMIZATION_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_ICPX)
             ADD_LINK_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xlinker=${OPT}>")
         ENDFOREACH ()
-        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-lto>") # BFD linker crashes when seeing CUDA fatbinData segments
-        #ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=--cuda-gpu-arch=sm_${CMAKE_CUDA_ARCHITECTURES}>") # For Intel compiler OMP target
+        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=--cuda-gpu-arch=sm_${CMAKE_CUDA_ARCHITECTURES}>") # For Intel compiler OMP target
     ELSE ()
         FOREACH (OPT IN LISTS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_GCC)
             ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${OPT}>")
@@ -241,8 +256,8 @@ if (USE_CUDA)
         FOREACH (OPT IN LISTS LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC CXX_OPTIMIZATION_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC)
             ADD_LINK_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xlinker=${OPT}>")
         ENDFOREACH ()
-        ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-lto>") # BFD linker crashes when seeing CUDA fatbinData segments
     ENDIF ()
+    ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-lto>") # BFD linker crashes when seeing CUDA fatbinData segments
     IF (NOT ${CUDA_SDK_ROOT_DIR} MATCHES "/")
         SET(CUDA_SDK_ROOT_DIR ${CUDA_TOOLKIT_ROOT_DIR})
     ENDIF ()
@@ -337,7 +352,7 @@ ENDIF ()
 
 SET(Boost_MIN_VERSION 1.74)
 
-SET(DEPLIBS_DIR /libs)
+SET(DEPLIBS_DIR /lib)
 SET(PQXX_LIBRARIES -lpqxx -lpq)
 LINK_LIBRARIES(hdf5_serial)
 

@@ -45,7 +45,6 @@ arma::mat &calc_cache::get_cached_cumulatives(const datamodel::SVRParameters &pa
             params.get_adjacent_levels(),
             arma::size(features_t),
             time};
-    LOG4_DEBUG("arma::size(features_t) hashed is " << std::hash<arma::SizeMat>{}(arma::size(features_t)));
     const auto prepare_f = [&params, &features_t]() { return datamodel::OnlineMIMOSVR::all_cumulatives(params, features_t); };
     return *cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
 }
@@ -114,7 +113,7 @@ std::tuple<mat_ptr, vec_ptr, times_ptr> calc_cache::get_cached_labels(
         return std::tuple{p_labels, p_last_knowns, p_label_times};
     };
     const auto [p_labels, p_last_knowns, p_label_times] = cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
-    return {ptr<arma::mat>(p_labels->colptr(step), p_labels->n_rows, 1, 0, 1), p_last_knowns, p_label_times};
+    return {ptr<arma::mat>(p_labels->col(step)), p_last_knowns, p_label_times};
 }
 
 
@@ -198,7 +197,7 @@ void calc_cache::clear_tune_cache(const std::string &column_name)
 
 void calc_cache::clear()
 {
-    std::for_each(std::execution::par_unseq, cached_register::cr.begin(), cached_register::cr.end(), [](auto &i) { i->clear(); });
+    std::for_each(C_default_exec_policy, cached_register::cr.begin(), cached_register::cr.end(), [](auto &i) { i->clear(); });
 }
 
 }

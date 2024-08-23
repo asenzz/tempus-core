@@ -409,7 +409,8 @@ std::string SVRParameters::to_string() const
       << ", column name " << input_queue_column_name
       << ", decon level " << decon_level_
       << ", chunk " << chunk_ix_
-      << ", gradient " << grad_level_;
+      << ", gradient " << grad_level_
+      << ", step " << step_;
 
     return s.str();
 }
@@ -472,8 +473,10 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
 bool t_feature_mechanics::needs_tuning() const noexcept
 {
     return quantization.empty() || quantization.has_nonfinite()
-        || stretches.empty() || stretches.has_nonfinite()
-        || trims.empty() || trims.has_nonfinite();
+           || stretches.empty() || stretches.has_nonfinite()
+           || shifts.empty() || shifts.has_nonfinite()
+           || skips.empty() || skips.has_nonfinite()
+           || trims.empty();
 }
 }
 }

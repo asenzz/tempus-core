@@ -42,14 +42,12 @@ OnlineMIMOSVR::batch_train(
         }
     }
 
-    size_t num_chunks = ixs.size();
     bool tuned = false;
     if (needs_tuning() && !is_manifold()) {
         if (precalc_kernel_matrices && precalc_kernel_matrices->size())
             LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
-        PROFILE_EXEC_TIME(tune_fast(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level() << " of " << num_chunks << " chunks");
-        num_chunks = ixs.size();
-#if 0 // save parameters
+        PROFILE_EXEC_TIME(tune_fast(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
+#ifdef SAVE_PARAMETERS
         if (model_id) {
             for (const auto &p: param_set) {
                 if (APP.svr_parameters_service.exists(p))
@@ -66,9 +64,9 @@ OnlineMIMOSVR::batch_train(
         tuned = true;
     }
 
-    if (!tuned && precalc_kernel_matrices && precalc_kernel_matrices->size()) {
+    const unsigned num_chunks = ixs.size();
+    if (!tuned && precalc_kernel_matrices && precalc_kernel_matrices->size() == num_chunks) {
         p_kernel_matrices = precalc_kernel_matrices;
-        num_chunks = p_kernel_matrices->size();
         LOG4_DEBUG("Using " << num_chunks << " precalculated matrices.");
     } else if (precalc_kernel_matrices && !precalc_kernel_matrices->empty()) {
         LOG4_ERROR("Precalculated kernel matrices do not match needed chunks count!");
@@ -80,7 +78,7 @@ OnlineMIMOSVR::batch_train(
         if (weight_chunks.size() != num_chunks) weight_chunks.resize(num_chunks);
         if (p_kernel_matrices->size() != num_chunks) p_kernel_matrices->resize(num_chunks);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_chunks))
-        for (size_t i = 0; i < num_chunks; ++i) {
+        for (unsigned i = 0; i < num_chunks; ++i) {
             const auto p_params = get_params_ptr(i);
 
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, i, gradient, step);
@@ -107,7 +105,7 @@ void OnlineMIMOSVR::learn(
     if (new_x.empty() || new_y.empty() || new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols || new_ylk.n_rows != new_y.n_rows || new_x.n_rows != new_y.n_rows)
         LOG4_THROW("New data dimensions labels " << arma::size(new_y) << ", last-knowns " << arma::size(new_ylk) << ", features " << arma::size(new_x) <<
             " not sane or do not match model data dimensions labels " << arma::size(*p_labels) << ", features " << arma::size(*p_features) << ", last-knowns " << arma::size(*p_last_knowns));
-    if (p_features->n_rows == samples_trained) { // First call to learn
+    if (p_features->n_rows == samples_trained) { // First call to online learn copy batch data
         p_features = otr(*p_features);
         p_labels = otr(*p_labels);
         p_last_knowns = otr(*p_last_knowns);
@@ -308,9 +306,7 @@ void OnlineMIMOSVR::learn(
     p_labels->insert_rows(p_labels->n_rows, new_y);
     p_last_knowns->insert_rows(p_last_knowns->n_rows, new_ylk);
 
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(affected_chunks.size()))
-    for (size_t i = 0; i < affected_chunks.size(); ++i)
-        calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit());
+    OMP_FOR_i(affected_chunks.size()) calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit());
     update_all_weights();
     samples_trained += new_rows_ct;
     last_trained_time = last_value_time;
@@ -322,7 +318,10 @@ void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const size_t iters)
     const auto p_params = get_params_ptr(chunk_ix);
     arma::mat K_epsco = p_kernel_matrices->at(chunk_ix);
     K_epsco.diag().fill(1. / p_params->get_svr_C());
-    solve_irwls(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters);
+    PROFILE_EXEC_TIME(solve_irwls(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters),
+                        "Solve weights for chunk " << chunk_ix << ", level " << level << ", iters " << iters);
+    PROFILE_EXEC_TIME(solve_opt(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters),
+                      "Solve weights for chunk " << chunk_ix << ", level " << level);
     LOG4_TRACE("Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << *p_params << ", K epsco " << common::present(K_epsco)
                         << ", w " << common::present(weight_chunks[chunk_ix]));
 }

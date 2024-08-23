@@ -86,7 +86,7 @@ long DataSource::batch_update(const std::string& table_name, const datamodel::Da
 void DataSource::cleanup_queue_table(const std::string &table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)
 {
     if (data.empty()) return;
-    LOG4_DEBUG("Cleaning queue of size " << data.size() << " rows, starting " << std::max(start_time, data.begin()->get()->get_value_time()) << " until " << data.rbegin()->get()->get_value_time());
+    LOG4_DEBUG("Cleaning queue of size " << data.size() << " rows, starting " << std::max(start_time, data.front()->get_value_time()) << " until " << data.back()->get_value_time());
     scoped_transaction_guard_ptr trx = open_transaction();
     const auto start_iter = lower_bound_back(data, start_time);
     auto start_ix = std::distance(data.begin(), start_iter);

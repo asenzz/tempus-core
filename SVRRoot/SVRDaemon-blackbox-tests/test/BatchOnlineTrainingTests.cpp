@@ -51,7 +51,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
     new_iq->set_data(aci.input_queue_service.load(NEW_VALUES_QUEUE));
     datamodel::InputQueue_ptr new_iq_aux = aci.input_queue_service.get_queue_metadata(NEW_VALUES_AUX_QUEUE);
     new_iq_aux->set_data(aci.input_queue_service.load(NEW_VALUES_AUX_QUEUE));
-    // new_iq_aux->get_data().erase(new_iq_aux->begin(), lower_bound(new_iq_aux->get_data(), new_iq->begin()->get()->get_value_time()));
+    // new_iq_aux->get_data().erase(new_iq_aux->begin(), lower_bound(new_iq_aux->get_data(), new_iq->front()->get_value_time()));
     //InputQueue_ptr new_ohlc_iq = aci.input_queue_service.get_queue_metadata(NEW_VALUES_QUEUE_OHLC);
     //new_ohlc_iq->set_data(aci.input_queue_service.load(NEW_VALUES_QUEUE_OHLC));
 
@@ -64,7 +64,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
     for (auto new_iq_iter = new_iq->begin(); new_iq_iter != new_iq->end(); ++new_iq_iter)
     {
         const auto t_start = std::chrono::high_resolution_clock::now();
-        LOG4_DEBUG("Start iteration, training until " << iq->get_data().rbegin()->get()->get_value_time());
+        LOG4_DEBUG("Start iteration, training until " << iq->get_data().back()->get_value_time());
 
         di.trigger_next_iteration(); di.wait_iteration_finished();
         di.trigger_next_iteration(); di.wait_iteration_finished();
@@ -90,7 +90,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
             const double cur_last_mae = total_last_known_mae / double(ctr);
             const double last_hit_pct = 100. * double(last_known_hit_ctr) / double(ctr);
             const double hit_rate_pct = 100. * double(hit_ctr) / double(ctr);
-            LOG4_INFO("Cycle " << ctr << " trained until " << iq->get_data().rbegin()->get()->get_value_time() << ", predicted " << pred_time << ", hit rate " << hit_rate_pct << " pct, last known hit rate " << last_hit_pct << " pct, MAE " << cur_mae << ", last known MAE " << cur_last_mae << ", alpha " << 100. * (cur_last_mae/cur_mae - 1.) << " pct, MAE OHLC " << double(total_mae_ohlc) / double(ctr) << ", last known MAE OHLC " << double(total_last_known_ohlc) / double(ctr));
+            LOG4_INFO("Cycle " << ctr << " trained until " << iq->get_data().back()->get_value_time() << ", predicted " << pred_time << ", hit rate " << hit_rate_pct << " pct, last known hit rate " << last_hit_pct << " pct, MAE " << cur_mae << ", last known MAE " << cur_last_mae << ", alpha " << 100. * (cur_last_mae/cur_mae - 1.) << " pct, MAE OHLC " << double(total_mae_ohlc) / double(ctr) << ", last known MAE OHLC " << double(total_last_known_ohlc) / double(ctr));
         } else {
             LOG4_ERROR("Forecasts validation failed for cycle at " << pred_time);
         }
@@ -109,7 +109,7 @@ void
 update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter)
 {
     LOG4_DEBUG("Adding new datarow for time " << new_iq_iter->get()->get_value_time());
-    const auto prev_last_time = iq->get_data().rbegin()->get()->get_value_time() + iq->get_resolution() - bpt::seconds(1);
+    const auto prev_last_time = iq->get_data().back()->get_value_time() + iq->get_resolution() - bpt::seconds(1);
     iq->get_data().emplace_back(*new_iq_iter);
     APP.input_queue_service.save(iq, prev_last_time);
     APP.flush_dao_buffers();

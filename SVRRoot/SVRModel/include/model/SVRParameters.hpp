@@ -76,7 +76,7 @@ constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
 constexpr double C_default_svrparam_kernel_param2 = 0;
-constexpr unsigned C_default_svrparam_decrement_distance = common::C_default_kernel_max_chunk_size;
+constexpr unsigned C_default_svrparam_decrement_distance = common::C_default_kernel_max_chunk_len;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
 constexpr svr::datamodel::kernel_type_e C_default_svrparam_kernel_type = svr::datamodel::kernel_type_e::PATH;
 constexpr unsigned C_default_svrparam_kernel_type_uint = unsigned(svr::datamodel::kernel_type_e::PATH);
@@ -85,9 +85,11 @@ const unsigned C_default_svrparam_feature_quantization = std::stoul(common::C_de
 
 struct t_feature_mechanics
 {
-    arma::Col<unsigned> quantization;
-    arma::vec stretches;
-    arma::uvec trims;
+    arma::u32_vec quantization;
+    arma::fvec stretches;
+    std::deque<arma::uvec> trims;
+    arma::u32_vec shifts;
+    arma::fvec skips;
 
     bool needs_tuning() const noexcept;
 };

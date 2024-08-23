@@ -72,7 +72,7 @@ bool DQScalingFactor::operator<(const DQScalingFactor &o) const
 
 bool DQScalingFactor::in(const dq_scaling_factor_container_t &c)
 {
-    return std::any_of(std::execution::par_unseq, c.begin(), c.end(), [&](const auto &p) { return *p ^= *this; });
+    return std::any_of(C_default_exec_policy, c.begin(), c.end(), [&](const auto &p) { return *p ^= *this; });
 }
 
 

@@ -7,25 +7,24 @@ namespace svr {
 namespace common {
 
 // GPU Context, set the worker as blocked during its lifetime.
-__attribute_noinline__ gpu_context::gpu_context()
+__attribute_noinline__ gpu_context::gpu_context() :
+        context_id_(gpu_handler_hid::get().get_free_gpu()), dev_ct(gpu_handler_hid::get().get_gpu_devices_count())
 {
-    __asm("");
-    context_id_ = gpu_handler_hid::get().get_free_gpu();
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
 __attribute_noinline__ gpu_context::gpu_context(const gpu_context &context) :
-context_id_(context.context_id_)
+        context_id_(context.context_id_), dev_ct(gpu_handler_hid::get().get_gpu_devices_count())
 {};
 
-size_t gpu_context::id() const
+unsigned gpu_context::id() const
 {
     return context_id_;
 }
 
-size_t gpu_context::phy_id() const
+unsigned gpu_context::phy_id() const
 {
-    const size_t gpu_id = context_id_ % gpu_handler_hid::get().get_gpu_devices_count();
+    const unsigned gpu_id = context_id_ % dev_ct;
     LOG4_TRACE("Returning GPU with ID " << gpu_id);
     return gpu_id;
 }
@@ -37,7 +36,11 @@ viennacl::ocl::context &gpu_context::ctx() const
 
 gpu_context::~gpu_context()
 {
+#ifdef GPU_QUEUE
+    gpu_handler_hid::get().return_gpu(context_id_);
+#else
     gpu_handler_hid::get().return_gpu();
+#endif
     LOG4_TRACE("Exit ctx " << context_id_);
 }
 
@@ -96,16 +99,15 @@ void gpu_helper::enqueue(const viennacl::ocl::kernel &kernel, const size_t local
     const auto err = clEnqueueNDRangeKernel(
             kernel.context().get_queue().handle().get(), kernel.handle().get(), 1, NULL,
             &global_work_size, &local_work_size, 0, NULL, NULL);
-    if (err != CL_SUCCESS)
-        LOG4_THROW("clEnqueueNDRangeKernel failed, " << get_error_string(err));
+    if (err != CL_SUCCESS) LOG4_THROW("clEnqueueNDRangeKernel failed, " << get_error_string(err));
 }
 
 } //namespace common
 
 
 namespace cl12 {
-cl_int
-kernel_helper::enqueue(
+
+cl_int kernel_helper::enqueue(
         const command_queue &queue,
         const ::cl::NDRange &offset,
         const ::cl::NDRange &global,
@@ -118,6 +120,12 @@ kernel_helper::enqueue(
         LOG4_THROW("OpenCL execution failed. Error: " << svr::common::gpu_helper::get_error_string(code));
     return code;
 }
+
+cl::NDRange ndrange(const range_args2_t &range_args)
+{
+    return {range_args[0], range_args[1]};
+}
+
 }
 
 } //namespace svr

@@ -75,5 +75,5 @@ void ResourceMeasure::print_measure_info()
 
 size_t ResourceMeasure::get_cpu_count()
 {
-    return std::thread::hardware_concurrency();
+    return svr::C_n_cpu;
 }

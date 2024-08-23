@@ -3,15 +3,11 @@
 //
 
 //#define BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS 1 // Otherwise Valgrind crashes on init
-#include <algorithm>
 #include <armadillo>
 #include <boost/math/distributions/students_t.hpp>
 #include <execution>
 #include <mutex>
 #include <cmath>
-#include <numeric>
-#include <tuple>
-#include <unordered_set>
 #include <vector>
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
@@ -25,13 +21,19 @@
 namespace svr {
 namespace datamodel {
 
-arma::mat stretch(const arma::mat &m, const arma::vec &stretches)
+// Stretch, shift, skip and transpose rows with indexes
+arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uvec &ixs)
 {
-    arma::mat v(arma::size(m), arma::fill::none);
+    arma::mat v(m.n_cols, ixs.size(), arma::fill::none);
     OMP_FOR_(m.n_elem, simd collapse(2))
     for (unsigned c = 0; c < m.n_cols; ++c)
-        for (unsigned r = 0; r < m.n_rows; ++r)
-            v(r, c) = stretch_ix(m.colptr(c), r, m.n_rows, stretches[c]);
+        for (unsigned r = 0; r < ixs.size(); ++r) {
+            const auto i = ixs[r] - fm.shifts[c];
+            const auto st = fm.stretches[c];
+            const auto sk = fm.skips[c];
+            v(c, r) = m(STRETCHSKIP_(i), c);
+            // v(c, r) = stretch_ix(m.colptr(c), ixs[r] - shifts[c], m.n_rows, stretches[c]);
+        }
     return v;
 }
 
@@ -42,7 +44,7 @@ arma::mat OnlineMIMOSVR::feature_chunk_t(const arma::uvec &ixs_i)
         LOG4_WARN("Feature alignment parameters not present.");
         return p_features->rows(ixs_i).t();
     }
-    return stretch(*p_features, fm.stretches).rows(ixs_i).t();
+    return sst(*p_features, fm, ixs_i);
 }
 
 arma::mat OnlineMIMOSVR::predict_chunk_t(const arma::mat &x_predict)
@@ -52,8 +54,7 @@ arma::mat OnlineMIMOSVR::predict_chunk_t(const arma::mat &x_predict)
         LOG4_WARN("Feature alignment parameters not present.");
         return x_predict.t();
     }
-    // LOG4_DEBUG("fm.stretches are " << fm.stretches);
-    return stretch(arma::join_cols(*p_features, x_predict), fm.stretches).tail_rows(x_predict.n_rows).t();
+    return sst(arma::join_cols(*p_features, x_predict), fm, arma::regspace<arma::uvec>(p_features->n_rows, p_features->n_rows + x_predict.n_rows - 1));
 }
 
 arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict)

@@ -20,7 +20,7 @@ SVRParametersService::SVRParametersService(dao::SVRParametersDAO &svr_parameters
 
 datamodel::SVRParameters_ptr SVRParametersService::is_manifold(const datamodel::t_param_set &param_set)
 {
-    auto res = std::find_if(std::execution::par_unseq, param_set.cbegin(), param_set.cend(), [](const auto &p) { return p->is_manifold(); });
+    auto res = std::find_if(C_default_exec_policy, param_set.cbegin(), param_set.cend(), [](const auto &p) { return p->is_manifold(); });
     return res == param_set.end() ? nullptr : *res;
 }
 
@@ -114,7 +114,7 @@ SVRParametersService::slice(const datamodel::t_param_set &params, const size_t c
 
 datamodel::t_param_set::iterator SVRParametersService::find(datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
 {
-    return std::find_if(std::execution::par_unseq, params.begin(), params.end(), [chunk_ix, grad_ix](const auto &p) {
+    return std::find_if(C_default_exec_policy, params.begin(), params.end(), [chunk_ix, grad_ix](const auto &p) {
         return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
                && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix);
     });
@@ -122,7 +122,7 @@ datamodel::t_param_set::iterator SVRParametersService::find(datamodel::t_param_s
 
 datamodel::t_param_set::const_iterator SVRParametersService::find(const datamodel::t_param_set &params, const size_t chunk_ix, const size_t grad_ix)
 {
-    return std::find_if(std::execution::par_unseq, params.cbegin(), params.cend(), [chunk_ix, grad_ix](const auto &p) {
+    return std::find_if(C_default_exec_policy, params.cbegin(), params.cend(), [chunk_ix, grad_ix](const auto &p) {
         return (chunk_ix == std::numeric_limits<size_t>::max() || p->get_chunk_index() == chunk_ix)
                && (grad_ix == std::numeric_limits<size_t>::max() || p->get_grad_level() == grad_ix);
     });
@@ -138,7 +138,7 @@ bool SVRParametersService::check(const datamodel::t_param_set &params, const siz
 {
     std::deque<bool> present(num_chunks, false);
     for (const auto &p: params) present[p->get_chunk_index()] = true;
-    return std::all_of(std::execution::par_unseq, present.cbegin(), present.cend(), [](const auto p) { return p; });
+    return std::all_of(C_default_exec_policy, present.cbegin(), present.cend(), [](const auto p) { return p; });
 }
 
 std::set<size_t> SVRParametersService::get_adjacent_indexes(const size_t level, const double ratio, const size_t level_count)
@@ -166,7 +166,7 @@ std::set<size_t> SVRParametersService::get_adjacent_indexes(const size_t level, 
 
     std::set<size_t> res;
     t_omp_lock level_indexes_l;
-#pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / std::thread::hardware_concurrency())
+#pragma omp parallel for num_threads(adj_threads(max_index - min_index)) schedule(static, 1 + (max_index - min_index) / C_n_cpu)
     for (ssize_t level_index = min_index; level_index <= max_index; ++level_index) {
         if (level_index >= 0
             && level_index < ssize_t(level_count)

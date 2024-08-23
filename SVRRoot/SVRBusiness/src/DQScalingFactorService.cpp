@@ -27,7 +27,7 @@ void DQScalingFactorService::add(datamodel::dq_scaling_factor_container_t &sf, c
 
 void DQScalingFactorService::add(datamodel::dq_scaling_factor_container_t &sf, const datamodel::dq_scaling_factor_container_t &new_sf, const bool overwrite)
 {
-    std::for_each(std::execution::par_unseq, new_sf.cbegin(), new_sf.cend(), [&sf, overwrite](const auto &nf)
+    std::for_each(C_default_exec_policy, new_sf.cbegin(), new_sf.cend(), [&sf, overwrite](const auto &nf)
                         { if (!match_n_set(sf, *nf, overwrite)) sf.emplace(nf); });
 }
 
@@ -69,7 +69,7 @@ DQScalingFactorService::find(
         const bool check_features,
         const bool check_labels)
 {
-    const auto res = std::find_if(std::execution::par_unseq, scaling_factors.cbegin(), scaling_factors.cend(),
+    const auto res = std::find_if(C_default_exec_policy, scaling_factors.cbegin(), scaling_factors.cend(),
                                   [&check_features, &check_labels, &model_id, &chunk, &gradient, &step, &level](const auto &sf) {
                                       return (!model_id || !sf->get_model_id() || sf->get_model_id() == model_id)
                                              && level == sf->get_decon_level()
@@ -89,6 +89,7 @@ DQScalingFactorService::find(
     return *res;
 }
 
+
 double DQScalingFactorService::calc_dc_offset(const arma::mat &v)
 {
     double r;
@@ -97,10 +98,17 @@ double DQScalingFactorService::calc_dc_offset(const arma::mat &v)
     // return arma::mean(arma::vectorise(v));
 }
 
-
 double DQScalingFactorService::calc_scaling_factor(const arma::mat &v)
 {
     return arma::median(arma::vectorise(arma::abs(v))) / common::C_input_obseg_labels;
+}
+
+
+std::pair<double, double> DQScalingFactorService::calc(const arma::mat &v)
+{
+    const auto dc = calc_dc_offset(v);
+    const auto sf = calc_scaling_factor(v - dc);
+    return {dc, sf};
 }
 
 
@@ -195,7 +203,7 @@ double DQScalingFactorService::scale_label(const datamodel::DQScalingFactor &sf,
 
 bool DQScalingFactorService::match_n_set(datamodel::dq_scaling_factor_container_t &sf, const datamodel::DQScalingFactor &nf, const bool overwrite)
 {
-    return std::any_of(std::execution::par_unseq, sf.begin(), sf.end(), [&nf, &overwrite](auto &of) {
+    return std::any_of(C_default_exec_policy, sf.begin(), sf.end(), [&nf, &overwrite](auto &of) {
         if (!(nf ^= *of)) return false;
 
         bool factor_set = false;
@@ -226,7 +234,7 @@ datamodel::dq_scaling_factor_container_t
 DQScalingFactorService::slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient, const size_t step)
 {
     datamodel::dq_scaling_factor_container_t res;
-    std::copy_if(std::execution::par_unseq, sf.cbegin(), sf.cend(), std::inserter(res, res.end()), [&chunk, &gradient, &step](const auto &p_sf) {
+    std::copy_if(C_default_exec_policy, sf.cbegin(), sf.cend(), std::inserter(res, res.end()), [&chunk, &gradient, &step](const auto &p_sf) {
         return p_sf->get_grad_depth() == gradient && p_sf->get_chunk_index() == chunk && p_sf->get_step() == step;
     });
     return res;

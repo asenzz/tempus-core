@@ -5,7 +5,7 @@
 #include <ostream>
 #include <string>
 #include <set>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_set.h>
 #include <algorithm>
 #include <locale>
 #include <codecvt>
@@ -15,8 +15,6 @@
 
 namespace svr {
 
-#define __TOSTR(X) #X
-#define TOSTR(X) __TOSTR(X)
 #define TOKENPASTE(x, y) x##y
 #define TOKENPASTE2(x, y) TOKENPASTE(x, y)
 
@@ -139,13 +137,13 @@ to_stringstream(const T *v, const size_t l)
     return s;
 }
 
-template<typename T> std::string
+template<typename T> inline std::string
 to_string(const T *v, const size_t l)
 {
     return to_stringstream(v, l).str();
 }
 
-template<typename T> std::string to_string(const arma::Mat<T> &v, const size_t start_i, const size_t n)
+template<typename T> inline std::string to_string(const arma::Mat<T> &v, const size_t start_i, const size_t n)
 {
     if (v.is_empty()) return "empty";
 
@@ -158,9 +156,12 @@ template<typename T> std::string to_string(const arma::Mat<T> &v, const size_t s
     return ss.str();
 }
 
+template<typename T> inline std::string to_string(const arma::Mat<T> &v, const size_t limit)
+{
+    return to_string(v, 0, std::min<size_t>(v.n_elem, limit));
+}
 
-template<typename T> std::string
-to_string(const std::vector<T> &v)
+template<typename T> inline std::string to_string(const std::vector<T> &v)
 {
     if (v.empty()) return "empty";
 
@@ -172,8 +173,7 @@ to_string(const std::vector<T> &v)
     return ss.str();
 }
 
-template<typename Tx, typename Ty>
-std::string to_string(const std::pair<Tx, Ty> &p)
+template<typename Tx, typename Ty> inline std::string to_string(const std::pair<Tx, Ty> &p)
 {
     std::stringstream s;
     s.precision(std::numeric_limits<double>::max_digits10);
@@ -181,7 +181,7 @@ std::string to_string(const std::pair<Tx, Ty> &p)
     return s.str();
 }
 
-template<typename T>
+template<typename T> inline
 std::string to_string(const std::deque<T> &v)
 {
     if (v.empty()) return "empty";
@@ -197,7 +197,7 @@ std::string to_string(const std::deque<T> &v)
 template<>
 std::string to_string(const std::vector<uint8_t> &v);
 
-template<typename T> std::stringstream
+template<typename T> inline std::stringstream
 to_tsvs(const std::vector<T> &v, const char sep = '\t')
 {
     std::stringstream ss;

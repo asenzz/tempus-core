@@ -71,9 +71,7 @@ __global__ void gpu_square_matrix_mult(const double *__restrict__ d_a, const dou
     const auto col = blockIdx.x * common::C_cu_tile_width + threadIdx.x;
     double tmp = 0;
     unsigned idx;
-#ifndef __GNUC__
-#pragma unroll
-#endif
+UNROLL()
     for (unsigned sub = 0; sub < gridDim.x; ++sub) {
         idx = row * n + sub * common::C_cu_tile_width + threadIdx.x;
         tile_a[threadIdx.y][threadIdx.x] = idx >= n * n ? 0 : d_a[idx];
@@ -82,9 +80,7 @@ __global__ void gpu_square_matrix_mult(const double *__restrict__ d_a, const dou
         tile_b[threadIdx.y][threadIdx.x] = idx >= n * n ? 0 : d_b[idx];
 
         __syncthreads();
-#ifndef __GNUC__
-#pragma unroll
-#endif
+UNROLL()
         for (unsigned k = 0; k < common::C_cu_tile_width; ++k)
             tmp += tile_a[threadIdx.y][k] * tile_b[k][threadIdx.x];
 

@@ -15,7 +15,7 @@ os.chdir("/mnt/faststore/repo/tempus-core/build")
 while offset < offlimit:
     os.system("pkill SVRDaemon")
     if not first:
-        res = os.system("rm -f /mnt/faststore/repo/tempus-core/libs/oemd_fir_masks_xauusd_1s/*")
+        res = os.system("rm -f /mnt/faststore/repo/tempus-core/lib/oemd_fir_masks_xauusd_1s/*")
         if res: print("Got error result ", str(res))
     else:
         first = False

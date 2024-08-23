@@ -28,7 +28,7 @@ template<typename kT, typename fT> __rT &cached<kT, fT>::operator()(const kT &ca
         iter = cache_cont.find(cache_key);
         if (iter == cache_cont.end()) {
             typename std::unordered_map<kT, __rT>::mapped_type r;
-            PROFILE_(r = f());
+            PROFILE_EXEC_TIME(r = f(), "Prepare");
             bool rc;
             std::tie(iter, rc) = cache_cont.emplace(cache_key, r); // If rehashing occurs here, we are doomed, in that case replace mx_map with plain mx
             if (!rc) LOG4_THROW("Error inserting entry in cache");

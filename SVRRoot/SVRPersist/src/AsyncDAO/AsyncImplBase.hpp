@@ -65,7 +65,7 @@ public:
         while (!store_buffer.push(value))
             flush();
 
-        StoreBufferController::getInstance().addStoreBuffer(*this);
+        StoreBufferController::get_instance().addStoreBuffer(*this);
     }
 
     void cache_no_store(my_value_t const & what)
@@ -111,7 +111,7 @@ public:
 
     void flush()
     {
-        StoreBufferController::getInstance().flush();
+        StoreBufferController::get_instance().flush();
     }
 };
 

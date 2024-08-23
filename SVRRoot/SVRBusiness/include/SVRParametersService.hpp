@@ -6,8 +6,8 @@
 #include <tuple>
 #include <armadillo>
 #include <deque>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_map.h>
+#include <oneapi/tbb/concurrent_set.h>
 #include "common/types.hpp"
 #include "model/SVRParameters.hpp"
 #include "onlinesvr.hpp"

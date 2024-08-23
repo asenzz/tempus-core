@@ -13,11 +13,11 @@ namespace business {
 
 class UserService {
 
-	svr::dao::UserDAO& userDao;
+	svr::dao::UserDAO& user_dao;
 
 public:
 
-    UserService(svr::dao::UserDAO& userDao) : userDao(userDao) {}
+    UserService(svr::dao::UserDAO& userDao) : user_dao(userDao) {}
 
     User_ptr get_user_by_user_name(const std::string& user_name);
     int save(const User_ptr&);

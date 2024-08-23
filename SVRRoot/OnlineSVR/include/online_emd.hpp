@@ -1,12 +1,13 @@
 #pragma once
 
 #include <vector>
+#include <common/cuda_util.cuh>
+
 #include "model/DataRow.hpp"
 #include "spectral_transform.hpp"
 #include "oemd_coefficients.hpp"
 #include "common/defines.h"
 #include "model/DeconQueue.hpp"
-#include "oemd_coefficients_search.hpp"
 
 // Algorithm to use FIR OEMD is default (slower and higher quality) or FFT OEMD faster but loss of precision on reconstruction
 // #define OEMDFFT
@@ -15,30 +16,22 @@
 namespace svr {
 namespace oemd {
 
-constexpr double oemd_epsilon = 0.0000011;
-constexpr double oemd_mask_sum = 1.00000;
-
-using oemd_fptr = void (*)(const std::vector<double> &, const std::vector<double> &, std::vector<double> &);
-
-class online_emd final : public spectral_transform
-{
-    const size_t levels;
+class online_emd final : public spectral_transform {
+    const unsigned levels;
     const double stretch_coef;
     static t_coefs_cache oemd_coefs_cache;
 
     static void transform(
             datamodel::datarow_range &inout,
             const std::vector<double> &tail,
-            const std::deque<size_t> &siftings,
+            const std::deque<unsigned> &siftings,
             const std::deque<std::vector<double>> &mask,
             const double stretch_coef);
 
 public:
-    explicit online_emd(const size_t levels, const double stretch_coef = OEMD_STRETCH_COEF);
+    explicit online_emd(const unsigned levels, const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef);
 
-
-    t_oemd_coefficients_ptr get_masks(
-            const datamodel::datarow_range &input, const std::vector<double> &tail, const std::string &queue_name) const;
+    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_range &input, const std::vector<double> &tail, const std::string &queue_name) const;
 
     void transform(const std::vector<double> &input, std::vector<std::vector<double>> &decon,
                    const size_t padding /* = 0 */) override
@@ -46,39 +39,32 @@ public:
 
     void transform(
             datamodel::DeconQueue &decon_queue,
-            const size_t decon_start_ix = 0,
-            const size_t test_offset = 0,
-            const size_t custom_residuals_ct = std::numeric_limits<size_t>::max());
+            const unsigned decon_start_ix = 0,
+            const unsigned test_offset = 0,
+            const unsigned custom_residuals_ct = std::numeric_limits<unsigned>::max());
 
-    void inverse_transform(const std::vector<double> &decon, std::vector<double> &recon,
-                           const size_t padding /* = 0 */) const override;
+    void inverse_transform(const std::vector<double> &decon, std::vector<double> &recon, const size_t padding /* = 0 */) const override;
 
-    static size_t get_residuals_length(const double _stretch_coef = OEMD_STRETCH_COEF, const size_t siftings = DEFAULT_SIFTINGS);
+    static unsigned get_residuals_length(const double _stretch_coef = oemd_coefficients::C_oemd_stretch_coef, const unsigned siftings = oemd_coefficients::default_siftings);
 
-    static size_t get_residuals_length(const oemd_coefficients &coefs, const double stretch_coef = OEMD_STRETCH_COEF);
+    static unsigned get_residuals_length(const oemd_coefficients &coefs, const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef);
 
-    size_t get_residuals_length(const std::string &queue_name);
+    unsigned get_residuals_length(const std::string &queue_name);
 
-    static void
-    expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask);
+    static void expand_the_mask(const unsigned mask_size, const unsigned input_size, const double *dev_mask, double *dev_expanded_mask, const cudaStream_t custream);
 };
 
+__global__ void G_subtract_inplace(double *__restrict__ const x, CRPTR(double) y, const unsigned n);
 
-__global__ void G_vec_power(
-        const cufftDoubleComplex *__restrict__ x,
-        cufftDoubleComplex *__restrict__ y,
-        const size_t x_size,
-        const size_t siftings);
-
-__global__ void G_gpu_multiply_complex(
-        const size_t input_size,
-        const cufftDoubleComplex *__restrict__ multiplier,
-        cufftDoubleComplex *__restrict__ output);
-
-__global__ void G_vec_subtract_inplace(
-        double *__restrict__ x,
-        const double *__restrict__ y,
-        const size_t x_size);
+__global__ void G_apply_mask(
+        const double stretch_coef,
+        CRPTR(double) rx,
+        const unsigned x_size,
+        CRPTR(double) mask,
+        const unsigned mask_size,
+        const unsigned stretched_mask_size,
+        double *__restrict__ const rx2,
+        const unsigned start_x);
 
 }
 }

@@ -3,7 +3,7 @@
 #include <common.hpp>
 #include <map>
 #include <mkl_vml.h>
-#include "sobolvec.h"
+#include "sobol.hpp"
 
 
 namespace svr {
@@ -12,7 +12,7 @@ namespace svr {
 std::vector<double> operator*(const std::vector<double> &v1, const double &m)
 {
     std::vector<double> ret(v1.size());
-    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), ret.begin(), [m](const auto val) -> double { return val * m; });
+    std::transform(C_default_exec_policy, v1.begin(), v1.end(), ret.begin(), [m](const auto val) -> double { return val * m; });
     return ret;
 }
 
@@ -25,7 +25,7 @@ std::vector<double> operator*(const std::vector<double> &v1, const std::vector<d
 {
     assert(v1.size() == v2.size());
     std::vector<double> ret(v1.size());
-    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(),
+    std::transform(C_default_exec_policy, v1.begin(), v1.end(), v2.begin(), ret.begin(),
                    [](const auto val1, const auto val2) -> double { return val1 * val2; });
     return ret;
 }
@@ -34,7 +34,7 @@ std::vector<double> operator+(const std::vector<double> &v1, const std::vector<d
 {
     assert(v1.size() == v2.size());
     std::vector<double> ret(v1.size());
-    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(),
+    std::transform(C_default_exec_policy, v1.begin(), v1.end(), v2.begin(), ret.begin(),
                    [](const auto val1, const auto val2) -> double { return val1 + val2; });
     return ret;
 }
@@ -43,7 +43,7 @@ std::vector<double> operator-(const std::vector<double> &v1, const std::vector<d
 {
     assert(v1.size() == v2.size());
     std::vector<double> ret(v1.size());
-    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(),
+    std::transform(C_default_exec_policy, v1.begin(), v1.end(), v2.begin(), ret.begin(),
                    [](const auto val1, const auto val2) -> double { return val1 - val2; });
     return ret;
 }
@@ -94,12 +94,11 @@ std::string present_chunk(const arma::uvec &u, const double head_factor)
 arma::vec levy(const size_t d) // Return colvec of columns d
 {
     constexpr double beta = 3. / 2.;
+    constexpr double beta_1 = 1. / beta;
     static const double sigma = std::pow(tgamma(1. + beta) * sin(M_PI * beta / 2.) / (tgamma((1. + beta) / 2.) * beta * std::pow(2, ((beta - 1.) / 2.))), 1. / beta);
 
-    arma::vec u(d, arma::fill::randn);
-    u = u * sigma;
-    arma::vec v(d, arma::fill::randn);
-    return u / arma::pow(arma::abs(v), 1. / beta);
+    arma::vec u(d, arma::fill::randn), v(d, arma::fill::randn);
+    return sigma * u / arma::pow(arma::abs(v), beta_1);
 }
 
 double randouble()
@@ -132,7 +131,7 @@ fftshift(const arma::cx_mat &input)
 {
     arma::cx_mat output(arma::size(input));
     const int N = input.n_elem;
-    __omp_pfor_i(0, N, output(i) = input((i + N / 2) % N));
+    omp_pfor_i__(0, N, output(i) = input((i + N / 2) % N));
     return output;
 }
 
@@ -150,7 +149,7 @@ ifftshift(const arma::cx_mat &input)
 {
     arma::cx_mat output(arma::size(input));
     const auto N = input.n_elem;
-#pragma omp parallel for schedule(static, 1 + N / std::thread::hardware_concurrency()) num_threads(adj_threads(N))
+#pragma omp parallel for schedule(static, 1 + N / C_n_cpu) num_threads(adj_threads(N))
     for (size_t i = 0; i < N; ++i)
         output(i) = input((i + N - N / 2) % N);
     return output;
@@ -163,7 +162,7 @@ transpose_matrix(const std::vector<std::vector<double>> &vvmat)
     if (vvmat.empty()) return {};
 
     std::vector<std::vector<double>> result(vvmat[0].size(), std::vector<double>(vvmat.size()));
-    __omp_pfor(j, 0, vvmat[0].size(),
+    omp_pfor__(j, 0, vvmat[0].size(),
                for (size_t i = 0; i < vvmat.size(); ++i)
                    result[j][i] = vvmat[i][j];
     )
@@ -214,19 +213,13 @@ size_t next_power_of_two(size_t value)
 
 double get_uniform_random_value()
 {
-    static std::random_device rd;  //Will be used to obtain a seed for the random number engine
-    static std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+    static std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    static std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
     static std::mutex uniform_random_value_mutex;
     std::scoped_lock ml(uniform_random_value_mutex);
     std::uniform_real_distribution<double> dis(0., 1.);
     const auto rand_num = dis(gen);
     return rand_num;
-}
-
-
-unsigned long long init_sobol_ctr()
-{
-    return 78786876896ULL + (long) std::floor(get_uniform_random_value() * (double) 4503599627370496ULL);
 }
 
 
@@ -252,7 +245,7 @@ get_uniform_random_vector(const std::pair<std::vector<double>, std::vector<doubl
 arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &v2)
 {
     arma::vec ret(v1.size());
-    std::transform(std::execution::par_unseq, v1.begin(), v1.end(), v2.begin(), ret.begin(), [](const auto val1, const auto val2) { return val1 + val2; });
+    std::transform(C_default_exec_policy, v1.begin(), v1.end(), v2.begin(), ret.begin(), [](const auto val1, const auto val2) { return val1 + val2; });
     return ret;
 }
 
@@ -386,6 +379,14 @@ meanabs<double>(const arma::Mat<double> &m)
     return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
 }
 
+double fdsum(CPTR(float) v, const unsigned len)
+{
+    double r = 0;
+    OMP_FOR_(len, simd reduction(+:r) firstprivate(len) shared(v))
+    for (unsigned i = 0; i < len; ++i) r += v[i];
+    return r;
+}
+
 double max(const arma::mat &input)
 {
 #if 0 // IPP freezes on init
@@ -444,6 +445,68 @@ arma::mat unscale(const arma::mat &m, const double sf, const double dc)
     arma::mat r(arma::size(m));
     vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, r.memptr());
     return r;
+}
+
+
+constexpr unsigned max_D = 42;
+
+#define INIT_SOBOL
+
+void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, uint64_t sobol_ctr)
+{
+#ifdef INIT_SOBOL
+    if (!sobol_ctr) sobol_ctr = init_sobol_ctr();
+#else
+    std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    std::uniform_real_distribution<double> dis(0., 1.);
+#endif
+    const unsigned n = x0.n_cols;
+    const unsigned D = x0.n_rows;
+    if (bounds.n_cols != 2 || bounds.n_rows != D) THROW_EX_FS(std::invalid_argument, "n " << n << ", D " << D << ", bounds " << arma::size(bounds));
+    const arma::vec range = bounds.col(1) - bounds.col(0);
+    bool init_random = n < 2;
+    const double n_1 = n - 1;
+    OMP_FOR_(n * D, simd collapse(2) firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
+    for (unsigned i = 0; i < n; ++i) {
+        for (unsigned j = 0; j < D; ++j) {
+            const auto pow_j = pows.empty() ? 1. : pows[j];
+            if (init_random || j >= max_D) { // Use Sobol pseudo-random number
+#ifdef INIT_SOBOL
+                x0(j, i) = range[j] * std::pow(sobolnum(j, sobol_ctr + i), pow_j) + bounds(j, 0);
+#else
+                x0(j, i) = std::pow(dis(gen), pow_j);
+#endif
+#ifndef NDEBUG
+                LOG4_TRACE("Random particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow "
+                                              << pow_j);
+#endif
+            } else { // Produce equispaced grid
+                x0(j, i) = range[j] * std::pow(std::fmod(std::pow<double>(2, j) * (i / n_1), 1.), pow_j) + bounds(j, 0);
+#ifndef NDEBUG
+                LOG4_TRACE("Equispaced particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0));
+#endif
+            }
+        }
+    }
+    if (x0.has_nonfinite()) LOG4_THROW("Illegal init values in " << arma::size(x0));
+    LOG4_TRACE("Scaled particles, parameters matrix " << to_string(x0, 6) << ", bounds " << to_string(bounds, 6));
+}
+
+double alpha(const double reference_error, const double prediction_error)
+{
+    return 100. * (reference_error / prediction_error - 1.);
+    // return 100. * (1. - prediction_error / reference_error);
+}
+
+double mape(const double absolute_error, const double absolute_label)
+{
+    return 100. * absolute_error / absolute_label;
+}
+
+size_t to_fft_len(const size_t input_len)
+{
+    return input_len / 2 + 1;
 }
 
 } //namespace common

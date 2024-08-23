@@ -15,7 +15,7 @@ namespace svr {
 namespace datamodel {
 
 
-bool Ensemble::operator==(const Ensemble &o)
+bool Ensemble::operator==(const Ensemble &o) const
 {
     return dataset_id == o.dataset_id && models == o.models && p_decon_queue == o.p_decon_queue && aux_decon_queues == o.aux_decon_queues;
 }
@@ -41,7 +41,7 @@ Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::string &
             LOG4_DEBUG("Decon queue " << decon_queue_table_name << " does not exist in database, creating with default configuration.");
         } else if (load_decon_data)
             try {
-                APP.decon_queue_service.load(p_decon_queue);
+                APP.decon_queue_service.load(*p_decon_queue);
             } catch (const std::exception &ex) {
                 LOG4_ERROR("Loading decon data for " << *p_decon_queue << " failed , error " << ex.what());
             }
@@ -54,7 +54,7 @@ Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::string &
             LOG4_DEBUG("Aux decon queue " << decon_queue_table_name << " does not exist in database, creating with default configuration.");
         } else if (load_decon_data)
             try {
-                APP.decon_queue_service.load(p_aux_decon_queue);
+                APP.decon_queue_service.load(*p_aux_decon_queue);
             } catch (const std::exception &ex) {
                 LOG4_ERROR("Loading decon data for " << *p_aux_decon_queue << "failed , error " << ex.what());
             }
@@ -186,7 +186,7 @@ datamodel::DeconQueue_ptr Ensemble::get_aux_decon_queue(const size_t i) const
 
 datamodel::DeconQueue_ptr Ensemble::get_aux_decon_queue(const std::string &column_name) const
 {
-    const auto res = std::find_if(std::execution::par_unseq, aux_decon_queues.begin(), aux_decon_queues.end(),
+    const auto res = std::find_if(C_default_exec_policy, aux_decon_queues.begin(), aux_decon_queues.end(),
                                   [&column_name](const datamodel::DeconQueue_ptr &d) { return d->get_input_queue_column_name() == column_name; });
     if (res == aux_decon_queues.end()) {
         LOG4_ERROR("Invalid column name " << column_name);

@@ -22,7 +22,7 @@ void thread_pool::delete_instance()
 
 
 thread_pool::thread_pool()
-: thread_number {std::thread::hardware_concurrency() + HW_THREAD_OVERFLOW_PCT * std::thread::hardware_concurrency() / 100}
+: thread_number {C_n_cpu + HW_THREAD_OVERFLOW_PCT * C_n_cpu / 100}
 {
     for(size_t i = 0; i < thread_number; ++i)    {
         threads.push_back(new thread(*this));

@@ -74,7 +74,7 @@ void DeconQueue::update_data(const DataRow::container &new_data, const bool over
 
     // Sanity checks against existing decon data
     if (!new_data.empty() && data_.size() > 1)
-        if (new_data.begin()->get()->get_value_time() - data_.rbegin()->get()->get_value_time() > std::next(new_data.begin())->get()->get_value_time() - new_data.begin()->get()->get_value_time()) // TODO Max gap time
+        if (new_data.front()->get_value_time() - data_.back()->get_value_time() > std::next(new_data.begin())->get()->get_value_time() - new_data.front()->get_value_time()) // TODO Max gap time
             THROW_EX_FS(std::runtime_error,
                     "Adding new data will introduce a gap in decon queue " << input_queue_column_name_ << " time series!");
 

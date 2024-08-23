@@ -5,9 +5,9 @@
 
 namespace svr { namespace dao { class RequestDAO; } }
 namespace svr { namespace datamodel {
-    class MultivalRequest;
-    class MultivalResponse;
-    class ValueRequest;
+    struct MultivalRequest;
+    struct MultivalResponse;
+    struct ValueRequest;
     class User;
     class Dataset;
     class InputQueue;

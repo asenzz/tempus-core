@@ -105,7 +105,7 @@ void Model::set_step(const size_t _step)
 /** Get pointer to an OnlineSVR model instance */
 OnlineMIMOSVR_ptr Model::get_gradient(const size_t i) const
 {
-    const auto svr_model_iter = std::find_if(std::execution::par_unseq, svr_models.begin(), svr_models.end(), [&](const auto &p_svr_model) {
+    const auto svr_model_iter = std::find_if(C_default_exec_policy, svr_models.begin(), svr_models.end(), [&](const auto &p_svr_model) {
         return p_svr_model->get_gradient_level() == i;
     });
     if (svr_model_iter != svr_models.end()) return *svr_model_iter;

@@ -3,38 +3,32 @@
 
 #include <vector>
 #include <deque>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
-#include <cstddef>
+#include <oneapi/tbb/concurrent_map.h>
 #include <string>
-
-#include "util/string_utils.hpp"
-
-constexpr unsigned DEFAULT_SIFTINGS = 1;
-
-constexpr unsigned MASK_FILE_MAX_VER = 0x20;
-constexpr double OEMD_STRETCH_COEF = 1;
-
 
 namespace svr {
 
-std::string mask_file_name(const size_t ctr, const size_t level, const size_t level_count, const std::string &queue_name);
-
-const std::string C_oemd_fir_coefs_dir = getenv("BACKTEST") ? "../libs/oemd_fir_masks_xauusd_1s_backtest/" : "../libs/oemd_fir_masks_xauusd_1s/";
-
 struct oemd_coefficients;
 typedef std::shared_ptr<oemd_coefficients> t_oemd_coefficients_ptr;
-typedef tbb::concurrent_map<std::pair<const size_t, const std::string>, const t_oemd_coefficients_ptr> t_coefs_cache;
+typedef tbb::concurrent_map<std::pair<const unsigned, const std::string>, const t_oemd_coefficients_ptr> t_coefs_cache;
 
 struct oemd_coefficients {
-    std::deque<size_t> siftings;
+    static constexpr unsigned default_siftings = 1;
+    static constexpr unsigned mask_file_max_ver = 0x20;
+    static constexpr double C_oemd_stretch_coef = 1;
+
+    static const std::string oemd_fir_coefs_dir;
+
+    static std::string get_mask_file_name(const unsigned ctr, const unsigned level, const unsigned level_count, const std::string &queue_name);
+
+    oemd_coefficients();
+
+    oemd_coefficients(const std::deque<unsigned> &siftings_, const std::deque<std::vector<double>> &mask_);
+
+    std::deque<unsigned> siftings;
     std::deque<std::vector<double>> masks;
 
-    oemd_coefficients() : siftings({}), masks({}) {};
-
-    oemd_coefficients(
-            const std::deque<size_t> &siftings_, const std::deque<std::vector<double>>& mask_) : siftings(siftings_), masks(mask_) {}
-
-    static t_oemd_coefficients_ptr load(const size_t level_count, const std::string &queue_name);
+    static t_oemd_coefficients_ptr load(const unsigned level_count, const std::string &queue_name);
 };
 
 }

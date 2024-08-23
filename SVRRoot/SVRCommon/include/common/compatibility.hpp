@@ -10,16 +10,17 @@
 #include <armadillo>
 #include <viennacl/matrix.hpp>
 #include <execution>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_unordered_set.h>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_unordered_map.h>
+#include <oneapi/tbb/concurrent_map.h>
+#include <oneapi/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_unordered_set.h>
+#include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/functional/hash.hpp>
 #include <functional>
 #include <thread>
 
 #include "types.hpp"
 #include "defines.h"
+#include "constants.hpp"
 #include "util/string_utils.hpp"
 
 namespace bpt = boost::posix_time;
@@ -27,6 +28,25 @@ namespace bpt = boost::posix_time;
 #define dtype(T) std::decay_t<decltype(T)>
 #define release_cont(x) dtype((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
+#define CPTR(x) const x *const
+
+// General utility macro
+#define PP_CAT( A, B ) A ## B
+#define PP_EXPAND(...) __VA_ARGS__
+
+// Macro overloading feature support
+#define PP_VA_ARG_SIZE(...) PP_EXPAND(PP_APPLY_ARG_N((PP_ZERO_ARGS_DETECT(__VA_ARGS__), PP_RSEQ_N)))
+
+#define PP_ZERO_ARGS_DETECT(...) PP_EXPAND(PP_ZERO_ARGS_DETECT_PREFIX_ ## __VA_ARGS__ ## _ZERO_ARGS_DETECT_SUFFIX)
+#define PP_ZERO_ARGS_DETECT_PREFIX__ZERO_ARGS_DETECT_SUFFIX ,,,,,,,,,,,0
+
+#define PP_APPLY_ARG_N(ARGS) PP_EXPAND(PP_ARG_N ARGS)
+#define PP_ARG_N(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N,...) N
+#define PP_RSEQ_N 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
+#define PP_OVERLOAD_SELECT(NAME, NUM) PP_CAT( NAME ## _, NUM)
+#define PP_MACRO_OVERLOAD(NAME, ...) PP_OVERLOAD_SELECT(NAME, PP_VA_ARG_SIZE(__VA_ARGS__))(__VA_ARGS__)
+
 
 template <typename T>
 struct return_type : return_type<decltype(&T::operator())>
@@ -106,11 +126,11 @@ struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::re
 
 
 typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
+typedef std::shared_ptr<arma::cube> cube_ptr;
 typedef std::shared_ptr<arma::mat> mat_ptr;
 typedef std::shared_ptr<arma::vec> vec_ptr;
 typedef std::shared_ptr<std::deque<bpt::ptime>> times_ptr;
-
-using mutex_ptr = std::shared_ptr<std::mutex>;
+typedef arma::Col<std::time_t> tvec;
 
 std::string demangle(const std::string &name);
 
@@ -153,11 +173,6 @@ template<typename... Args> \
 inline auto highLevelF(Args&&... args) -> dtype(lowLevelF(std::forward<Args>(args)...)) \
 { \
     return lowLevelF(std::forward<Args>(args)...); \
-}
-
-template<typename T> unsigned adj_threads(const T iterations)
-{
-    return (unsigned) std::min<T>(iterations < 0 ? 0 : iterations, std::thread::hardware_concurrency());
 }
 
 template<typename T> const T &operator^(const std::set<T> &s, const size_t i)
@@ -319,23 +334,10 @@ max_size(const C &container)
 
 
 template<typename T>
-arma::uvec find(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
-{
-    arma::uvec r;
-#pragma omp parallel for ordered schedule(static, 1 + m2.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(m2.size()))
-    for (const auto e: m2) {
-        const arma::uvec r_e = arma::find(m1 == e);
-#pragma omp ordered
-        r.insert_rows(r.n_rows, r_e);
-    }
-    return r;
-}
-
-template<typename T>
 arma::uvec lower_bound(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
 {
     arma::uvec r;
-#pragma omp parallel for ordered schedule(static, 1 + m2.size() / std::thread::hardware_concurrency()) num_threads(adj_threads(m2.size()))
+#pragma omp parallel for ordered schedule(static, 1 + m2.size() / C_n_cpu) num_threads(adj_threads(m2.size()))
     for (const auto e: m2) {
         const arma::uvec r_e = arma::find(m1 >= e);
 #pragma omp ordered
@@ -688,9 +690,6 @@ template<typename ContainerT, typename PredicateT>
 void remove_if(ContainerT &items, const PredicateT &predicate)
 {
     typename std::decay_t<ContainerT>::iterator it = items.begin();
-#ifndef __GNUC__
-#pragma unroll
-#endif
     while (items.size() && it != items.end())
         if (predicate(*it)) {
             if (items.size() < 2) {

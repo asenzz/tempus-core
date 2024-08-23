@@ -66,7 +66,7 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
         y[n] = loss_fun(start);
         ++icount;
 
-        __omp_pfor(j, 0, n,
+        omp_pfor__(j, 0, n,
                    auto x = start[j];
             start[j] = start[j] + step[j] * del;
             for (size_t i = 0; i < n; i++) {
@@ -111,7 +111,7 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
             //  Calculate PBAR, the centroid of the simplex vertices
             //  excepting the vertex with Y value YNEWLO.
             //
-            __omp_pfor_i (0, n,
+            omp_pfor_i__ (0, n,
                           auto z = 0.0;
                 for (j = 0; j < nn; j++) {
                     z = z + p[i + j * n];
@@ -176,14 +176,14 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
                     //  Contraction on the Y(IHI) side of the centroid.
                     //
                 else if (ell == 0) {
-                    __omp_pfor_i (0, n, p2star[i] = pbar[i] + ccoeff * (p[i + ihi * n] - pbar[i]) )
+                    omp_pfor_i__ (0, n, p2star[i] = pbar[i] + ccoeff * (p[i + ihi * n] - pbar[i]) )
                     y2star = loss_fun(p2star);
                     ++icount;
                     //
                     //  Contract the whole simplex.
                     //
                     if (y[ihi] < y2star) {
-                        __omp_pfor(j, 0, nn,
+                        omp_pfor__(j, 0, nn,
                                    for (size_t i = 0; i < n; i++) {
                                 p[i + j * n] = (p[i + j * n] + p[i + ilo * n]) * 0.5;
                                 xmin[i] = p[i + j * n];
@@ -269,7 +269,7 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
         //
         //  Factorial tests to check that YNEWLO is a local minimum.
         //
-        __omp_pfor_i (0, n, xmin[i] = p[i + ilo * n])
+        omp_pfor_i__ (0, n, xmin[i] = p[i + ilo * n])
         ynewlo = y[ilo];
 
         if (nm_parameters.max_iteration_number_ < icount)
@@ -279,7 +279,7 @@ nm(const svr::optimizer::loss_callback_t &loss_fun, const std::vector<double> &i
 
         std::mutex mux;
         std::atomic<size_t> red_icount(0);
-        __omp_pfor_i (0, n,
+        omp_pfor_i__ (0, n,
                       auto del = step[i] * eps;
             xmin[i] = xmin[i] + del;
             auto z = loss_fun(xmin);

@@ -69,7 +69,7 @@ void InputQueueView::getAllInputQueues()
     session()["user"] = DEFAULT_WEB_USER;
     std::vector<datamodel::InputQueue_ptr> queue_vector;
     const auto queues = APP.input_queue_service.get_all_user_queues(DEFAULT_WEB_USER /* session()["user"] */ );
-    std::copy(std::execution::par_unseq, queues.begin(), queues.end(), std::back_inserter(queue_vector));
+    std::copy(C_default_exec_policy, queues.begin(), queues.end(), std::back_inserter(queue_vector));
     return_result(queue_vector);
 }
 
@@ -162,7 +162,7 @@ svr::dao::OptionalTimeRange
 parseTimeRange(session_interface &session, cppcms::json::object obj, string &logicalName, time_duration &resolution, datamodel::InputQueue_ptr &queue)
 {
     logicalName = obj["symbol"].str();
-    std::transform(std::execution::par_unseq, logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
+    std::transform(C_default_exec_policy, logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
     resolution = seconds(boost::lexical_cast<long>(obj["period"].str()));
 
     session["user"] = DEFAULT_WEB_USER;
@@ -344,7 +344,7 @@ void InputQueueView::historyData(cppcms::json::object data)
     json::value response;
     string symbol = data["symbol"].str();
     session()["user"] = DEFAULT_WEB_USER;
-    std::transform(std::execution::par_unseq, symbol.begin(), symbol.end(), symbol.begin(), ::tolower);
+    std::transform(C_default_exec_policy, symbol.begin(), symbol.end(), symbol.begin(), ::tolower);
     time_duration resolution = seconds(boost::lexical_cast<long>(data["period"].str()));
     LOG4_DEBUG("Resolution " << resolution);// << " data " << data);
     datamodel::InputQueue_ptr queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
@@ -425,7 +425,7 @@ void InputQueueView::sendTick(cppcms::json::object obj)
 {
 
     string logicalName = obj["symbol"].str();
-    std::transform(std::execution::par_unseq, logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
+    std::transform(C_default_exec_policy, logicalName.begin(), logicalName.end(), logicalName.begin(), ::tolower);
     time_duration resolution = seconds(boost::lexical_cast<long>(obj["period"].str()));
     session()["user"] = DEFAULT_WEB_USER;
     if (!AppContext::get_instance().input_queue_service.exists(session()["user"], logicalName, resolution)) {

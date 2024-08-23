@@ -18,6 +18,8 @@ using namespace svr;
 
 namespace {
 
+// constexpr double oemd_epsilon = 0.0000011;
+// constexpr double oemd_mask_sum = 1.00000;
 
 const std::string transform_input_filename = "../SVRRoot/OnlineSVR/test/online_emd_test_data/transform_input_eurusd_avg_1_cvmd_level_0";
 const std::string transform_result_filename = "online_emd_test_data/transform_output_real";
@@ -115,7 +117,7 @@ TEST_F(onlineEmdTransformTest, test_transform_correctness)
     std::deque<std::vector<double>> decon(TEST_LEVELS, std::vector<double>(input->size() - start_t));
     std::vector<double> invec(input->size() - start_t);
     std::atomic<bool> test_result{true};
-#pragma omp parallel for simd schedule(static, 1 + (input->size() - start_t) / std::thread::hardware_concurrency()) num_threads(adj_threads(input->size() - start_t))
+#pragma omp parallel for simd schedule(static, 1 + (input->size() - start_t) / C_n_cpu) num_threads(adj_threads(input->size() - start_t))
     for (size_t t = start_t; t < input->size(); ++t) {
         const size_t off_t = t >= DECON_OFFSET ? t - DECON_OFFSET : 0;
         double recon = 0, off_recon = 0;
@@ -218,7 +220,7 @@ public:
     onlineEmdInvTransformTest() : input(1024 * 9)
     {
         omp_set_nested(true);
-        omp_set_max_active_levels((int) std::thread::hardware_concurrency());
+        omp_set_max_active_levels((int) C_n_cpu);
         this->transformer = svr::spectral_transform::create(std::string("oemd"), 8);
     }
 

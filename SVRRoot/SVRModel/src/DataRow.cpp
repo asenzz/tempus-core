@@ -4,6 +4,7 @@
 #include "util/math_utils.hpp"
 #include "model/DataRow.hpp"
 #include "appcontext.hpp"
+#include "common/parallelism.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -81,6 +82,16 @@ double DataRow::get_value(const size_t column_index) const
 double &DataRow::get_value(const size_t column_index)
 {
     return values_[column_index];
+}
+
+double &DataRow::operator*()
+{
+    return values_.front();
+}
+
+const double &DataRow::operator*() const
+{
+    return values_.front();
 }
 
 double DataRow::operator()(const size_t column_index) const
@@ -205,7 +216,7 @@ bool DataRow::operator==(const DataRow &other) const
     return value_time_ == other.value_time_
            && tick_volume_ == other.tick_volume_
            && values_.size() == other.values_.size()
-           && std::equal(std::execution::par_unseq, values_.begin(), values_.end(), other.values_.begin());
+           && std::equal(C_default_exec_policy, values_.begin(), values_.end(), other.values_.begin());
 }
 
 bool DataRow::fast_compare(const DataRow::container &lhs, const DataRow::container &rhs)
@@ -256,7 +267,7 @@ clone_datarows(data_row_container::const_iterator it, const data_row_container::
 {
     const auto res_size = std::distance(it, end);
     data_row_container res(res_size);
-#pragma omp parallel for schedule(static, 1 + std::thread::hardware_concurrency() / res_size) num_threads(adj_threads(res_size))
+#pragma omp parallel for schedule(static, 1 + C_n_cpu / res_size) num_threads(adj_threads(res_size))
     for (std::decay_t<dtype(res_size)> i = 0; i < res_size; ++i) res[i] = ptr<datamodel::DataRow>(**(it + i));
     return res;
 }
@@ -561,8 +572,22 @@ lower_bound_or_before_back(const data_row_container &data, const data_row_contai
     }
     auto row_iter = lower_bound_back(data, hint_end, time_key);
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() > time_key) --row_iter;
-    if ((**row_iter).get_value_time() > time_key)
-        LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
+    if ((**row_iter).get_value_time() > time_key) LOG4_ERROR(
+            "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
+    return row_iter;
+}
+
+data_row_container::const_iterator
+lower_bound_or_before_back(const data_row_container &data, const bpt::ptime &time_key)
+{
+    if (data.empty()) {
+        LOG4_ERROR("Data is empty!");
+        return data.cend();
+    }
+    auto row_iter = lower_bound_back(data, data.cend(), time_key);
+    while (row_iter != data.cbegin() && (**row_iter).get_value_time() > time_key) --row_iter;
+    if ((**row_iter).get_value_time() > time_key) LOG4_ERROR(
+            "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
 }
 
@@ -576,8 +601,8 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
     }
     auto row_iter = lower_bound_back(data, hint_end, time_key);
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
-    if ((**row_iter).get_value_time() > time_key)
-        LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
+    if ((**row_iter).get_value_time() > time_key) LOG4_ERROR(
+            "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
 }
 
@@ -665,7 +690,7 @@ upper_bound(datamodel::DataRow::container &c, const bpt::ptime &t)
 // [start_it, it_end)
 // [start_time, end_time)
 bool
-generate_twap(
+generate_twav( // Time-weighted average volume
         const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
         const datamodel::DataRow::container::const_iterator &it_end,
         const bpt::ptime &start_time,
@@ -674,36 +699,33 @@ generate_twap(
         const size_t colix,
         arma::subview<double> out) // Needs to be zeroed out before submitting to this function
 {
-    auto valit = start_it;
-    const ssize_t inlen = (end_time - start_time) / hf_resolution;
-    arma::rowvec ct_prices(out.n_elem);
-    ssize_t inctr = 0;
+    assert(it_end >= start_it);
+    assert(end_time >= start_time);
+    auto volit = start_it;
+    const unsigned inlen = (end_time - start_time) / hf_resolution;
+    unsigned inctr = 0;
     const auto inout_ratio = double(out.n_elem) / double(inlen);
-    auto last_price = (**start_it)[colix];
-#pragma unroll
+    auto last_volume = (**start_it).get_tick_volume();
+UNROLL()
     for (auto time_iter = start_time; time_iter < end_time; time_iter += hf_resolution) {
-#pragma unroll
-        while (valit != it_end && (**valit).get_value_time() <= time_iter) {
-            last_price = (**valit)[colix];
-            ++valit;
+UNROLL()
+        while (volit != it_end && (**volit).get_value_time() <= time_iter) {
+            last_volume = (**volit).get_tick_volume();
+            ++volit;
         }
-        const auto outctr = inctr * inout_ratio;
-        out[outctr] += last_price;
-        ct_prices[outctr] += 1;
+        out[inctr * inout_ratio] += last_volume;
         ++inctr;
     }
-    out /= ct_prices;
 #ifndef NDEBUG
-    const auto dist_it = std::distance(start_it, valit);
-    if (inctr != inlen || dist_it < 1) 
+    const unsigned dist_it = std::distance(start_it, volit);
+    if (inctr != inlen || dist_it < 1)
         LOG4_THROW("Could not calculate TWAP for " << start_time << ", column " << colix << ", HF resolution " << hf_resolution);
     if (dist_it != inlen) LOG4_TRACE("HF price rows " << dist_it << " different than expected " << inlen);
     if (out.has_nonfinite()) LOG4_THROW(
-            "Out " << out << ", ct_prices " << ct_prices << ", hf_resolution " << hf_resolution << ", inlen " << inlen << ", inout_ratio " << inout_ratio << ", inctr " << inctr);
+            "Out " << out << ", hf_resolution " << hf_resolution << ", inlen " << inlen << ", inout_ratio " << inout_ratio << ", inctr " << inctr);
 #endif
     return true;
 }
-
 
 
 bpt::ptime // Returns last inserted row value time // TODO Add phases
@@ -765,6 +787,17 @@ datamodel::DataRow::insert_rows(
         (**row_iter)[level] += arma::mean(data.row(row_ix));
     }
     LOG4_END();
+}
+
+
+arma::mat to_arma_mat(const data_row_container &c)
+{
+    arma::mat v(c.size(), c.front()->size());
+    OMP_FOR_(v.n_elem, simd collapse(2))
+    for (unsigned i = 0; i < v.n_rows; ++i)
+        for (unsigned j = 0; j < v.n_cols; ++j)
+            v(i, j) = c[i]->at(j);
+    return v;
 }
 
 }

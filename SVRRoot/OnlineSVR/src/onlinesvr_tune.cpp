@@ -166,10 +166,10 @@ OnlineMIMOSVR::recombine_params(const size_t chunkix, const size_t stepix)
             const auto levix = business::ModelService::to_level_ix(colix, levct);
             const auto p_sf = business::DQScalingFactorService::find(scaling_factors, 0, chunkix, grad_level, stepix, levix, false, true);
             auto &tp = p_tune_predictions->at(levix).param_pred[rowix];
-#pragma unroll C_max_j
+UNROLL(C_max_j)
             for (uint32_t j = 0; j < C_max_j; ++j) {
                 const uint32_t elto = C_tune_min_validation_window + (C_max_j - j - 1) * C_slide_skip;
-#pragma unroll
+UNROLL()
                 for (uint32_t el = 0; el < elto; ++el) {
                     params_preds[rowix * colct + colix].predictions[j][el] = arma::mean(tp.p_predictions->at(j)->row(el));
                     params_preds[rowix * colct + colix].labels[j][el] = arma::mean(p_tune_predictions->at(levix).labels[j].row(el));
@@ -198,7 +198,7 @@ OnlineMIMOSVR::recombine_params(const size_t chunkix, const size_t stepix)
         const uint64_t end_row_ix = std::min<uint64_t>(start_row_ix + rows_gpu, num_combos);
         const uint64_t chunk_rows_ct = end_row_ix - start_row_ix;
         arma::uchar_mat combos(chunk_rows_ct, colct);
-#pragma omp unroll
+UNROLL()
         for (uint32_t colix = 0; colix < colct; ++colix)
             combos.col(colix) = arma::conv_to<arma::uchar_colvec>::from(common::mod<double>(
                     arma::regspace(start_row_ix, end_row_ix - 1) / std::pow<double>(common::C_tune_keep_preds, colct - colix) / filter_combos, common::C_tune_keep_preds));

@@ -10,7 +10,7 @@ NUM_THREADS=8
 if [[ `pgrep paramtune` ]]; then echo "Paramtune is already running!"; exit 0; fi
 pkill paramtune
 pkill SVRDaemon
-/usr/bin/python ../libs/paramtune_get_best_params.py $PARAMTUNE_OUTPUT 16 > /tmp/paramtune.best && rm -f "$PARAMTUNE_OUTPUT"
+/usr/bin/python ../lib/paramtune_get_best_params.py $PARAMTUNE_OUTPUT 16 > /tmp/paramtune.best && rm -f "$PARAMTUNE_OUTPUT"
 mv /tmp/paramtune.best $PARAMTUNE_OUTPUT
 sleep 1
 rm -f /dev/shm/sem.svrwave_gpu_sem /tmp/SVRDaemon_*

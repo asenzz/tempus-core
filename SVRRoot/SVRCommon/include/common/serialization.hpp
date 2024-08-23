@@ -28,8 +28,8 @@
 #include <utility>
 #include <tuple>
 #include <armadillo>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_map.h>
+#include <oneapi/tbb/concurrent_set.h>
 
 
 namespace boost {

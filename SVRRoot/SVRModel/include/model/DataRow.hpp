@@ -31,10 +31,10 @@ public:
      *
      *  class container {
      *      arma::mat values;
-     *
      *      std::vector<boost::posix_time::ptime> row_times;
      *      std::pair<bpt::ptime &, arma::sub_view<double> &> operator[] (const bpt::ptime &ptime) {}
      *      std::pair<bpt::ptime &, arma::sub_view<double> &> operator[] (const size_t ix) {}
+     *      ...
      *  }
      *
      */
@@ -109,6 +109,10 @@ public:
 
     double &get_value(const size_t column_index);
 
+    const double &operator*() const;
+
+    double &operator*();
+
     double operator()(const size_t column_index) const;
 
     double &operator[](const size_t column_index);
@@ -158,7 +162,7 @@ template<typename T> std::basic_ostream<T> &operator <<(std::basic_ostream<T> &o
 template<typename C = DataRow::container, typename C_range_iter = typename C::iterator, typename T = typename C::value_type>
 class container_range
 {
-    using C_iter = typename C::iterator;
+    using C_iter = C_range_iter;
     using C_citer = typename C::const_iterator;
     using C_riter = typename C::reverse_iterator;
     using C_criter = typename C::const_reverse_iterator;
@@ -201,6 +205,10 @@ public:
     C_range_iter begin() const;
 
     C_range_iter end() const;
+
+    C_citer cbegin() const;
+
+    C_citer cend() const;
 
     T &front();
 
@@ -308,6 +316,8 @@ lower_bound_or_before_back(
         const data_row_container::const_iterator &hint_end,
         const bpt::ptime &time_key);
 
+data_row_container::const_iterator lower_bound_or_before_back(const data_row_container &data, const bpt::ptime &time_key);
+
 data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
@@ -373,15 +383,29 @@ find_nearest_after(
         const size_t lag_count);
 
 
-bool
+// [start_it, it_end)
+// [start_time, end_time)
+template<typename C> inline void
 generate_twap(
+        const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
+        const datamodel::DataRow::container::const_iterator &it_end, // At end time or after
+        const bpt::ptime &start_time, // Exact start time
+        const boost::posix_time::ptime &end_time, // Exact end time
+        const bpt::time_duration &hf_resolution, // Aux input queue resolution
+        const size_t colix, // Input column index
+        C &out); // Output vector needs to be zeroed out before submitting to this function
+
+bool
+generate_twav( // Time-weighted average volume
         const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
         const datamodel::DataRow::container::const_iterator &it_end,
         const bpt::ptime &start_time,
         const boost::posix_time::ptime &end_time,
         const bpt::time_duration &hf_resolution,
         const size_t colix,
-        arma::subview<double> out);
+        arma::subview<double> out); // Needs to be zeroed out before submitting to this function
+
+arma::mat to_arma_mat(const data_row_container &c);
 
 }
 

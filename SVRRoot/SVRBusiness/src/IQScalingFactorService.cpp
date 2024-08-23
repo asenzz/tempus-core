@@ -48,7 +48,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     LOG4_DEBUG("Calculating input queue " << input_queue.get_table_name() << ", dataset " << dataset_id << " scaling factors on last " << row_ct << " values.");
 
     arma::mat iq_values(row_ct, columns_ct);
-#pragma omp parallel for collapse(2) num_threads(adj_threads(row_ct * columns_ct)) schedule(static, 1 + (row_ct * columns_ct) / std::thread::hardware_concurrency())
+#pragma omp parallel for collapse(2) num_threads(adj_threads(row_ct * columns_ct)) schedule(static, 1 + (row_ct * columns_ct) / C_n_cpu)
     for (size_t r = 0; r < row_ct; ++r)
         for (size_t c = 0; c < columns_ct; ++c)
             iq_values(r, c) = (**(iter_start + r))[c];
@@ -79,7 +79,7 @@ bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_p
                 && std::isnormal(sf->get_scaling_factor())
                 && common::isnormalz(sf->get_dc_offset()))
                 present[i] = true;
-    return std::all_of(std::execution::par_unseq, present.begin(), present.end(), [](const auto &el) { return el; });
+    return std::all_of(C_default_exec_policy, present.begin(), present.end(), [](const auto &el) { return el; });
 }
 
 

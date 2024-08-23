@@ -34,9 +34,9 @@ class firefly {
 
     arma::vec levy_random;
 
-    const size_t D = 2;	    		        // dimension of the problem
-    const size_t n = OPT_PARTICLES;			// number of fireflies
-    const size_t MaxGeneration = MAX_ITERATIONS_OPT;  // number of iterations
+    const unsigned D = 2;	    		        // dimension of the problem
+    const unsigned n = OPT_PARTICLES;			// number of fireflies
+    const unsigned MaxGeneration = MAX_ITERATIONS_OPT;  // number of iterations
     const size_t sobol_ctr = 0;
 
     const arma::vec range;
@@ -63,15 +63,14 @@ class firefly {
     void sort_ffa();
     void replace_ffa();
     void move_ffa_adaptive(const double rate);
-    void findlimits(const size_t k);
     void ffa_main();
     void run_iteration();
 
 public:
     operator std::pair<double, std::vector<double>>() { return {best_score, arma::conv_to<std::vector<double>>::from(best_parameters)}; }
 
-    firefly(const size_t D, const size_t n, const size_t MaxGeneration, const double alpha, const double betamin, const double gamma,
-            const arma::vec &lb, const arma::vec &ub, const arma::vec &pows, const loss_callback_t function);
+    firefly(const unsigned D, const unsigned n, const unsigned MaxGeneration, const double alpha, const double betamin, const double gamma, const arma::mat &bounds,
+            const arma::vec &pows, const loss_callback_t function);
 };
 
 

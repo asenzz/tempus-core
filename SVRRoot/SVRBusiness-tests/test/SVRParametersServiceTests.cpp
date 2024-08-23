@@ -39,7 +39,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
         aci.flush_dao_buffers();
 
         datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(),
-                                                                              iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_size, PROPS.get_multistep_len(), decon_levels, "sym7");
+                                                                              iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), decon_levels, "sym7");
 
         // ASSERT_EQ(ds->get_ensemble_svr_parameters().size(), 0UL);
 

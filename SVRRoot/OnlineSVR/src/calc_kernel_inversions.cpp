@@ -2,14 +2,14 @@
 // Created by zarko on 5/29/22.
 //
 
-#include "calc_kernel_inversions.hpp"
-#include "common/compatibility.hpp"
-
 #include <set>
 #include <vector>
 #include <numeric>
 #include <algorithm>
 #include <cmath>
+#include "calc_kernel_inversions.hpp"
+#include "common/compatibility.hpp"
+#include "common/parallelism.hpp"
 
 
 namespace svr {
@@ -168,7 +168,7 @@ calc_kernel_inversions::calc_kernel_inversions(const double *Z, const arma::mat 
         // initialize original index locations
         std::vector<size_t> idx(N);
         std::iota(idx.begin(), idx.end(), 0);
-        std::stable_sort(std::execution::par_unseq, idx.begin(), idx.end(),
+        std::stable_sort(C_default_exec_policy, idx.begin(), idx.end(),
                          [&](const size_t j, const size_t k) { return Z[i * N + j] > Z[i * N + k]; });
         //idx are now sorted according to distance with i^th element
         std::vector<double> Ydistances(N);

@@ -8,6 +8,7 @@
 #include "DAO/ScopedTransaction.hpp"
 #include "DAO/DummyRowMapper.hpp"
 #include "common/logging.hpp"
+#include "util/math_utils.hpp"
 
 
 namespace svr::dao {
@@ -125,27 +126,30 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
         const size_t cursor_size = result_size / num_cursors;
         LOG4_DEBUG("Getting up to " << result_size << " rows for " << query);
         res.resize(result_size);
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(num_cursors))
-        for (size_t cur_ix = 0; cur_ix < num_cursors; ++cur_ix) {
-            const size_t start_ix = cur_ix * cursor_size;
-            if (start_ix >= result_size) continue;
-            const auto end_ix = cur_ix == num_cursors - 1 ? result_size : start_ix + cursor_size;
-            scoped_transaction_guard_ptr l_trx = open_transaction();
-            pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> l_cursor(*l_trx->get_pqxx_work(), query, to_string(cur_ix) + C_tempus_cursor_name, false);
-            const auto l_result = l_cursor.retrieve(start_ix, end_ix);
-            if (l_result.size() < 1 || size_t(l_result.size()) != end_ix - start_ix)
-                LOG4_ERROR("Cursor didn't return expected size " << end_ix - start_ix << ", got " << l_result.size() << " instead.");
-            else
-                LOG4_DEBUG("Got " << l_result.size() << " rows for cursor " << cur_ix << " range " << start_ix << " - " << end_ix);
-#pragma omp parallel for num_threads(adj_threads(l_result.size()))
-            for (size_t r = 0; r < size_t(l_result.size()); ++r) {
-                const auto this_res = row_mapper.mapRow(l_result[r]);
-                res[r + start_ix] = this_res;
-                if (!res[r + start_ix] || !this_res)
-                    LOG4_ERROR("Result for " << (r + start_ix) << " is empty, row string " << l_result[r][0]);
+#pragma omp parallel num_threads(C_n_cpu)
+#pragma omp single
+        {
+#pragma omp taskloop grainsize(1) mergeable default(shared) untied firstprivate(num_cursors, result_size)
+            for (size_t cur_ix = 0; cur_ix < num_cursors; ++cur_ix) {
+                const size_t start_ix = cur_ix * cursor_size;
+                if (start_ix >= result_size) continue;
+                const auto end_ix = cur_ix == num_cursors - 1 ? result_size : start_ix + cursor_size;
+                scoped_transaction_guard_ptr l_trx = open_transaction();
+                pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> l_cursor(*l_trx->get_pqxx_work(), query,
+                                                                                                        to_string(cur_ix) + C_tempus_cursor_name, false);
+                const auto l_result = l_cursor.retrieve(start_ix, end_ix);
+                if (l_result.size() < 1 || size_t(l_result.size()) != end_ix - start_ix)
+                    LOG4_ERROR("Cursor didn't return expected size " << end_ix - start_ix << ", got " << l_result.size() << " instead.");
+                else
+                    LOG4_DEBUG("Got " << l_result.size() << " rows for cursor " << cur_ix << " range " << start_ix << " - " << end_ix);
+#pragma omp taskloop simd grainsize(cdiv(l_result.size(), C_n_cpu)) mergeable default(shared) untied firstprivate(start_ix)
+                for (size_t r = 0; r < size_t(l_result.size()); ++r) {
+                    const auto this_res = row_mapper.mapRow(l_result[r]);
+                    res[r + start_ix] = this_res;
+                    if (!res[r + start_ix] || !this_res)
+                        LOG4_ERROR("Result for " << (r + start_ix) << " is empty, row string " << l_result[r][0]);
+                }
             }
-//            l_cursor.close();
-//            l_trx.reset();
         }
         return res;
     } catch (const std::exception &ex) {

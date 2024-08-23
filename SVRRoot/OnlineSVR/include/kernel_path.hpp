@@ -78,7 +78,7 @@ public:
     void operator()(const vmatrix<scalar_type> &features, vmatrix<scalar_type> &kernel_matrix) // not used currently
     {
         LOG4_WARN("Kernel matrix computation on CPU is very slow!");
-        __omp_tpfor(ssize_t, row, 0, features.get_length_rows(),
+        omp_tpfor__(ssize_t, row, 0, features.get_length_rows(),
                     for (ssize_t row2 = 0; row2 < features.get_length_rows(); ++row2)
                 kernel_matrix.set_value(row, row2, this->operator()(features[row], features[row2]));
         )

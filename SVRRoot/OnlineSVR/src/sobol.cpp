@@ -1,82 +1,57 @@
-#include <cmath>
-#include <atomic>
-#include <iostream>
-#include <cstdlib>
-#include <iomanip>
-#include <cassert>
-#include <mutex>
+#include "common/constants.hpp"
+#include "common/parallelism.hpp"
+#include "util/math_utils.hpp"
+#include "sobol.hpp"
+#include "sobolnum.hpp"
 
-#define SOBOL_IMPLEMENTATION
-
-#include "sobolvec.h"
-
-uint64_t sobol_direction_numbers_cross[sobol_max_power][sobol_max_dimension];
-uint64_t sobol_direction_numbers_twix[sobol_max_power][sobol_max_dimension];
+namespace svr {
 
 
-int do_load_directions()
-{
-    static std::once_flag sobol_flag;
-    std::call_once(sobol_flag, [](){
-        for (int i = 0; i < sobol_max_power; i++) {
-            for (int j = 0; j < sobol_max_dimension; j++) {
-                sobol_direction_numbers_twix[i][j] = sobol_direction_numbers[j][i];
-                if (i == 0) {
-                    sobol_direction_numbers_cross[i][j] = sobol_direction_numbers[j][i];
-                } else {
-                    sobol_direction_numbers_cross[i][j] = sobol_direction_numbers[j][i] ^ sobol_direction_numbers[j][i - 1];
-                }
-            }
+namespace {
+
+constexpr unsigned sobol_max_dimension = 1024;
+constexpr unsigned sobol_max_power = 51;
+constexpr uint64_t pow2_51 = 2251799813685248; // 2^51
+constexpr uint64_t pow2_52 = 2 * pow2_51;
+constexpr double inversepow2_52 = 1. / pow2_52;
+
+const auto sobol_direction_numbers_cross = []() {
+    std::deque<std::deque<uint64_t>> result(sobol_max_power, std::deque<uint64_t>(sobol_max_dimension));
+    OMP_FOR_(sobol_max_dimension * sobol_max_power, simd collapse(2))
+    for (unsigned i = 0; i < sobol_max_power; ++i) {
+        for (unsigned j = 0; j < sobol_max_dimension; ++j) {
+            result[i][j] = sobol_direction_numbers[j][i];
+            if (i) result[i][j] ^= sobol_direction_numbers[j][i - 1];
         }
-    });
-    return 0;
+    }
+    return result;
+}();
+
+tbb::mutex sobol_mutex;
+
 }
 
 
-//int do_sobol_init(long seed ,int maxdim=SobolMaxDimension){
-//static thread_local unsigned long SobolRandomInit[SobolMaxDimension];
-
-int do_sobol_init()
+uint64_t init_sobol_ctr()
 {
-    do_load_directions();
-    return 0;
+    static auto random_seed = .54321; // common::get_uniform_random_value(); // Use quasi-random seed for reproducibility
+    const tbb::mutex::scoped_lock lock(sobol_mutex);
+    auto res = 78786876896UL + (uint64_t) std::floor(random_seed * pow2_52);
+    random_seed = std::fmod(random_seed + .123456789, 1.);
+    return res;
 }
 
-
-double sobolnum(const int Dim, const unsigned long N)
+double sobolnum(const unsigned dim, const uint64_t n)
 {
     uint64_t P = 1;
     uint64_t result = 0;
-    for (size_t i = 0; i < sobol_max_power; i++) {
-        if (P > N) break;
-        if (N & P) result ^= sobol_direction_numbers_cross[i][Dim % sobol_max_dimension];
+UNROLL(sobol_max_power)
+    for (unsigned i = 0; i < sobol_max_power; i++) {
+        if (P > n) break;
+        if (n & P) result ^= sobol_direction_numbers_cross[i][dim % sobol_max_dimension];
         P += P;
     }
-    return double(result) * inversepow2_52;
+    return std::fmod(double(result) * inversepow2_52, 1.);
 }
 
-
-int do_test()
-{
-
-    std::cout << std::setprecision(16);
-    for (int N = 0; N < 64; N++) {
-        for (int Dim = 0; Dim < 1024; Dim++) {
-            std::cout << sobolnum(Dim, N) << std::endl;
-        }
-    }
-
-
-    return 0;
-}
-
-int do_main_not_used()
-{
-    do_sobol_init();
-    do_test();
-
-    return 0;
-}
-
-
-
+} // namespace svr

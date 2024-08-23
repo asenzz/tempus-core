@@ -9,20 +9,21 @@
 #include <tuple>
 #include <vector>
 #include <armadillo>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_map.h>
+#include <oneapi/tbb/concurrent_map.h>
 #include "model/DataRow.hpp"
 #include "model/DeconQueue.hpp"
 #include "spectral_transform.hpp"
 #include "IQScalingFactorService.hpp"
 
 constexpr unsigned CVMD_INIT_LEN = 100'000; // Last N samples of the input queue used for calculating frequencies
-constexpr double TAU_FIDELITY = 0; // 1e3; // 1000 seems to yield best results
-constexpr bool HAS_DC = false; // Has DC component is always false, it's removed during scaling
-constexpr double C_default_alpha_bins = 50; // 1600; // 2000 for EURUSD, 1600 for XAUUSD, Matlab examples use 50 on input length 1200 (CVMD_INIT_LEN * 50 / 1200 = 4166)
+constexpr auto TAU_FIDELITY = 1e3; // 1000 seems to yield best results
+constexpr auto HAS_DC = false; // Has DC component is always false, it's removed during scaling
+constexpr double C_default_alpha_bins = .016 * CVMD_INIT_LEN; // 2000 for EURUSD, 1600 for XAUUSD, Matlab examples use 50 on input length 1200 (CVMD_INIT_LEN * 50 / 1200 = 4166)
 constexpr unsigned MAX_VMD_ITERATIONS = 500;
 constexpr double DEFAULT_PHASE_STEP = 1; // Multiplies frequency by N, best so far 1e-1 for XAUUSD, 1/14 for EURUSD
 constexpr size_t C_freq_init_type = 1; // Type of initialization, let's use 1 for now.
-constexpr double CVMD_TOL = 1e-7;
+constexpr auto CVMD_TOL = 1e-7;
+constexpr auto CVMD_EPS = 2 * std::numeric_limits<double>::epsilon();
 const auto C_arma_solver_opts = arma::solve_opts::refine + arma::solve_opts::equilibrate;
 // #define EMOS_OMEGAS
 
@@ -34,8 +35,7 @@ typedef std::tuple<std::string /* decon queue table_name */, size_t /* levels */
 
 struct fcvmd_frequency_outputs
 {
-    arma::vec phase_cos;
-    arma::vec phase_sin;
+    arma::vec phase_cos, phase_sin;
 };
 
 class fast_cvmd final : public spectral_transform
@@ -49,14 +49,14 @@ class fast_cvmd final : public spectral_transform
     tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> vmd_frequencies;
     static const business::t_iqscaler C_no_scaler;
 
+    static fcvmd_frequency_outputs compute_cos_sin(const arma::vec &omega, const double step = DEFAULT_PHASE_STEP);
+
 public:
-    tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> get_vmd_frequencies() const
-    { return vmd_frequencies; }
+    tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> get_vmd_frequencies() const;
 
-    void set_vmd_frequencies(const tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> &_vmd_frequencies)
-    { vmd_frequencies = _vmd_frequencies; }
+    void set_vmd_frequencies(const tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> &_vmd_frequencies);
 
-    explicit fast_cvmd(const size_t levels);
+    explicit fast_cvmd(const size_t levels_);
 
     ~fast_cvmd() final = default;
 
@@ -81,9 +81,12 @@ public:
 
     size_t get_residuals_length(const std::string &decon_queue_table_name);
 
+    static size_t get_residuals_length(const unsigned levels);
+
     bool initialized(const std::string &decon_queue_table_name);
 
-    void initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name, const business::t_iqscaler &scaler = C_no_scaler);
+    void initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name,
+                    const business::t_iqscaler &scaler = C_no_scaler);
 };
 
 }

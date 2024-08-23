@@ -51,24 +51,20 @@ template<const unsigned k_block_size> __global__ void cu_recombine_parameters(
     __shared__ t_params_vec _sh_best_params_ix[k_block_size];
     _sh_best_score[tid] = std::numeric_limits<double>::max();
     uint32_t best_rowix = 0;
-// #pragma unroll
+UNROLL()
     for (auto rowix = g_tid; rowix < rowct; rowix += grid_size) {
         double score = 0;
         double recon_preds[C_test_len];
-#pragma unroll C_max_j
+UNROLL(C_max_j)
         for (uint8_t j = 0; j < C_max_j; ++j) {
             memset(recon_preds, 0, C_test_len * sizeof(double));
             const auto elto = C_tune_min_validation_window + (C_max_j - j - 1) * C_slide_skip;
             const auto j_emo_test_len = j * C_test_len;
-#ifdef PRODUCTION_BUILD
-#pragma unroll
-#endif
+UNROLL()
             for (uint16_t colix = 0; colix < colct; ++colix)
                 for (uint16_t el = 0; el < elto; ++el)
                     recon_preds[el] += p_params_preds[colct * p_combinations[colix * rowct + rowix] + colix].predictions[j][el];
-#ifdef PRODUCTION_BUILD
-#pragma unroll
-#endif
+UNROLL()
             for (uint16_t el = 0; el < elto; ++el)
                 score += fabs(_SIGN(_SIGN(recon_preds[el] - recon_last_knowns[j_emo_test_len + el]) - recon_signs[j_emo_test_len + el]));
         }
@@ -77,9 +73,7 @@ template<const unsigned k_block_size> __global__ void cu_recombine_parameters(
             best_rowix = rowix;
         }
     }
-#ifdef PRODUCTION_BUILD
-#pragma unroll
-#endif
+UNROLL()
     for (uint16_t colix = 0; colix < colct; ++colix)
         _sh_best_params_ix[tid][colix] = p_params_preds[colct * p_combinations[colix * rowct + best_rowix] + colix].params_ix;
     __syncthreads();
@@ -155,28 +149,22 @@ __global__ void cu_recombine_parameters(
     _sh_best_score[tid] = std::numeric_limits<double>::max();
     double score = 0;
     double recon_preds[C_test_len];
-#pragma unroll C_max_j
+UNROLL(C_max_j)
     for (uint8_t j = 0; j < C_max_j; ++j) {
         memset(recon_preds, 0, C_test_len * sizeof(double));
         const auto elto = C_tune_min_validation_window + (C_max_j - j - 1) * C_slide_skip;
         const auto j_emo_test_len = j * C_test_len;
-#ifdef PRODUCTION_BUILD
-#pragma unroll
-#endif
+UNROLL()
         for (uint16_t colix = 0; colix < colct; ++colix)
             for (uint16_t el = 0; el < elto; ++el)
                 recon_preds[el] += p_params_preds[colct * best_param_ixs[colix * rowct + tid] + colix].predictions[j][el];
-#ifdef PRODUCTION_BUILD
-#pragma unroll
-#endif
+UNROLL()
         for (uint16_t el = 0; el < elto; ++el)
             score += fabs(_SIGN(_SIGN(recon_preds[el] - recon_last_knowns[j_emo_test_len + el]) - recon_signs[j_emo_test_len + el]));
     }
     if (_sh_best_score[tid] > score) {
         _sh_best_score[tid] = score;
-#ifdef PRODUCTION_BUILD
-#pragma unroll
-#endif
+UNROLL()
         for (uint16_t colix = 0; colix < colct; ++colix)
             _sh_best_params_ix[tid][colix] = p_params_preds[colct * best_param_ixs[colix * rowct + tid] + colix].params_ix;
     }
@@ -225,12 +213,12 @@ recombine_parameters(
     double recon_last_knowns[recon_test_len], recon_signs[recon_test_len];
     memset(recon_last_knowns, 0, recon_test_size);
     memset(recon_signs, 0, recon_test_size);
-#pragma unroll C_max_j
+UNROLL(C_max_j)
     for (uint8_t j = 0; j < uint8_t(C_max_j); ++j) {
-#pragma omp unroll
+UNROLL()
         for (uint16_t el = 0; el < uint16_t(C_tune_min_validation_window + (C_max_j - j - 1) * C_slide_skip); ++el) {
             double recon_labels = 0;
-#pragma omp unroll
+UNROLL()
             for (uint16_t colix = 0; colix < colct; ++colix) {
                 recon_labels += params_preds[colix].labels[j][el];
                 recon_last_knowns[C_test_len * j + el] += params_preds[colix].last_knowns[j][el];
@@ -240,8 +228,8 @@ recombine_parameters(
     }
 
     const auto clamped_n = clamp_n(rowct);
-    const auto blocks = CUDA_BLOCKS(clamped_n);
-    const auto threads = CUDA_THREADS(clamped_n);
+    const auto blocks = CU_BLOCKS(clamped_n);
+    const auto threads = CU_THREADS(clamped_n);
 
     const common::gpu_context ctx;
     cudaSetDevice(ctx.phy_id());

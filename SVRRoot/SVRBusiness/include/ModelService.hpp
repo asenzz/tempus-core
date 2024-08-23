@@ -8,7 +8,7 @@
 #include <armadillo>
 #include <deque>
 
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_set.h>
 #include "common/types.hpp"
 #include "model/Dataset.hpp"
 #include "model/DataRow.hpp"
@@ -49,16 +49,7 @@ class ModelService
 {
     dao::ModelDAO &model_dao;
 
-    /* [start_iter, end_iter] */
-    static double get_quantized_feature(
-            const size_t pos,
-            const data_row_container::const_iterator &end_iter,
-            const size_t level,
-            const double quantization_mul,
-            const size_t lag);
-
-    static bool
-    prepare_time_features(const bpt::ptime &value_time, arma::rowvec &row);
+    static arma::rowvec prepare_special_features(const data_row_container::const_iterator &last_known_it, const bpt::time_duration &resolution, const unsigned len);
 
     static arma::vec
     get_last_knowns(const datamodel::Ensemble &ensemble, const size_t level, const std::deque<bpt::ptime> &times, const bpt::time_duration &resolution);
@@ -67,17 +58,21 @@ class ModelService
     get_start(const datamodel::DataRow::container &cont, const size_t decremental_offset, const boost::posix_time::ptime &model_last_time,
               const boost::posix_time::time_duration &resolution);
 public:
-    ModelService(dao::ModelDAO &model_dao);
+    static const unsigned C_max_quantisation;
+
+    static const std::deque<unsigned> C_quantizations;
+
+    explicit ModelService(dao::ModelDAO &model_dao);
 
     datamodel::Model_ptr get_model_by_id(const bigint model_id);
 
     datamodel::Model_ptr get_model(const bigint ensemble_id, const size_t decon_level);
 
-    void configure(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble_ptr &p_ensemble, datamodel::Model_ptr &p_model);
+    void configure(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
     int save(const datamodel::Model_ptr &p_model);
 
-    bool exists(const datamodel::Model_ptr &p_model);
+    bool exists(const datamodel::Model &model);
 
     int remove(const datamodel::Model_ptr &p_model);
 
@@ -100,10 +95,11 @@ public:
             const size_t multistep);
 
     static void tune_features(
+            arma::mat &out_features,
             datamodel::SVRParameters &params,
             const arma::mat &labels,
             const std::deque<bpt::ptime> &label_times,
-            const std::deque<datamodel::DeconQueue_ptr> &features_aux,
+            const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
             const bpt::time_duration &max_gap,
             const bpt::time_duration &aux_queue_res,
             const bpt::time_duration &main_queue_resolution);
@@ -146,7 +142,7 @@ public:
 
     static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const size_t levix, const size_t stepix);
 
-    void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble_ptr &p_ensemble);
+    void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble);
 
     static bool check(const std::deque<datamodel::Model_ptr> &models, const size_t model_ct);
 

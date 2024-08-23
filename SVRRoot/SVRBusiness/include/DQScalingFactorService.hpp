@@ -6,7 +6,7 @@
 #include <set>
 #include <execution>
 #include <algorithm>
-#include </opt/intel/oneapi/tbb/latest/include/tbb/concurrent_set.h>
+#include <oneapi/tbb/concurrent_set.h>
 #include <unordered_set>
 #include "model/DQScalingFactor.hpp"
 #include "model/DataRow.hpp"
@@ -15,6 +15,7 @@
 #include "model/SVRParameters.hpp"
 #include "model/Entity.hpp"
 #include "util/string_utils.hpp"
+#include "util/math_utils.hpp"
 
 class DaoTestFixture_DQScalingFactorScalingUnscaling_Test;
 
@@ -52,13 +53,25 @@ public:
             const size_t model_id, const size_t chunk, const size_t gradient, const size_t step, const size_t level,
             const bool check_features, const bool check_labels);
 
-    static datamodel::dq_scaling_factor_container_t
-    slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient, const size_t step);
+    static datamodel::dq_scaling_factor_container_t slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient, const size_t step);
 
     static double calc_scaling_factor(const arma::mat &v);
     static double calc_dc_offset(const arma::mat &v);
+    static std::pair<double, double> calc(const arma::mat &v);
 
     static datamodel::dq_scaling_factor_container_t calculate(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, const arma::mat &features_t, const arma::mat &labels);
+
+    template<typename T> inline static T scale(const T &v)
+    {
+        const auto [dc, sf] = calc(v);
+        return common::scale(v, sf, dc);
+    }
+
+    template<typename T> inline static T &scale_I(T &v)
+    {
+        const auto [dc, sf] = calc(v);
+        return common::scale_I(v, sf, dc);
+    }
 
     static void scale_features(const size_t chunk_ix, const size_t grad_level, const size_t step, const size_t lag,
                                const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t);

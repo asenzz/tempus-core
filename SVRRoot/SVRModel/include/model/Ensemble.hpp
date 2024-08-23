@@ -32,7 +32,7 @@ class Ensemble : public Entity
     std::deque<datamodel::DeconQueue_ptr> aux_decon_queues;
 
 public:
-    bool operator==(Ensemble const &o);
+    bool operator==(Ensemble const &o) const;
 
     Ensemble() : Entity() {}
 
