@@ -4,7 +4,7 @@
 #include <map>
 #include <mkl_vml.h>
 #include "sobol.hpp"
-
+#include <xoshiro.h>
 
 namespace svr {
 
@@ -447,18 +447,18 @@ arma::mat unscale(const arma::mat &m, const double sf, const double dc)
     return r;
 }
 
+std::atomic<double> pseudo_random_dev::state = .54321;
 
 constexpr unsigned max_D = 42;
 
-#define INIT_SOBOL
+// #define INIT_SOBOL
 
 void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, uint64_t sobol_ctr)
 {
 #ifdef INIT_SOBOL
     if (!sobol_ctr) sobol_ctr = init_sobol_ctr();
 #else
-    std::random_device rd;  // Will be used to obtain a seed for the random number engine
-    std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    auto gen = reproducibly_seeded_64<xso::rng64>();
     std::uniform_real_distribution<double> dis(0., 1.);
 #endif
     const unsigned n = x0.n_cols;
@@ -471,7 +471,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
     for (unsigned i = 0; i < n; ++i) {
         for (unsigned j = 0; j < D; ++j) {
             const auto pow_j = pows.empty() ? 1. : pows[j];
-            if (init_random || j >= max_D) { // Use Sobol pseudo-random number
+            if (init_random || j >= max_D) { // Use a pseudo-random number
 #ifdef INIT_SOBOL
                 x0(j, i) = range[j] * std::pow(sobolnum(j, sobol_ctr + i), pow_j) + bounds(j, 0);
 #else
@@ -504,9 +504,16 @@ double mape(const double absolute_error, const double absolute_label)
     return 100. * absolute_error / absolute_label;
 }
 
-size_t to_fft_len(const size_t input_len)
+size_t fft_len(const size_t input_len)
 {
     return input_len / 2 + 1;
+}
+
+bool safe_double_less::operator()(const double left, const double right) const
+{
+    const auto leftNaN = std::isnan(left);
+    const auto rightNaN = std::isnan(right);
+    return leftNaN != rightNaN ? leftNaN < rightNaN : left < right;
 }
 
 } //namespace common

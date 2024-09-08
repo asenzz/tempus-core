@@ -3,14 +3,30 @@
 //
 
 #include <iostream>
+#include <vector>
+#include <complex>
+#include <cmath>
+#include <algorithm>
+#include <random>
+#include <numeric>
+
 #include "vmd.hpp"
 #include "util/math_utils.hpp"
 #include "IQScalingFactorService.hpp"
 
+
+#ifdef EIGEN_VMD
+
 using namespace Eigen;
 using namespace std;
 
+#endif
+
+
 namespace svr {
+
+
+#ifdef EIGEN_VMD
 
 void printMatrix(const MatrixXd &u)
 {
@@ -26,7 +42,7 @@ void printMatrix(const MatrixXd &u)
 
 void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
          svr::data_row_container::const_iterator iterin, const size_t saveT, const unsigned input_column_index, const double alpha, const double tau,
-         const int K, const int DC, const int init, const double tol, const double eps, const svr::business::t_iqscaler &scaler)
+         const int K, const int DC, const int init, const double tol, const double eps, const svr::datamodel::t_iqscaler &scaler)
 {
     /* ---------------------
 
@@ -155,6 +171,8 @@ void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
         MatrixXcd Dividend_vec = f_hat_plus_Xcd - sum_uk - (prev_lambda_hat / 2.0);
         MatrixXcd Divisor_vec = (1 + alpha *
                                      ((freqs_Xcd.array() - omega_plus(n - 1, k))).array().square());
+        prev_prev_u_hat_plus = prev_u_hat_plus;
+        prev_u_hat_plus = u_hat_plus;
         u_hat_plus.row(k).noalias() = Dividend_vec.cwiseQuotient(Divisor_vec);
 
         //update first omega if not held at 0
@@ -183,7 +201,7 @@ void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
             Divisor_vec = (1 + alpha *
                                          ((freqs_Xcd.array() - omega_plus(n - 1, k))).array().square());
 
-            u_hat_plus.row(k) = Dividend_vec.cwiseQuotient(Divisor_vec);
+            u_hat_plus.row(k).noalias() = Dividend_vec.cwiseQuotient(Divisor_vec);
 
             //center frequencies
             std::complex<double> Dividend{0, 0}, Divisor{0, 0}, Addend{0, 0}, Addend_sqrt{0, 0};
@@ -196,6 +214,7 @@ void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
             omega_plus(n, k) = Dividend / Divisor;
         }
 
+        prev_lambda_hat = lambda_hat;
         lambda_hat.noalias() = prev_lambda_hat + tau * (u_hat_plus.rowwise().sum() - f_hat_plus_Xcd);
         n++;
 
@@ -208,10 +227,6 @@ void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
         }
         uDiff = abs(acc);
 
-        prev_prev_u_hat_plus = prev_u_hat_plus;
-        prev_u_hat_plus = u_hat_plus;
-
-        prev_lambda_hat = lambda_hat;
     }
 
     //Postprocessing and cleanup
@@ -223,11 +238,11 @@ void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
     u_hat = MatrixXcd::Zero(T, K);
     for (int i = T / 2; i < T; i++)
 		for (int k = 0; k < K; k++)
-			u_hat(i, k) = prev_u_hat_plus(k, i);
+			u_hat(i, k) = u_hat_plus(k, i);
 
     for (int i = T / 2; i >= 0; i--)
         for (int k = 0; k < K; k++)
-            u_hat(i, k) = conj(prev_u_hat_plus(k, T - i - 1));
+            u_hat(i, k) = conj(u_hat_plus(k, T - i - 1));
 
     u_hat.row(0) = u_hat.row(T - 1).transpose().adjoint();
     u.resize(K, saveT);
@@ -302,7 +317,204 @@ vectorcd ExtractRowFromMatrixXd(MatrixXd &Input, const int RowIdx, const int Col
     return Output;
 }
 
+#pragma endregion
 
+#else
+
+// Function declaration
+std::tuple<std::vector<std::vector<double>>, std::vector<std::vector<std::complex<double>>>, std::vector<std::vector<double>>>
+VMD(const svr::data_row_container::const_iterator iterin, const size_t save_T,
+    const unsigned input_column_index, double alpha, double tau, int K, bool DC, int init, double tol, const svr::datamodel::t_iqscaler &scaler)
+{
+    if (save_T % 2) LOG4_THROW("Signal length must be even.");
+    // Preparations
+    int T = save_T;
+    double fs = 1.0 / save_T;
+
+    // Extend the signal by mirroring
+    const auto T_2 = T / 2;
+    const auto T_3_2 = 3 * T / 2;
+    std::vector<double> f(2 * T);
+    OMP_FOR(T)
+    for (size_t i = 0; i < T; ++i) {
+        f[T_2 + i] = scaler( (**(iterin + i))[input_column_index] );
+        if (i < T / 2) {
+            f[i] = scaler( (**(iterin + T_2 - 1 - i))[input_column_index] );
+            f[T_3_2 + i] = scaler( (**(iterin + T - 1 - i))[input_column_index]);
+        }
+    }
+
+    // Time Domain 0 to T (of mirrored signal)
+    T = f.size();
+    std::vector<double> t(T);
+    OMP_FOR(T)
+    for (int i = 0; i < T; ++i) t[i] = (i + 1.0) / T;
+
+    // Spectral Domain discretization
+    std::vector<double> freqs(T);
+    OMP_FOR(T)
+    for (int i = 0; i < T; ++i) freqs[i] = t[i] - 0.5 - 1.0/T;
+
+    // Maximum number of iterations
+    int N = 500;
+
+    // Individual alpha for each mode
+    std::vector<double> Alpha(K, alpha);
+
+    // Construct and center f_hat
+    std::vector<std::complex<double>> f_hat(T);
+    OMP_FOR(T)
+    for (int i = 0; i < T; ++i) {
+        f_hat[i] = std::polar(f[i], -2.0 * M_PI * i * (T/2) / T);
+    }
+    std::vector<std::complex<double>> f_hat_plus = f_hat;
+    std::fill(f_hat_plus.begin(), f_hat_plus.begin() + T/2, 0.0);
+
+    // Initialize u_hat_plus, omega_plus, and lambda_hat
+    std::vector<std::vector<std::vector<std::complex<double>>>> u_hat_plus(N, std::vector<std::vector<std::complex<double>>>(T, std::vector<std::complex<double>>(K, std::complex<double>(0))));
+    std::vector<std::vector<double>> omega_plus(N, std::vector<double>(K));
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(std::log(fs), std::log(0.5));
+
+    switch (init) {
+        case 1:
+            for (int i = 0; i < K; ++i) omega_plus[0][i] = (0.5/K) * i;
+            break;
+        case 2:
+            for (int i = 0; i < K; ++i) omega_plus[0][i] = std::exp(dis(gen));
+            std::sort(omega_plus[0].begin(), omega_plus[0].end());
+            break;
+        default:
+            std::fill(omega_plus[0].begin(), omega_plus[0].end(), 0.0);
+    }
+
+    if (DC) omega_plus[0][0] = 0.0;
+
+    std::vector<std::vector<std::complex<double>>> lambda_hat(N, std::vector<std::complex<double>>(T, 0));
+
+    double uDiff = tol + std::numeric_limits<double>::epsilon();
+    int n = 0;
+    std::vector<std::complex<double>> sum_uk(T);
+
+    // Main loop for iterative updates
+    while (uDiff > tol && n < N - 1) {
+        // Update first mode
+        int k = 0;
+        OMP_FOR(T)
+        for (int i = 0; i < T; ++i) {
+            sum_uk[i] += u_hat_plus[n][i][K-1] - u_hat_plus[n][i][0];
+        }
+
+        OMP_FOR(T)
+        for (int i = 0; i < T; ++i) {
+            u_hat_plus[n+1][i][k] = (f_hat_plus[i] - sum_uk[i] - lambda_hat[n][i]/2.0) /
+                                    (1.0 + Alpha[k] * std::pow(freqs[i] - omega_plus[n][k], 2));
+        }
+
+        if (!DC) {
+            double num = 0.0, den = 0.0;
+            OMP_FOR(T/2)
+            for (int i = T/2; i < T; ++i) {
+                num += freqs[i] * std::norm(u_hat_plus[n+1][i][k]);
+                den += std::norm(u_hat_plus[n+1][i][k]);
+            }
+            omega_plus[n+1][k] = num / den;
+        }
+
+        // Update other modes
+        for (k = 1; k < K; ++k) {
+            OMP_FOR(T)
+            for (int i = 0; i < T; ++i) {
+                sum_uk[i] += u_hat_plus[n+1][i][k-1] - u_hat_plus[n][i][k];
+            }
+
+            for (int i = 0; i < T; ++i) {
+                u_hat_plus[n+1][i][k] = (f_hat_plus[i] - sum_uk[i] - lambda_hat[n][i]/2.0) /
+                                        (1.0 + Alpha[k] * std::pow(freqs[i] - omega_plus[n][k], 2));
+            }
+
+            double num = 0.0, den = 0.0;
+            for (int i = T/2; i < T; ++i) {
+                num += freqs[i] * std::norm(u_hat_plus[n+1][i][k]);
+                den += std::norm(u_hat_plus[n+1][i][k]);
+            }
+            omega_plus[n+1][k] = num / den;
+        }
+
+        // Dual ascent
+        OMP_FOR(T)
+        for (int i = 0; i < T; ++i) {
+            std::complex<double> sum_u = 0.0;
+            for (int j = 0; j < K; ++j) {
+                sum_u += u_hat_plus[n+1][i][j];
+            }
+            lambda_hat[n+1][i] = lambda_hat[n][i] + tau * (sum_u - f_hat_plus[i]);
+        }
+
+        ++n;
+
+        // Check convergence
+        uDiff = std::numeric_limits<double>::epsilon();
+        OMP_FOR_(K * T, simd collapse(2))
+        for (int i = 0; i < K; ++i) {
+            for (int j = 0; j < T; ++j) {
+                uDiff += std::norm(u_hat_plus[n][j][i] - u_hat_plus[n-1][j][i]) / T;
+            }
+        }
+        uDiff = std::abs(uDiff);
+    }
+
+    // Postprocessing and cleanup
+    N = std::min(N, n + 1);
+    std::vector<std::vector<double>> omega(N, std::vector<double>(K));
+    for (int i = 0; i < N; ++i) {
+        omega[i] = omega_plus[i];
+    }
+
+    // Signal reconstruction
+    std::vector<std::vector<std::complex<double>>> u_hat(T, std::vector<std::complex<double>>(K));
+    OMP_FOR(K)
+    for (int k = 0; k < K; ++k) {
+        for (int i = T/2; i < T; ++i) {
+            u_hat[i][k] = u_hat_plus[N-1][i][k];
+            u_hat[T-i][k] = std::conj(u_hat_plus[N-1][i][k]);
+        }
+        u_hat[0][k] = std::conj(u_hat[T-1][k]);
+    }
+
+    std::vector<std::vector<double>> u(K, std::vector<double>(T));
+    OMP_FOR(K)
+    for (int k = 0; k < K; ++k) {
+        std::vector<std::complex<double>> temp(T);
+        for (int i = 0; i < T; ++i) {
+            temp[i] = u_hat[i][k] * std::polar(1.0, 2.0 * M_PI * i * (T/2) / T);
+        }
+        for (int i = 0; i < T; ++i) {
+            u[k][i] = std::real(std::accumulate(temp.begin(), temp.end(), std::complex<double>(0.0)) / double(T));
+        }
+    }
+
+    // Remove mirror part
+    std::vector<std::vector<double>> uo(K, std::vector<double>(alpha));
+    OMP_FOR(K)
+    for (int k = 0; k < K; ++k) {
+        std::copy(u[k].begin() + T/4, u[k].begin() + T/4 + alpha, uo[k].begin());
+    }
+
+    // Recompute spectrum
+    std::vector<std::vector<std::complex<double>>> u_hat_final(T, std::vector<std::complex<double>>(K));
+    OMP_FOR(K)
+    for (int k = 0; k < K; ++k) {
+        for (int i = 0; i < T; ++i) {
+            u_hat_final[i][k] = std::polar(uo[k][std::fmod(i, alpha)], -2.0 * M_PI * i * (double(T)/2) / T);
+        }
+    }
+
+    return std::make_tuple(uo, u_hat_final, omega);
 }
 
-#pragma endregion
+#endif
+
+}

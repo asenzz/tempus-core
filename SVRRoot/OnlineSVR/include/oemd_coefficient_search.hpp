@@ -21,15 +21,10 @@ class oemd_coefficients_search {
     constexpr static unsigned iterations = 100;
     constexpr static double lambda1 = .30;
     constexpr static double lambda2 = .33;
-    constexpr static double b_factor = 1000;
-    constexpr static unsigned mask_expander = 2;
-    constexpr static unsigned parallelism = 24; // TODO use gpu handler instead
     constexpr static double allowed_eps_up = .1;
     constexpr static double norm_thresh = 1. + allowed_eps_up;
 
-    const double levels;
-    double best_quality = 1;
-    double best_result = common::C_bad_validation;
+    const unsigned levels;
     unsigned max_gpus;
     std::deque<unsigned> gpuids;
     const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef;
@@ -47,9 +42,8 @@ class oemd_coefficients_search {
     transform(double *d_values, CPTR(double) d_mask, const unsigned input_len, const unsigned mask_size,
               const unsigned siftings, double *d_temp, const cudaStream_t custream) const;
 
+    // 18k mask len is the maximum for 16GB video card that won't make OSQP crash
     //int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsigned input_size, const double *x, const int gpu_id);
-
-    static void fix_mask(const arma::vec &in_mask, std::vector<double> &out_mask);
 
     void
     create_random_mask(
@@ -66,24 +60,19 @@ class oemd_coefficients_search {
     static void prep_x_matrix(const unsigned M, const unsigned N, const double *x, std::vector<double> &Bmatrix,
                               std::vector<double> &Fmatrix);
 
-    static void save_mask(
-            const std::vector<double> &mask,
-            const std::string &queue_name,
-            const unsigned level,
-            const unsigned levels);
+    static void save_mask(const std::vector<double> &mask, const std::string &queue_name, const unsigned level, const unsigned levels);
 
-    double find_good_mask(const unsigned siftings, const unsigned valid_start_ix, const std::vector<double> &workspace, std::vector<double> &mask, const unsigned level) const;
+    double find_mask(const unsigned siftings, const unsigned valid_start_ix, const std::vector<double> &workspace, std::vector<double> &mask, const unsigned level) const;
 
 public:
-
+    constexpr static unsigned label_len = 3600;
     constexpr static double C_smooth_factor = 1000;
     constexpr static unsigned C_fir_mask_start_len = 500;
-    constexpr static unsigned C_fir_mask_end_len = 20'000; // 18k is the maximum for 16GB video card that won't make OSQP crash
-    constexpr static unsigned C_fir_validation_window = C_test_len * 3600;
+    constexpr static unsigned C_fir_mask_end_len = 20'000;
+    constexpr static unsigned C_fir_validation_window = C_fir_mask_end_len * oemd_coefficients::default_siftings + common::C_default_kernel_max_chunk_len * label_len; // 5 * C_fir_mask_end_len; //
 
-    double evaluate_mask(
-            const std::vector<double> &h_mask, const std::vector<double> &h_workspace, const size_t validate_start_ix, const size_t validation_len, const unsigned siftings,
-            const unsigned current_level, const std::deque<unsigned> &head_tail_sizes, const double meanabs_input, const unsigned gpu_id) const;
+    double evaluate_mask(const double freq, const unsigned mask_len, const std::vector<double> &workspace, const size_t validate_start_ix, const size_t validate_len,
+                         const unsigned siftings, const std::vector<unsigned int> &offsets, const double meanabs_input, const unsigned gpu_id) const;
 
     static double do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const unsigned siftings);
 
@@ -92,22 +81,28 @@ public:
 
     static int do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft);
 
-    static void
-    gauss_smoothen_mask(const unsigned mask_size, std::vector<double> &mask, common::t_drand48_data_ptr buffer,
+    static void gauss_smoothen_mask(const unsigned mask_size, std::vector<double> &mask, common::t_drand48_data_ptr buffer,
                         cufftHandle plan_mask_forward, cufftHandle plan_mask_backward, const unsigned gpu_id);
 
     static void prepare_masks(std::deque<std::vector<double> > &masks, std::deque<unsigned> &siftings, const unsigned levels);
 
     void optimize_levels(
-            const datamodel::datarow_range &input, const std::vector<double> &tail, std::deque<std::vector<double> > &masks, std::deque<unsigned> &siftings,
-            const unsigned window_start, const unsigned window_end, const std::string &queue_name) const;
+            const datamodel::datarow_crange &input,
+            const std::vector<double> &tail,
+            std::deque<std::vector<double>> &masks,
+            std::deque<unsigned> &siftings,
+            const unsigned window_start,
+            const unsigned window_end,
+            const std::string &queue_name,
+            const unsigned in_colix,
+            const datamodel::t_iqscaler &scaler) const;
 
     explicit oemd_coefficients_search(const unsigned levels);
 
     void sift(const unsigned siftings, const unsigned full_input_len, const unsigned mask_len, cudaStream_t const custream, CPTR(double) d_mask,
               double *const d_rx, double *const d_rx2) const noexcept;
 
-    static double compute_spectral_entropy_cufft(const double *d_signal, const unsigned N, const cudaStream_t custream);
+    static double compute_spectral_entropy_cufft(CPTR(double) d_signal, unsigned N, const cudaStream_t custream);
 };
 }
 }

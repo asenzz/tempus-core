@@ -19,28 +19,34 @@
 namespace svr {
 
 constexpr size_t INPUT_LIMIT = CVMD_INIT_LEN;
-constexpr unsigned DECON_LEVELS = 32;
+constexpr unsigned DECON_LEVELS = 8;
 constexpr double TEST_TOL = 1e-14;
 const std::string transform_input_filename = "xauusd_1_2023.csv";
 // #define TEST_TIME_INVARIANCE
 
-class cvmd_transform_test : public testing::Test
-{
+class cvmd_transform_test : public testing::Test {
 public:
     cvmd_transform_test() :
             input("input", "input", "", "", bpt::seconds(1)),
             input_trimmed("input_trimmed", "input_trimmed", "", "", bpt::seconds(1)),
+#ifdef VMD_ONLY
+            decon("decon", "decon", "decon", 0, DECON_LEVELS),
+            decon_trimmed("decon_trimmed", "decon_trimmed", "decon_trimmed", 0, DECON_LEVELS),
+#else
             decon("decon", "decon", "decon", 0, 2 * DECON_LEVELS),
             decon_trimmed("decon_trimmed", "decon_trimmed", "decon_trimmed", 0, 2 * DECON_LEVELS),
+#endif
             transformer(DECON_LEVELS),
             transformer2(DECON_LEVELS)
     {
         input.set_value_columns(std::deque<std::string>{"xauusd_avg"});
         input_trimmed.set_value_columns(std::deque<std::string>{"xauusd_avg"});
     }
+
     ~cvmd_transform_test() = default;
 
     using testing::Test::SetUp;
+
     virtual void SetUp(
             const std::string &input_filename,
             const size_t levels = DECON_LEVELS)
@@ -48,7 +54,7 @@ public:
         auto input_f = open_data_file(input_filename);
         EXPECT_TRUE(input_f.good());
         std::string line;
-        while(not input_f.eof()) {
+        while (not input_f.eof()) {
             std::getline(input_f, line);
             if (line.empty()) continue;
             input.get_data().emplace_back(datamodel::DataRow::load(line));
@@ -72,7 +78,9 @@ TEST_F(cvmd_transform_test, test_transform_correctness)
     LOG4_DEBUG("IQ scaling factor " << iq_scaling_factors.front()->to_string());
     const auto scaler = business::IQScalingFactorService::get_scaler(*iq_scaling_factors.front());
     const auto unscaler = business::IQScalingFactorService::get_unscaler(*iq_scaling_factors.front());
+#ifndef ORIG_VMD
     PROFILE_EXEC_TIME(transformer.initialize(input, 0, decon.get_table_name(), scaler), "VMD initialize");
+#endif
     PROFILE_EXEC_TIME(transformer.transform(input, decon, 0, 0, scaler), "VMD batch transform");
 #ifdef TEST_TIME_INVARIANCE
     constexpr size_t C_decon_offset = 5000;
@@ -99,46 +107,76 @@ TEST_F(cvmd_transform_test, test_transform_correctness)
 #else
     for (size_t t = start_t; t < test_len; ++t) {
 #endif
-        for (size_t l = 0; l < DECON_LEVELS; ++l) {
+
+#ifdef VMD_ONLY
+        for (unsigned l = 0; l < DECON_LEVELS; ++l) {
+#ifdef TEST_TIME_INVARIANCE
+            err += abs(decon[t + C_decon_offset]->at(l) - decon_trimmed[t]->at(l));
+#endif
+            values[l][t - start_t] = decon[t]->at(l);
+        }
+#else
+        for (unsigned l = 0; l < DECON_LEVELS; ++l) {
 #ifdef TEST_TIME_INVARIANCE
             err += abs(decon[t + C_decon_offset]->at(DECON_LEVELS + l) - decon_trimmed[t]->at(DECON_LEVELS + l));
 #endif
             values[l][t - start_t] = decon[t]->at(DECON_LEVELS + l);
         }
-        // if (err > TEST_TOL) LOG4_DEBUG("Time " << decon[t]->get_value_time() << ", difference " << err << " at " << t); // CVMD is not time invariant unless omega is preserved
+#endif
+#ifdef TEST_TIME_INVARIANCE
+        if (err > TEST_TOL) LOG4_DEBUG("Time " << decon[t]->get_value_time() << ", difference " << err << " at " << t); // CVMD is not time invariant unless omega is preserved
+#endif
     }
 
-#pragma omp parallel for ordered schedule(static, 1) num_threads(adj_threads(values.size()))
-    for (size_t l = 0; l < values.size(); ++l) {
-        const auto mean_abs_level = common::meanabs(values[l]);
+    OMP_FOR_i_(values.size(), ordered) {
+        const auto mean_abs_level = common::meanabs(values[i]);
 #pragma omp ordered
-        LOG4_DEBUG("Level " << l << ", power " << mean_abs_level);
+        LOG4_DEBUG("Level " << i << ", power " << mean_abs_level);
     }
 
     data_row_container recon(decon.size());
     double min_v = 0;
-#pragma omp parallel for num_threads(adj_threads(decon.size())) schedule(static, 1 + decon.size() / C_n_cpu)
-    for (ssize_t i = 0; i < decon.size(); ++i) {
+#if 0
+    OMP_FOR_i_(decon.size(), simd reduction(min:min_v)) {
+#else
+    for (unsigned i = 0; i < decon.size(); ++i) {
+#endif
         const auto &d = *decon[i];
         double v = 0;
-        for (size_t l = 0; l < DECON_LEVELS; l += 2) v += d[DECON_LEVELS + l];
-        recon[i] = ptr<datamodel::DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{unscaler(v)});
-        if (v < min_v) min_v = v;
-    }
-    /*if (min_v != 0)
-        for (const auto &r: recon)
-            r->at(0) -= min_v;*/
+        UNROLL(DECON_LEVELS)
+        for (size_t l = 0; l < DECON_LEVELS; l += LEVEL_STEP) {
+#ifdef VMD_ONLY
+            v += d[l];
 
-    double total_diff = 0;
-    double highest_diff = 0;
-    for (size_t i = 0; i < recon.size(); ++i) {
+#else
+            v += d[DECON_LEVELS + l];
+#endif
+        }
+        OMPMINAS(min_v, v);
+        recon[i] = ptr<datamodel::DataRow>(d.get_value_time(), bpt::second_clock::local_time(), d.get_tick_volume(), std::vector{v});
+    }
+    if (false /* min_v < 0 */) {
+        LOG4_DEBUG("Minimum value " << min_v << " found.");
+        OMP_FOR(recon.size())
+        for (const auto &r: recon)
+            r->at(0) -= min_v;
+    }
+    OMP_FOR(recon.size())
+    for (const auto &r: recon)
+        r->at(0) = unscaler(r->at(0));
+    double total_diff = 0, highest_diff = 0;
+#if 0
+    OMP_FOR_i_(recon.size(), simd reduction(+:total_diff) reduction(max:highest_diff)) {
+#else
+    for (unsigned i = 0; i < recon.size(); ++i) {
+#endif
         const auto diff = std::abs(input[i]->at(0) - recon[i]->at(0));
-        if (diff > highest_diff) highest_diff = diff;
+        OMPMAXAS(highest_diff, diff);
         if (diff > TEST_TOL) LOG4_WARN("Input value " << *input[i] << " differs " << diff << " from recon value " << *recon[i] << " at index " << i);
         total_diff += diff;
     }
     LOG4_INFO("Test took " << std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count() << " seconds, total reconstruction error " << total_diff <<
-                ", average error " << total_diff / double(input.size()) << ", highest diff " << highest_diff << ", samples count " << decon.size());
+                           ", average error " << total_diff / double(input.size()) << ", highest diff " << highest_diff << ", samples count " << decon.size());
 }
 
 }

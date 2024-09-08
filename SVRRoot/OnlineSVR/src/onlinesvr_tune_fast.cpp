@@ -69,29 +69,26 @@ void OnlineMIMOSVR::tune_fast()
     weight_chunks.resize(num_chunks);
 
     constexpr unsigned opt_particles = 100;
-    constexpr unsigned opt_iters = 40;
+    constexpr unsigned opt_iters = 35;
     constexpr unsigned D = 2;
     // static const auto equiexp = std::log(std::sqrt(C_tune_range_max_lambda)) / M_LN2;
-    static const arma::mat bounds = [] () {
+    static const arma::mat bounds = []() {
         arma::mat r(D, 2);
         r.col(0).zeros();
         r.col(1).ones();
         return r;
-    } ();
-    LOG4_TRACE("Tuning slide skip " << C_slide_skip << ", max j " << C_max_j << ", tune min validation window "
-                                    << C_tune_min_validation_window << ", test len " << C_test_len << ", level " << level << ", step " << step
-                                    << ", num chunks " << num_chunks <<
-                                    ", first chunk " << common::present_chunk(ixs.front(), C_chunk_header) << ", last chunk "
-                                    << common::present_chunk(ixs.back(), C_chunk_header) << " labels " <<
-                                    common::present(*p_labels) << ", features " << common::present(*p_features) << ", last-knowns " << common::present(*p_last_knowns)
-                                    << ", max lambda " <<
-                                    C_tune_range_max_lambda << ", gamma variance " << C_gamma_variance << ", Prima particles " << opt_particles << ", iterations "
-                                    << opt_iters);
+    }();
+    LOG4_TRACE("Tuning slide skip " << C_slide_skip << ", max j " << C_max_j << ", tune min validation window " << C_tune_min_validation_window << ", test len " << C_test_len
+                                    << ", level " << level << ", step " << step << ", num chunks " << num_chunks << ", first chunk "
+                                    << common::present_chunk(ixs.front(), C_chunk_header) << ", last chunk "
+                                    << common::present_chunk(ixs.back(), C_chunk_header) << " labels " << common::present(*p_labels) << ", features "
+                                    << common::present(*p_features) << ", last-knowns " << common::present(*p_last_knowns) << ", max lambda " << C_tune_range_max_lambda
+                                    << ", gamma variance " << C_gamma_variance << ", Prima particles " << opt_particles << ", iterations " << opt_iters);
 
     const arma::uvec test_ixs = arma::regspace<arma::uvec>(p_labels->n_rows - C_test_len, p_labels->n_rows - 1);
     std::array<arma::mat, C_max_j> test_labels;
     std::array<arma::mat, C_max_j> test_last_knowns;
-UNROLL(C_max_j)
+    UNROLL(C_max_j)
     for (size_t j = 0; j < C_max_j; ++j) {
         const size_t test_tail = test_ixs.n_rows - j * C_slide_skip;
         test_labels[j] = p_labels->tail_rows(test_tail);
@@ -137,7 +134,9 @@ UNROLL(C_max_j)
         }
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, lag, features_sf, train_feature_chunks_t[chunk_ix]);
         business::DQScalingFactorService::scale_labels(*p_labels_sf, train_label_chunks[chunk_ix]);
-        const mmm_t train_L_m{common::mean(train_label_chunks[chunk_ix]), train_label_chunks[chunk_ix].max(), train_label_chunks[chunk_ix].min()};
+        const mmm_t train_L_m{common::mean(train_label_chunks[chunk_ix] * C_diff_coef),
+                              train_label_chunks[chunk_ix].max() * C_diff_coef,
+                              train_label_chunks[chunk_ix].min() * C_diff_coef};
 #ifdef BACON_OUTLIER // TODO Test BACON outlier detection
         if (!samples_selected) {
             const arma::mat joint_dataset = common::normalize_cols<double>(arma::join_rows(train_label_chunks[chunk_ix], train_feature_chunks_t[chunk_ix].t()));
@@ -180,12 +179,12 @@ UNROLL(C_max_j)
         auto &train_cuml = ccache().get_cached_cumulatives(*p_template_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
         auto &tune_cuml = ccache().get_cached_cumulatives(*p_template_chunk_params, tune_features_t, last_trained_time);
         assert(tune_labels.n_rows - C_test_len - ixs[chunk_ix].n_elem == 0);
-
+        tune_labels *= C_diff_coef;
         t_omp_lock chunk_preds_l;
-        static std::atomic<size_t> call_ct = 0;
+        std::atomic<size_t> call_ct = 0;
         const auto labels_f = p_labels_sf->get_labels_factor();
         auto &tune_results = ccache().checkin_tuner(*this, chunk_ix);
-        const auto prima_cb = [&](const double x[], double *const f) {
+        const auto prima_cb = [&, lag, chunk_ix](const double x[], double *const f) {
             ++call_ct;
             const auto xx = optimizer::pprune::ensure_bounds(x, bounds);
             const auto lambda = C_tune_range_max_lambda * xx[1];
@@ -193,12 +192,11 @@ UNROLL(C_max_j)
             cu_errchk(cudaSetDevice(ctx.phy_id()));
             magma_queue_t ma_queue;
             magma_queue_create(ctx.phy_id(), &ma_queue);
-            auto [score, gamma, epsco, p_predictions] = cuvalidate(
-                    lambda, xx[0], lag, tune_cuml, train_cuml, tune_labels, train_L_m, labels_f, ma_queue);
+            auto [score, gamma, epsco, p_predictions] =
+                    cuvalidate(lambda, xx[0], lag, tune_cuml, train_cuml, tune_labels, train_L_m, labels_f, ma_queue);
             if ((*f = score) == common::C_bad_validation)
                 LOG4_THROW("Bad validation for chunk " << chunk_ix << ", tune indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", gamma " << gamma <<
-                                                       ", epsco " << epsco << ", lambda " << lambda << ", tune features " << common::present(tune_features_t)
-                                                       << ", tune labels " << tune_labels);
+                                   ", epsco " << epsco << ", lambda " << lambda << ", tune features " << common::present(tune_features_t) << ", tune labels " << tune_labels);
             chunk_preds_l.set();
             const auto prev_score = tune_results.param_pred.front().score;
             if (score < prev_score) {
@@ -212,8 +210,8 @@ UNROLL(C_max_j)
                     tune_results.param_pred.front().params = *p_template_chunk_params;
                 }
                 tune_results.param_pred.front().score = score;
-                LOG4_TRACE("New best score " << score << ", previous best " << prev_score << ", improvement " << 100. * (1. - score / prev_score) << "pc, parameters " <<
-                    *p_template_chunk_params << ", prima callback count " << call_ct << ", parameters " << arma::conv_to<arma::rowvec>::from(xx));
+                LOG4_TRACE("New best score " << score << ", previous best " << prev_score << ", improvement " << common::imprv(score, prev_score) << "pc, parameters " <<
+                                             *p_template_chunk_params << ", prima callback count " << call_ct << ", parameters " << arma::conv_to<arma::rowvec>::from(xx));
                 chunk_preds_l.unset();
                 goto __bail;
             }
@@ -223,6 +221,7 @@ UNROLL(C_max_j)
                 delete p_predictions;
             }
             __bail:
+            cu_errchk(cudaStreamSynchronize(magma_queue_get_cuda_stream(ma_queue)));
             magma_queue_destroy(ma_queue);
         };
         const optimizer::t_pprune_res res = optimizer::pprune(0 /* prima_algorithm_t::PRIMA_LINCOA */, opt_particles, bounds, prima_cb, opt_iters, .25, 1e-11);

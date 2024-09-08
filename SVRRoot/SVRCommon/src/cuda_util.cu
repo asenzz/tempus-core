@@ -29,28 +29,35 @@ void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const 
 
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream)
 {
-    NppStreamContext ctx;
-    ctx.hStream = custream;
-    ctx.nCudaDeviceId = gpuid;
-
+    NppStreamContext res;
 #ifdef HETEROGENOUS_GPU_HW
     cudaDeviceProp prop;
     cu_errchk(cudaGetDeviceProperties(&prop, gpuid));
+    res.nMultiProcessorCount = prop.multiProcessorCount;
+    res.nMaxThreadsPerMultiProcessor = prop.maxThreadsPerMultiProcessor;
+    res.nMaxThreadsPerBlock = prop.maxThreadsPerBlock;
+    res.nSharedMemPerBlock = prop.sharedMemPerBlock;
+    res.nCudaDevAttrComputeCapabilityMajor = prop.major;
+    res.nCudaDevAttrComputeCapabilityMinor = prop.minor;
 #else
     static auto prop = [gpuid]() {
         cudaDeviceProp prop;
         cu_errchk(cudaGetDeviceProperties(&prop, gpuid));
         return prop;
     } ();
+    static const NppStreamContext C_npp_ctx {nullptr /* CUDA stream */, 0 /* GPU device ID */,
+            prop.multiProcessorCount,
+            prop.maxThreadsPerMultiProcessor,
+            prop.maxThreadsPerBlock,
+            prop.sharedMemPerBlock,
+            prop.major,
+            prop.minor};
+    res = C_npp_ctx;
 #endif
-    ctx.nMultiProcessorCount = prop.multiProcessorCount;
-    ctx.nMaxThreadsPerMultiProcessor = prop.maxThreadsPerMultiProcessor;
-    ctx.nMaxThreadsPerBlock = prop.maxThreadsPerBlock;
-    ctx.nSharedMemPerBlock = prop.sharedMemPerBlock;
-    ctx.nCudaDevAttrComputeCapabilityMajor = prop.major;
-    ctx.nCudaDevAttrComputeCapabilityMinor = prop.minor;
-    cu_errchk(cudaStreamGetFlags(custream, &ctx.nStreamFlags));
-    return ctx;
+    res.hStream = custream;
+    res.nCudaDeviceId = gpuid;
+    cu_errchk(cudaStreamGetFlags(custream, &res.nStreamFlags));
+    return res;
 }
 
 }

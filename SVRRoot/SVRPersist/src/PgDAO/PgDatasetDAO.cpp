@@ -38,7 +38,7 @@ int PgDatasetDAO::save(const datamodel::Dataset_ptr &dataset)
                 dataset->get_gradient_count(),
                 dataset->get_max_chunk_size(),
                 dataset->get_multistep(),
-                dataset->get_transformation_levels(),
+                dataset->get_spectral_levels(),
                 dataset->get_transformation_name(),
                 dataset->get_max_lookback_time_gap(),
                 dataset->get_is_active()
@@ -55,7 +55,7 @@ int PgDatasetDAO::save(const datamodel::Dataset_ptr &dataset)
                 dataset->get_gradient_count(),
                 dataset->get_max_chunk_size(),
                 dataset->get_multistep(),
-                dataset->get_transformation_levels(),
+                dataset->get_spectral_levels(),
                 dataset->get_transformation_name(),
                 dataset->get_max_lookback_time_gap(),
                 dataset->get_is_active(),

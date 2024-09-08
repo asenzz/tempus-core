@@ -18,9 +18,16 @@ namespace datamodel {
 
 void Dataset::init_transform()
 {
-    if (transformation_levels_ < 8) return;
-    p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(transformation_levels_ / 4);
-    p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(transformation_levels_ / 2);
+    if (spectrum_levels_ >= MIN_LEVEL_COUNT) {
+#ifdef VMD_ONLY
+        p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(spectrum_levels_);
+#elif defined(EMD_ONLY)
+        p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(spectrum_levels_);
+#else
+        p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(spectrum_levels_ / 4);
+        p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(spectrum_levels_ / 2);
+#endif
+    }
 }
 
 Dataset::Dataset() :
@@ -29,7 +36,7 @@ Dataset::Dataset() :
         gradients_(common::C_default_gradient_count),
         max_chunk_size_(common::C_default_kernel_max_chunk_len),
         multistep_(common::C_default_multistep_len),
-        transformation_levels_(common::C_default_level_count),
+        spectrum_levels_(common::C_default_level_count),
         is_active_(false)
 {
     init_transform();
@@ -46,10 +53,10 @@ Dataset::Dataset(
         const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
         const Priority &priority,
         const std::string &description,
-        const size_t gradients,
-        const size_t chunk_size,
-        const size_t multiout,
-        const size_t transformation_levels,
+        const unsigned gradients,
+        const unsigned chunk_size,
+        const unsigned multiout,
+        const unsigned spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
@@ -65,7 +72,7 @@ Dataset::Dataset(
           gradients_(gradients),
           max_chunk_size_(chunk_size),
           multistep_(multiout),
-          transformation_levels_(transformation_levels),
+          spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
           ensembles_(svr::common::clone_shared_ptr_elements(ensembles)),
@@ -94,10 +101,10 @@ Dataset::Dataset(
         const std::deque<std::string> &aux_input_queue_table_names,
         const Priority &priority,
         const std::string &description,
-        const size_t gradients,
-        const size_t chunk_size,
-        const size_t multiout,
-        const size_t transformation_levels,
+        const unsigned gradients,
+        const unsigned chunk_size,
+        const unsigned multiout,
+        const unsigned spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
@@ -112,7 +119,7 @@ Dataset::Dataset(
           gradients_(gradients),
           max_chunk_size_(chunk_size),
           multistep_(multiout),
-          transformation_levels_(transformation_levels),
+          spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
           ensembles_(ensembles),
@@ -143,15 +150,15 @@ Dataset::Dataset(Dataset const &dataset) :
                 dataset.gradients_,
                 dataset.max_chunk_size_,
                 dataset.multistep_,
-                dataset.transformation_levels_,
+                dataset.spectrum_levels_,
                 dataset.transformation_name_,
                 dataset.max_lookback_time_gap_,
                 dataset.ensembles_,
                 dataset.is_active_,
                 dataset.iq_scaling_factors_)
 {
-    p_cvmd_transformer = std::make_unique<vmd::fast_cvmd>(*dataset.p_cvmd_transformer);
-    p_oemd_transformer_fat = std::make_unique<oemd::online_emd>(*dataset.p_oemd_transformer_fat);
+    if (dataset.p_cvmd_transformer) p_cvmd_transformer = std::make_unique<vmd::fast_cvmd>(*dataset.p_cvmd_transformer);
+    if (dataset.p_oemd_transformer_fat) p_oemd_transformer_fat = std::make_unique<oemd::online_emd>(*dataset.p_oemd_transformer_fat);
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
@@ -190,14 +197,14 @@ bool Dataset::operator^=(const Dataset &o) const
                             && gradients_ == o.gradients_
                             && max_chunk_size_ == o.max_chunk_size_
                             && multistep_ == o.multistep_
-                            && transformation_levels_ == o.transformation_levels_
-               && transformation_name_ == o.transformation_name_
-               && max_lookback_time_gap_ == o.max_lookback_time_gap_
-               && is_active_ == o.is_active_;
+                            && spectrum_levels_ == o.spectrum_levels_
+                            && transformation_name_ == o.transformation_name_
+                            && max_lookback_time_gap_ == o.max_lookback_time_gap_
+                            && is_active_ == o.is_active_;
 
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(aux_input_queues_.size()))
+    OMP_FOR(aux_input_queues_.size())
     for (const auto &iq: aux_input_queues_)
-        res &= std::any_of(o.aux_input_queues_.begin(), o.aux_input_queues_.end(), [&] (const auto &oiq) { return iq.get_id() == oiq.get_id(); });
+        res &= std::any_of(o.aux_input_queues_.begin(), o.aux_input_queues_.end(), [&](const auto &oiq) { return iq.get_id() == oiq.get_id(); });
 
     return res;
 }
@@ -222,22 +229,22 @@ oemd::online_emd &Dataset::get_oemd_transformer()
 bool Dataset::get_initialized()
 { return initialized; }
 
-size_t Dataset::get_gradient_count() const
+unsigned Dataset::get_gradient_count() const
 { return gradients_; };
 
-size_t Dataset::get_max_chunk_size() const
+unsigned Dataset::get_max_chunk_size() const
 { return max_chunk_size_; };
 
-size_t Dataset::get_multistep() const
+unsigned Dataset::get_multistep() const
 { return multistep_; };
 
-void Dataset::set_gradients(const size_t grads)
+void Dataset::set_gradients(const unsigned grads)
 { gradients_ = grads; }
 
-void Dataset::set_chunk_size(const size_t chunk_size)
+void Dataset::set_chunk_size(const unsigned chunk_size)
 { max_chunk_size_ = chunk_size; }
 
-void Dataset::set_multistep(const size_t multistep)
+void Dataset::set_multistep(const unsigned multistep)
 { multistep_ = multistep; }
 
 std::string Dataset::get_dataset_name() const
@@ -271,7 +278,7 @@ std::deque<datamodel::InputQueue_ptr> Dataset::get_aux_input_queues() const
 }
 
 
-datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const size_t idx) const
+datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const unsigned idx) const
 {
     return aux_input_queues_[idx].get_obj();
 }
@@ -305,36 +312,53 @@ void Dataset::set_description(const std::string &description)
     description_ = description;
 }
 
-size_t Dataset::get_transformation_levels() const
+unsigned Dataset::get_spectral_levels() const
 {
-    return transformation_levels_ >= MIN_LEVEL_COUNT ? transformation_levels_ : 1;
+    return spectrum_levels_ >= MIN_LEVEL_COUNT ? spectrum_levels_ : 1;
 }
 
-size_t Dataset::get_half_levct() const
+unsigned Dataset::get_trans_levix() const
 {
-    return transformation_levels_ >= MIN_LEVEL_COUNT ? transformation_levels_ / 2 : std::numeric_limits<size_t>::max();
+    return business::SVRParametersService::get_trans_levix(spectrum_levels_);
 }
 
-size_t Dataset::get_model_count() const
+unsigned Dataset::get_model_count() const
 {
-    return business::ModelService::to_model_ct(transformation_levels_);
+    return business::ModelService::to_model_ct(spectrum_levels_);
 }
 
-size_t Dataset::get_transformation_levels_cvmd() const
+unsigned Dataset::get_spectrum_levels_cvmd() const
 {
-    return transformation_levels_ >= MIN_LEVEL_COUNT ? std::max<ssize_t>(1, transformation_levels_ / 2) : 0;
+#ifdef VMD_ONLY
+    return spectrum_levels_ / 2;
+#elif defined(EMD_ONLY)
+    return 0;
+#else
+    return spectrum_levels_ >= MIN_LEVEL_COUNT ? std::max<unsigned>(1, spectrum_levels_ / 2) : 0;
+#endif
 }
 
-size_t Dataset::get_transformation_levels_oemd() const
+unsigned int Dataset::get_spectrum_levels_oemd() const noexcept
 {
-    return transformation_levels_ >= MIN_LEVEL_COUNT ? std::max<ssize_t>(1, transformation_levels_ / 4) : 0;
+#ifdef VMD_ONLY
+    return 0;
+#elif defined(EMD_ONLY)
+    return spectrum_levels_;
+#else
+    return spectrum_levels_ >= MIN_LEVEL_COUNT ? std::max<unsigned>(1, spectrum_levels_ / 4) : 0;
+#endif
 }
 
-void Dataset::set_transformation_levels(const size_t transformation_levels)
-{ transformation_levels_ = transformation_levels; }
+void Dataset::set_spectrum_levels(const unsigned int spectrum_levels)
+{
+    assert(spectrum_levels >= 1);
+    spectrum_levels_ = spectrum_levels;
+}
 
-std::string Dataset::get_transformation_name() const
-{ return transformation_name_; }
+std::string Dataset::get_transformation_name() const noexcept
+{
+    return transformation_name_;
+}
 
 void Dataset::set_transformation_name(const std::string &transformation_name)
 {
@@ -342,50 +366,57 @@ void Dataset::set_transformation_name(const std::string &transformation_name)
     transformation_name_ = transformation_name;
 }
 
-bool Dataset::validate_transformation_name(const std::string &transformation_name) const
+bool Dataset::validate_transformation_name(const std::string &transformation_name) noexcept
 {
-    return std::find(transformation_names.begin(), transformation_names.end(), transformation_name) != transformation_names.end();
+    return std::find(C_default_exec_policy, transformation_names.cbegin(), transformation_names.cend(), transformation_name) != transformation_names.cend();
 }
 
-const bpt::time_duration &Dataset::get_max_lookback_time_gap() const
-{ return max_lookback_time_gap_; }
+const bpt::time_duration &Dataset::get_max_lookback_time_gap() const noexcept
+{
+    return max_lookback_time_gap_;
+}
 
 
 void Dataset::set_max_lookback_time_gap(const bpt::time_duration &max_lookback_time_gap)
-{ max_lookback_time_gap_ = max_lookback_time_gap; }
+{
+    assert(!max_lookback_time_gap_.is_neg_infinity());
+    max_lookback_time_gap_ = max_lookback_time_gap;
+}
 
 
-std::deque<datamodel::Ensemble_ptr> &Dataset::get_ensembles()
+std::deque<datamodel::Ensemble_ptr> &Dataset::get_ensembles() noexcept
 { return ensembles_; }
 
-std::deque<datamodel::Ensemble_ptr> Dataset::get_ensembles() const
+std::deque<datamodel::Ensemble_ptr> Dataset::get_ensembles() const noexcept
 { return ensembles_; }
 
-datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &column_name)
+datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &column_name) noexcept
 {
     return get_ensemble(input_queue_.get_obj()->get_table_name(), column_name);
 }
 
 
-datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &table_name, const std::string &column_name)
+datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &table_name, const std::string &column_name) noexcept
 {
-    const auto res = std::find_if(C_default_exec_policy, ensembles_.begin(), ensembles_.end(), [&](const auto &p_ensemble) {
+    const auto res = std::find_if(C_default_exec_policy, ensembles_.cbegin(), ensembles_.cend(), [&](const auto &p_ensemble) {
         return p_ensemble->get_decon_queue()->get_input_queue_column_name() == column_name &&
                p_ensemble->get_decon_queue()->get_input_queue_table_name() == table_name;
     });
-    if (res != ensembles_.end()) return *res;
+    if (res != ensembles_.cend()) return *res;
     LOG4_ERROR("Ensemble for table " << table_name << ", column " << column_name << " not found!");
     return nullptr;
 }
 
 void Dataset::set_decon_queue(const datamodel::DeconQueue_ptr &p_decon_queue)
 {
+    assert(p_decon_queue);
     datamodel::Ensemble_ptr p_ensemble = get_ensemble(p_decon_queue->get_input_queue_table_name(), p_decon_queue->get_input_queue_column_name());
     if (!p_ensemble) LOG4_THROW("Ensemble not found!");
     if (!p_ensemble->get_decon_queue() || (p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_decon_queue->get_input_queue_column_name() &&
                                            p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_decon_queue->get_input_queue_table_name()))
         p_ensemble->set_decon_queue(p_decon_queue);
     auto &aux_decon_queues = p_ensemble->get_aux_decon_queues();
+    OMP_FOR(aux_decon_queues.size())
     for (auto &p_aux_decon_queue: aux_decon_queues)
         if (p_aux_decon_queue->get_input_queue_column_name() == p_decon_queue->get_input_queue_column_name() &&
             p_aux_decon_queue->get_input_queue_table_name() == p_decon_queue->get_input_queue_table_name())
@@ -411,6 +442,7 @@ void Dataset::clear_data()
     for (auto &p_decon_queue: get_decon_queues())
         p_decon_queue.second->get_data().clear();
     input_queue_.get_obj()->get_data().clear();
+    OMP_FOR(aux_input_queues_.size())
     for (auto &p_input_queue: aux_input_queues_)
         p_input_queue.get_obj()->get_data().clear();
 }
@@ -435,88 +467,103 @@ datamodel::DeconQueue_ptr Dataset::get_decon_queue(const std::string &table_name
     return nullptr;
 }
 
-datamodel::Ensemble_ptr Dataset::get_ensemble(const size_t idx)
+datamodel::Ensemble_ptr Dataset::get_ensemble(const unsigned int idx)
 {
     return ensembles_[idx];
 }
 
-size_t Dataset::get_ensemble_count() const
+unsigned int Dataset::get_ensemble_count() const
 {
     return input_queue_.get_obj()->get_value_columns().size();
 }
 
 void Dataset::set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensembles, const bool overwrite)
 {
-    const auto prev_size = ensembles_.size();
+    const unsigned prev_size = ensembles_.size();
 
-#pragma omp parallel for num_threads(adj_threads(new_ensembles.size())) schedule(static, 1)
-    for (const auto &e: new_ensembles) {
-        std::atomic<bool> found = false;
-#pragma omp parallel for num_threads(adj_threads(prev_size)) schedule(static, 1)
-        for (size_t i = 0; i < prev_size; ++i)
-            if (e->get_column_name() == ensembles_[i]->get_column_name()) {
-                found.store(true, std::memory_order_relaxed);
-                if (!overwrite) continue;
-                const std::scoped_lock lk(ensembles_mx);
-                ensembles_[i] = e;
-                ensembles_[i]->set_dataset_id(id);
-            }
-        if (found) continue;
-        const std::scoped_lock lk(ensembles_mx);
-        ensembles_.emplace_back(e);
-        ensembles_.back()->set_dataset_id(id);
+#pragma omp parallel num_threads(adj_threads(ensembles_.size() + new_ensembles.size()))
+#pragma omp single
+    {
+#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
+        for (const auto &e: new_ensembles) {
+            std::atomic<bool> found = false;
+#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
+            for (unsigned i = 0; i < prev_size; ++i)
+                if (e->get_column_name() == ensembles_[i]->get_column_name()) {
+                    found.store(true, std::memory_order_relaxed);
+                    if (!overwrite) continue;
+                    const std::scoped_lock lk(ensembles_mx);
+                    ensembles_[i] = e;
+                    ensembles_[i]->set_dataset_id(id);
+                }
+            if (found) continue;
+            const std::scoped_lock lk(ensembles_mx);
+            ensembles_.emplace_back(e);
+            ensembles_.back()->set_dataset_id(id);
+        }
     }
 }
 
-bool Dataset::get_is_active() const
+bool Dataset::get_is_active() const noexcept
 { return is_active_; }
 
-void Dataset::set_is_active(const bool is_active)
+void Dataset::set_is_active(const bool is_active) noexcept
 { is_active_ = is_active; }
 
-std::deque<datamodel::IQScalingFactor_ptr> &Dataset::get_iq_scaling_factors()
+std::deque<datamodel::IQScalingFactor_ptr> &Dataset::get_iq_scaling_factors() noexcept
 { return iq_scaling_factors_; }
 
 std::deque<datamodel::IQScalingFactor_ptr> Dataset::get_iq_scaling_factors(const InputQueue &input_queue) const
 {
     std::deque<datamodel::IQScalingFactor_ptr> res;
-    for (const auto &iqsf: iq_scaling_factors_)
-        if (iqsf->get_input_queue_table_name() == input_queue.get_table_name())
-            res.emplace_back(iqsf);
+    std::copy_if(C_default_exec_policy, iq_scaling_factors_.cbegin(), iq_scaling_factors_.cend(), std::back_inserter(res),
+                 [&](const auto &iqsf) { return iqsf->get_input_queue_table_name() == input_queue.get_table_name(); });
     return res;
 }
 
 datamodel::IQScalingFactor_ptr Dataset::get_iq_scaling_factor(const std::string &input_queue_table_name, const std::string &input_queue_column_name) const
 {
-    for (const auto &iqsf: iq_scaling_factors_)
-        if (iqsf->get_input_queue_table_name() == input_queue_table_name && iqsf->get_input_queue_column_name() == input_queue_column_name)
-            return iqsf;
-    return nullptr;
+    const auto res = std::find_if(C_default_exec_policy, iq_scaling_factors_.cbegin(), iq_scaling_factors_.cend(),
+                 [&](const auto &iqsf) { return iqsf->get_input_queue_table_name() == input_queue_table_name && iqsf->get_input_queue_column_name() == input_queue_column_name; });
+    return res == iq_scaling_factors_.cend() ? nullptr : *res;
 }
 
 void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor_ptr> &new_iq_scaling_factors, const bool overwrite)
 {
     const auto prev_size = iq_scaling_factors_.size();
-    for (const auto &new_iqsf: new_iq_scaling_factors) {
-        std::atomic<bool> found = false;
-#pragma omp parallel for num_threads(adj_threads(prev_size))
-        for (size_t i = 0; i < prev_size; ++i) {
-            auto &old_iqsf = iq_scaling_factors_[i];
-            if (new_iqsf->get_input_queue_table_name() == old_iqsf->get_input_queue_table_name() &&
-                new_iqsf->get_input_queue_column_name() == old_iqsf->get_input_queue_column_name()) {
-                if (overwrite || !std::isnormal(old_iqsf->get_scaling_factor())) old_iqsf->set_scaling_factor(new_iqsf->get_scaling_factor());
-                found.store(true, std::memory_order_relaxed);
+    t_omp_lock iq_scaling_factors_l;
+#pragma omp parallel num_threads(adj_threads(new_iq_scaling_factors.size() + prev_size))
+#pragma omp single
+    {
+#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
+        for (const auto &new_iqsf: new_iq_scaling_factors) {
+            std::atomic<bool> found = false;
+#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
+            for (unsigned i = 0; i < prev_size; ++i) {
+                auto &old_iqsf = iq_scaling_factors_[i];
+                if (new_iqsf->get_input_queue_table_name() == old_iqsf->get_input_queue_table_name() &&
+                    new_iqsf->get_input_queue_column_name() == old_iqsf->get_input_queue_column_name()) {
+                    if (overwrite || !std::isnormal(old_iqsf->get_scaling_factor())) {
+                        iq_scaling_factors_l.set();
+                        old_iqsf->set_scaling_factor(new_iqsf->get_scaling_factor());
+                        iq_scaling_factors_l.unset();
+                    }
+                    found.store(true, std::memory_order_relaxed);
+                }
+            }
+            if (!found) {
+                iq_scaling_factors_l.set();
+                iq_scaling_factors_.emplace_back(new_iqsf);
+                iq_scaling_factors_.back()->set_dataset_id(id);
+                iq_scaling_factors_l.unset();
             }
         }
-        if (found) continue;
-        iq_scaling_factors_.emplace_back(new_iqsf);
-        iq_scaling_factors_.back()->set_dataset_id(id);
     }
 }
 
 unsigned Dataset::get_max_lag_count() const
 {
-    size_t max_lag_count = 0;
+    unsigned max_lag_count = 0;
     for (const auto &e: ensembles_)
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
@@ -534,7 +581,8 @@ unsigned Dataset::get_max_quantise() const
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
                 for (const auto &p: svr->get_param_set())
-                    if (p && !p->get_feature_mechanics().needs_tuning()) res = std::max(res, p->get_feature_mechanics().quantization.max());
+                    if (p && !p->get_feature_mechanics().needs_tuning())
+                        res = std::max(res, p->get_feature_mechanics().quantization.max());
     if (!res) res = business::ModelService::C_max_quantisation;
     LOG4_DEBUG("Returning  " << res);
     return res;
@@ -547,50 +595,62 @@ unsigned Dataset::get_max_decrement() const
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
                 for (const auto &p: svr->get_param_set())
-                    if (p) _MAXAS(res, p->get_svr_decremental_distance());
+                    if (p) MAXAS(res, p->get_svr_decremental_distance());
 
     LOG4_DEBUG("Returning  " << res);
     return res;
 }
 
-size_t Dataset::get_max_residuals_length() const
+unsigned int Dataset::get_max_residuals_length() const
 {
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
-    size_t result = 0;
+    unsigned result = 0;
     t_omp_lock max_residuals_l;
-#pragma omp parallel for num_threads(adj_threads(ensembles_.size())) schedule(static, 1)
-    for (const auto &p_ensemble: ensembles_) {
-        const size_t res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
-        max_residuals_l.set();
-        result = std::max(result, res_count);
-        max_residuals_l.unset();
-#pragma omp parallel for num_threads(adj_threads(p_ensemble->get_aux_decon_queues().size())) schedule(static, 1)
-        for (const auto &p_decon: p_ensemble->get_aux_decon_queues()) {
-            const size_t res_count_aux = get_residuals_length(p_decon->get_table_name());
+#pragma omp parallel num_threads(adj_threads(ensembles_.size() + 1))
+#pragma omp single
+    {
+#pragma omp taskloop mergeable untied default(shared) grainsize(1)
+        for (const auto &p_ensemble: ensembles_) {
+            const unsigned res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
             max_residuals_l.set();
-            result = std::max(result, res_count_aux);
+            MAXAS(result, res_count);
             max_residuals_l.unset();
+#pragma omp taskloop mergeable untied default(shared) grainsize(1)
+            for (const auto &p_decon: p_ensemble->get_aux_decon_queues()) {
+                const unsigned res_count_aux = get_residuals_length(p_decon->get_table_name());
+                max_residuals_l.set();
+                MAXAS(result, res_count_aux);
+                max_residuals_l.unset();
+            }
         }
     }
     return result;
 }
 
-size_t Dataset::get_max_possible_residuals_length() const
+unsigned int Dataset::get_max_possible_residuals_length() const
 {
     return get_residuals_length(common::gen_random(8));
 }
 
-size_t Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
+unsigned int Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
 {
-    return std::max<size_t>(
+    return std::max<unsigned>(
             p_cvmd_transformer ? p_cvmd_transformer->get_residuals_length(decon_queue_table_name) : 0,
             p_oemd_transformer_fat ? p_oemd_transformer_fat->get_residuals_length(decon_queue_table_name) : 0);
 }
 
 size_t Dataset::get_residuals_length(const unsigned levels)
 {
+    if (levels < MIN_LEVEL_COUNT) return 0;
+
+#ifdef VMD_ONLY
+    return vmd::fast_cvmd::get_residuals_length(levels);
+#elif defined(EMD_ONLY)
+    return oemd::online_emd::get_residuals_length();
+#else
     return std::max<size_t>(vmd::fast_cvmd::get_residuals_length(levels / 2), oemd::online_emd::get_residuals_length());
+#endif
 }
 
 bpt::ptime Dataset::get_last_modeled_time() const
@@ -613,7 +673,7 @@ std::string Dataset::to_string() const
       << ", user name " << get_user_name()
       << ", priority " << svr::datamodel::to_string(get_priority())
       << ", description " << get_description()
-      << ", transformation levels " << transformation_levels_
+      << ", transformation levels " << spectrum_levels_
       << ", transformation name " << transformation_name_
       << ", gradients " << gradients_
       << ", chunk size " << max_chunk_size_

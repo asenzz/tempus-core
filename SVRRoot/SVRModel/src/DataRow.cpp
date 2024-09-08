@@ -20,7 +20,7 @@ DataRow::DataRow(
         const bpt::ptime &value_time,
         const bpt::ptime &update_time,
         const double tick_volume,
-        const size_t levels) :
+        const unsigned levels) :
         value_time_(value_time),
         update_time_(update_time),
         tick_volume_(tick_volume),
@@ -31,7 +31,7 @@ DataRow::DataRow(
         const bpt::ptime &value_time,
         const bpt::ptime &update_time,
         const double tick_volume,
-        const size_t levels,
+        const unsigned levels,
         const double value) :
         value_time_(value_time),
         update_time_(update_time),
@@ -55,7 +55,7 @@ DataRow::DataRow(
         const bpt::ptime &update_time,
         const double tick_volume,
         const double *values_ptr,
-        const size_t values_size) :
+        const unsigned values_size) :
         value_time_(value_time),
         update_time_(update_time),
         tick_volume_(tick_volume),
@@ -74,12 +74,12 @@ void DataRow::set_values(const std::vector<double> &values)
     values_ = values;
 }
 
-double DataRow::get_value(const size_t column_index) const
+double DataRow::get_value(const unsigned column_index) const
 {
     return values_[column_index];
 }
 
-double &DataRow::get_value(const size_t column_index)
+double &DataRow::get_value(const unsigned column_index)
 {
     return values_[column_index];
 }
@@ -94,43 +94,43 @@ const double &DataRow::operator*() const
     return values_.front();
 }
 
-double DataRow::operator()(const size_t column_index) const
+double DataRow::operator()(const unsigned column_index) const
 {
     return values_[column_index];
 }
 
-double DataRow::at(const size_t column_index) const
+double DataRow::at(const unsigned column_index) const
 {
     if (column_index >= values_.size()) LOG4_THROW("Index " << column_index << " larger or equal to " << values_.size());
     return values_[column_index];
 }
 
-double DataRow::operator[](const size_t column_index) const
+double DataRow::operator[](const unsigned column_index) const
 {
     return values_[column_index];
 }
 
-double &DataRow::operator[](const size_t column_index)
+double &DataRow::operator[](const unsigned column_index)
 {
     return values_[column_index];
 }
 
-double &DataRow::operator()(const size_t column_index)
+double &DataRow::operator()(const unsigned column_index)
 {
     return values_[column_index];
 }
 
-double &DataRow::at(const size_t column_index)
+double &DataRow::at(const unsigned column_index)
 {
     return values_[column_index];
 }
 
-double *DataRow::p(const size_t column_index)
+double *DataRow::p(const unsigned column_index)
 {
     return values_.data() + column_index;
 }
 
-size_t DataRow::size() const
+unsigned DataRow::size() const
 {
     return values_.size();
 }
@@ -183,7 +183,7 @@ DataRow::construct(const std::deque<datamodel::MultivalResponse_ptr> &responses)
     return result;
 }
 
-void DataRow::set_value(const size_t column_index, const double value)
+void DataRow::set_value(const unsigned column_index, const double value)
 {
     if (values_.size() <= column_index) LOG4_THROW("Invalid column index " << column_index << " of " << values_.size() << " columns.");
     values_[column_index] = value;
@@ -192,9 +192,9 @@ void DataRow::set_value(const size_t column_index, const double value)
 std::string DataRow::to_string() const
 {
     std::stringstream s;
-    s.precision(std::numeric_limits<long double>::max_digits10);
+    s.precision(std::numeric_limits<double>::max_digits10);
     s << "Value time " << value_time_ << ", update time " << update_time_ << ", volume " << tick_volume_ << ", values ";
-    for (size_t i = 0; i < values_.size() - 1; ++i) s << values_[i] << ", ";
+    for (unsigned i = 0; i < values_.size() - 1; ++i) s << values_[i] << ", ";
     s << values_.back();
     return s.str();
 }
@@ -216,22 +216,22 @@ bool DataRow::operator==(const DataRow &other) const
     return value_time_ == other.value_time_
            && tick_volume_ == other.tick_volume_
            && values_.size() == other.values_.size()
-           && std::equal(C_default_exec_policy, values_.begin(), values_.end(), other.values_.begin());
+           && std::equal(C_default_exec_policy, values_.cbegin(), values_.cend(), other.values_.cbegin());
 }
 
 bool DataRow::fast_compare(const DataRow::container &lhs, const DataRow::container &rhs)
 {
     return lhs.size() == rhs.size()
-           && (**lhs.begin()).size() == (**rhs.begin()).size()
-           && (**lhs.begin()).get_value_time() == (**rhs.begin()).get_value_time()
-           && (**lhs.rbegin()).get_value_time() == (**rhs.rbegin()).get_value_time();
+           && lhs.front()->size() == rhs.front()->size()
+           && lhs.front()->get_value_time() == rhs.front()->get_value_time()
+           && lhs.back()->get_value_time() == rhs.back()->get_value_time();
 }
 
 std::shared_ptr<DataRow> DataRow::load(const std::string &s, const char delim)
 {
     std::istringstream is(s);
     char field[common::C_max_csv_token_size];
-    size_t tix = 0;
+    unsigned tix = 0;
     auto r = ptr<DataRow>();
     while (is.getline(field, common::C_max_csv_token_size, delim)) {
         switch (tix) {
@@ -267,8 +267,7 @@ clone_datarows(data_row_container::const_iterator it, const data_row_container::
 {
     const auto res_size = std::distance(it, end);
     data_row_container res(res_size);
-#pragma omp parallel for schedule(static, 1 + C_n_cpu / res_size) num_threads(adj_threads(res_size))
-    for (std::decay_t<dtype(res_size)> i = 0; i < res_size; ++i) res[i] = ptr<datamodel::DataRow>(**(it + i));
+    OMP_FOR_i(res_size) res[i] = otr<datamodel::DataRow>(**(it + i));
     return res;
 }
 
@@ -359,7 +358,7 @@ find_nearest(
 datamodel::DataRow::container::const_iterator
 find_nearest(
         const datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time)
+        const boost::posix_time::ptime &time) noexcept
 {
     if (data.empty()) {
         LOG4_ERROR("Data is empty");
@@ -734,12 +733,12 @@ datamodel::DataRow::insert_rows(
         const arma::mat &data,
         const bpt::ptime &start_time,
         const bpt::time_duration &resolution,
-        const size_t level,
-        const size_t level_ct,
+        const unsigned level,
+        const unsigned level_ct,
         const bool merge)
 {
     std::deque<bpt::ptime> times;
-    for (size_t i = 0; i < data.n_rows; ++i)
+    for (unsigned i = 0; i < data.n_rows; ++i)
         times.emplace_back(start_time + double(i) * resolution);
     insert_rows(rows_container, data, times, level, level_ct, merge);
     return *times.rbegin();
@@ -749,8 +748,8 @@ data_row_container
 datamodel::DataRow::insert_rows(
         const arma::mat &data,
         const std::deque<bpt::ptime> &times,
-        const size_t level,
-        const size_t level_ct,
+        const unsigned level,
+        const unsigned level_ct,
         const bool merge)
 {
     data_row_container rows_container;
@@ -763,8 +762,8 @@ datamodel::DataRow::insert_rows(
         data_row_container &rows_container,
         const arma::mat &data,
         const std::deque<bpt::ptime> &times,
-        const size_t level,
-        const size_t level_ct,
+        const unsigned level,
+        const unsigned level_ct,
         const bool merge)
 {
     if (times.size() != data.n_rows) LOG4_THROW("Times " << times.size() << " and data rows " << data.n_rows << " do not match.");
@@ -779,8 +778,8 @@ datamodel::DataRow::insert_rows(
     const auto time_now = bpt::second_clock::local_time();
     const auto prev_size = rows_container.size();
     rows_container.resize(prev_size + data.n_rows);
-#pragma omp parallel for num_threads(adj_threads(data.n_rows))
-    for (size_t row_ix = 0; row_ix < data.n_rows; ++row_ix) {
+OMP_FOR(data.n_rows)
+    for (unsigned row_ix = 0; row_ix < data.n_rows; ++row_ix) {
         const auto row_time = times[row_ix];
         auto row_iter = rows_container.begin() + prev_size + row_ix;
         if (!*row_iter) *row_iter = ptr<datamodel::DataRow>(row_time, time_now, common::C_default_value_tick_volume, level_ct, 0.);

@@ -29,12 +29,17 @@ constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0.
 constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
 constexpr double C_chunk_tail = .1;
 constexpr double C_chunk_header = 1. - C_chunk_tail;
-constexpr size_t C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
-constexpr size_t C_end_chunks = 1; // [1..1/offlap]
+constexpr unsigned C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
+constexpr unsigned C_end_chunks = 1; // [1..1/offlap]
 constexpr double C_gamma_variance = 6e4;
 constexpr magma_int_t C_rbt_iter = 40; // default 30
 constexpr double C_rbt_threshold = 0; // [0..1] default 1
 constexpr double C_features_superset_coef = 1e2; // [1..+inf)
+#ifdef EMO_DIFF
+constexpr double C_diff_coef = 1;
+#else
+constexpr double C_diff_coef = 1;
+#endif
 
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -87,11 +92,11 @@ class OnlineMIMOSVR final : public Entity
     std::deque<arma::uvec> ixs;
     std::deque<std::pair<double, double>> chunks_score;
     arma::mat all_weights;
-    size_t multiout = common::C_default_multiout;
-    size_t max_chunk_size = common::C_default_kernel_max_chunk_len;
-    size_t gradient = C_default_svrparam_grad_level;
-    size_t level = C_default_svrparam_decon_level;
-    size_t step = C_default_svrparam_step;
+    unsigned multiout = common::C_default_multiout;
+    unsigned max_chunk_size = common::C_default_kernel_max_chunk_len;
+    unsigned gradient = C_default_svrparam_grad_level;
+    unsigned level = C_default_svrparam_decon_level;
+    unsigned step = C_default_svrparam_step;
     unsigned projection = 0;
 
     virtual void init_id() override;
@@ -170,17 +175,19 @@ public:
             const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
             const magma_queue_t &magma_queue, const size_t gpu_phy_id);
 
-    static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs);
+    static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const unsigned nrhs);
 
     static arma::mat direct_solve(const arma::mat &a, const arma::mat &b);
 
-    size_t get_gradient_level() const;
+    dtype(OnlineMIMOSVR::gradient) get_gradient_level() const noexcept;
 
-    size_t get_decon_level() const;
+    dtype(OnlineMIMOSVR::level) get_decon_level() const noexcept;
 
-    size_t get_step() const;
+    dtype(OnlineMIMOSVR::step) get_step() const noexcept;
 
-    ssize_t get_samples_trained_number() const;
+    dtype(OnlineMIMOSVR::multiout) get_multiout() const noexcept;
+
+    dtype(OnlineMIMOSVR::samples_trained) get_samples_trained_number() const noexcept;
 
     void clear_kernel_matrix();
 
@@ -188,19 +195,19 @@ public:
 
     OnlineMIMOSVR_ptr get_manifold();
 
-    t_param_set get_param_set() const;
+    dtype(OnlineMIMOSVR::param_set) get_param_set() const noexcept;
 
-    t_param_set &get_param_set();
+    dtype(OnlineMIMOSVR::param_set) &get_param_set() noexcept;
 
-    void set_param_set(const t_param_set &param_set_);
+    void set_param_set(const dtype(OnlineMIMOSVR::param_set) &param_set_);
 
-    void set_params(const SVRParameters_ptr &p_svr_parameters_, const size_t chunk_ix = 0);
+    void set_params(const SVRParameters_ptr &p_svr_parameters_, const unsigned chunk_ix = 0);
 
-    void set_params(const SVRParameters &param, const size_t chunk_ix = 0);
+    void set_params(const SVRParameters &param, const unsigned chunk_ix = 0);
 
-    SVRParameters &get_params(const size_t chunk_ix = 0) const;
+    SVRParameters &get_params(const unsigned chunk_ix = 0) const;
 
-    SVRParameters_ptr get_params_ptr(const size_t chunk_ix = 0) const;
+    SVRParameters_ptr get_params_ptr(const unsigned chunk_ix = 0) const;
 
     SVRParameters_ptr is_manifold() const;
 
@@ -214,25 +221,23 @@ public:
 
     void tune_fast();
 
-    void recombine_params(const size_t chunkix, const size_t stepix);
+    void recombine_params(const unsigned chunkix, const unsigned stepix);
 
 #if defined(TUNE_HYBRID)
     double produce_kernel_inverse_order(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &y_train);
 #endif
 
-    static double get_gamma_range_variance(const size_t train_len);
+    static double get_gamma_range_variance(const unsigned train_len);
 
-    static std::deque<double> get_gamma_base_multipliers(const double gamma_range_variance);
-
-    static size_t get_full_train_len(const size_t n_rows, const size_t decrement);
+    static unsigned get_full_train_len(const unsigned n_rows, const unsigned decrement);
 
     size_t get_num_chunks();
 
-    static size_t get_num_chunks(const size_t n_rows, const size_t chunk_size_);
+    static size_t get_num_chunks(const unsigned n_rows, const unsigned chunk_size_);
 
-    static auto generate_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size);
+    static std::deque<arma::uvec> generate_indexes(const unsigned n_rows_dataset, const unsigned decrement, const unsigned max_chunk_size);
 
-    arma::uvec get_other_ixs(const size_t i) const;
+    arma::uvec get_other_ixs(const unsigned i) const;
 
     std::deque<arma::uvec> generate_indexes() const;
 
@@ -244,16 +249,14 @@ public:
 
     t_gradient_data produce_residuals();
 
-    void learn(const arma::mat &new_x_train, const arma::mat &new_y_train, const arma::vec &new_y_last_knowns, const bpt::ptime &last_value_time,
-                 const bool temp_learn = false, const std::deque<size_t> &forget_ixs = {});
+    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const bpt::ptime &last_value_time,
+               const bool temp_learn = false, const std::deque<unsigned int> &forget_ixs = {});
 
     void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time, const matrices_ptr &precalc_kernel_matrices = nullptr);
 
     arma::mat &get_features();
 
     arma::mat &get_labels();
-
-    size_t get_multiout() const;
 
     arma::uvec get_active_ixs() const;
 
@@ -283,7 +286,7 @@ public:
 
     static double calc_epsco(const arma::mat &K);
 
-    void calc_weights(const size_t chunk_ix, const size_t iters);
+    void calc_weights(const unsigned int chunk_ix, const unsigned int iters);
 
     void update_all_weights();
 

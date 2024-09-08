@@ -21,7 +21,7 @@
 namespace svr {
 namespace datamodel {
 
-double OnlineMIMOSVR::get_gamma_range_variance(const size_t train_len)
+double OnlineMIMOSVR::get_gamma_range_variance(const unsigned train_len)
 {
     return 1. / std::sqrt(train_len);
 }
@@ -143,7 +143,7 @@ coot_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, cons
 #endif
 
 void
-OnlineMIMOSVR::recombine_params(const size_t chunkix, const size_t stepix)
+OnlineMIMOSVR::recombine_params(const unsigned chunkix, const unsigned stepix)
 {
     LOG4_BEGIN();
 
@@ -153,7 +153,7 @@ OnlineMIMOSVR::recombine_params(const size_t chunkix, const size_t stepix)
         return;
     }
     const auto colct = p_dataset->get_model_count();
-    const auto levct = p_dataset->get_transformation_levels();
+    const auto levct = p_dataset->get_spectral_levels();
     constexpr size_t grad_level = 0; // Only gradient level 0 supported
     const auto max_num_combos = std::pow<double>(double(common::C_tune_keep_preds), double(colct));
     const uint64_t num_combos = (uint64_t) std::min<double>(common::C_num_combos, max_num_combos);
@@ -224,7 +224,7 @@ UNROLL()
     auto p_ensemble = p_dataset->get_ensemble(column_name);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(colct))
     for (uint32_t colix = 0; colix < colct; ++colix) {
-        const uint32_t levix = business::ModelService::to_level_ix(colix, p_dataset->get_transformation_levels());
+        const uint32_t levix = business::ModelService::to_level_ix(colix, p_dataset->get_spectral_levels());
         const auto &params = p_tune_predictions->at(levix).param_pred[best_params_ixs[colix]].params;
         auto p_model = p_ensemble->get_model(levix, stepix)->get_gradient(grad_level);
         if (p_model->is_manifold()) p_model = p_model->get_manifold();

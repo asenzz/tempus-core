@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 source ../scripts/setup_tempus_env.sh
 
+export SVRWAVE_TEST_WINDOW=0
+
 REMOVE_OUTPUT=0
 DEBUG_SESSION=0
 WEB_ONLY=0

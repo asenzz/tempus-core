@@ -22,7 +22,7 @@ constexpr unsigned C_test_len = 1;
 #else
 constexpr unsigned C_slide_skip = 10;
 constexpr unsigned C_max_j = 10;
-constexpr unsigned C_test_len = 500;
+constexpr unsigned C_test_len = 1000;
 #endif
 constexpr unsigned C_tune_min_validation_window = C_test_len - C_slide_skip * (C_max_j - 1);
 constexpr double C_slides_len = [](){

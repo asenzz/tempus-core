@@ -28,7 +28,7 @@ namespace vmd {
 
 void
 fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name,
-                      const business::t_iqscaler &scaler)
+                      const datamodel::t_iqscaler &scaler)
 {
     if (input.distance() < 1) LOG4_THROW("Illegal input size " << input.distance());
     const auto freq_key = freq_key_t(decon_queue_table_name, levels);

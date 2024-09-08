@@ -3,7 +3,7 @@
 #include <common/logging.hpp>
 #include <chrono>
 #include <thread>
-#include <stdio.h>
+#include <cstdio>
 #include <unistd.h>
 #include <ftw.h>
 #include <ios>
@@ -15,12 +15,17 @@
 namespace svr {
 namespace common {
 
+struct pclose_wrapper {
+	void operator()(FILE *const f) const {
+		pclose(f);
+	}
+};
 
 std::string exec(const char *cmd)
 {
     std::array<char, BUFSIZ> buffer;
     std::string result;
-    std::unique_ptr<FILE, dtype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    std::unique_ptr<FILE, pclose_wrapper> pipe(popen(cmd, "r"));
     if (!pipe) LOG4_THROW("popen() failed!");
     while (fgets(buffer.data(), buffer.size(), pipe.get())) result += buffer.data();
     return result;

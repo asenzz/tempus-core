@@ -27,18 +27,14 @@ const auto sobol_direction_numbers_cross = []() {
     return result;
 }();
 
-tbb::mutex sobol_mutex;
 
 }
 
 
 uint64_t init_sobol_ctr()
 {
-    static auto random_seed = .54321; // common::get_uniform_random_value(); // Use quasi-random seed for reproducibility
-    const tbb::mutex::scoped_lock lock(sobol_mutex);
-    auto res = 78786876896UL + (uint64_t) std::floor(random_seed * pow2_52);
-    random_seed = std::fmod(random_seed + .123456789, 1.);
-    return res;
+    common::pseudo_random_dev reproducible_seed; // common::get_uniform_random_value(); // Use quasi-random seed for reproducibility
+    return 78786876896UL + (uint64_t) std::floor(reproducible_seed() * pow2_52);
 }
 
 double sobolnum(const unsigned dim, const uint64_t n)

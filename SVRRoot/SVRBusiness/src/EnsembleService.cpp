@@ -305,7 +305,7 @@ UNROLL()
         if (!p_decon_queue)
             p_decon_queue = dtr<datamodel::DeconQueue>(
                     DeconQueueService::make_queue_table_name(input_queue.get_table_name(), dataset.get_id(), column_name),
-                    input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_transformation_levels());
+                    input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_spectral_levels());
 #pragma omp critical
         decon_queues.emplace_back(p_decon_queue);
     }

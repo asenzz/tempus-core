@@ -13,6 +13,8 @@
 namespace svr {
 namespace datamodel {
 
+typedef std::function<double(const double)> t_iqscaler;
+
 class DataRow;
 
 using DataRow_ptr = std::shared_ptr<DataRow>;
@@ -45,8 +47,8 @@ public:
             const arma::mat &data,
             const bpt::ptime &start_time,
             const bpt::time_duration &resolution,
-            const size_t level,
-            const size_t level_ct,
+            const unsigned level,
+            const unsigned level_ct,
             const bool merge);
 
     static void
@@ -54,16 +56,16 @@ public:
             container &rows_container,
             const arma::mat &data,
             const std::deque<bpt::ptime> &times,
-            const size_t level,
-            const size_t level_ct,
+            const unsigned level,
+            const unsigned level_ct,
             const bool merge);
 
     static container
     insert_rows(
             const arma::mat &data,
             const std::deque<bpt::ptime> &times,
-            const size_t level,
-            const size_t level_ct,
+            const unsigned level,
+            const unsigned level_ct,
             const bool merge);
 
     static container
@@ -79,13 +81,13 @@ public:
             const bpt::ptime &value_time,
             const bpt::ptime &update_time,
             const double tick_volume,
-            const size_t levels);
+            const unsigned levels);
 
     DataRow(
             const bpt::ptime &value_time,
             const bpt::ptime &update_time,
             const double tick_volume,
-            const size_t levels,
+            const unsigned levels,
             const double value);
 
     DataRow(
@@ -99,37 +101,37 @@ public:
             const bpt::ptime &update_time,
             const double tick_volume,
             const double *values_ptr,
-            const size_t values_size);
+            const unsigned values_size);
 
     std::vector<double> &get_values();
 
     void set_values(const std::vector<double> &values);
 
-    double get_value(const size_t column_index) const;
+    double get_value(const unsigned column_index) const;
 
-    double &get_value(const size_t column_index);
+    double &get_value(const unsigned column_index);
 
     const double &operator*() const;
 
     double &operator*();
 
-    double operator()(const size_t column_index) const;
+    double operator()(const unsigned column_index) const;
 
-    double &operator[](const size_t column_index);
+    double &operator[](const unsigned column_index);
 
-    double operator[](const size_t column_index) const;
+    double operator[](const unsigned column_index) const;
 
-    double &operator()(const size_t column_index);
+    double &operator()(const unsigned column_index);
 
-    double at(const size_t column_index) const;
+    double at(const unsigned column_index) const;
 
-    double &at(const size_t column_index);
+    double &at(const unsigned column_index);
 
-    double *p(const size_t column_index);
+    double *p(const unsigned column_index = 0);
 
-    void set_value(const size_t column_index, const double value);
+    void set_value(const unsigned column_index, const double value);
 
-    size_t size() const;
+    unsigned size() const;
 
     const bpt::ptime &get_update_time() const;
 
@@ -352,8 +354,8 @@ find_nearest(
 
 data_row_container::const_iterator
 find_nearest(
-        const data_row_container &data,
-        const boost::posix_time::ptime &time);
+        const datamodel::DataRow::container &data,
+        const boost::posix_time::ptime &time) noexcept;
 
 datamodel::DataRow::container::const_iterator
 find_nearest_back(

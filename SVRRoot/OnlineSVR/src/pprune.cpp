@@ -44,6 +44,7 @@ struct t_calfun_data {
     const t_pprune_cost_fun cost_fun;
     const unsigned particle_index = 0;
     const unsigned maxfun = 0;
+    const unsigned D = 0;
     double best_f = std::numeric_limits<double>::max();
     unsigned nf = 0;
     bool zombie = false;
@@ -102,7 +103,7 @@ public:
     double optcost(CPTR(double) x) override
     {
         double f;
-        PROFILE_EXEC_TIME(pprune::calfun(x, &f, calfun_data), "Cost, score " << f << ", parameters " << common::to_string(x, std::min<unsigned>(3, bounds.n_rows)));
+        pprune::calfun(x, &f, calfun_data);
         return f;
     }
 };
@@ -117,15 +118,16 @@ void pprune::calfun(CPTR(double) x, double *const f, t_calfun_data_ptr calfun_da
 {
     ++calfun_data->nf;
     if (!calfun_data->zombie) {
-        PROFILE_EXEC_TIME(calfun_data->cost_fun(x, f), "Cost, score " << *f << ", call count " << calfun_data->nf << ", index " << calfun_data->particle_index);
+        PROFILE_EXEC_TIME(calfun_data->cost_fun(x, f), "Cost, score " << *f << ", call count " << calfun_data->nf << ", index " << calfun_data->particle_index
+            << ", parameters " << common::to_string(x, std::min<unsigned>(4, calfun_data->D)));
         if (*f < calfun_data->best_f) {
             LOG4_DEBUG("New best score " << *f << ", previous " << calfun_data->best_f << ", improvement " << common::imprv(*f, calfun_data->best_f) <<
-                ", at particle " << calfun_data->particle_index << ", calls " << calfun_data->nf);
+                "pc, at particle " << calfun_data->particle_index << ", calls " << calfun_data->nf);
             calfun_data->best_f = *f;
         }
     }
     if (calfun_data->no_elect || calfun_data->zombie) return;
-    UNROLL(maxfun_drop_coefs_size)
+    UNROLL()
     for (const auto drop_coef: C_maxfun_drop_coefs) {
         if (calfun_data->nf != unsigned(drop_coef * calfun_data->maxfun)) continue;
         calfun_data->zombie = calfun_data->drop((1. - drop_coef) * calfun_data->p_particles->size());
@@ -140,8 +142,7 @@ bool t_calfun_data::drop(const unsigned keep_particles)
     std::iota(ixs.begin(), ixs.end(), 0);
 
     __do_wait:
-    const auto ct = std::count_if(C_default_exec_policy, p_particles->cbegin(), p_particles->cend(),
-                                  [this](const auto v) { return v && v->nf >= nf; });
+    const unsigned ct = std::count_if(C_default_exec_policy, p_particles->cbegin(), p_particles->cend(), [this](const auto v) { return v && v->nf >= nf; });
     if (ct != p_particles->size()) {
         task_yield_wait__;
         goto __do_wait;
@@ -333,7 +334,7 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
     {
 #pragma omp taskloop simd mergeable untied default(shared) grainsize(1) firstprivate(maxfun, no_elect, C_rand_disperse, C_biteopt_depth)
         for (unsigned i = 0; i < n_particles; ++i) {
-            auto const calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun};
+            auto const calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun, D};
 #endif
 #ifdef USE_BITEOPT
             CBiteRnd rnd(std::pow(C_rand_disperse * i, C_rand_disperse));
@@ -412,6 +413,7 @@ UNROLL()
 
 pprune::operator t_pprune_res()
 {
+    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !std::isnormal(result.total_iterations)) LOG4_THROW("No valid solution found.");
     return result;
 }
 

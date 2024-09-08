@@ -7,6 +7,7 @@
 #include "pprune.hpp"
 #include <cstddef>
 #include <magma_auxiliary.h>
+#include <xoshiro.h>
 
 namespace svr {
 namespace datamodel {
@@ -99,8 +100,8 @@ OnlineMIMOSVR::batch_train(
 
 
 void OnlineMIMOSVR::learn(
-    const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const bpt::ptime &last_value_time,
-    const bool temp_learn, const std::deque<size_t> &forget_ixs)
+        const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const bpt::ptime &last_value_time,
+        const bool temp_learn, const std::deque<unsigned int> &forget_ixs)
 {
     if (new_x.empty() || new_y.empty() || new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols || new_ylk.n_rows != new_y.n_rows || new_x.n_rows != new_y.n_rows)
         LOG4_THROW("New data dimensions labels " << arma::size(new_y) << ", last-knowns " << arma::size(new_ylk) << ", features " << arma::size(new_x) <<
@@ -114,20 +115,19 @@ void OnlineMIMOSVR::learn(
 
     if (is_manifold()) {
         if (!p_manifold) LOG4_THROW("Manifold not initialized.");
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<size_t> rand_int(0, C_interlace_manifold_factor);
+        auto gen = common::reproducibly_seeded_64<xso::rng64>();
+        std::uniform_int_distribution<unsigned> rand_int(0, C_interlace_manifold_factor);
         const auto new_manifold_rows_ct = new_x.n_rows * p_features->n_rows / C_interlace_manifold_factor;
         arma::mat new_x_manifold(new_manifold_rows_ct, new_x.n_cols + p_features->n_cols);
         arma::mat new_y_manifold(new_manifold_rows_ct, new_y.n_cols);
         arma::mat new_ylk_manifold(new_manifold_rows_ct, 1);
 #pragma omp parallel for num_threads(adj_threads(p_features->n_rows * new_x.n_rows)) collapse(2)
-        for (size_t i = 0; i < p_features->n_rows; ++i)
-            for (size_t j = 0; j < new_x.n_rows; ++j) {
+        for (unsigned i = 0; i < p_features->n_rows; ++i)
+            for (unsigned j = 0; j < new_x.n_rows; ++j) {
                 const auto r = i * new_x.n_rows + j;
                 if (r % C_interlace_manifold_factor == 0) {
-                    const auto r_i = common::bounce<size_t>(new_x.n_rows - 1, i + rand_int(gen));
-                    const auto r_j = common::bounce<size_t>(p_features->n_rows - 1, j + rand_int(gen));
+                    const auto r_i = common::bounce<unsigned>(new_x.n_rows - 1, i + rand_int(gen));
+                    const auto r_j = common::bounce<unsigned>(p_features->n_rows - 1, j + rand_int(gen));
                     MANIFOLD_SET(new_x_manifold.row(r / C_interlace_manifold_factor), new_y_manifold.row(r / C_interlace_manifold_factor),
                                  new_x.row(r_j), new_y.row(r_j), p_features->row(r_i), p_labels->row(r_i));
                 }
@@ -182,7 +182,7 @@ void OnlineMIMOSVR::learn(
         }
     }
     if (!tmp_ixs.empty()) {
-        size_t i = 0;
+        unsigned i = 0;
         while (i < tmp_ixs.size() && shed_ixs.n_rows < new_rows_ct)
             shed_ixs.insert_rows(shed_ixs.n_rows, tmp_ixs ^ i++);
         tmp_ixs.erase(std::next(tmp_ixs.begin(), i), tmp_ixs.end());
@@ -209,17 +209,17 @@ void OnlineMIMOSVR::learn(
     p_features->shed_rows(shed_ixs);
     p_labels->shed_rows(shed_ixs);
     p_last_knowns->shed_rows(shed_ixs);
-    tbb::concurrent_map<size_t /* chunk */, size_t /* affected rows */> affected_chunks;
+    tbb::concurrent_map<unsigned /* chunk */, unsigned /* affected rows */> affected_chunks;
 #ifdef KEEP_PREV_WEIGHTS
     std::deque<tbb::concurrent_map<size_t /* shedix */, arma::rowvec /* weights */>> chunk_shedded_weights(ixs.size());
 #endif
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(ixs.size()))
-    for (size_t chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
+    for (unsigned chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
         auto &chunk_ixs = ixs[chunk_ix];
         arma::uvec find_res = arma::sort(arma::unique(common::find(chunk_ixs, shed_ixs)));
         if (find_res.empty()) {
             LOG4_DEBUG("Shed indexes " << shed_ixs << " not found in chunk " << chunk_ix);
-            size_t ct = 0;
+            unsigned ct = 0;
             for (auto shed_ix: shed_ixs) { // Bump indexes down for rows above the shedded
                 shed_ix -= ct++;
                 const auto find_res2 = arma::find(chunk_ixs >= shed_ix);
@@ -229,7 +229,7 @@ void OnlineMIMOSVR::learn(
             continue;
         }
 
-        size_t ct = 0;
+        unsigned ct = 0;
         for (auto shed_ix: find_res) {
             shed_ix -= ct++;
             chunk_ixs.shed_row(shed_ix);
@@ -255,15 +255,15 @@ void OnlineMIMOSVR::learn(
 
     // Append new distances
     LOG4_DEBUG("Affected chunks " << affected_chunks.size());
-    std::atomic<size_t> add_new_row_ix{0};
+    std::atomic<unsigned> add_new_row_ix{0};
 #pragma omp parallel for num_threads(adj_threads(affected_chunks.size())) schedule(static, 1)
-    for (size_t i = 0; i < affected_chunks.size(); ++i) {
+    for (unsigned i = 0; i < affected_chunks.size(); ++i) {
         const auto chunk_ix = affected_chunks % i;
         const auto chunk_new_rows = affected_chunks ^ i;
         auto &params = *get_params_ptr(chunk_ix);
         auto &K_chunk = p_kernel_matrices->at(chunk_ix);
         arma::uvec new_ixs(chunk_new_rows);
-        for (size_t r = 0; r < new_ixs.n_rows; ++r)
+        for (unsigned r = 0; r < new_ixs.n_rows; ++r)
             new_ixs[r] = add_new_row_ix++ % new_x.n_rows;
         arma::mat new_chunk_features_t = new_x.rows(new_ixs).t();
         business::DQScalingFactorService::scale_features(chunk_ix, *this, new_chunk_features_t);
@@ -300,7 +300,7 @@ void OnlineMIMOSVR::learn(
 #endif
     }
     if (temp_learn)
-        for (size_t row_i = p_labels->n_rows; row_i < p_labels->n_rows + new_rows_ct; ++row_i)
+        for (unsigned row_i = p_labels->n_rows; row_i < p_labels->n_rows + new_rows_ct; ++row_i)
             tmp_ixs.emplace(row_i);
     p_features->insert_rows(p_features->n_rows, new_x);
     p_labels->insert_rows(p_labels->n_rows, new_y);
@@ -313,14 +313,14 @@ void OnlineMIMOSVR::learn(
 }
 
 
-void OnlineMIMOSVR::calc_weights(const size_t chunk_ix, const size_t iters)
+void OnlineMIMOSVR::calc_weights(const unsigned int chunk_ix, const unsigned int iters)
 {
     const auto p_params = get_params_ptr(chunk_ix);
     arma::mat K_epsco = p_kernel_matrices->at(chunk_ix);
     K_epsco.diag().fill(1. / p_params->get_svr_C());
-    PROFILE_EXEC_TIME(solve_irwls(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters),
+    PROFILE_EXEC_TIME(solve_irwls(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix] * C_diff_coef, weight_chunks[chunk_ix], iters),
                         "Solve weights for chunk " << chunk_ix << ", level " << level << ", iters " << iters);
-    PROFILE_EXEC_TIME(solve_opt(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_chunks[chunk_ix], iters),
+    PROFILE_EXEC_TIME(solve_opt(K_epsco, p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix] * C_diff_coef, weight_chunks[chunk_ix], iters),
                       "Solve weights for chunk " << chunk_ix << ", level " << level);
     LOG4_TRACE("Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << *p_params << ", K epsco " << common::present(K_epsco)
                         << ", w " << common::present(weight_chunks[chunk_ix]));
@@ -332,7 +332,7 @@ void OnlineMIMOSVR::update_all_weights()
     all_weights.zeros(arma::size(*p_labels));
     all_weights.rows(ixs.front()) = weight_chunks.front();
     arma::mat divisors(arma::size(*p_labels), arma::fill::ones);
-    for (size_t i = 1; i < ixs.size(); ++i) {
+    for (unsigned i = 1; i < ixs.size(); ++i) {
         all_weights.rows(ixs[i]) += weight_chunks[i];
         divisors.rows(ixs[i]) += 1;
     }

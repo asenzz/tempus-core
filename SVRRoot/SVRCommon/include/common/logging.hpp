@@ -2,19 +2,12 @@
 
 #include <boost/format.hpp>
 #include <boost/date_time.hpp>
-
-#define BOOST_STACKTRACE_USE_ADDR2LINE
-
 #include <boost/stacktrace.hpp>
-
-#define BOOST_LOG_DYN_LINK 1
-
 #include <boost/log/trivial.hpp>
 #include <boost/timer/timer.hpp>
-
-#include "../util/MemoryManager.hpp"
-#include "../util/string_utils.hpp"
-#include "../util/validation_utils.hpp"
+#include "util/MemoryManager.hpp"
+#include "util/string_utils.hpp"
+#include "util/validation_utils.hpp"
 
 namespace bpt = boost::posix_time;
 

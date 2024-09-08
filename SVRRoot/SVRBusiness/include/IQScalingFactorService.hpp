@@ -18,8 +18,6 @@ using Dataset_ptr = std::shared_ptr<Dataset>;
 namespace svr {
 namespace business {
 
-typedef std::function<double(const double)> t_iqscaler;
-
 class IQScalingFactorService
 {
     dao::IQScalingFactorDAO &iq_scaling_factor_dao_;
@@ -42,17 +40,17 @@ public:
 
     void prepare(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const bool save);
 
-    static t_iqscaler get_scaler(const datamodel::IQScalingFactor &sf);
+    static datamodel::t_iqscaler get_scaler(const datamodel::IQScalingFactor &sf);
 
-    static t_iqscaler get_scaler(const double scaling_factor, const double dc_offset);
+    static datamodel::t_iqscaler get_scaler(const double scaling_factor, const double dc_offset);
 
-    static t_iqscaler get_scaler(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name);
+    static datamodel::t_iqscaler get_scaler(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name);
 
-    static t_iqscaler get_unscaler(const datamodel::IQScalingFactor &sf);
+    static datamodel::t_iqscaler get_unscaler(const datamodel::IQScalingFactor &sf);
 
-    static t_iqscaler get_unscaler(const double scaling_factor, const double dc_offset);
+    static datamodel::t_iqscaler get_unscaler(const double scaling_factor, const double dc_offset);
 
-    static t_iqscaler get_unscaler(const datamodel::Dataset &dataset, const std::string &table_name, const std::string &column_name);
+    static datamodel::t_iqscaler get_unscaler(const datamodel::Dataset &dataset, const std::string &table_name, const std::string &column_name);
 
     bool check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns);
 

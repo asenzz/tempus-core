@@ -14,8 +14,12 @@ fi
 export ASAN_OPTIONS=protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=0:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=0:log_threads=1
 # export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 
+# export LD_PRELOAD="${LD_PRELOAD}:libduma.so"
+# export DUMA_OPTIONS=debug=1,log=/tmp/${BIN}.duma.log
+
 export VGRIND=/usr/local/bin/valgrind
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib"
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib"
+
 # Debugger
 # export DBG=/usr/bin/gdb # GNU debugger for GCC builds
 # export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds

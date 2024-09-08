@@ -103,13 +103,13 @@ public:
             const datamodel::datarow_range &decon,
             const recon_type_e type,
             data_row_container &recon,
-            const t_iqscaler &iq_unscaler);
+            const datamodel::t_iqscaler &iq_unscaler);
 
     static data_row_container
     reconstruct(
             const svr::datamodel::datarow_range &data,
             const recon_type_e type,
-            const t_iqscaler &unscaler);
+            const datamodel::t_iqscaler &unscaler);
 
     static std::vector<double>
     get_actual_values(
@@ -119,11 +119,11 @@ public:
     static void prepare_decon(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue);
 
     static void dummy_decon(
-            const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const size_t levix, const size_t levct, const t_iqscaler &iq_scaler);
+            const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const size_t levix, const size_t levct, const datamodel::t_iqscaler &iq_scaler);
 
     static std::string make_queue_table_name(const std::string &input_queue_table_name_, const bigint dataset_id_, const std::string &input_queue_column_name_);
 
-    static void mirror_tail(const datamodel::datarow_range &input, const size_t needed_data_ct, std::vector<double> &tail);
+    static void mirror_tail(const datamodel::datarow_crange &input, const size_t needed_data_ct, std::vector<double> &tail, const unsigned in_colix);
 };
 
 } /* namespace business */

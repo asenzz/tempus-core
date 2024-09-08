@@ -54,7 +54,7 @@ double sumabs(const double *d_in, const unsigned n, const cudaStream_t &stm);
 
 double sum(const double *d_data, const unsigned n, const cudaStream_t &strm);
 
-double sum(const double *d_in, const unsigned n, const NppStreamContext &ctx);
+double sum(const double *d_in, const unsigned n, const NppStreamContext &npp_ctx);
 
 double mean(const double *d_in, const unsigned n, const cudaStream_t &strm);
 
@@ -64,6 +64,12 @@ double min(const double *d_in, const unsigned n, const cudaStream_t strm);
 
 double unscaled_distance(
         const double *d_labels, const double *d_predictions, const double scale, const unsigned m, const unsigned n, const unsigned ldl, const cudaStream_t stm);
+
+double autocorrelation(const double *d_x, const double *d_y, const unsigned n, const cudaStream_t stm);
+
+double autocorrelation_n(CPTR(double) d_in, const unsigned n, const std::vector<unsigned> &offsets, const cudaStream_t &stm);
+
+double score_weights(CPTR(double) K, CPTR(double) weights, CPTR(double) labels, const unsigned m, const unsigned n, const unsigned mn, const unsigned mm);
 
 // Solvers
 

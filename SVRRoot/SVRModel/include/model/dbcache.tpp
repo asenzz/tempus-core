@@ -15,8 +15,7 @@ template<typename T> using registered_ptr = std::shared_ptr<T>;
 
 namespace datamodel {
 
-template<typename T>
-class dbcache
+template<typename T> class dbcache
 {
 #define actual_T std::decay_t<T>
 #define actual_T_id typeid(actual_T).hash_code()

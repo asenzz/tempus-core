@@ -175,110 +175,115 @@ inline auto highLevelF(Args&&... args) -> dtype(lowLevelF(std::forward<Args>(arg
     return lowLevelF(std::forward<Args>(args)...); \
 }
 
-template<typename T> const T &operator^(const std::set<T> &s, const size_t i)
+template<typename T> inline const T &operator^(const std::set<T> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);
 }
 
-template<typename T, typename C> const T &operator^(const std::set<T, C> &s, const size_t i)
+template<typename T, typename C> inline const T &operator^(const std::set<T, C> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);
 }
 
-template<typename T> const T &operator^(const tbb::concurrent_set <T> &s, const size_t i)
+template<typename T> inline const T &operator^(const tbb::concurrent_set <T> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);
 }
 
-template<typename T, typename C> const T &operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
+template<typename T, typename C> inline const T &operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);
 }
 
-template<typename K, typename V> const K &operator%(const std::map<K, V> &s, const size_t i)
+template<typename K, typename V> inline const K &operator%(const std::map<K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> const V &operator^(const std::map<K, V> &s, const size_t i)
+template<typename K, typename V> inline const V &operator^(const std::map<K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->second;
 }
 
-template<typename K, typename V> V &operator^(std::map<K, V> &s, const size_t i)
+template<typename K, typename V, typename L> inline const V &operator^(const std::map<K, V, L> &s, const size_t i)
+{
+    return std::next(s.cbegin(), i)->second;
+}
+
+template<typename K, typename V> inline V &operator^(std::map<K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> const K &operator%(const std::unordered_map<K, V> &s, const size_t i)
+template<typename K, typename V> inline const K &operator%(const std::unordered_map<K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> const V &operator^(const std::unordered_map<K, V> &s, const size_t i)
+template<typename K, typename V> inline const V &operator^(const std::unordered_map<K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->second;
 }
 
-template<typename K, typename V> V &operator^(std::unordered_map<K, V> &s, const size_t i)
+template<typename K, typename V> inline V &operator^(std::unordered_map<K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> const K &operator%(const tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> inline const K &operator%(const tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> const V &operator^(const tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> inline const V &operator^(const tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->second;
 }
 
-template<typename K, typename V> V &operator^(tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> inline V &operator^(tbb::concurrent_map <K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> const K &last(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const K &last(const tbb::concurrent_map <K, V> &s)
 {
     if (s.size() < 2) return *s.cbegin()->first;
     return std::prev(s.end())->first;
 }
 
-template<typename K, typename V> const V &back(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const V &back(const tbb::concurrent_map <K, V> &s)
 {
     if (s.size() < 2) return *s.cbegin()->second;
     return std::prev(s.cend())->second;
 }
 
-template<typename K, typename V> const K &first(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const K &first(const tbb::concurrent_map <K, V> &s)
 {
     return s.cbegin()->first;
 }
 
-template<typename K, typename V> const V &front(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const V &front(const tbb::concurrent_map <K, V> &s)
 {
     return s.cbegin()->second;
 }
 
-template<typename V> const V &front(const tbb::concurrent_set <V> &s)
+template<typename V> inline const V &front(const tbb::concurrent_set <V> &s)
 {
     return *s.cbegin();
 }
 
-template<typename V> const V &back(const tbb::concurrent_set <V> &s)
+template<typename V> inline const V &back(const tbb::concurrent_set <V> &s)
 {
     if (s.size() < 2) return *s.cbegin();
     return *std::prev(s.cend());
 }
 
-template<typename V, typename L> const V &front(const std::set<V, L> &s)
+template<typename V, typename L> inline const V &front(const std::set<V, L> &s)
 {
     return *s.cbegin();
 }
 
-template<typename V, typename L> const V &back(const std::set<V, L> &s)
+template<typename V, typename L> inline const V &back(const std::set<V, L> &s)
 {
     if (s.size() < 2) return *s.cbegin();
     return *std::prev(s.cend());

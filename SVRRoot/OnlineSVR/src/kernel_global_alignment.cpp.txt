@@ -1,5 +1,4 @@
 #if 0 // Implementation according to ChatGPT :)
-
 The Global Alignment Kernel (GAK) is a kernel method for time series analysis introduced by Marco Cuturi. It computes the similarity between two time series using dynamic time warping (DTW). Implementing GAK in CUDA can significantly accelerate the computations, especially for large datasets.
 
 Below is an implementation of the Global Alignment Kernel in CUDA.
@@ -102,13 +101,7 @@ This implementation provides a basic framework. For practical use, you may need 
 Handle larger time series more efficiently.
 Optimize memory access patterns.
 Consider edge cases and numerical stability.
-This implementation follows the principles outlined in Cuturi's paper and adapts them for CUDA to leverage GPU acceleration for time series similarity computation.
-
-
-
-
-
-
+This implementation follows the principles outlined in Cuturis paper and adapts them for CUDA to leverage GPU acceleration for time series similarity computation.
 #endif
 
 #if 0 // Old GAK implementation by Emo

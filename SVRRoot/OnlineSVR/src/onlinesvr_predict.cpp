@@ -107,8 +107,7 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
                                                 chunk_x_predict_t); // prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], chunk_x_predict_t, time, last_trained_time);
         LOG4_TRACE(
                 "Predicting " << arma::size(x_predict) << ", indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", size " << arma::size(ixs[chunk_ix])
-                              <<
-                              ", parameters " << *p_params << ", K " << common::present(*chunk_predict_K) << ", w " << common::present(weight_chunks[chunk_ix]));
+                              << ", parameters " << *p_params << ", K " << common::present(*chunk_predict_K) << ", w " << common::present(weight_chunks[chunk_ix]));
         arma::mat multiplicated(chunk_predict_K->n_rows, weight_chunks[chunk_ix].n_cols);
 #pragma omp parallel for collapse(2) num_threads(adj_threads(chunk_predict_K->n_rows * weight_chunks[chunk_ix].n_cols))
         for (size_t r = 0; r < chunk_predict_K->n_rows; ++r)

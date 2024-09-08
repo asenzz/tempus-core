@@ -45,13 +45,13 @@ class Dataset : public Entity
     std::deque<iq_relation> aux_input_queues_; // Aux input queues are decomposed and used for model features and labels
     Priority priority_ = Priority::Normal;
     std::string description_; // Textual description of the dataset
-    size_t gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
-    size_t max_chunk_size_ = common::C_default_kernel_max_chunk_len; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
-    size_t multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
+    unsigned gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
+    unsigned max_chunk_size_ = common::C_default_kernel_max_chunk_len; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
+    unsigned multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<svr::oemd::online_emd> p_oemd_transformer_fat;
     std::unique_ptr<svr::vmd::fast_cvmd> p_cvmd_transformer;
-    size_t transformation_levels_ = common::C_default_level_count; // Number of spectral components to extract from every input queue column
+    unsigned spectrum_levels_ = common::C_default_level_count; // Number of spectral components to extract from every input queue column
     std::string transformation_name_ = "cvmd"; // Deconstruction type
     bpt::time_duration max_lookback_time_gap_ = common::C_default_features_max_time_gap; // Maximum time gap between feature points after which the whole row is discarded from the learning process
 
@@ -74,10 +74,10 @@ public:
             const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
-            const size_t gradients = common::C_default_gradient_count,
-            const size_t chunk_size = common::C_default_kernel_max_chunk_len,
-            const size_t multiout = common::C_default_multistep_len,
-            const size_t transformation_levels = common::C_default_level_count,
+            const unsigned gradients = common::C_default_gradient_count,
+            const unsigned chunk_size = common::C_default_kernel_max_chunk_len,
+            const unsigned multiout = common::C_default_multistep_len,
+            const unsigned transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
             const bpt::time_duration &max_lookback_time_gap = common::C_default_features_max_time_gap,
             const std::deque<datamodel::Ensemble_ptr> &ensembles = {},
@@ -92,10 +92,10 @@ public:
             const std::deque<std::string> &aux_input_queues_table_names,
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
-            const size_t gradients = common::C_default_gradient_count,
-            const size_t chunk_size = common::C_default_kernel_max_chunk_len,
-            const size_t multiout = common::C_default_multistep_len,
-            const size_t transformation_levels = common::C_default_level_count,
+            const unsigned gradients = common::C_default_gradient_count,
+            const unsigned chunk_size = common::C_default_kernel_max_chunk_len,
+            const unsigned multiout = common::C_default_multistep_len,
+            const unsigned transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
             const bpt::time_duration &max_lookback_time_gap_ = common::C_default_features_max_time_gap,
             const std::deque<datamodel::Ensemble_ptr> &ensembles_ = {},
@@ -134,51 +134,51 @@ public:
 
     void set_description(const std::string &description);
 
-    size_t get_transformation_levels() const;
+    unsigned get_spectral_levels() const;
 
-    size_t get_half_levct() const;
+    unsigned get_trans_levix() const;
 
-    size_t get_transformation_levels_cvmd() const;
+    unsigned get_spectrum_levels_cvmd() const;
 
-    size_t get_transformation_levels_oemd() const;
+    unsigned int get_spectrum_levels_oemd() const noexcept;
 
-    size_t get_model_count() const;
+    unsigned get_model_count() const;
 
-    size_t get_gradient_count() const;
+    unsigned get_gradient_count() const;
 
-    size_t get_max_chunk_size() const;
+    unsigned get_max_chunk_size() const;
 
-    size_t get_multistep() const;
+    unsigned get_multistep() const;
 
-    void set_transformation_levels(const size_t transformation_levels);
+    void set_spectrum_levels(const unsigned int spectrum_levels);
 
-    void set_gradients(const size_t grads);
+    void set_gradients(const unsigned grads);
 
-    void set_chunk_size(const size_t chunk_size);
+    void set_chunk_size(const unsigned chunk_size);
 
-    void set_multistep(const size_t multistep);
+    void set_multistep(const unsigned multistep);
 
-    std::string get_transformation_name() const;
+    std::string get_transformation_name() const noexcept;
 
     void set_transformation_name(const std::string &transformation_name);
 
-    bool validate_transformation_name(const std::string &transformation_name) const;
+    static bool validate_transformation_name(const std::string &transformation_name) noexcept;
 
-    const bpt::time_duration &get_max_lookback_time_gap() const;
+    const bpt::time_duration &get_max_lookback_time_gap() const noexcept;
 
     void set_max_lookback_time_gap(const bpt::time_duration &max_lookback_time_gap);
 
-    std::deque<datamodel::Ensemble_ptr> &get_ensembles();
+    std::deque<datamodel::Ensemble_ptr> &get_ensembles() noexcept;
 
-    std::deque<datamodel::Ensemble_ptr> get_ensembles() const;
+    std::deque<datamodel::Ensemble_ptr> get_ensembles() const noexcept;
 
-    datamodel::Ensemble_ptr get_ensemble(const std::string &column_name);
+    datamodel::Ensemble_ptr get_ensemble(const std::string &column_name) noexcept;
 
-    datamodel::Ensemble_ptr get_ensemble(const std::string &table_name, const std::string &column_name);
+    datamodel::Ensemble_ptr get_ensemble(const std::string &table_name, const std::string &column_name) noexcept;
 
-    datamodel::Ensemble_ptr get_ensemble(const size_t idx = 0);
+    datamodel::Ensemble_ptr get_ensemble(const unsigned int idx = 0);
 
-    size_t get_ensemble_count() const;
+    unsigned int get_ensemble_count() const;
 
     void set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensembles, const bool overwrite);
 
@@ -192,13 +192,13 @@ public:
 
     void clear_data();
 
-    bool get_is_active() const;
+    bool get_is_active() const noexcept;
 
-    void set_is_active(const bool is_active);
+    void set_is_active(const bool is_active) noexcept;
 
     IQScalingFactor_ptr get_iq_scaling_factor(const std::string &input_queue_table_name, const std::string &input_queue_column_name) const;
 
-    std::deque<IQScalingFactor_ptr> &get_iq_scaling_factors();
+    std::deque<IQScalingFactor_ptr> &get_iq_scaling_factors() noexcept;
 
     std::deque<IQScalingFactor_ptr> get_iq_scaling_factors(const InputQueue &input_queue) const;
 
@@ -206,7 +206,7 @@ public:
 
     std::deque<datamodel::InputQueue_ptr> get_aux_input_queues() const;
 
-    datamodel::InputQueue_ptr get_aux_input_queue(const size_t idx = 0) const;
+    datamodel::InputQueue_ptr get_aux_input_queue(const unsigned idx = 0) const;
 
     std::deque<std::string> get_aux_input_table_names() const;
 
@@ -218,11 +218,11 @@ public:
 
     unsigned get_max_quantise() const;
 
-    size_t get_max_residuals_length() const;
+    unsigned int get_max_residuals_length() const;
 
-    size_t get_max_possible_residuals_length() const;
+    unsigned int get_max_possible_residuals_length() const;
 
-    size_t get_residuals_length(const std::string &decon_queue_table_name = {}) const;
+    unsigned int get_residuals_length(const std::string &decon_queue_table_name = {}) const;
 
     static size_t get_residuals_length(const unsigned levels);
 

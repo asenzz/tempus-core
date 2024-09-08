@@ -34,7 +34,7 @@ TEST_F(DaoTestFixture, DQSavePerfTests)
 
     for(size_t j = 0UL; j < m; ++j)
     {
-        datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+        datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
         bpt::ptime nw = bpt::second_clock::local_time();
 

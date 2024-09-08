@@ -20,6 +20,10 @@
 
 namespace svr {
 
+template <typename A, typename B> using common_signed_t = std::conditional_t<std::is_unsigned_v<A> && std::is_unsigned_v<B>,
+        std::common_type_t<A, B>,
+        std::common_type_t<std::make_signed_t<A>, std::make_signed_t<B>>>;
+
 #define ARRAYLEN(X) (sizeof(X) / sizeof((X)[0]))
 #define ARMASIZEOF(X) (X).n_elem * sizeof((X)[0])
 
@@ -28,11 +32,35 @@ namespace svr {
 #define _SIGN(X) ((X) > 0. ? 1.: (X) < 0 ? -1. : 0.)
 #define _MIN(X, Y) (((X) > (Y)) ? (Y) : (X)) // X returned if smaller or equal
 #define _MAX(X, Y) (((X) < (Y)) ? (Y) : (X)) // X returned if larger or equal
-#define _MAXAS(X, Y) if ((X) < (Y)) (X) = (Y) // (((X) < (Y)) && ((X) = (Y))) // Y assigned to X only if Y larger than X
-#define _MINAS(X, Y) if ((X) > (Y)) (X) = (Y) // (((X) > (Y)) && ((X) = (Y))) // Y assigned to X only if Y smaller than X
+#define MAXAS(X, Y) if ((X) < (Y)) (X) = (Y) // (((X) < (Y)) && ((X) = (Y))) // Y assigned to X only if Y larger than X
+#define MINAS(X, Y) if ((X) > (Y)) (X) = (Y) // (((X) > (Y)) && ((X) = (Y))) // Y assigned to X only if Y smaller than X
+#define OMPMINAS(X, Y) X = _MIN(X, Y)
+#define OMPMAXAS(X, Y) X = _MAX(X, Y)
 #define CDIV(X, Y) std::ceil(double(X) / double(Y))
-#define CDIVI(X, Y) ((X) / (Y) + (((X) % (Y)) ? 1 : 0))
+#define CDIVI(X, Y) ((X) / (Y) + ((X) % (Y) != 0))
 #define LDi(i, m, ld) (((i) % (m)) + ((i) / (m)) * (ld))
+
+template <typename Dividend, typename Divisor> inline constexpr common_signed_t<Dividend, Divisor> cdivi(Dividend x, Divisor y)
+{
+    if constexpr (std::is_unsigned_v<Dividend> && std::is_unsigned_v<Divisor>) {
+        // quotient is always positive
+        return x / y + (x % y != 0);  // uint / uint
+    }
+    else if constexpr (std::is_signed_v<Dividend> && std::is_unsigned_v<Divisor>) {
+        auto sy = static_cast<std::make_signed_t<Divisor>>(y);
+        bool quotientPositive = x >= 0;
+        return x / sy + (x % sy != 0 && quotientPositive);  // int / uint
+    }
+    else if constexpr (std::is_unsigned_v<Dividend> && std::is_signed_v<Divisor>) {
+        auto sx = static_cast<std::make_signed_t<Dividend>>(x);
+        bool quotientPositive = y >= 0;
+        return sx / y + (sx % y != 0 && quotientPositive);  // uint / int
+    }
+    else {
+        bool quotientPositive = (y >= 0) == (x >= 0);
+        return x / y + (x % y != 0 && quotientPositive);  // int / int
+    }
+}
 
 template<typename T1, typename T2> inline T1 cdiv(const T1 l, const T2 r) { return CDIV((l), (r)); }
 
@@ -78,7 +106,36 @@ std::atomic<T> &operator&=(std::atomic<T> &lhs, const T &rhs)
 
 namespace common {
 
-size_t to_fft_len(const size_t input_len);
+struct pseudo_random_dev {
+    static std::atomic<double> state;
+
+    double operator()()
+    {
+        const double res = state;
+        state = std::fmod(state + .123456789, 1.);
+        return res;
+    }
+};
+
+/// @brief Returns a reproducibly seeded 64-bit RNG
+template<typename RNG> RNG reproducibly_seeded_64()
+{
+    // Some constants etc.
+    using word_type = typename RNG::word_type;
+    constexpr auto n_words = RNG::word_count();
+
+    // A seed array we will fill for this RNG.
+    std::array<word_type, n_words> seed_array;
+    pseudo_random_dev dev;
+    std::generate(seed_array.begin(), seed_array.end(), [&dev] { return dev(); });
+
+    // Construct the RNG
+    RNG retval(seed_array.cbegin(), seed_array.cend());
+    return retval;
+}
+
+
+size_t fft_len(const size_t input_len);
 
 arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &v2);
 
@@ -768,6 +825,11 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle);
 arma::uvec complement_vectors(std::set<size_t> svi, arma::uvec new_ixs);
 
 arma::uvec subview_indexes(arma::uvec batch_ixs, arma::uvec ix_tracker);
+
+struct safe_double_less {
+    bool operator()(const double left, const double right) const;
+};
+
 
 }
 }

@@ -26,7 +26,7 @@ TEST_F(DaoTestFixture, DeconQueueWorkflow)
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     // The decon queue is saved with saving the dataset
     //aci.decon_queue_service.save(dq);
@@ -281,7 +281,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     bpt::ptime nw = bpt::second_clock::local_time();
 
@@ -296,7 +296,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
     row1->set_values({0, 1, 2});
     dq->get_data().push_back(row1);
 
-    datamodel::DeconQueue_ptr dq1 = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr dq1 = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     aci.decon_queue_service.load(*dq1, nw - bpt::hours(1), nw + bpt::hours(1), 1000);
 
@@ -327,7 +327,7 @@ TEST_F(DaoTestFixture, TestDQUpdates)
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("GatesFoundationDQ", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("GatesFoundationDQ", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     bpt::ptime nw = bpt::second_clock::local_time();
 

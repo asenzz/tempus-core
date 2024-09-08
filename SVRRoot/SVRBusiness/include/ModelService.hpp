@@ -52,13 +52,15 @@ class ModelService
     static arma::rowvec prepare_special_features(const data_row_container::const_iterator &last_known_it, const bpt::time_duration &resolution, const unsigned len);
 
     static arma::vec
-    get_last_knowns(const datamodel::Ensemble &ensemble, const size_t level, const std::deque<bpt::ptime> &times, const bpt::time_duration &resolution);
+    get_last_knowns(const datamodel::Ensemble &ensemble, const unsigned int level, const std::deque<bpt::ptime> &times, const bpt::time_duration &resolution);
 
     static datamodel::DataRow::container::const_iterator
-    get_start(const datamodel::DataRow::container &cont, const size_t decremental_offset, const boost::posix_time::ptime &model_last_time,
+    get_start(const datamodel::DataRow::container &cont, const unsigned int decremental_offset, const boost::posix_time::ptime &model_last_time,
               const boost::posix_time::time_duration &resolution);
 public:
     static const unsigned C_max_quantisation;
+
+    static constexpr unsigned C_num_quantisations = 61; // 30
 
     static const std::deque<unsigned> C_quantizations;
 
@@ -66,7 +68,7 @@ public:
 
     datamodel::Model_ptr get_model_by_id(const bigint model_id);
 
-    datamodel::Model_ptr get_model(const bigint ensemble_id, const size_t decon_level);
+    datamodel::Model_ptr get_model(const bigint ensemble_id, const unsigned int decon_level);
 
     void configure(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
@@ -94,15 +96,9 @@ public:
             const bpt::time_duration &main_queue_resolution,
             const size_t multistep);
 
-    static void tune_features(
-            arma::mat &out_features,
-            datamodel::SVRParameters &params,
-            const arma::mat &labels,
-            const std::deque<bpt::ptime> &label_times,
-            const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
-            const bpt::time_duration &max_gap,
-            const bpt::time_duration &aux_queue_res,
-            const bpt::time_duration &main_queue_resolution);
+    static void tune_features(arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const std::deque<bpt::ptime> &label_times,
+                              const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res,
+                              const bpt::time_duration &main_queue_resolution);
 
     static void
     prepare_features(arma::mat &features, const std::deque<bpt::ptime> &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux,
@@ -110,7 +106,7 @@ public:
                      const bpt::time_duration &main_queue_resolution);
 
     static std::tuple<mat_ptr, mat_ptr, vec_ptr, times_ptr>
-    get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, size_t dataset_rows = 0);
+    get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, unsigned int dataset_rows = 0);
 
     static void predict(
             const datamodel::Ensemble &ensemble,
@@ -140,25 +136,25 @@ public:
 
     static void train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const bpt::ptime &last_value_time);
 
-    static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const size_t levix, const size_t stepix);
+    static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const unsigned int levix, const unsigned int stepix);
 
     void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble);
 
-    static bool check(const std::deque<datamodel::Model_ptr> &models, const size_t model_ct);
+    static bool check(const std::deque<datamodel::Model_ptr> &models, const unsigned int model_ct);
 
     static bool check(const std::deque<datamodel::OnlineMIMOSVR_ptr> &models, const size_t grad_ct);
 
-    static size_t to_level_ix(const size_t model_ix, const size_t level_ct);
+    static unsigned int to_level_ix(const unsigned int model_ix, const unsigned int level_ct) noexcept;
 
-    static size_t to_model_ix(const size_t level_ix, const size_t level_ct);
+    static unsigned int to_model_ix(const unsigned int level_ix, const unsigned int level_ct);
 
-    static size_t to_level_ct(const size_t model_ct);
+    static unsigned int to_level_ct(const unsigned int model_ct) noexcept;
 
-    static size_t to_model_ct(const size_t level_ct);
+    static unsigned int to_model_ct(const unsigned int level_ct) noexcept;
 
     static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec>
     validate(
-            const size_t start_ix,
+            const unsigned int start_ix,
             const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model,
             const arma::mat &features, const arma::mat &labels, const arma::mat &last_knowns, const std::deque<bpt::ptime> &times,
             const bool online, const bool verbose);

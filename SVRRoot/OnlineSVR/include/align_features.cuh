@@ -10,13 +10,12 @@
 
 namespace svr {
 
-constexpr float C_stretch_multiplier = 1 - 1e-3; // (1, 0) Closer to 1, higher precision, slower tuning
+constexpr float C_stretch_multiplier = 1 - 1e-4; // (1, 0) Closer to 1, higher precision, slower tuning
 constexpr float C_stretch_limit = .5; // (0..1] Lower is higher precision slower tuning.
 constexpr float C_skip_multiplier = 1.001;
 constexpr float C_skip_limit = C_skip_multiplier;
-constexpr float C_shift_inc_mul = 1 + 1e3; // (1, +inf] The closer to 1, higher precision, slower tuning
+constexpr float C_shift_inc_mul = 1 + 1e4; // (1, +inf] The closer to 1, higher precision, slower tuning
 constexpr float C_shift_limit = .5;
-constexpr unsigned C_validate_cutoff = 1000;
 
 #ifndef __CUDACC__
 __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { return _MIN(a, b); }

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include "parallelism.hpp"
 
 
 namespace svr::common {
@@ -19,7 +20,7 @@ class barrier
 {
 public:
     // Construct barrier for use with num threads.
-    barrier(const std::size_t num);
+    barrier(const unsigned num);
 
     // disable copying of barrier
     barrier(const barrier &) = delete;
@@ -33,11 +34,36 @@ public:
     void wait() noexcept;
 
 private:
-    std::size_t num_threads; // number of threads using barrier
-    std::size_t wait_count; // counter to keep track of waiting threads
-    std::size_t instance; // counter to keep track of barrier use count
+    unsigned num_threads; // number of threads using barrier
+    unsigned wait_count; // counter to keep track of waiting threads
+    unsigned instance; // counter to keep track of barrier use count
     std::mutex mut; // mutex used to protect resources
     std::condition_variable cv; // condition variable used to block threads
+};
+
+class omp_task_barrier
+{
+    t_omp_lock wait_l; // lock to protect wait_count
+    const unsigned num_threads; // number of threads using barrier
+    unsigned wait_count = 0; // counter to keep track of waiting threads
+    unsigned instance = 0; // counter to keep track of barrier use count
+public:
+    // Construct barrier for use with num threads.
+    omp_task_barrier(const unsigned num_threads);
+
+    // disable copying of barrier
+    omp_task_barrier(const omp_task_barrier &) = delete;
+
+    omp_task_barrier &operator=(const omp_task_barrier &) = delete;
+
+    // This function blocks the calling thread until
+    // all threads (specified by num_threads) have
+    // called it. Blocking is achieved using a
+    // call to condition_variable.wait().
+    void wait() noexcept;
+
+    // Call this function to reset the barrier.
+    void reset() noexcept;
 };
 
 }

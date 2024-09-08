@@ -3,6 +3,7 @@
 //
 
 #include <set>
+#include "common/parallelism.hpp"
 #include "SVRParametersService.hpp"
 #include "model/SVRParameters.hpp"
 
@@ -28,17 +29,32 @@ bool less_SVRParameters_ptr::operator()(const datamodel::SVRParameters_ptr &lhs,
     return lhs->operator<(*rhs);
 }
 
+void t_param_preds::free_predictions(t_predictions_ptr &p_predictions_)
+{
+    if (!p_predictions_) return;
+    UNROLL(C_max_j)
+    for (unsigned j = 0; j < C_max_j; ++j)
+        if (p_predictions_->at(j))
+            delete p_predictions_->at(j);
+    delete p_predictions_;
+    p_predictions_ = nullptr;
+}
+
+void t_param_preds::free()
+{
+    free_predictions(p_predictions);
+}
 
 SVRParameters::SVRParameters(
         const bigint id,
         const bigint dataset_id,
         const std::string &input_queue_table_name,
         const std::string &input_queue_column_name,
-        const size_t level_ct,
-        const size_t decon_level,
-        const size_t step,
-        const size_t chunk_ix,
-        const size_t grad_level,
+        const unsigned level_ct,
+        const unsigned decon_level,
+        const unsigned step,
+        const unsigned chunk_ix,
+        const unsigned grad_level,
         const double svr_C,
         const double svr_epsilon,
         const double svr_kernel_param,
@@ -46,8 +62,8 @@ SVRParameters::SVRParameters(
         const u_int64_t svr_decremental_distance,
         const double svr_adjacent_levels_ratio,
         const kernel_type_e kernel_type,
-        const size_t lag_count,
-        const std::set<size_t> &adjacent_levels)
+        const unsigned lag_count,
+        const std::set<unsigned> &adjacent_levels)
         : Entity(id),
           dataset_id(dataset_id),
           input_queue_table_name(input_queue_table_name),
@@ -207,56 +223,56 @@ void SVRParameters::set_input_queue_table_name(const std::string &value)
     input_queue_table_name = value;
 }
 
-size_t SVRParameters::get_decon_level() const
+unsigned SVRParameters::get_decon_level() const
 {
     return decon_level_;
 }
 
-void SVRParameters::set_decon_level(const size_t _decon_level)
+void SVRParameters::set_decon_level(const unsigned _decon_level)
 {
     decon_level_ = _decon_level;
     adjacent_levels.clear();
     (void) get_adjacent_levels();
 }
 
-size_t SVRParameters::get_level_count() const
+unsigned SVRParameters::get_level_count() const
 {
     return levels_ct;
 }
 
-size_t SVRParameters::get_step() const
+unsigned SVRParameters::get_step() const
 {
     return step_;
 }
 
-void SVRParameters::set_step(const size_t _step)
+void SVRParameters::set_step(const unsigned _step)
 {
     step_ = _step;
 }
 
-void SVRParameters::set_level_count(const size_t levels)
+void SVRParameters::set_level_count(const unsigned levels)
 {
     levels_ct = levels;
     adjacent_levels.clear();
     (void) get_adjacent_levels();
 }
 
-size_t SVRParameters::get_chunk_index() const
+unsigned SVRParameters::get_chunk_index() const
 {
     return chunk_ix_;
 }
 
-void SVRParameters::set_chunk_index(const size_t _chunk_ix)
+void SVRParameters::set_chunk_index(const unsigned _chunk_ix)
 {
     chunk_ix_ = _chunk_ix;
 }
 
-size_t SVRParameters::get_grad_level() const
+unsigned SVRParameters::get_grad_level() const
 {
     return grad_level_;
 }
 
-void SVRParameters::set_grad_level(const size_t _grad_level)
+void SVRParameters::set_grad_level(const unsigned _grad_level)
 {
     grad_level_ = _grad_level;
 }
@@ -334,14 +350,14 @@ void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_lev
     (void) get_adjacent_levels();
 }
 
-std::set<size_t> &SVRParameters::get_adjacent_levels()
+std::set<unsigned> &SVRParameters::get_adjacent_levels()
 {
     return adjacent_levels.empty()
            ? adjacent_levels = business::SVRParametersService::get_adjacent_indexes(decon_level_, svr_adjacent_levels_ratio, levels_ct)
            : adjacent_levels;
 }
 
-const std::set<size_t> &SVRParameters::get_adjacent_levels() const
+const std::set<unsigned> &SVRParameters::get_adjacent_levels() const
 {
     if (adjacent_levels.empty()) LOG4_THROW("Adjacent levels not initialized.");
     return adjacent_levels;
@@ -365,12 +381,12 @@ void SVRParameters::set_kernel_type(const kernel_type_e _kernel_type)
         THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << (ssize_t) _kernel_type);
 }
 
-size_t SVRParameters::get_lag_count() const
+unsigned SVRParameters::get_lag_count() const
 {
     return lag_count;
 }
 
-void SVRParameters::set_lag_count(const size_t _lag_count)
+void SVRParameters::set_lag_count(const unsigned _lag_count)
 {
     if (_lag_count == 0) THROW_EX_FS(std::invalid_argument, "Lag count parameter cannot be zero.");
     lag_count = _lag_count;

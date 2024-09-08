@@ -1,8 +1,6 @@
-#include <thrust/async/reduce.h>
 #include <npp.h>
-#include <thrust/device_vector.h>
-#include <thrust/execution_policy.h>
 #include <thrust/async/reduce.h>
+#include <thrust/sort.h>
 #include <cmath>
 #include <thread>
 #include <cublas_v2.h>
@@ -17,12 +15,36 @@
 #include "cuqrsolve.cuh"
 #include "common/constants.hpp"
 #include "onlinesvr.hpp"
-#include "thrust/detail/extrema.inl"
 #include "cuda_path.hpp"
 
 namespace svr {
 namespace solvers {
 
+double score_weights(CPTR(double) K, CPTR(double) weights, CPTR(double) labels, const unsigned m, const unsigned n, const unsigned mn, const unsigned mm)
+{
+    constexpr double one = 1., minus_one = -1.;
+    common::gpu_context ctx;
+    cu_errchk(cudaSetDevice(ctx.phy_id()));
+    cudaStream_t custream;
+    cu_errchk(cudaStreamCreateWithFlags(&custream, cudaStreamNonBlocking));
+    auto d_K = cumallocopy(K, mm, cudaMemcpyHostToDevice, custream);
+    auto d_weights = cumallocopy(weights, mn, cudaMemcpyHostToDevice, custream);
+    auto d_labels = cumallocopy(labels, mn, cudaMemcpyHostToDevice, custream);
+    cublasHandle_t cublasH;
+    cb_errchk(cublasCreate(&cublasH));
+    cb_errchk(cublasSetStream(cublasH, custream));
+    if (n == 1) { cb_errchk(cublasDgemv(cublasH, CUBLAS_OP_N, m, m, &one, d_K, m, d_weights, 1, &minus_one, d_labels, 1)); }
+    else cb_errchk(cublasDgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, d_K, m, d_weights, m, &minus_one, d_labels, m));
+    cu_errchk(cudaFreeAsync(d_K, custream));
+    cu_errchk(cudaFreeAsync(d_weights, custream));
+    double res;
+    cb_errchk(cublasDasum(cublasH, mn, d_labels, 1, &res));
+    cu_errchk(cudaFreeAsync(d_labels, custream));
+    cu_errchk(cudaStreamSynchronize(custream));
+    cb_errchk(cublasDestroy(cublasH));
+    cu_errchk(cudaStreamDestroy(custream));
+    return res;
+}
 
 void __global__
 G_score_kernel(
@@ -773,7 +795,7 @@ G_sumabs(const double *__restrict__ d_input, double *__restrict__ d_result_sum, 
 double sumabs(const double *d_in, const unsigned n, const cudaStream_t &stm)
 {
     double sum, *d_sum = cucalloc<double>(stm);
-    const auto [blocks, threads] = std::tuple{CU_BLOCKS_THREADS(n)};
+    const auto [blocks, threads] = CU_BLOCKS_THREADS_t(n);
     G_sumabs<<<blocks, threads, threads * sizeof(double), stm>>>(d_in, d_sum, n);
     cufreecopy(&sum, d_sum, stm);
     cu_errchk(cudaStreamSynchronize(stm));
@@ -876,7 +898,7 @@ UNROLL()
 double irwls_op1(double *d_in, const unsigned n, const cudaStream_t &stm)
 {
     double sum, *d_sum = cucalloc<double>(stm);
-    const auto [blocks, threads] = std::tuple{CU_BLOCKS_THREADS(n)};
+    const auto [blocks, threads] = CU_BLOCKS_THREADS_t(n);
     G_irwls_op1<<<blocks, threads, threads * sizeof(double), stm>>>(d_in, d_sum, n);
     cufreecopy(&sum, d_sum, stm);
     cu_errchk(cudaStreamSynchronize(stm));
@@ -887,8 +909,8 @@ double irwls_op1(double *d_in, const unsigned n, const cudaStream_t &stm)
 
 #define _SMM_OP(X1, X2, X3, Y1, Y2, Y3) {       \
         (X1) += (Y1);                           \
-        _MINAS((X2), (Y2));                     \
-        _MAXAS((X3), (Y3));                     \
+        MINAS((X2), (Y2));                     \
+        MAXAS((X3), (Y3));                     \
     }
 
 #if 1
@@ -1030,7 +1052,7 @@ std::tuple<double, double, double> suminmax(const double *d_in, const unsigned n
     auto d_sum = cucalloc<double>(stm);
     auto d_min = cumallocopy(&min, stm);
     auto d_max = cumallocopy(&max, stm);
-    const auto [blocks, threads] = std::tuple{CU_BLOCKS_THREADS(n)};
+    const auto [blocks, threads] = CU_BLOCKS_THREADS_t(n);
     LOG4_DEBUG("Blocks " << blocks << ", threads " << threads);
     G_suminmax<<<blocks, threads, 3 * threads * sizeof(double), stm>>>(d_in, d_sum, d_min, d_max, n);
     cufreecopy(&sum, d_sum, stm);
@@ -1059,12 +1081,13 @@ template<const unsigned block_size> __global__ void G_dist_unscaled(
     CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]);
 
     __syncthreads();
+    const auto n_min = _MIN(mn, block_size);
 
 #define stride_reduce_dist(block_low_)                                                  \
         if (block_size >= block_low_) {                                                 \
             constexpr unsigned stride2 = block_low_ / 2;                                \
             const auto tid_stride2 = tid + stride2;                                     \
-            if (tid < stride2 && tid_stride2 < mn)                                      \
+            if (tid < stride2 && tid_stride2 < n_min)                                      \
                 sh_dist[tid] += sh_dist[tid_stride2];                                   \
             __syncthreads();                                                            \
         }
@@ -1074,7 +1097,7 @@ template<const unsigned block_size> __global__ void G_dist_unscaled(
     stride_reduce_dist(256);
     stride_reduce_dist(128);
     if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sh_dist, tid, mn);
+    warp_reduce_sum<block_size>(sh_dist, tid, n_min);
     if (tid) return;
     atomicAdd(d_sum, sh_dist[0]);
 }
@@ -1087,12 +1110,13 @@ template<const unsigned block_size> __global__ void G_dist_unscaled(
     CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[i] - d_predictions[i]);
 
     __syncthreads();
+    const auto n_min = _MIN(mn, block_size);
 
 #define stride_reduce_dist(block_low_)                                                  \
         if (block_size >= block_low_) {                                                 \
             constexpr unsigned stride2 = block_low_ / 2;                                \
             const auto tid_stride2 = tid + stride2;                                     \
-            if (tid < stride2 && tid_stride2 < mn)                                      \
+            if (tid < stride2 && tid_stride2 < n_min)                                      \
                 sh_dist[tid] += sh_dist[tid_stride2];                                   \
             __syncthreads();                                                            \
         }
@@ -1102,7 +1126,7 @@ template<const unsigned block_size> __global__ void G_dist_unscaled(
     stride_reduce_dist(256);
     stride_reduce_dist(128);
     if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sh_dist, tid, mn);
+    warp_reduce_sum<block_size>(sh_dist, tid, n_min);
     if (tid) return;
     atomicAdd(d_sum, *sh_dist);
 }
@@ -1176,7 +1200,7 @@ unscaled_distance(const double *d_labels, const double *d_predictions, const dou
 {
     const auto mn = m * n;
     double sum, *d_sum = cucalloc<double>(stm);
-    const auto [blocks, threads] = std::tuple{CU_BLOCKS_THREADS(mn)};
+    const auto [blocks, threads] = CU_BLOCKS_THREADS_t(mn);
     if (ldl == m)
         G_dist_unscaled<<<blocks, threads, threads * sizeof(double), stm>>>(d_sum, d_labels, d_predictions, mn);
     else
@@ -1208,25 +1232,22 @@ double sum(const double *d_in, const unsigned n, const cudaStream_t &stm)
     return thrust::async::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, double(0), thrust::plus<double>()).get();
 }
 
-double sum(const double *d_in, const unsigned n, const NppStreamContext &ctx)
+double sum(const double *d_in, const unsigned n, const NppStreamContext &npp_ctx)
 {
     size_t npp_buffer_size;
-    np_errchk(nppsSumGetBufferSize_64f_Ctx(n, &npp_buffer_size, ctx));
+    np_errchk(nppsSumGetBufferSize_64f_Ctx(n, &npp_buffer_size, npp_ctx));
 
     Npp8u *npp_sum_buf;
     Npp64f *dres;
-    cu_errchk(cudaMallocAsync((void **) &npp_sum_buf, npp_buffer_size, ctx.hStream));
-    cu_errchk(cudaMallocAsync((void **) &dres, sizeof(*dres), ctx.hStream));
-    assert(npp_sum_buf != nullptr);
-    assert(dres != nullptr);
-
-    np_errchk(nppsSum_64f_Ctx(d_in, n, dres, npp_sum_buf, ctx));
+    cu_errchk(cudaMallocAsync((void **) &npp_sum_buf, npp_buffer_size, npp_ctx.hStream));
+    cu_errchk(cudaMallocAsync((void **) &dres, sizeof(*dres), npp_ctx.hStream));
+    np_errchk(nppsSum_64f_Ctx(d_in, n, dres, npp_sum_buf, npp_ctx));
 
     double res;
-    cu_errchk(cudaMemcpyAsync(&res, dres, sizeof(*dres), cudaMemcpyDeviceToHost, ctx.hStream));
-    cu_errchk(cudaFreeAsync(npp_sum_buf, ctx.hStream));
-    cu_errchk(cudaFreeAsync(dres, ctx.hStream));
-    cu_errchk(cudaStreamSynchronize(ctx.hStream));
+    cu_errchk(cudaMemcpyAsync(&res, dres, sizeof(*dres), cudaMemcpyDeviceToHost, npp_ctx.hStream));
+    cu_errchk(cudaFreeAsync(npp_sum_buf, npp_ctx.hStream));
+    cu_errchk(cudaFreeAsync(dres, npp_ctx.hStream));
+    cu_errchk(cudaStreamSynchronize(npp_ctx.hStream));
 
     return res;
 }

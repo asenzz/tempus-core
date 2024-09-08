@@ -101,8 +101,7 @@ DeconQueueService::extract_copy_data(
     LOG4_BEGIN();
     const auto decon_queues = p_dataset->get_decon_queues();
     std::deque<datamodel::DeconQueue_ptr> new_decon_queues(decon_queues.size());
-OMP_FOR(decon_queues.size())
-    for (size_t i = 0; i < decon_queues.size(); ++i) {
+    OMP_FOR_i(decon_queues.size()) {
         const auto p_decon_queue = decon_queues ^ i;
         new_decon_queues[i] = p_decon_queue->clone_empty();
         new_decon_queues[i]->set_data(p_decon_queue->get_data(period));
@@ -124,7 +123,7 @@ DeconQueueService::deconstruct(
     auto p_decon_queue = dataset.get_decon_queue(input_queue, column_name);
     if (!p_decon_queue) {
         p_decon_queue = ptr<datamodel::DeconQueue>(
-                std::string{}, input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_transformation_levels());
+                std::string{}, input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_spectral_levels());
         APP.decon_queue_service.load(*p_decon_queue);
         dataset.set_decon_queue(p_decon_queue);
     }
@@ -159,10 +158,10 @@ DeconQueueService::deconstruct(
         THROW_EX_FS(std::range_error, "Column index out of bounds " << input_column_index << " > " << input_queue.front()->size());
 
     const auto scaler = IQScalingFactorService::get_scaler(dataset, input_queue, decon_queue.get_input_queue_column_name());
-    const auto levct = dataset.get_transformation_levels();
+    const auto levct = dataset.get_spectral_levels();
     const auto main_resolution = dataset.get_input_queue()->get_resolution();
 #ifdef NO_MAIN_DECON // Hack to avoid proper deconstruction of unused data
-    if (input_queue.get_resolution() == main_resolution || dataset.get_transformation_levels() < MIN_LEVEL_COUNT)
+    if (input_queue.get_resolution() == main_resolution || dataset.get_spectral_levels() < MIN_LEVEL_COUNT)
         return dummy_decon(input_queue, decon_queue, input_column_index, levct, scaler);
 #endif
 
@@ -176,8 +175,16 @@ DeconQueueService::deconstruct(
     LOG4_DEBUG("Input data length " << input_queue.size() << ", columns " << input_queue.front()->size() << ", combined residual length " << residuals_ct <<
                     ", input column index " << input_column_index << ", test offset " << test_offset << ", main to aux queue resolution ratio " << res_ratio);
     const auto pre_decon_size = decon_queue.size();
+#if defined(VMD_ONLY) && !defined(EMD_ONLY)
     PROFILE_EXEC_TIME(dataset.get_cvmd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
+#endif
+#ifndef VMD_ONLY
+#if defined(EMD_ONLY)
+    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals_ct), "OEMD transform");
+#else
     PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals_ct), "OEMD fat transform");
+#endif
+#endif
 
 // Trim not needed data
     auto trim_diff = std::max<size_t>(
@@ -190,9 +197,9 @@ DeconQueueService::deconstruct(
 
     if (SVR_LOG_LEVEL > LOG_LEVEL_T::TRACE) return;
 
-    const size_t start_rms = std::max<ssize_t>(decon_queue.size() - common::C_default_kernel_max_chunk_len * res_ratio, residuals_ct);
-    OMP_FOR(dataset.get_transformation_levels())
-    for (size_t i = 0; i < dataset.get_transformation_levels(); ++i)
+    const auto chunk_len_res = common::C_default_kernel_max_chunk_len * res_ratio;
+    const auto start_rms = decon_queue.size() > chunk_len_res ? decon_queue.size() - chunk_len_res : 0;
+    OMP_FOR_i(dataset.get_spectral_levels())
         BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "RMS power for level " << i << " is " << common::meanabs(decon_queue.get_column_values(i, start_rms)) << ", start " << start_rms;
 }
 
@@ -200,28 +207,25 @@ DeconQueueService::deconstruct(
 void DeconQueueService::dummy_decon(
         const datamodel::InputQueue &input_queue,
         datamodel::DeconQueue &decon_queue,
-        const size_t levix, const size_t levct, const t_iqscaler &iq_scaler)
+        const size_t levix, const size_t levct, const datamodel::t_iqscaler &iq_scaler)
 {
     LOG4_DEBUG("Dummy decon of main input queue " << input_queue.get_table_name());
     const auto &input_data = input_queue.get_data();
-    const auto modct = ModelService::to_model_ct(levct);
-    auto initer = input_data.begin();
-    if (!decon_queue.get_data().empty())
-        initer = upper_bound_back(input_data, decon_queue.back()->get_value_time());
-    const auto inct = std::distance(initer, input_data.end());
+    const double modct = ModelService::to_model_ct(levct);
+    auto initer = decon_queue.empty() ? input_data.cbegin() : upper_bound_back(input_data, decon_queue.back()->get_value_time());
+    const auto inct = std::distance(initer, input_data.cend());
     const auto prev_outct = decon_queue.size();
     decon_queue.get_data().resize(prev_outct + inct);
     const auto outiter = decon_queue.begin() + ssize_t(prev_outct);
     const auto timenow = boost::posix_time::second_clock::local_time();
-    const auto half_levct = levct / 2;
-OMP_FOR(inct)
-    for (ssize_t t = 0; t < inct; ++t) {
+    const auto trans_levix = SVRParametersService::get_trans_levix(levct);
+    OMP_FOR_i(inct) {
         std::vector v(levct, 0.);
-        const auto p_inrow = *(initer + t);
-        for (size_t l = 0; l < levct; l += 2)
-            if (levct < MIN_LEVEL_COUNT || l != half_levct)
-                v[l] = iq_scaler((*p_inrow)[levix]) / double(modct);
-        *(outiter + t) = ptr<datamodel::DataRow>(p_inrow->get_value_time(), timenow, p_inrow->get_tick_volume(), v);
+        const auto p_inrow = *(initer + i);
+        for (size_t l = 0; l < levct; l += LEVEL_STEP)
+            if (levct < MIN_LEVEL_COUNT || l != trans_levix)
+                v[l] = iq_scaler(p_inrow->at(levix)) / modct;
+        *(outiter + i) = ptr<datamodel::DataRow>(p_inrow->get_value_time(), timenow, p_inrow->get_tick_volume(), v);
     }
 }
 
@@ -308,7 +312,7 @@ data_row_container
 DeconQueueService::reconstruct(
         const svr::datamodel::datarow_range &decon,
         const recon_type_e type,
-        const t_iqscaler &unscaler)
+        const datamodel::t_iqscaler &unscaler)
 {
     data_row_container recon;
     reconstruct(decon, type, recon, unscaler);
@@ -320,7 +324,7 @@ void DeconQueueService::reconstruct(
         const datamodel::datarow_range &decon,
         const recon_type_e type,
         data_row_container &recon,
-        const t_iqscaler &iq_unscaler)
+        const datamodel::t_iqscaler &iq_unscaler)
 {
     LOG4_BEGIN();
     if (decon.distance() < 1) LOG4_THROW("No deconstructed data to reconstruct.");
@@ -339,20 +343,20 @@ void DeconQueueService::reconstruct(
     }
 
     const auto levct = decon.front()->size();
-    const size_t half_levct = levct / 2;
-    if (recon.size()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.cend());
+    const auto trans_levix = SVRParametersService::get_trans_levix(levct);
+    if (recon.size()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.end());
     const auto startout = recon.size();
     const auto ct = decon.distance();
     recon.resize(startout + ct);
     const auto time_nau = bpt::second_clock::local_time();
     LOG4_DEBUG("Reconstructing " << ct << " rows of " << levct << " levels, type " << int(type) << ", output starting " << startout);
-    OMP_FOR(ct)
-    for (ssize_t i = 0; i < ct; ++i) {
+    OMP_FOR_i(ct) {
         const datamodel::DataRow &d = **(decon.cbegin() + i);
         double v = 0;
 UNROLL()
-        for (size_t l = 0; l < levct; l += 2)
-            if (l != half_levct) op(v, d.get_value(l));
+        for (dtype(levct) l = 0; l < levct; l += LEVEL_STEP)
+            if (l != trans_levix)
+                op(v, d.get_value(l));
         recon[startout + i] = ptr<datamodel::DataRow>(d.get_value_time(), time_nau, d.get_tick_volume(), std::vector{iq_unscaler(v)});
     }
     LOG4_END();
@@ -366,7 +370,7 @@ DeconQueueService::load(datamodel::DeconQueue &decon_queue, const bpt::ptime &ti
     if (data.empty()) decon_queue.set_data(decon_queue_dao.get_data(decon_queue.get_table_name(), time_from, time_to, limit));
     else {
         std::deque<datamodel::DataRow_ptr> new_data = decon_queue_dao.get_data(decon_queue.get_table_name(), time_from, time_to, limit);
-        if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
+        if (new_data.size() && new_data.front()->get_value_time() <= data.back()->get_value_time())
             data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.cend());
         data.insert(data.cend(), new_data.cbegin(), new_data.cend());
     }
@@ -449,23 +453,22 @@ std::string DeconQueueService::make_queue_table_name(
         LOG4_THROW("Illegal arguments, input queue table name " << input_queue_table_name << ", input queue column name " << input_queue_column_name << ", dataset id " << dataset_id);
     std::string result = common::sanitize_db_table_name(common::formatter() <<
             common::C_decon_queue_table_name_prefix << "_" << input_queue_table_name << "_" << dataset_id << "_" << input_queue_column_name);
-    std::transform(C_default_exec_policy, result.begin(), result.end(), result.begin(), ::tolower);
+    std::for_each(C_default_exec_policy, result.begin(), result.end(), ::tolower);
     return result;
 }
 
-void DeconQueueService::mirror_tail(const datamodel::datarow_range &input, const size_t needed_data_ct, std::vector<double> &tail)
+void DeconQueueService::mirror_tail(const datamodel::datarow_crange &input, const size_t needed_data_ct, std::vector<double> &tail, const unsigned in_colix)
 {
-    const auto in_colix = input.front()->get_values().size() / 2;
     const auto input_size = input.distance();
     const auto empty_ct = needed_data_ct - input_size;
     LOG4_WARN("Adding mirrored tail of size " << empty_ct << ", to input of size " << input_size << ", total size " << needed_data_ct);
     tail.resize(empty_ct);
-OMP_FOR(empty_ct)
-    for (size_t i = 0; i < empty_ct; ++i) {
+    OMP_FOR_i(empty_ct) {
         const auto phi = double(i) / double(input_size);
         tail[empty_ct - 1 - i] = input[(size_t) std::round((input_size - 1) * std::abs(std::round(phi) - phi))]->at(in_colix);
     }
 }
+
 
 } // business
 } // svr

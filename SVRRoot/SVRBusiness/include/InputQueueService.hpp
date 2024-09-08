@@ -31,6 +31,10 @@ class InputQueueService
 {
     svr::dao::InputQueueDAO &input_queue_dao;
 
+    data_row_container load_latest_from_mmf(const datamodel::InputQueue &input_queue, const bpt::ptime &last_time);
+
+    static void prepare_input_data(datamodel::Dataset &dataset);
+
 public:
     /**
      * This method uses the inputQueue's resolution and legal_time_deviation values to calculate the value_time
@@ -115,11 +119,6 @@ public:
     //data_row_container shift_times_forward(const data_row_container &data, const bpt::time_duration &resolution);
 
     static std::string make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
-
-private:
-    data_row_container
-    load_latest_from_mmf(const datamodel::InputQueue &input_queue, const bpt::ptime &last_time);
-    static void prepare_input_data(datamodel::Dataset &dataset);
 };
 
 } /* namespace business */

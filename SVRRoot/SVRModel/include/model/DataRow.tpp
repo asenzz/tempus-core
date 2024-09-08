@@ -222,7 +222,7 @@ void container_range<C, C_range_iter, T>::reinit() // Call whenever changes to t
 template<typename C, typename C_range_iter, typename T>
 size_t container_range<C, C_range_iter, T>::levels() const
 {
-    return container_.size() ? container_.front()->get_values().size() : 0;
+    return container_.size() ? container_.front()->size() : 0;
 }
 
 }

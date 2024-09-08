@@ -16,7 +16,6 @@
 #include "onlinesvr.hpp"
 #include "mat_solve_gpu.hpp"
 #include "cuqrsolve.cuh"
-#include "model/Dataset.hpp"
 #include "model/Entity.hpp"
 #include "model/SVRParameters.hpp"
 #include "util/math_utils.hpp"
@@ -119,17 +118,17 @@ void OnlineMIMOSVR::set_dataset(const Dataset_ptr &p_dataset_)
     p_dataset = p_dataset_;
 }
 
-Dataset_ptr OnlineMIMOSVR::get_dataset() const
+dtype(OnlineMIMOSVR::p_dataset) OnlineMIMOSVR::get_dataset() const
 {
     return p_dataset;
 }
 
-Dataset_ptr &OnlineMIMOSVR::get_dataset()
+dtype(OnlineMIMOSVR::p_dataset) &OnlineMIMOSVR::get_dataset()
 {
     return p_dataset;
 }
 
-ssize_t OnlineMIMOSVR::get_samples_trained_number() const
+dtype(OnlineMIMOSVR::samples_trained) OnlineMIMOSVR::get_samples_trained_number() const noexcept
 {
     return samples_trained;
 }
@@ -140,22 +139,22 @@ void OnlineMIMOSVR::clear_kernel_matrix()
     for (auto &k: *p_kernel_matrices) k.clear();
 }
 
-size_t OnlineMIMOSVR::get_gradient_level() const
+dtype(OnlineMIMOSVR::gradient) OnlineMIMOSVR::get_gradient_level() const noexcept
 {
     return gradient;
 }
 
-size_t OnlineMIMOSVR::get_decon_level() const
+dtype(OnlineMIMOSVR::level) OnlineMIMOSVR::get_decon_level() const noexcept
 {
     return level;
 }
 
-size_t OnlineMIMOSVR::get_step() const
+dtype(OnlineMIMOSVR::step) OnlineMIMOSVR::get_step() const noexcept
 {
     return step;
 }
 
-size_t OnlineMIMOSVR::get_multiout() const
+dtype(OnlineMIMOSVR::multiout) OnlineMIMOSVR::get_multiout() const noexcept
 {
     return multiout;
 }
@@ -167,23 +166,23 @@ arma::uvec OnlineMIMOSVR::get_active_ixs() const
     return arma::unique(active_ixs);
 }
 
-t_param_set OnlineMIMOSVR::get_param_set() const
+dtype(OnlineMIMOSVR::param_set) OnlineMIMOSVR::get_param_set() const noexcept
 {
     return param_set;
 }
 
-t_param_set &OnlineMIMOSVR::get_param_set()
+dtype(OnlineMIMOSVR::param_set) &OnlineMIMOSVR::get_param_set() noexcept
 {
     return param_set;
 }
 
-void OnlineMIMOSVR::set_param_set(const t_param_set &param_set_)
+void OnlineMIMOSVR::set_param_set(const dtype(OnlineMIMOSVR::param_set) &param_set_)
 {
     for (const auto &new_p: param_set_)
         set_params(new_p, new_p->get_chunk_index());
 }
 
-void OnlineMIMOSVR::set_params(const SVRParameters_ptr &p_svr_parameters_, const size_t chunk_ix)
+void OnlineMIMOSVR::set_params(const SVRParameters_ptr &p_svr_parameters_, const unsigned chunk_ix)
 {
     auto it_target_params = business::SVRParametersService::find(param_set, chunk_ix, gradient);
     if (it_target_params == param_set.cend())
@@ -192,7 +191,7 @@ void OnlineMIMOSVR::set_params(const SVRParameters_ptr &p_svr_parameters_, const
         **it_target_params = *p_svr_parameters_;
 }
 
-void OnlineMIMOSVR::set_params(const SVRParameters &param, const size_t chunk_ix)
+void OnlineMIMOSVR::set_params(const SVRParameters &param, const unsigned chunk_ix)
 {
     auto p_target_params = get_params_ptr(chunk_ix);
     if (p_target_params)
@@ -201,12 +200,12 @@ void OnlineMIMOSVR::set_params(const SVRParameters &param, const size_t chunk_ix
         param_set.emplace(ptr<SVRParameters>(param));
 }
 
-SVRParameters &OnlineMIMOSVR::get_params(const size_t chunk_ix) const
+SVRParameters &OnlineMIMOSVR::get_params(const unsigned chunk_ix) const
 {
     return **business::SVRParametersService::find(param_set, chunk_ix, gradient);
 }
 
-SVRParameters_ptr OnlineMIMOSVR::get_params_ptr(const size_t chunk_ix) const
+SVRParameters_ptr OnlineMIMOSVR::get_params_ptr(const unsigned chunk_ix) const
 {
     return business::SVRParametersService::find_ptr(param_set, chunk_ix, gradient);
 }
@@ -262,7 +261,7 @@ void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved);
 void do_mkl_over_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved);
 
 // Unstable avoid! OpenCL
-arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, const int m, const int nrhs)
+arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, const int m, const unsigned nrhs)
 {
     LOG4_THROW("Deprecated!");
     return {};
@@ -551,16 +550,16 @@ arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
     return solved;
 }
 
-size_t OnlineMIMOSVR::get_full_train_len(const size_t n_rows, const size_t decrement)
+unsigned OnlineMIMOSVR::get_full_train_len(const unsigned n_rows, const unsigned decrement)
 {
     return n_rows && n_rows < decrement ? n_rows - C_test_len : decrement;
 }
 
-size_t OnlineMIMOSVR::get_num_chunks(const size_t n_rows, const size_t chunk_size_)
+size_t OnlineMIMOSVR::get_num_chunks(const unsigned n_rows, const unsigned chunk_size_)
 {
     if (!n_rows || !chunk_size_) LOG4_THROW("Rows count " << n_rows << " or maximum chunk size " << chunk_size_ << " is zero!");
     if (n_rows <= chunk_size_) return 1;
-    return std::ceil(double(n_rows) / (double(chunk_size_) * C_chunk_offlap)) - std::ceil(1. / C_chunk_offlap) + C_end_chunks;
+    return cdiv(n_rows, chunk_size_ * C_chunk_offlap) - cdiv(1, C_chunk_offlap) + C_end_chunks;
 }
 
 size_t OnlineMIMOSVR::get_num_chunks()
@@ -576,7 +575,7 @@ size_t OnlineMIMOSVR::get_num_chunks()
 }
 
 std::deque<arma::uvec>
-generate_chunk_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size)
+generate_chunk_indexes(const unsigned n_rows_dataset, const unsigned decrement, const unsigned max_chunk_size)
 {
     // Make sure we train on the latest data
     const auto n_rows_train = OnlineMIMOSVR::get_full_train_len(n_rows_dataset, decrement);
@@ -611,8 +610,8 @@ OMP_FOR(num_chunks)
     return indexes;
 }
 
-auto
-OnlineMIMOSVR::generate_indexes(const size_t n_rows_dataset, const size_t decrement, const size_t max_chunk_size)
+std::deque<arma::uvec>
+OnlineMIMOSVR::generate_indexes(const unsigned n_rows_dataset, const unsigned decrement, const unsigned max_chunk_size)
 {
     return generate_chunk_indexes(n_rows_dataset, decrement, max_chunk_size);
 }
@@ -625,7 +624,7 @@ std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
 }
 
 arma::uvec
-OnlineMIMOSVR::get_other_ixs(const size_t i) const
+OnlineMIMOSVR::get_other_ixs(const unsigned i) const
 {
     return arma::find(ixs[i] != arma::linspace<arma::uvec>(0, p_features->n_rows - 1, p_features->n_rows));
 }
@@ -707,7 +706,7 @@ void OnlineMIMOSVR::reset()
 
 bool OnlineMIMOSVR::is_gradient() const
 {
-    return std::any_of(C_default_exec_policy, param_set.begin(), param_set.end(), [](const auto &p) -> bool { return p->get_grad_level(); });
+    return std::any_of(C_default_exec_policy, param_set.cbegin(), param_set.cend(), [](const auto &p) -> bool { return p->get_grad_level(); });
 }
 
 /* original features_t before matrix transposition
@@ -736,9 +735,7 @@ std::shared_ptr<std::deque<arma::mat>> OnlineMIMOSVR::prepare_cumulatives(const 
     const auto lag = params.get_lag_count();
     const auto levels = features_t.n_rows / lag;
     const auto p_cums = otr<std::deque<arma::mat>>(levels);
-OMP_FOR(levels)
-    for (size_t i = 0; i < levels; ++i)
-        p_cums->at(i) = arma::cumsum(features_t.rows(i * lag, (i + 1) * lag - 1));
+    OMP_FOR_i(levels) p_cums->at(i) = arma::cumsum(features_t.rows(i * lag, (i + 1) * lag - 1));
     LOG4_TRACE("Prepared " << levels << " cumulatives with " << lag << " lag, parameters " << params << ", from features_t " << arma::size(features_t));
     return p_cums;
 }

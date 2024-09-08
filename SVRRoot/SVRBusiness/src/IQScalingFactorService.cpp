@@ -3,8 +3,9 @@
 #include "common/parallelism.hpp"
 #include "util/time_utils.hpp"
 #include "DAO/IQScalingFactorDAO.hpp"
-#include "model/InputQueue.hpp"
 #include "model/Dataset.hpp"
+#include "model/InputQueue.hpp"
+#include "model/DataRow.hpp"
 #include "IQScalingFactorService.hpp"
 #include "appcontext.hpp"
 
@@ -120,18 +121,18 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool sav
     for (const auto &p_aux_input: dataset.get_aux_input_queues()) prepare(dataset, *p_aux_input, save);
 }
 
-t_iqscaler IQScalingFactorService::get_scaler(const datamodel::IQScalingFactor &sf)
+datamodel::t_iqscaler IQScalingFactorService::get_scaler(const datamodel::IQScalingFactor &sf)
 {
     const double scaling_factor = sf.get_scaling_factor(), dc_offset = sf.get_dc_offset();
     return [scaling_factor, dc_offset](const double v) -> double { return common::scale(v, scaling_factor, dc_offset); };
 }
 
-t_iqscaler IQScalingFactorService::get_scaler(const double scaling_factor, const double dc_offset)
+datamodel::t_iqscaler IQScalingFactorService::get_scaler(const double scaling_factor, const double dc_offset)
 {
     return [scaling_factor, dc_offset](const double v) -> double { return common::scale(v, scaling_factor, dc_offset); };
 }
 
-t_iqscaler
+datamodel::t_iqscaler
 IQScalingFactorService::get_scaler(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name)
 {
     const auto p_iq_scaling_factor = dataset.get_iq_scaling_factor(input_queue.get_table_name(), column_name);
@@ -142,18 +143,18 @@ IQScalingFactorService::get_scaler(const datamodel::Dataset &dataset, const data
     return get_scaler(scaling_factor, dc_offset);
 }
 
-t_iqscaler IQScalingFactorService::get_unscaler(const datamodel::IQScalingFactor &sf)
+datamodel::t_iqscaler IQScalingFactorService::get_unscaler(const datamodel::IQScalingFactor &sf)
 {
     const double scaling_factor = sf.get_scaling_factor(), dc_offset = sf.get_dc_offset();
     return [scaling_factor, dc_offset](const double v) -> double { return common::unscale(v, scaling_factor, dc_offset); };
 }
 
-t_iqscaler IQScalingFactorService::get_unscaler(const double scaling_factor, const double dc_offset)
+datamodel::t_iqscaler IQScalingFactorService::get_unscaler(const double scaling_factor, const double dc_offset)
 {
     return [scaling_factor, dc_offset](const double v) -> double { return common::unscale(v, scaling_factor, dc_offset); };
 }
 
-t_iqscaler
+datamodel::t_iqscaler
 IQScalingFactorService::get_unscaler(const datamodel::Dataset &dataset, const std::string &table_name, const std::string &column_name)
 {
     const auto p_iq_scaling_factor = dataset.get_iq_scaling_factor(table_name, column_name);

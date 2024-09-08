@@ -24,9 +24,9 @@ constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;
 #define tid threadIdx.x
 #define CRPTR(T) const T *__restrict__ const
 #ifdef PRODUCTION_BUILD
-#define CU_STRIDED_FOR_i(N)                       \
-    const auto __stride = blockDim.x * gridDim.x;   \
-    _Pragma("unroll")                               \
+#define CU_STRIDED_FOR_i(N)                             \
+    const auto __stride = blockDim.x * gridDim.x;       \
+    UNROLL()                                            \
     for (auto i = blockIdx.x * blockDim.x + threadIdx.x; i < (N); i += __stride)
 #else
 #define CU_STRIDED_FOR_i(N)                         \
@@ -35,8 +35,9 @@ constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;
 #endif
 
 #define CU_THREADS(n) unsigned((n) > common::C_cu_block_size ? common::C_cu_block_size : (n))
-#define CU_BLOCKS(n) (unsigned) CDIV((n), common::C_cu_block_size)
+#define CU_BLOCKS(n) (unsigned) CDIVI((n), common::C_cu_block_size)
 #define CU_BLOCKS_THREADS(n) CU_BLOCKS(n), CU_THREADS(n)
+#define CU_BLOCKS_THREADS_t(n) std::pair{CU_BLOCKS_THREADS(n)}
 
 #define CU_THREADS_2D(x_size) unsigned((x_size) > common::C_cu_tile_width ? common::C_cu_tile_width : (x_size))
 #define CU_BLOCKS_2D(x_size) (unsigned) CDIV((x_size), common::C_cu_tile_width)
@@ -106,20 +107,13 @@ NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custre
 void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
                  const unsigned in_end_n, const unsigned ldout, cudaMemcpyKind kind, const cudaStream_t stm);
 
-constexpr unsigned clamp_n (const unsigned n) { return _MIN(n, svr::common::C_cu_clamp_n); }
+__host__ __device__ inline constexpr unsigned clamp_n (const unsigned n) { return _MIN(n, svr::common::C_cu_clamp_n); }
 
-template<typename T> T *cumallocopy(const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)
-{
-    T *ptr;
-    const auto size = len * sizeof(T);
-    cu_errchk(cudaMallocAsync((void **)&ptr, size, custream));
-    cu_errchk(cudaMemcpyAsync(ptr, source, size, cudaMemcpyHostToDevice, custream));
-    return ptr;
-}
 
 template<typename T> T *
-cumallocopy(const T *source, const size_t size, const cudaMemcpyKind kind, const cudaStream_t custream = nullptr)
+cumallocopy(const T *source, const size_t len, const cudaMemcpyKind kind, const cudaStream_t custream = nullptr)
 {
+    const auto size = len * sizeof(T);
     T *ptr;
     switch (kind) {
         case cudaMemcpyDeviceToHost:
@@ -136,28 +130,23 @@ cumallocopy(const T *source, const size_t size, const cudaMemcpyKind kind, const
 }
 
 template<typename T> T *
-cumallocopyl(CPTR(T) source, const size_t len, const cudaMemcpyKind kind, const cudaStream_t custream = nullptr)
+cumallocopy(const T *source, const cudaStream_t custream, const size_t len = 1, const cudaMemcpyKind kind = cudaMemcpyHostToDevice)
 {
-    const auto size = len * sizeof(T);
-    T *ptr;
-    switch (kind) {
-        case cudaMemcpyDeviceToHost:
-        case cudaMemcpyHostToHost:
-            ptr = (T *) malloc(size);
-            break;
-        case cudaMemcpyDeviceToDevice:
-        case cudaMemcpyHostToDevice:
-        case cudaMemcpyDefault: cu_errchk(cudaMallocAsync((void **)&ptr, size, custream));
-            break;
-    }
-    cu_errchk(cudaMemcpyAsync(ptr, source, size, kind, custream));
-    return ptr;
+    return cumallocopy(source, len, kind, custream);
 }
 
 template<typename T> void cufreecopy(T *output, const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)
 {
     cu_errchk(cudaMemcpyAsync(output, source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFree((void *) source));
+    cu_errchk(cudaFreeAsync((void *) source, custream));
+}
+
+template<typename T> std::vector<T> cufreecopy(const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)
+{
+    std::vector<T> res(len);
+    cu_errchk(cudaMemcpyAsync(res.data(), source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync((void *) source, custream));
+    return res;
 }
 
 template<typename T> std::vector<T>

@@ -1,7 +1,6 @@
 //
 // Created by zarko on 7/5/22.
 //
-
 // #define ORIG_VMD
 
 #ifdef ORIG_VMD
@@ -44,14 +43,11 @@ fcvmd_frequency_outputs fast_cvmd::compute_cos_sin(const arma::vec &omega, const
     const arma::vec phase_cos = arma::cos(step_omega);
     const arma::vec phase_sin = arma::sin(step_omega);
     LOG4_DEBUG("Omega " << omega << ", phase cos " << phase_cos << ", phase sin " << phase_sin << ", step " << step << ", alpha bins " << C_default_alpha_bins
-                        << ", tau fidelity "
-                        << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL);
+                        << ", tau fidelity " << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL);
     return {phase_cos, phase_sin};
 }
 
-const business::t_iqscaler fast_cvmd::C_no_scaler = [](const double v) -> double { return v; };
-
-fast_cvmd::fast_cvmd(const size_t levels_) :
+fast_cvmd::fast_cvmd(const unsigned int levels_) :
         spectral_transform(std::string("cvmd"), levels_),
         levels(levels_),
         K(levels_ / 2),
@@ -60,8 +56,13 @@ fast_cvmd::fast_cvmd(const size_t levels_) :
         even_ixs(arma::regspace<arma::uvec>(0, 2, levels_ - 2)),
         odd_ixs(arma::regspace<arma::uvec>(1, 2, levels_ - 1)),
         f(levels_),
+#ifdef VMD_ONLY
+        row_values(levels_),
+        soln(row_values.memptr(), levels_, false, true),
+#else
         row_values(levels_ * 2),
         soln(row_values.memptr() + levels_, levels_, false, true),
+#endif
         timenow(boost::posix_time::second_clock::local_time())
 {
     if (levels < 2 or levels % 2) LOG4_THROW("Invalid number of levels " << levels);
@@ -77,17 +78,19 @@ bool fast_cvmd::initialized(const std::string &decon_queue_table_name)
 
 
 inline void
-calc_omega(arma::vec &omega, const size_t k, const arma::vec &freqs, const arma::cx_mat &u_hat_plus, const size_t T)
+calc_omega(arma::vec &omega, const unsigned int k, const arma::vec &freqs, const arma::cx_mat &u_hat_plus, const unsigned int T)
 {
-    const arma::vec norm_u_hat_plus = common::norm<double>(u_hat_plus.submat(T / 2, k, T - 1, k));
-    omega[k] = arma::accu(freqs.rows(T / 2, T - 1) % norm_u_hat_plus) / arma::accu(norm_u_hat_plus);
+    const auto T_2 = T / 2;
+    const auto T_1 = T - 1;
+    const arma::vec norm_u_hat_plus = common::norm<double>(u_hat_plus.submat(T_2, k, T_1, k));
+    omega[k] = arma::accu(freqs.rows(T_2, T_1) % norm_u_hat_plus) / arma::accu(norm_u_hat_plus);
 }
 
 #if 1
 
 void
-fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input_column_index, const std::string &decon_queue_table_name,
-                      const business::t_iqscaler &scaler)
+fast_cvmd::initialize(const datamodel::datarow_crange &input, const unsigned int input_column_index, const std::string &decon_queue_table_name,
+                      const datamodel::t_iqscaler &scaler)
 {
     if (input.distance() < 1) LOG4_THROW("Illegal input size " << input.distance());
     LOG4_DEBUG("Initializing omega on " << input.distance() << " rows, for " << levels << " levels, " << decon_queue_table_name << " table.");
@@ -107,7 +110,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     vmd_frequencies.emplace(freq_key, compute_cos_sin(omega, DEFAULT_PHASE_STEP));
 #else
     //Initialize u, w, lambda, n
-    const size_t save_T = input.distance();
+    const unsigned save_T = input.distance();
     auto T = save_T;
     if (T & 1) LOG4_THROW("Input data size " << T << " must be even!");
 
@@ -115,8 +118,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     arma::vec f_init(2 * T);
     const auto T_2 = T / 2;
     const auto T_3_2 = 3 * T / 2;
-    OMP_FOR(T)
-    for (size_t i = 0; i < T; ++i) {
+    OMP_FOR_i(T) {
         if (i < T / 2) {
             f_init[i] = scaler(input[T_2 - 1 - i]->at(input_column_index));
             f_init[T_3_2 + i] = scaler(input[T - 1 - i]->at(input_column_index));
@@ -161,7 +163,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     double uDiff = CVMD_TOL + CVMD_EPS; // tol + eps must be different from just tol, that is why eps should not be too small
     arma::cx_vec sum_uk(T);
 
-    size_t n_iter = 0;
+    unsigned n_iter = 0;
     while (n_iter < MAX_VMD_ITERATIONS && uDiff > CVMD_TOL) {
         //% update first mode accumulator
         sum_uk += u_hat_plus_old.col(K - 1) - u_hat_plus_old.col(0);
@@ -236,9 +238,9 @@ void
 fast_cvmd::transform(
         const data_row_container &input,
         datamodel::DeconQueue &decon,
-        const size_t in_colix,
-        const size_t test_offset,
-        const business::t_iqscaler &scaler)
+        const unsigned int in_colix,
+        const unsigned int test_offset,
+        const datamodel::t_iqscaler &scaler)
 {
 #ifdef ORIG_VMD
 
@@ -254,21 +256,35 @@ fast_cvmd::transform(
         }
     }
     const auto in_ct = std::distance(iterin, input.cend());
+#ifdef EIGEN_VMD
     vectord signal(in_ct);
 
     // Example 1: If you want to get the full results as a 2D matrix of VMD.
     MatrixXd u, omega;
     MatrixXcd u_hat;
-    VMD(u, u_hat, omega, iterin, in_ct, in_colix, C_default_alpha_bins, TAU_FIDELITY, levels, HAS_DC, C_freq_init_type, CVMD_TOL, std::numeric_limits<double>::epsilon(), scaler);
-
+    VMD(u, u_hat, omega, iterin, in_ct, in_colix, 50 /* C_default_alpha_bins */, 0 /*TAU_FIDELITY*/, levels, HAS_DC, C_freq_init_type, CVMD_TOL, 2.2204e-16 /* std::numeric_limits<double>::epsilon() */, scaler);
+#else
+    std::vector<std::vector<std::complex<double>>> u_hat;
+    std::vector<std::vector<double>> u;
+    std::vector<std::vector<double>> omega;
+    std::tie(u, u_hat, omega) = VMD(iterin, in_ct, in_colix, 50 /* C_default_alpha_bins */, 0 /*TAU_FIDELITY*/, levels, HAS_DC, C_freq_init_type, CVMD_TOL, scaler);
+#endif
     const auto prev_decon_ct = decon.size();
     decon.get_data().resize(prev_decon_ct + in_ct);
     OMP_FOR(in_ct)
     for (ssize_t t = 0; t < in_ct; ++t) {
         const auto p_in_row = *(iterin + t - prev_decon_ct);
+#ifdef VMD_ONLY
+        const auto p_row= ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels);
+#else
         const auto p_row = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), 2 * levels);
+#endif
         decon[prev_decon_ct + t] = p_row;
+#ifdef VMD_ONLY
+        for (unsigned l = 0; l < levels; ++l) p_row->at(l) = u[l][t];
+#else
         for (unsigned l = 0; l < levels; ++l) p_row->at(levels + l) = u(l, t);
+#endif
     }
 
 #else
@@ -287,7 +303,7 @@ fast_cvmd::transform(
     }
 
     const auto found_freqs = vmd_frequencies.find({decon.get_table_name(), levels});
-    if (vmd_frequencies.empty() or found_freqs == vmd_frequencies.end())
+    if (vmd_frequencies.empty() || found_freqs == vmd_frequencies.cend())
         LOG4_THROW("VMD frequencies for " << decon.get_table_name() << " " << levels << " not found!");
 
     const auto &phase_cos = found_freqs->second.phase_cos;
@@ -307,17 +323,24 @@ fast_cvmd::transform(
             LOG4_WARN("No input data newer than " << decon.back()->get_value_time() << " to deconstruct.");
             return;
         }
+#ifdef VMD_ONLY
+        memcpy(soln.memptr(), decon.back()->p(), levels_size);
+#else
         memcpy(soln.memptr(), decon.back()->p(levels), levels_size);
+#endif
     }
 
     const auto in_ct = std::distance(iterin, input.cend());
     const auto prev_decon_ct = decon.size();
     decon.get_data().resize(prev_decon_ct + in_ct);
+#ifdef VMD_ONLY
+#define levels_2 levels
+#else
     const auto levels_2 = levels * 2;
-    OMP_FOR_(in_ct, simd firstprivate(in_ct, prev_decon_ct, levels_2))
-    for (ssize_t t = 0; t < in_ct; ++t) {
-        const auto p_in_row = *(iterin + t - prev_decon_ct);
-        decon[prev_decon_ct + t] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels_2);
+#endif
+    OMP_FOR_i_(in_ct, simd firstprivate(in_ct, prev_decon_ct, levels_2)) {
+        const auto p_in_row = *(iterin + i - prev_decon_ct);
+        decon[prev_decon_ct + i] = ptr<datamodel::DataRow>(p_in_row->get_value_time(), timenow, p_in_row->get_tick_volume(), levels_2);
     }
 
     auto f_even = f.rows(even_ixs);
@@ -331,7 +354,11 @@ fast_cvmd::transform(
 #pragma omp simd
     for (size_t t = prev_decon_ct; t < decon.size(); ++t) {
         soln = ASOLVE(H, -A_t * (-ASOLVE(A * ASOLVE(H, A_t), A * ASOLVE(H, f) + scaler((**iterin)[in_colix]))) - f);
+#ifdef VMD_ONLY
+        memcpy(decon[t]->p(), soln.memptr(), levels_size);
+#else
         memcpy(decon[t]->p(levels), soln.mem, levels_size);
+#endif
         f_even = -phase_cos % sl_even + phase_sin % sl_odd;
         f_odd = -phase_sin % sl_even - phase_cos % sl_odd;
         ++iterin;
@@ -351,9 +378,10 @@ fast_cvmd::inverse_transform(
     if (recon.size() != input_size)
         recon.resize(input_size, 0);
 
-            OMP_FOR(input_size)
+    OMP_FOR(input_size)
     for (size_t t = 0; t < input_size; ++t) {
         recon[t] = 0;
+        UNROLL()
         for (size_t l = 0; l < levels; l += 2)
             recon[t] += decon[t + l * input_size];
     }
@@ -364,13 +392,23 @@ size_t fast_cvmd::get_residuals_length(const std::string &decon_queue_table_name
 {
     LOG4_DEBUG("Getting residuals length for " << decon_queue_table_name << " " << levels << " levels.");
     const auto vmd_freq_iter = vmd_frequencies.find({decon_queue_table_name, levels});
-    return vmd_freq_iter == vmd_frequencies.end() || vmd_freq_iter->second.phase_cos.empty() ? (size_t) std::pow(levels / 2, 4) : 0;
+    return vmd_freq_iter == vmd_frequencies.end() || vmd_freq_iter->second.phase_cos.empty() ?
+#ifdef VMD_ONLY
+    (size_t) std::pow(levels, 4)
+#else
+    (size_t) std::pow(levels / 2, 4)
+#endif
+    : 0;
 }
 
-size_t fast_cvmd::get_residuals_length(const unsigned levels)
+size_t fast_cvmd::get_residuals_length(const unsigned levels) noexcept
 {
     LOG4_DEBUG("Getting residuals length for " << levels << " levels.");
-    return (size_t) std::pow(levels / 2, 4);
+#ifdef VMD_ONLY
+    return std::pow(levels, 4);
+#else
+    return std::pow(levels / 2, 4);
+#endif
 }
 
 }

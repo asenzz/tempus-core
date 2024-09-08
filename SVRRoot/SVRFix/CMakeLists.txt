@@ -11,8 +11,8 @@ INCLUDE(../../cmake/IncludeDependencies.cmake)
 INCLUDE("../../cmake/SourceList.cmake")
 
 FILE(GLOB SHARED_SOURCE_FILES
-        "${CMAKE_CURRENT_SOURCE_DIR}/shared/*.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/shared/*.cpp")
+        "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.cpp")
 # if($ENV{HOSTNAME} MATCHES "sl[0-9]+$")
 #     find_package(OpenCV EXACT REQUIRED PATHS /opt/soft/opencv3.2/)
 # else()
@@ -28,7 +28,7 @@ INCLUDE_DIRECTORIES(include)
 
 ADD_LIBRARY(${PROJECT_NAME}-shared SHARED ${SHARED_SOURCE_FILES})
 
-ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCE_FILES})
+ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES})
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${PROJECT_NAME}-shared ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} ${Boost_LIBRARIES} ${QUICKFIX_LIBRARIES} atomic pthread rt)
 

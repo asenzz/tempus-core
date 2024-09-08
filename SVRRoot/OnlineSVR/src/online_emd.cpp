@@ -7,8 +7,7 @@
 #include "online_emd.hpp"
 #include "util/string_utils.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.tpp"
-#include "oemd_coefficients_search.hpp"
+#include "oemd_coefficient_search.hpp"
 
 
 namespace svr {
@@ -23,39 +22,102 @@ void online_emd::transform(
         const unsigned custom_residuals_ct)
 {
     const unsigned residuals_ct = custom_residuals_ct == std::numeric_limits<unsigned>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
-
+    const unsigned in_colix = business::SVRParametersService::get_trans_levix(decon_queue.front()->size());
     auto start_decon_iter = decon_queue.begin() + decon_start_ix;
-    ssize_t dist = 0;
-    if ((dist = std::distance(decon_queue.begin(), start_decon_iter)) >= ssize_t(residuals_ct))
+    const auto dist = std::distance(decon_queue.begin(), start_decon_iter);
+    size_t tail_len;
+    if (dist >= dtype(dist)(residuals_ct)) {
         start_decon_iter -= residuals_ct;
-    else {
-        if (decon_start_ix) LOG4_ERROR("Not enough data " << dist <<  " to produce time invariant output " << residuals_ct);
+        tail_len = 0;
+    } else {
+        tail_len = residuals_ct - dist;
         start_decon_iter = decon_queue.begin();
+        if (decon_start_ix) LOG4_WARN("Not enough data " << dist <<  " to produce time invariant output " << residuals_ct << " for " << decon_queue.get_table_name() <<
+            ", generating tail of length " << tail_len);
     }
 
     std::vector<double> tail;
-    datamodel::datarow_range in_range(start_decon_iter, decon_queue.end(), decon_queue.get_data());
-    if (in_range.distance() < ssize_t(residuals_ct)) business::DeconQueueService::mirror_tail(in_range, residuals_ct, tail);
-
+    datamodel::datarow_crange in_crange(start_decon_iter, decon_queue.cend(), decon_queue.get_data());
+    if (tail_len) business::DeconQueueService::mirror_tail(in_crange, in_crange.distance() + tail_len, tail, in_colix);
 #ifdef INTEGRATION_TEST
-    datamodel::datarow_range in_range_test(start_decon_iter, decon_queue.end() - test_offset, decon_queue.get_data());
+    datamodel::datarow_crange in_range_test(start_decon_iter, decon_queue.end() - test_offset, decon_queue.get_data());
     if (in_range_test.distance() < ssize_t(residuals_ct))
-        business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail);
-    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name());
+        business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
+    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, std::identity());
 #else
     const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name());
 #endif
-
+    datamodel::datarow_range in_range{start_decon_iter, decon_queue.end(), decon_queue.get_data()};
     PROFILE_EXEC_TIME(transform(
+            in_crange,
             in_range,
             tail,
             p_coefs->siftings,
             p_coefs->masks,
-            stretch_coef), "OEMD transform of " << in_range.distance() + tail.size() << " values.");
+            stretch_coef,
+            levels,
+            in_colix,
+            std::identity()), "OEMD inplace transform of " << in_crange.distance() + tail.size() << " values.");
 }
 
+void online_emd::transform(
+        const datamodel::InputQueue &input_queue,
+        datamodel::DeconQueue &decon_queue,
+        const unsigned in_colix,
+        const unsigned test_offset,
+        const datamodel::t_iqscaler &scaler,
+        const unsigned custom_residuals_ct)
+{
+    const unsigned residuals_ct = custom_residuals_ct == std::numeric_limits<unsigned>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
+    data_row_container::const_iterator start_input_iter;
+    if (decon_queue.empty()) start_input_iter = input_queue.cbegin();
+    else start_input_iter = upper_bound(input_queue.get_data(), decon_queue.back()->get_value_time());
+    unsigned tail_len;
+    if (start_input_iter - input_queue.cbegin() < residuals_ct) {
+        tail_len = residuals_ct - (start_input_iter - input_queue.cbegin());
+        start_input_iter = input_queue.cbegin();
+    } else {
+        start_input_iter -= residuals_ct;
+        tail_len = 0;
+    }
 
-t_oemd_coefficients_ptr online_emd::get_masks(const datamodel::datarow_range &input, const std::vector<double> &tail, const std::string &queue_name) const
+    std::vector<double> tail;
+    datamodel::datarow_crange in_range(start_input_iter, input_queue.cend(), input_queue.get_data());
+    if (tail_len) business::DeconQueueService::mirror_tail(in_range, in_range.distance() + tail_len, tail, in_colix);
+
+#ifdef INTEGRATION_TEST
+    datamodel::datarow_crange in_range_test(start_input_iter, input_queue.cend() - test_offset, input_queue.get_data());
+    if (in_range_test.distance() < ssize_t(residuals_ct))
+        business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
+    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, scaler);
+#else
+    const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name(), in_colix);
+#endif
+
+    const auto prev_size = decon_queue.size();
+    const auto time_now = bpt::second_clock::local_time();
+#ifdef EMD_ONLY
+    const auto out_levels = levels;
+#else
+    const auto out_levels = levels * 4;
+#endif
+    for (auto &in_iter: in_range) decon_queue.get_data().emplace_back(
+            std::make_shared<datamodel::DataRow>(in_iter->get_value_time(), time_now, in_iter->get_tick_volume() / out_levels, out_levels));
+    datamodel::datarow_range out_range(decon_queue.begin() + prev_size, decon_queue.end(), decon_queue.get_data());
+    PROFILE_EXEC_TIME(transform(
+            in_range,
+            out_range,
+            tail,
+            p_coefs->siftings,
+            p_coefs->masks,
+            stretch_coef,
+            levels,
+            in_colix,
+            scaler), "OEMD transform of " << in_range.distance() + tail.size() << " values.");
+}
+
+t_oemd_coefficients_ptr online_emd::get_masks(
+        const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name, const unsigned in_colix, const datamodel::t_iqscaler &scaler) const
 {
     const oemd::oemd_coefficients_search oemd_search(levels);
     const auto in_tail_size = input.distance() + tail.size();
@@ -63,13 +125,11 @@ t_oemd_coefficients_ptr online_emd::get_masks(const datamodel::datarow_range &in
     const auto it_coefs = oemd_coefs_cache.find(coefs_key);
     if (it_coefs != oemd_coefs_cache.end()) return it_coefs->second;
 
-    const size_t fir_search_input_window_start = std::max<ssize_t>(0, in_tail_size - oemd_coefficients_search::C_fir_validation_window);
+    const size_t fir_search_input_window_start = in_tail_size > oemd_coefficients_search::C_fir_validation_window ?
+            in_tail_size - oemd_coefficients_search::C_fir_validation_window : 0;
 
     auto coefs = oemd_coefficients::load(levels, queue_name);
-    if (coefs && !coefs->siftings.empty()
-        && *std::min_element(coefs->siftings.begin(), coefs->siftings.end())
-        && !coefs->masks.empty()
-        && !common::empty(coefs->masks))
+    if (coefs && !coefs->siftings.empty() && *std::min_element(coefs->siftings.begin(), coefs->siftings.end()) && !coefs->masks.empty() && !common::empty(coefs->masks))
         goto __bail;
 
     if (in_tail_size < oemd_coefficients_search::C_fir_validation_window)
@@ -79,7 +139,7 @@ t_oemd_coefficients_ptr online_emd::get_masks(const datamodel::datarow_range &in
     oemd::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
 
     PROFILE_EXEC_TIME(
-            oemd_search.optimize_levels(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, in_tail_size, queue_name),
+            oemd_search.optimize_levels(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, in_tail_size, queue_name, in_colix, scaler),
             "OEMD FIR coefficients search");
 
     __bail:
@@ -152,19 +212,23 @@ void online_emd::inverse_transform(
     }
 }
 
+unsigned mult_residuals(const unsigned mask_len, const double stretch, const unsigned siftings)
+{
+    return mask_len * stretch * siftings * 8;
+}
 
 unsigned online_emd::get_residuals_length(const oemd_coefficients &coefs, const double stretch_coef)
 {
     //return coefs.masks.back().size(); // Minimum
     //return coefs.masks.back().size() * p_oemd_coef->siftings.back(); // Tradeoff
     //return 6 * svr::common::next_power_of_two(coefs.masks.back().size() * coefs.siftings.back()); // Assured time invariance first
-    return common::max_size(coefs.masks) * stretch_coef * common::max(coefs.siftings) * 7; /* time invariance 1: * oemd_level_coefs->second.siftings.back() * 7 */ //
+    return mult_residuals(common::max_size(coefs.masks), stretch_coef, common::max(coefs.siftings)); /* time invariance 1: * oemd_level_coefs->second.siftings.back() * 7 */ //
 }
 
 
 unsigned online_emd::get_residuals_length(const double _stretch_coef, const unsigned siftings)
 {
-    return oemd_coefficients_search::C_fir_mask_end_len * _stretch_coef * siftings * 7;
+    return mult_residuals(oemd_coefficients_search::C_fir_mask_end_len, _stretch_coef, siftings);
 }
 
 

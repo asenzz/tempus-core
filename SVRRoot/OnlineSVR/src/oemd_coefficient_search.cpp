@@ -8,7 +8,7 @@
 #include <complex>
 #include <iomanip>
 #include "util/math_utils.hpp"
-#include "oemd_coefficients_search.hpp"
+#include "oemd_coefficient_search.hpp"
 #include "common/gpu_handler.tpp"
 #include "oemd_coefficients.hpp"
 
@@ -230,9 +230,9 @@ oemd_coefficients_search::prepare_masks(
         masks.back().resize(C_fir_mask_end_len);
     }
     OMP_FOR(masks.size() - 1)
-    for (unsigned i = 1; i < masks.size() - 1; ++i) {
+    for (unsigned i = 1; i < masks.size() - 1; ++i) { // TODO Masks are in inverted order, fix!
         const auto new_size = (unsigned) round(
-                std::pow<double>(C_fir_mask_start_len, double(masks.size() - i) / double(masks.size())) *
+                std::pow<double>(C_fir_mask_start_len, double(masks.size() - i) / masks.size()) *
                 std::pow<double>(C_fir_mask_end_len, double(i) / double(masks.size())));
         if (masks[i].size() != new_size) {
             LOG4_DEBUG("Resizing level " << i << " out of " << levels << " masks to " << new_size);
@@ -351,20 +351,6 @@ UNROLL()
         if (std::norm<double>({i.x, i.y}) > norm_thresh)
             return 1;
     return 0;
-}
-
-void oemd_coefficients_search::fix_mask(const arma::vec &in_mask, std::vector<double> &out_mask)
-{
-    out_mask.resize(in_mask.size());
-    double sum = 0;
-    OMP_FOR_(in_mask.size(), simd reduction(+:sum))
-    for (unsigned i = 0; i < in_mask.size(); ++i) {
-        out_mask[i] = common::isnormalz(in_mask[i]) ? in_mask[i] : 0;
-        sum += out_mask[i];
-    }
-    if (sum == 0) LOG4_THROW("Bad mask!");
-    OMP_FOR(out_mask.size())
-    for (auto &o: out_mask) o /= sum;
 }
 
 

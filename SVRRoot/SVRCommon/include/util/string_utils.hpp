@@ -181,8 +181,7 @@ template<typename Tx, typename Ty> inline std::string to_string(const std::pair<
     return s.str();
 }
 
-template<typename T> inline
-std::string to_string(const std::deque<T> &v)
+template<typename T> inline std::string to_string(const std::deque<T> &v)
 {
     if (v.empty()) return "empty";
 

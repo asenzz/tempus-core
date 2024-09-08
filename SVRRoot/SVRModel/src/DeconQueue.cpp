@@ -34,8 +34,12 @@ datamodel::DeconQueue_ptr DeconQueue::clone_empty() const
 datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t end_ix) const
 {
     auto p_new_decon_queue = clone_empty();
-    if (data_.size() > start_ix) p_new_decon_queue->data_ = clone_datarows(
-            data_.begin() + std::min(start_ix, data_.size() - 1), data_.begin() + std::min(end_ix, data_.size()));
+    if (data_.empty()) return p_new_decon_queue;
+    else if (data_.size() > start_ix) p_new_decon_queue->data_ = clone_datarows(
+            data_.cbegin() + std::min(start_ix, data_.size() - 1),
+            data_.cbegin() + std::min(end_ix, data_.size()));
+    else
+        LOG4_ERROR("Start index " << start_ix << " exceeds data size " << data_.size());
     return p_new_decon_queue;
 }
 
@@ -183,7 +187,7 @@ std::string DeconQueue::data_to_string(const size_t data_size) const
             ss << ". . . " << (size() - data_size) << " more" << std::endl;
             break;
         }
-        ss << row.get()->to_string() << '\n';
+        ss << row->to_string() << '\n';
     }
     return ss.str();
 }

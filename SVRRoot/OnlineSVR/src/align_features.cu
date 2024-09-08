@@ -10,10 +10,20 @@
 
 namespace svr {
 
+#ifdef INTEGRATION_TEST
+constexpr unsigned C_integration_test_validation_window = 460;
+#else
+constexpr unsigned C_integration_test_validation_window = 0;
+#endif
+
+constexpr unsigned C_tuning_window = common::C_default_kernel_max_chunk_len + C_test_len;
+constexpr unsigned C_active_window = C_tuning_window + C_integration_test_validation_window;
+constexpr unsigned C_validate_cutoff = 1000; // C_tuning_window;
+
 __device__ inline double vec_dist(CRPTR(double) mean_L, CRPTR(double) features, const unsigned n_rows, const float st, const unsigned sh)
 {
     double res = 0;
-    const auto validate_rows = n_rows - sh;
+    const auto validate_rows = n_rows - sh - C_integration_test_validation_window;
 UNROLL()
     for (unsigned r = 0; r < validate_rows; ++r) res += abs(mean_L[r] - stretch_ix(features, r, n_rows, st, 1));
     return res / validate_rows;
@@ -23,9 +33,10 @@ UNROLL()
 __device__ inline double vec_dist_stretch(CRPTR(double) mean_L, CRPTR(double) features, const unsigned n_rows, const float st, const unsigned sh, const float sk)
 {
     double res = 0;
-    const auto validate_rows = n_rows - sh;
+    const auto validate_rows = n_rows - sh - C_integration_test_validation_window;
 UNROLL()
-    for (unsigned r = validate_rows - C_validate_cutoff; r < validate_rows; ++r) res += abs(mean_L[r] - features[STRETCHSKIP_(r)]);
+    for (unsigned r = validate_rows - C_validate_cutoff; r < validate_rows; ++r)
+        res += fabs(mean_L[r] - features[STRETCHSKIP_(r)]);
     return res / validate_rows;
 }
 
@@ -34,13 +45,15 @@ __global__ void cu_align_features(
         double *__restrict__ const scores, float *__restrict__ const stretches, unsigned *__restrict__ const shifts, float *__restrict__ const skips,
         const unsigned n_rows, const unsigned n_cols)
 {
-    const unsigned shift_limit = n_rows * C_shift_limit;
+    // const unsigned shift_limit = n_rows * C_shift_limit;
+    const unsigned shift_limit = n_rows - C_active_window;
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = std::numeric_limits<dtype(*scores) >::infinity();
         CPTR(double) features_col = features + n_rows * i;
 UNROLL()
         for (unsigned sh = 0; sh < shift_limit; sh += umax(1, C_shift_inc_mul * sh)) { // TODO Unroll loop into an array supplied at kernel launch
             const unsigned shift_limit_sh = shift_limit - sh;
+            // 3040 - 1 = 3039
             CPTR(double) mean_L_sh = mean_L + shift_limit_sh;
 UNROLL()
             for (float st = 1; st > C_stretch_limit; st *= C_stretch_multiplier) {
@@ -66,35 +79,29 @@ void align_features(
     cu_errchk(cudaSetDevice(ctx.phy_id()));
     cudaStream_t custream;
     cu_errchk(cudaStreamCreateWithFlags(&custream, cudaStreamNonBlocking));
-    const auto d_features = cumallocopyl(p_features, n_rows * n_cols, cudaMemcpyHostToDevice, custream);
-    const auto d_mean_L = cumallocopyl(p_mean_L, n_rows, cudaMemcpyHostToDevice, custream);
+    const auto d_features = cumallocopy(p_features, n_rows * n_cols, cudaMemcpyHostToDevice, custream);
+    const auto d_mean_L = cumallocopy(p_mean_L, n_rows, cudaMemcpyHostToDevice, custream);
     double *d_scores;
-    const auto cols_size_double = n_cols * sizeof(double);
-    cu_errchk(cudaMallocAsync((void **) &d_scores, cols_size_double, custream));
+    cu_errchk(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
     float *d_stretches, *d_skips;
     const auto cols_size_float = n_cols * sizeof(float);
     cu_errchk(cudaMallocAsync((void **) &d_stretches, cols_size_float, custream));
     cu_errchk(cudaMallocAsync((void **) &d_skips, cols_size_float, custream));
     unsigned *d_shifts;
-    const auto cols_size_unsigned = n_cols * sizeof(unsigned);
-    cu_errchk(cudaMallocAsync((void **) &d_shifts, cols_size_unsigned, custream));
+    cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(unsigned), custream));
     cu_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_mean_L, d_scores, d_stretches, d_shifts, d_skips, n_rows, n_cols);
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_mean_L, custream));
-    cu_errchk(cudaMemcpyAsync(p_scores, d_scores, cols_size_double, cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_scores, custream));
-    cu_errchk(cudaMemcpyAsync(p_stretches, d_stretches, cols_size_float, cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_stretches, custream));
-    cu_errchk(cudaMemcpyAsync(p_skips, d_skips, cols_size_float, cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_skips, custream));
-    cu_errchk(cudaMemcpyAsync(p_shifts, d_shifts, cols_size_unsigned, cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_shifts, custream));
+    cufreecopy(p_scores, d_scores, custream, n_cols);
+    cufreecopy(p_stretches, d_stretches, custream, n_cols);
+    cufreecopy(p_skips, d_skips, custream, n_cols);
+    cufreecopy(p_shifts, d_shifts, custream, n_cols);
     cu_errchk(cudaStreamSynchronize(custream));
     cu_errchk(cudaStreamDestroy(custream));
 }
 
 
-template<typename T> __device__ inline unsigned before_bound(CRPTR(T) cbegin, CRPTR(T) cend, T value)
+template<typename T> __device__ inline unsigned before_bound(CRPTR(T) cbegin, CRPTR(T) cend, const T value)
 {
     auto res = thrust::lower_bound(thrust::seq, cbegin, cend, value); // TODO Test with thrust::device
     while (*res > value && res > cbegin) --res;
@@ -104,7 +111,7 @@ template<typename T> __device__ inline unsigned before_bound(CRPTR(T) cbegin, CR
 __global__ void G_quantise_features(
         CRPTR(double) d_decon_F, CRPTR(unsigned) d_times_F, CRPTR(unsigned) d_times_last_F, CRPTR(unsigned) d_ixs_last_F,
         const unsigned n_rows, const unsigned quantise, const unsigned start_row, const unsigned n_cols_quantise_, const unsigned n_cols_,
-        double *features /* zeroed out before */)
+        double *__restrict__ const features /* zeroed out before */)
 {
     CU_STRIDED_FOR_i(n_rows) {
         const auto in_row = start_row + i;
@@ -144,10 +151,10 @@ void quantise_features(CPTR(double) decon, CPTR(unsigned) times_F, CPTR(unsigned
     cu_errchk(cudaStreamCreate(&custream));
     const auto end_row = start_row + n_rows_chunk - 1;
     auto d_features = cucalloc<double>(custream, n_rows_chunk * n_cols_coef_);
-    const auto d_decon_F = cumallocopyl(decon + n_feat_rows * level, ixs_last_F[end_row], cudaMemcpyHostToDevice, custream);
-    const auto d_times_F = cumallocopyl(times_F, ixs_last_F[end_row], cudaMemcpyHostToDevice, custream);
-    const auto d_times_last_F = cumallocopyl(times_last_F, end_row + 1, cudaMemcpyHostToDevice, custream);
-    const auto d_ixs_last_F = cumallocopyl(ixs_last_F, end_row + 1, cudaMemcpyHostToDevice, custream);
+    const auto d_decon_F = cumallocopy(decon + n_feat_rows * level, ixs_last_F[end_row], cudaMemcpyHostToDevice, custream);
+    const auto d_times_F = cumallocopy(times_F, ixs_last_F[end_row], cudaMemcpyHostToDevice, custream);
+    const auto d_times_last_F = cumallocopy(times_last_F, end_row + 1, cudaMemcpyHostToDevice, custream);
+    const auto d_ixs_last_F = cumallocopy(ixs_last_F, end_row + 1, cudaMemcpyHostToDevice, custream);
     G_quantise_features<<<CU_BLOCKS_THREADS(clamp_n(n_rows_chunk)), 0, custream>>>(
             d_decon_F, d_times_F, d_times_last_F, d_ixs_last_F, n_rows_chunk, quantise, start_row, n_cols_coef_ * quantise, n_cols_coef_, d_features);
 #ifndef NDEBUG

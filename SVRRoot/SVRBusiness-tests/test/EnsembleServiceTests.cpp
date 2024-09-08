@@ -180,7 +180,7 @@ TEST_F(EnsembleIntegrationTests, testEnsembleCRUD)
 #endif
     for (const datamodel::Ensemble_ptr &p_ensemble : ensembles) {
         // for each decon level should be there a model
-        ASSERT_EQ(p_ensemble->get_models().size(), testDataset->get_transformation_levels() + 1);
+        ASSERT_EQ(p_ensemble->get_models().size(), testDataset->get_spectral_levels() + 1);
     }
 
     PROFILE_EXEC_TIME(aci.ensemble_service.save_ensembles(ensembles, true), "Persisting ensemble models");

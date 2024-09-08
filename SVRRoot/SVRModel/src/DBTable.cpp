@@ -141,6 +141,11 @@ DataRow::container::iterator Queue::begin()
     return data_.begin();
 }
 
+DataRow::container::reverse_iterator Queue::rbegin()
+{
+    return data_.rbegin();
+}
+
 DataRow::container::const_iterator Queue::cend() const
 {
     return data_.cend();
@@ -149,6 +154,11 @@ DataRow::container::const_iterator Queue::cend() const
 DataRow::container::iterator Queue::end()
 {
     return data_.end();
+}
+
+DataRow::container::reverse_iterator Queue::rend()
+{
+    return data_.rend();
 }
 
 DataRow::container Queue::get_data(const size_t row_count, const bpt::ptime &time_to) const

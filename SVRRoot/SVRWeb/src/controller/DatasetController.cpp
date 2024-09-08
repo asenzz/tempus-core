@@ -25,7 +25,7 @@ void DatasetController::show(const std::string dataset_name) {
         model.gradients = std::to_string(dataset->get_gradient_count());
         model.chunk_size = std::to_string(dataset->get_max_chunk_size());
         model.multiout = std::to_string(dataset->get_multistep());
-        model.transformation_levels = std::to_string(dataset->get_transformation_levels());
+        model.transformation_levels = std::to_string(dataset->get_spectral_levels());
         model.transformation_wavelet = dataset->get_transformation_name();
     }
     render("ShowDataset", model);

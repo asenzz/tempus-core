@@ -38,7 +38,7 @@ TEST_F(DaoTestFixture, ModelWorkflow)
 
     ASSERT_EQ(0UL, ens.size());
 
-    datamodel::DeconQueue_ptr p_decon_queue = std::make_shared<datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr p_decon_queue = std::make_shared<datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     datamodel::DataRow_ptr row = std::make_shared<datamodel::DataRow>(bpt::second_clock::local_time(), bpt::second_clock::local_time(), 1, 1);
     row->set_values({3, 4, 5});

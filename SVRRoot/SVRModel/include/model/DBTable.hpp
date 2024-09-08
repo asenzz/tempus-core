@@ -75,9 +75,13 @@ public:
 
     DataRow::container::iterator begin();
 
+    DataRow::container::reverse_iterator rbegin();
+
     DataRow::container::const_iterator cend() const;
 
     DataRow::container::iterator end();
+
+    DataRow::container::reverse_iterator rend();
 
     DataRow::container get_data(const size_t row_count, const bpt::ptime &time_to) const;
 

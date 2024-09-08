@@ -1,6 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(SVRDaemon-blackbox-tests)
-LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/local/libexec)
 
 #Define project dependencies
 SET(DEPENDENCIES SVRPersist SVRBusiness)
@@ -8,6 +7,7 @@ IF(EXPERIMENTAL_FEATURES)
     LINK_DIRECTORIES(${MATLAB_LINK_DIR})
 ENDIF(EXPERIMENTAL_FEATURES)
 
+INCLUDE(../../cmake/SourceList.cmake)
 INCLUDE(../../cmake/IncludeDependencies.cmake)
 
 if(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
@@ -17,7 +17,7 @@ if(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     FIND_PACKAGE(GTest REQUIRED)
     FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED)
     FILE(GLOB_RECURSE TEST_SOURCE_FILES "test/*.cpp")
-    ADD_EXECUTABLE(${PROJECT_NAME} ${TEST_SOURCE_FILES})
+    ADD_EXECUTABLE(${PROJECT_NAME} ${TEST_SOURCE_FILES} ${COMMON_SOURCE_FILES})
     TARGET_LINK_LIBRARIES(${PROJECT_NAME} gtest gtest_main ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} pthread ${Boost_LIBRARIES} wavelib)
 endif()
 

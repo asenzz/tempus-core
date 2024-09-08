@@ -71,7 +71,7 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
 
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("EmmaWatsonDeconQueue", iq->get_table_name(), "up", ds->get_id(), ds->get_transformation_levels());
+    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("EmmaWatsonDeconQueue", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
     auto lt = bpt::second_clock::local_time();
 
     const size_t dq_len = 1e+6;

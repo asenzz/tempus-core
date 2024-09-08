@@ -71,16 +71,18 @@ constexpr auto C_online_validate = false;
 constexpr auto C_test_decrement = 2 * common::C_default_kernel_max_chunk_len;
 constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif
-
+#define MAIN_QUEUE_RES 3600
+#define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
 const auto C_placement_delay = bpt::seconds(3);
-const auto C_test_length_h = C_test_decrement + C_test_len + common::C_integration_test_validation_window;
-const std::string C_test_input_table_name = "q_svrwave_test_xauusd_avg_3600";
+const auto C_test_labels_len_h = C_test_decrement + C_test_len + common::C_integration_test_validation_window;
+const std::string C_test_input_table_name = "q_svrwave_test_xauusd_avg_" STR_MAIN_QUEUE_RES;
 const std::string C_test_aux_input_table_name = "q_svrwave_test_xauusd_avg_1";
 constexpr unsigned C_test_levels = MIN_LEVEL_COUNT;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
-constexpr unsigned C_overload_factor = 2;
+constexpr auto C_overload_factor = 1.2;
 const auto C_decon_tail = svr::datamodel::Dataset::get_residuals_length(C_test_levels);
-const auto C_test_data_len_h = C_overload_factor * (C_test_length_h + C_decon_tail / 3600);
+const unsigned C_max_features_len = C_test_lag * datamodel::C_features_superset_coef * business::ModelService::C_max_quantisation;
+const unsigned C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
 
 }
 
@@ -97,12 +99,12 @@ TEST(manifold_tune_train_predict, basic_integration)
         const std::string q = common::formatter() << "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_1; "
                                                      "CREATE VIEW " << C_test_aux_input_table_name
                                                   << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_1 "
-                                                     "ORDER BY value_time DESC LIMIT (" << C_test_data_len_h << " * 3600); "
-                                                  "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_3600; "
+                                                     "ORDER BY value_time DESC LIMIT (" << C_test_features_len_h << " * " << TOSTR(MAIN_QUEUE_RES) << "); "
+                                                  "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_" STR_MAIN_QUEUE_RES "; "
                                                   "CREATE VIEW " << C_test_input_table_name
-                                                  << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_3600 "
-                                                     "ORDER BY value_time DESC LIMIT " << C_test_data_len_h;
-        w.exec0(q);
+                                                  << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_" STR_MAIN_QUEUE_RES
+                                                     " ORDER BY value_time DESC LIMIT " << C_test_features_len_h;
+        w.exec(q).no_rows();
         w.commit();
     } catch (const std::exception &ex) {
         LOG4_DEBUG("Error " << ex.what() << " while preparing test queue.");
@@ -142,10 +144,11 @@ TEST(manifold_tune_train_predict, basic_integration)
             recon_last_knowns(common::C_integration_test_validation_window, p_dataset->get_multistep()),
             recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep());
     t_omp_lock recon_l;
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(std::min<unsigned>(C_parallel_train_models, p_dataset->get_transformation_levels() * p_dataset->get_multistep()))) collapse(2)
-    for (unsigned l = 0; l < p_dataset->get_transformation_levels(); l += 2)
+#pragma omp parallel for schedule(static, 1) collapse(2) \
+    num_threads(adj_threads(std::min<unsigned>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())))
+    for (unsigned l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
         for (unsigned s = 0; s < p_dataset->get_multistep(); ++s)
-            if (l != p_dataset->get_half_levct()) {
+            if (l != p_dataset->get_trans_levix()) {
                 auto p_ensemble = p_dataset->get_ensemble();
                 auto p_model = p_ensemble->get_model(l, s);
                 if (!p_model) LOG4_THROW("Model not found!");
@@ -162,11 +165,11 @@ TEST(manifold_tune_train_predict, basic_integration)
                     }
 
                 LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params);
-                const auto [p_model_features, p_model_labels, p_model_last_knowns, p_model_times] = business::ModelService::get_training_data(
-                        *p_dataset, *p_ensemble, *p_model, C_test_length_h);
-                assert(p_model_labels->n_rows == C_test_length_h);
-                assert(p_model_times->size() == C_test_length_h);
-                const unsigned train_start = p_model_labels->n_rows - C_test_length_h;
+                const auto [p_model_features, p_model_labels, p_model_last_knowns, p_model_times] =
+                        business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_labels_len_h);
+                assert(p_model_labels->n_rows == C_test_labels_len_h);
+                assert(p_model_times->size() == C_test_labels_len_h);
+                const unsigned train_start = p_model_labels->n_rows - C_test_labels_len_h;
                 const unsigned train_end = p_model_labels->n_rows - common::C_integration_test_validation_window - 1;
 #else
                 auto p_all_features = ptr<arma::mat>(C_test_length, TEST_LAG, arma::fill::randn);
@@ -174,7 +177,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 auto p_all_last_knowns = ptr<arma::mat>(C_test_length, 1, arma::fill::randn);
                 std::deque<bpt::ptime> times(C_test_length, bpt::second_clock::local_time());
 #endif
-                LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_length_h);
+                LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_labels_len_h);
                 const auto feat_levels = p_head_params->get_adjacent_levels();
                 const auto last_value_time = p_model_times->back();
                 business::ModelService::train_batch(*p_model, otr<arma::mat>(p_model_features->rows(train_start, train_end)),
@@ -188,7 +191,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                                 p_model_labels->n_rows - common::C_integration_test_validation_window,
                                 *p_dataset, *p_ensemble, *p_model,
                                 *p_model_features, *p_model_labels, *p_model_last_knowns, *p_model_times,
-                                C_online_validate, p_dataset->get_transformation_levels() < MIN_LEVEL_COUNT);
+                                C_online_validate, p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
                 recon_l.set();
                 if (!p_times) p_times = p_model_times;
                 recon_predicted.col(s) += predicted;
@@ -210,6 +213,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const auto validated_ct = recon_actual.size();
     const auto resolution = p_dataset->get_input_queue()->get_resolution();
     const auto offset_period = resolution * PROPS.get_prediction_offset();
+    UNROLL()
     for (unsigned i = 0; i < validated_ct; ++i) {
         const auto i_div = i + 1.;
         const auto cur_time = p_times->at(p_times->size() - validated_ct + i);

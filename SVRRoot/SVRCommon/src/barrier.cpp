@@ -7,7 +7,7 @@
 
 namespace svr::common {
 
-barrier::barrier(const std::size_t num) : num_threads(num), wait_count(0), instance(0), mut(), cv()
+barrier::barrier(const unsigned num) : num_threads(num), wait_count(0), instance(0), mut(), cv()
 {
     if (num == 0) THROW_EX_FS(std::invalid_argument, "Barrier thread count cannot be 0");
 }
@@ -15,7 +15,7 @@ barrier::barrier(const std::size_t num) : num_threads(num), wait_count(0), insta
 void barrier::wait() noexcept
 {
     std::unique_lock<std::mutex> lock(mut); // acquire lock
-    std::size_t inst = instance; // store current instance for comparison
+    unsigned inst = instance; // store current instance for comparison
     // in predicate
 
     if (++wait_count == num_threads) { // all threads reached barrier
@@ -33,4 +33,36 @@ void barrier::wait() noexcept
     }
 }
 
+omp_task_barrier::omp_task_barrier(const unsigned num_threads) : num_threads(num_threads)
+{
+    if (num_threads == 0) THROW_EX_FS(std::invalid_argument, "Barrier thread count cannot be 0");
 }
+
+void omp_task_barrier::wait() noexcept
+{
+    wait_l.set();
+    const auto current_instance = instance;
+    ++wait_count;
+    wait_l.unset();
+
+    __do_wait:
+    if (instance <= current_instance && wait_count < num_threads) { // all threads haven't reached barrier
+        task_yield_wait__;
+        goto __do_wait;
+    }
+    // all threads reached barrier
+    wait_l.set();
+    wait_count = 0; // reset wait_count
+    instance = current_instance + 1; // increment instance for next use of barrier
+    wait_l.unset();
+}
+
+void omp_task_barrier::reset() noexcept
+{
+    wait_l.set();
+    wait_count = 0; // reset wait_count
+    wait_l.unset();
+}
+
+} // namespace svr::common
+
