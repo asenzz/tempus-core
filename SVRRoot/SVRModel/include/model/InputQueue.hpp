@@ -53,6 +53,8 @@ public:
             const bool uses_fix_connection = false,
             const data_row_container &rows = data_row_container());
 
+    datamodel::InputQueue_ptr clone(const size_t start_ix, const size_t end_ix) const;
+
     const std::string &get_description() const;
 
     void set_description(const std::string &description);

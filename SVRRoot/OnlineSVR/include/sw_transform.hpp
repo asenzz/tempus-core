@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <string>
+#include "common/compatibility.hpp"
 #include "spectral_transform.hpp"
 
 namespace svr {
@@ -75,7 +76,7 @@ protected:
     /* SWT decomposition at given level */
     void
     double_swt_a_cls(
-            const double *const input,
+            CPTR(double)  input,
             const size_t input_len,
             const spectral_transform::wavelet &wavelet,
             double *const output,
@@ -84,7 +85,7 @@ protected:
 
     void
     double_swt_d_cls(
-            const double *const input,
+            CPTR(double)  input,
             const size_t input_len,
             const spectral_transform::wavelet &wavelet,
             double *const output,
@@ -93,9 +94,9 @@ protected:
 
     void
     double_swt_cls(
-            const double *const input,
+            CPTR(double)  input,
             const size_t input_len,
-            const double *const filter,
+            CPTR(double)  filter,
             const size_t filter_len,
             double *const output,
             const size_t output_len,
@@ -103,9 +104,9 @@ protected:
 
     void
     double_downsampling_convolution_periodization_cls(
-            const double *const input,
+            CPTR(double)  input,
             const size_t N,
-            const double *const filter,
+            CPTR(double)  filter,
             const size_t F,
             double *const output,
             const size_t step,
@@ -113,9 +114,9 @@ protected:
 
     void
     double_idwt_cls(
-            const double *const coeffs_a,
+            CPTR(double)  coeffs_a,
             const size_t coeffs_a_len,
-            const double *const coeffs_d,
+            CPTR(double)  coeffs_d,
             const size_t coeffs_d_len,
             double *const output,
             const size_t output_len,
@@ -123,17 +124,17 @@ protected:
 
     void
     double_upsampling_convolution_valid_sf_cls(
-            const double *const input,
+            CPTR(double)  input,
             const size_t N,
-            const double *const filter,
+            CPTR(double)  filter,
             const size_t F,
             double *const output, const size_t O) const;
 
     void
     double_upsampling_convolution_valid_sf_periodization_cls(
-            const double *const input,
+            CPTR(double)  input,
             const size_t N,
-            const double *const filter,
+            CPTR(double)  filter,
             const size_t F,
             double *const output,
             const size_t O) const;

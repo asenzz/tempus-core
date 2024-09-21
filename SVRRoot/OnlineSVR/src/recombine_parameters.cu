@@ -1,7 +1,7 @@
 #include <cuda_runtime_api.h>
 #include <cfloat>
 #include "common/cuda_util.cuh"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "util/math_utils.hpp"
 #include "recombine_parameters.cuh"
 
@@ -39,9 +39,9 @@ template<const unsigned k_block_size> __global__ void cu_recombine_parameters(
         const uint8_t *__restrict__ p_combinations, // Len of rowct * col_ct
         const t_param_preds_cu *__restrict__ p_params_preds, // Len of col_ct * C_tune_keep_preds
         uint8_t *__restrict__ best_param_ixs, // Len of gridDim.x * col_ct
-        double *__restrict__ p_best_score,
-        const double *__restrict__ recon_signs,
-        const double *__restrict__ recon_last_knowns
+        RPTR(double) p_best_score,
+        CRPTR(double) recon_signs,
+        CRPTR(double) recon_last_knowns
 )
 {
     const auto g_tid = tid + blockIdx.x * k_block_size;
@@ -138,9 +138,9 @@ __global__ void cu_recombine_parameters(
         const uint8_t colct, const uint32_t rowct,
         const t_param_preds_cu *__restrict__ p_params_preds, // Len of col_ct * C_tune_keep_preds
         uint8_t *__restrict__ best_param_ixs, // Len of rowct * col_ct
-        double *__restrict__ p_best_score,
-        const double *__restrict__ recon_signs,
-        const double *__restrict__ recon_last_knowns
+        RPTR(double) p_best_score,
+        CRPTR(double) recon_signs,
+        CRPTR(double) recon_last_knowns
 )
 {
     if (tid >= rowct) return;
@@ -231,44 +231,40 @@ UNROLL()
     const auto blocks = CU_BLOCKS(clamped_n);
     const auto threads = CU_THREADS(clamped_n);
 
-    const common::gpu_context ctx;
-    cudaSetDevice(ctx.phy_id());
-    cudaStream_t stm;
-    cu_errchk(cudaStreamCreateWithFlags(&stm, cudaStreamNonBlocking));
+    CTX_CUSTREAM;
     double *d_best_scores, *d_recon_last_knowns, *d_recon_signs;
-    cu_errchk(cudaMallocAsync((void **) &d_best_scores, sizeof(double), stm));
+    cu_errchk(cudaMallocAsync((void **) &d_best_scores, sizeof(double), custream));
     uint8_t *combos_gpu, *d_best_param_ixs;
-    cu_errchk(cudaMallocAsync((void **) &combos_gpu, rowct * colct, stm));
-    cu_errchk(cudaMemcpyAsync(combos_gpu, combos, rowct * colct, cudaMemcpyHostToDevice, stm));
+    cu_errchk(cudaMallocAsync((void **) &combos_gpu, rowct * colct, custream));
+    cu_errchk(cudaMemcpyAsync(combos_gpu, combos, rowct * colct, cudaMemcpyHostToDevice, custream));
     t_param_preds_cu *d_params_preds;
     const uint32_t param_preds_size = sizeof(t_param_preds_cu) * colct * common::C_tune_keep_preds;
-    cu_errchk(cudaMallocAsync((void **) &d_params_preds, param_preds_size, stm));
-    cu_errchk(cudaMemcpyAsync(d_params_preds, params_preds, param_preds_size, cudaMemcpyHostToDevice, stm));
-    cu_errchk(cudaMallocAsync((void **) &d_best_param_ixs, colct * blocks, stm));
-    cu_errchk(cudaMallocAsync((void **) &d_recon_last_knowns, recon_test_size, stm));
-    cu_errchk(cudaMallocAsync((void **) &d_recon_signs, recon_test_size, stm));
-    cu_errchk(cudaMemcpyAsync(d_recon_last_knowns, recon_last_knowns, recon_test_size, cudaMemcpyHostToDevice, stm));
-    cu_errchk(cudaMemcpyAsync(d_recon_signs, recon_signs, recon_test_size, cudaMemcpyHostToDevice, stm));
+    cu_errchk(cudaMallocAsync((void **) &d_params_preds, param_preds_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_params_preds, params_preds, param_preds_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync((void **) &d_best_param_ixs, colct * blocks, custream));
+    cu_errchk(cudaMallocAsync((void **) &d_recon_last_knowns, recon_test_size, custream));
+    cu_errchk(cudaMallocAsync((void **) &d_recon_signs, recon_test_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_recon_last_knowns, recon_last_knowns, recon_test_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMemcpyAsync(d_recon_signs, recon_signs, recon_test_size, cudaMemcpyHostToDevice, custream));
 
     if (threads == common::C_cu_block_size) {
-        cu_recombine_parameters<common::C_cu_block_size><<<blocks, common::C_cu_block_size, 0, stm>>>(
+        cu_recombine_parameters<common::C_cu_block_size><<<blocks, common::C_cu_block_size, 0, custream>>>(
                 colct, rowct, combos_gpu, d_params_preds, d_best_param_ixs, d_best_scores, d_recon_signs, d_recon_last_knowns);
-        cu_recombine_parameters<<<1, blocks, blocks * sizeof(double) + blocks * sizeof(t_params_vec), stm>>>(
+        cu_recombine_parameters<<<1, blocks, blocks * sizeof(double) + blocks * sizeof(t_params_vec), custream>>>(
                 colct, blocks, d_params_preds, d_best_param_ixs, d_best_scores, d_recon_signs, d_recon_last_knowns);
     } else
-        cu_recombine_parameters<<<1, threads, threads * sizeof(double) + threads * sizeof(t_params_vec), stm>>>(
+        cu_recombine_parameters<<<1, threads, threads * sizeof(double) + threads * sizeof(t_params_vec), custream>>>(
                 colct, rowct, d_params_preds, d_best_param_ixs, d_best_scores, d_recon_signs, d_recon_last_knowns);
 
-    cu_errchk(cudaMemcpyAsync(best_params_ixs, d_best_param_ixs, colct, cudaMemcpyDeviceToHost, stm));
-    cu_errchk(cudaMemcpyAsync(p_best_score, d_best_scores, sizeof(double), cudaMemcpyDeviceToHost, stm));
-    cu_errchk(cudaFreeAsync(d_best_param_ixs, stm));
-    cu_errchk(cudaFreeAsync(d_params_preds, stm));
-    cu_errchk(cudaFreeAsync(combos_gpu, stm));
-    cu_errchk(cudaFreeAsync(d_best_scores, stm));
-    cu_errchk(cudaFreeAsync(d_recon_last_knowns, stm));
-    cu_errchk(cudaFreeAsync(d_recon_signs, stm));
-    cu_errchk(cudaStreamSynchronize(stm));
-    cu_errchk(cudaStreamDestroy(stm));
+    cu_errchk(cudaMemcpyAsync(best_params_ixs, d_best_param_ixs, colct, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaMemcpyAsync(p_best_score, d_best_scores, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_best_param_ixs, custream));
+    cu_errchk(cudaFreeAsync(d_params_preds, custream));
+    cu_errchk(cudaFreeAsync(combos_gpu, custream));
+    cu_errchk(cudaFreeAsync(d_best_scores, custream));
+    cu_errchk(cudaFreeAsync(d_recon_last_knowns, custream));
+    cu_errchk(cudaFreeAsync(d_recon_signs, custream));
+    cu_sync_destroy(custream);
 }
 
 }

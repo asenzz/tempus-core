@@ -41,7 +41,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
 }
 
 
-__global__  void old_gpu_kernel_xx_compute(size_t sizeX, int len, int dim, const double *X, double *Z, size_t full_sizeZ, double param1, double param2, double param3)
+__global__  void old_gpu_kernel_xx_compute(size_t sizeX, int len, int dim, CPTR(double) X, double *Z, size_t full_sizeZ, double param1, double param2, double param3)
 {
     double gamma = param1;
     double gamma_mult = 2. * gamma * gamma;
@@ -92,7 +92,7 @@ __global__  void old_gpu_kernel_xx_compute(size_t sizeX, int len, int dim, const
 
 
 __global__  void
-gpu_kernel_xx_compute(size_t sizeX, size_t startX, size_t startY, size_t numX, size_t numY, int len, int dim, const double *X, double *Z, size_t full_sizeZ,
+gpu_kernel_xx_compute(size_t sizeX, size_t startX, size_t startY, size_t numX, size_t numY, int len, int dim, CPTR(double) X, double *Z, size_t full_sizeZ,
                       double param1, double param2, double param3, double param4)
 {
     //double sigma = param1; - not used when only computing distance
@@ -197,7 +197,7 @@ gpu_kernel_xx_compute(size_t sizeX, size_t startX, size_t startY, size_t numX, s
 
 
 __global__  void
-gpu_kernel_xy_compute(size_t sizeX, size_t sizeY, size_t startX, size_t startY, size_t numX, size_t numY, int len, int dim, const double *X, const double *Y, double *Z,
+gpu_kernel_xy_compute(size_t sizeX, size_t sizeY, size_t startX, size_t startY, size_t numX, size_t numY, int len, int dim, CPTR(double) X, const double *Y, double *Z,
                       size_t full_sizeZ, double param1, double param2, double param3, double param4)
 {
 

@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <cmath>
 #include <time.h>
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include <unordered_map>
 #include <tuple>
 

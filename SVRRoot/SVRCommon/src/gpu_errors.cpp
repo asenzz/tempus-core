@@ -2,7 +2,7 @@
 // Created by zarko on 9/28/21.
 //
 
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "common/common.hpp"
 
 

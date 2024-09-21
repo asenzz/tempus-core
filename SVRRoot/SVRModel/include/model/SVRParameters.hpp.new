@@ -48,18 +48,18 @@ typedef enum class kernel_type : int
     DEEP_PATH = 8,
     DEEP_PATH2 = 9,
     number_of_kernel_types = 10 //end of enum = invalid type
-} kernel_type_e, *kernel_type_e_ptr;
+} e_kernel_type, *kernel_type_e_ptr;
 
-inline kernel_type_e operator++(kernel_type_e &k_type)
+inline e_kernel_type operator++(e_kernel_type &k_type)
 {
     int tmp = static_cast<int>(k_type);
     tmp++;
-    return k_type = static_cast<kernel_type_e >( tmp);
+    return k_type = static_cast<e_kernel_type >( tmp);
 }
 
-inline kernel_type_e const operator++(kernel_type_e &k_type, int)
+inline e_kernel_type const operator++(e_kernel_type &k_type, int)
 {
-    const kernel_type_e tmp(k_type);
+    const e_kernel_type tmp(k_type);
     ++k_type;
     return tmp;
 }
@@ -78,18 +78,18 @@ struct machine_parameters
     double svr_epsilon;
     double svr_kernel_param;
     double svr_kernel_param2;
-    kernel_type_e kernel_type;
+    e_kernel_type kernel_type;
 
     explicit machine_parameters(
             const double svr_C = DEFAULT_SVRPARAM_SVR_COST,
             const double svr_epsilon = DEFAULT_SVRPARAM_SVR_EPSILON,
             const double svr_kernel_param = DEFAULT_SVRPARAM_KERNEL_PARAM_1,
             const double svr_kernel_param2 = DEFAULT_SVRPARAM_KERNEL_PARAM_2,
-            const kernel_type_e kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE
+            const e_kernel_type kernel_type = DEFAULT_SVRPARAM_KERNEL_TYPE
     ) : svr_C(svr_C), svr_epsilon(svr_epsilon), svr_kernel_param(svr_kernel_param), svr_kernel_param2(svr_kernel_param2), kernel_type(kernel_type)
     {
         if (svr_epsilon < 0) THROW_EX_FS(std::invalid_argument, "Epsilon parameter " << svr_epsilon << " is less than zero.");
-        if (kernel_type >= kernel_type_e::number_of_kernel_types) THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << ssize_t(kernel_type));
+        if (kernel_type >= e_kernel_type::number_of_kernel_types) THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << ssize_t(kernel_type));
     }
 };
 
@@ -324,15 +324,15 @@ public:
         chunk_label_params.at({chunk_ix, label_col}).svr_kernel_param2 = _svr_kernel_param2;
     }
 
-    kernel_type_e get_kernel_type(const size_t chunk_ix, const size_t label_col) const
+    e_kernel_type get_kernel_type(const size_t chunk_ix, const size_t label_col) const
     {
         return chunk_label_params.at({chunk_ix, label_col}).kernel_type;
     }
 
 
-    void set_kernel_type(const size_t chunk_ix, const size_t label_col, const kernel_type_e _kernel_type)
+    void set_kernel_type(const size_t chunk_ix, const size_t label_col, const e_kernel_type _kernel_type)
     {
-        if (_kernel_type < kernel_type_e::number_of_kernel_types)
+        if (_kernel_type < e_kernel_type::number_of_kernel_types)
             chunk_label_params.at({chunk_ix, label_col}).kernel_type = _kernel_type;
         else
             THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << ssize_t(_kernel_type));

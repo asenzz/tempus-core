@@ -7,7 +7,8 @@ namespace bpt = boost::posix_time;
 
 namespace svr {
 
-#define onesec bpt::seconds(1)
+const auto onesec = bpt::seconds(1);
+const auto onehour = bpt::hours(1);
 
 double operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs);
 //boost::posix_time::time_duration operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs);
@@ -25,6 +26,12 @@ boost::posix_time::time_duration operator *(const boost::posix_time::time_durati
 }
 
 template<typename T, std::enable_if_t<std::is_same<T, double>::value, bool> = false>
+boost::posix_time::time_duration operator *(const T lhs, const boost::posix_time::time_duration &rhs)
+{
+    return boost::posix_time::microseconds(size_t(rhs.total_microseconds() * lhs));
+}
+
+template<typename T, std::enable_if_t<std::is_same<T, unsigned>::value, bool> = false>
 boost::posix_time::time_duration operator *(const T lhs, const boost::posix_time::time_duration &rhs)
 {
     return boost::posix_time::microseconds(size_t(rhs.total_microseconds() * lhs));

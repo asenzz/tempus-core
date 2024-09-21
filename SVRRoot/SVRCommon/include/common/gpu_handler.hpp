@@ -259,3 +259,5 @@ cl::NDRange ndrange(const range_args2_t &range_args);
 #endif //VIENNACL_WITH_OPENCL
 }  //namespace cl12
 }
+
+#include "gpu_handler.tpp"

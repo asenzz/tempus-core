@@ -9,12 +9,26 @@
 #include <iomanip>
 #include "util/math_utils.hpp"
 #include "oemd_coefficient_search.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "oemd_coefficients.hpp"
+#include "ModelService.hpp"
+#include "align_features.cuh"
 
 namespace svr {
 namespace oemd {
 
+oemd_coefficients_search::oemd_coefficients_search(const unsigned levels, const bpt::time_duration &resolution, const unsigned label_len) :
+        resolution(resolution),
+        sample_rate(onesec / resolution),
+        levels(levels),
+        max_gpus(common::gpu_handler_hid::get().get_gpu_devices_count()),
+        gpuids(max_gpus),
+        max_row_len(business::ModelService::C_max_quantisation * (1 + datamodel::C_default_svrparam_lag_count * datamodel::C_features_superset_coef)), // Not a constexpr because business::ModelService::C_max_quantisation is initialized after this class
+        label_len(label_len),
+        fir_validation_window(C_fir_max_len * oemd_coefficients::default_siftings + C_align_window * label_len + max_row_len)
+{
+    std::iota(gpuids.begin(), gpuids.end(), 0);
+}
 
 double
 oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const unsigned siftings)
@@ -27,7 +41,7 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
     for (unsigned i = 0; i < end_i; ++i) {
         std::complex<double> zz(1 - h_mask_fft[i].x, -h_mask_fft[i].y);
         std::complex<double> p(1, 0);
-UNROLL()
+        UNROLL()
         for (unsigned k = 0; k < siftings; ++k) p *= zz;
         result += std::norm(p) + fabs(1. - std::norm(cplx_one - p));
     }
@@ -35,7 +49,7 @@ UNROLL()
     for (unsigned i = end_i; i < h_mask_fft.size(); ++i) {
         std::complex<double> zz(h_mask_fft[i].x, h_mask_fft[i].y);
         std::complex<double> p(1, 0);
-UNROLL()
+        UNROLL()
         for (unsigned k = 0; k < siftings; ++k) p *= zz;
         result += i < h_mask_fft.size() * 2. * lambda2 / coeff ? std::norm(p) : C_smooth_factor * std::norm(p);
     }
@@ -68,7 +82,7 @@ void oemd_coefficients_search::do_diff_mult(const unsigned M, const unsigned N, 
     }
 }
 
-void oemd_coefficients_search::prep_x_matrix(const unsigned M, const unsigned N, const double *x, std::vector<double> &Bmatrix, std::vector<double> &Fmatrix)
+void oemd_coefficients_search::prep_x_matrix(const unsigned M, const unsigned N, CPTR(double) x, std::vector<double> &Bmatrix, std::vector<double> &Fmatrix)
 {
     std::vector<double> diff(N - 1, 0.);
     for (unsigned i = 0; i < N - 1; ++i)
@@ -81,7 +95,7 @@ void oemd_coefficients_search::prep_x_matrix(const unsigned M, const unsigned N,
 }
 
 #if 0
-int make_P_from_dense(const double *H, unsigned m, c_int &P_nnz, std::vector<c_float> &P_x_vector, std::vector<c_int> &P_i_vector, std::vector<c_int> &P_p_vector)
+int make_P_from_dense(CPTR(double) H, unsigned m, c_int &P_nnz, std::vector<c_float> &P_x_vector, std::vector<c_int> &P_i_vector, std::vector<c_int> &P_p_vector)
 {
     P_nnz = 0;
     P_x_vector.clear();
@@ -100,7 +114,7 @@ int make_P_from_dense(const double *H, unsigned m, c_int &P_nnz, std::vector<c_f
 }
 
 
-int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsigned input_size, const double *x, const int gpu_id)
+int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsigned input_size, CPTR(double) x, const int gpu_id)
 {
     unsigned fft_size = C_mask_expander * mask_size;
     unsigned M = mask_size;
@@ -220,6 +234,7 @@ oemd_coefficients_search::prepare_masks(
         std::deque<unsigned> &siftings,
         const unsigned levels)
 {
+#if 0
     if (masks.size() != levels - 1) masks.resize(levels - 1);
     if (masks.front().size() != C_fir_mask_start_len) {
         LOG4_DEBUG("Resizing first mask " << 0 << " to " << C_fir_mask_start_len);
@@ -239,22 +254,14 @@ oemd_coefficients_search::prepare_masks(
             masks[i].resize(new_size);
         }
     }
+#else
+    if (masks.size() != levels - 1) masks.resize(levels - 1);
+#endif
     if (siftings.size() != masks.size()) {
         LOG4_DEBUG("Resizing siftings to " << masks.size());
         siftings.resize(masks.size());
     }
-    OMP_FOR(siftings.size())
-    for (auto &sifting: siftings)
-        sifting = oemd_coefficients::default_siftings;
-}
-
-
-oemd_coefficients_search::oemd_coefficients_search(const unsigned levels) :
-    levels(levels),
-    max_gpus(common::gpu_handler_hid::get().get_gpu_devices_count()),
-    gpuids(max_gpus)
-{
-    std::iota(gpuids.begin(), gpuids.end(), 0);
+    std::fill(C_default_exec_policy, siftings.begin(), siftings.end(), oemd_coefficients::default_siftings);
 }
 
 
@@ -322,7 +329,7 @@ double get_std(double *x, const unsigned input_size)
 #endif
 
 std::vector<double>
-oemd_coefficients_search::fill_auto_matrix(const unsigned M, const unsigned siftings, const unsigned N, const double *x)
+oemd_coefficients_search::fill_auto_matrix(const unsigned M, const unsigned siftings, const unsigned N, CPTR(double) x)
 {
     return {};
 
@@ -346,7 +353,7 @@ oemd_coefficients_search::fill_auto_matrix(const unsigned M, const unsigned sift
 
 int oemd_coefficients_search::do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft)
 {
-UNROLL()
+    UNROLL()
     for (auto i: h_mask_fft)
         if (std::norm<double>({i.x, i.y}) > norm_thresh)
             return 1;

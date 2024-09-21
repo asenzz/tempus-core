@@ -42,7 +42,7 @@ public:
 
     static void calfun(CPTR(double) x, double *const f, t_calfun_data_ptr const calfun_data);
 
-    static arma::vec ensure_bounds(const double *x, const arma::mat &bounds);
+    static arma::vec ensure_bounds(CPTR(double) x, const arma::mat &bounds);
 
     operator t_pprune_res();
 };

@@ -159,30 +159,31 @@ DeconQueueService::deconstruct(
 
     const auto scaler = IQScalingFactorService::get_scaler(dataset, input_queue, decon_queue.get_input_queue_column_name());
     const auto levct = dataset.get_spectral_levels();
+    const auto resolution = input_queue.get_resolution();
     const auto main_resolution = dataset.get_input_queue()->get_resolution();
 #ifdef NO_MAIN_DECON // Hack to avoid proper deconstruction of unused data
-    if (input_queue.get_resolution() == main_resolution || dataset.get_spectral_levels() < MIN_LEVEL_COUNT)
+    if (resolution == main_resolution || dataset.get_spectral_levels() < MIN_LEVEL_COUNT)
         return dummy_decon(input_queue, decon_queue, input_column_index, levct, scaler);
 #endif
 
-    const double res_ratio = main_resolution / input_queue.get_resolution();
+    const double res_ratio = main_resolution / resolution;
 #ifdef INTEGRATION_TEST
     const auto test_offset = res_ratio * common::C_integration_test_validation_window;
 #else
     constexpr size_t test_offset = 0;
 #endif
-    const auto residuals_ct = dataset.get_residuals_length(decon_queue.get_table_name());
-    LOG4_DEBUG("Input data length " << input_queue.size() << ", columns " << input_queue.front()->size() << ", combined residual length " << residuals_ct <<
-                    ", input column index " << input_column_index << ", test offset " << test_offset << ", main to aux queue resolution ratio " << res_ratio);
+    const auto residuals = dataset.get_residuals_length(decon_queue.get_table_name());
+    LOG4_DEBUG("Input data length " << input_queue.size() << ", columns " << input_queue.front()->size() << ", combined residual length " << residuals <<
+                                    ", input column index " << input_column_index << ", test offset " << test_offset << ", main to aux queue resolution ratio " << res_ratio);
     const auto pre_decon_size = decon_queue.size();
 #if defined(VMD_ONLY) && !defined(EMD_ONLY)
     PROFILE_EXEC_TIME(dataset.get_cvmd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
 #endif
 #ifndef VMD_ONLY
 #if defined(EMD_ONLY)
-    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals_ct), "OEMD transform");
+    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals, main_resolution), "OEMD transform");
 #else
-    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals_ct), "OEMD fat transform");
+    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals, resolution), "OEMD fat transform");
 #endif
 #endif
 
@@ -195,7 +196,7 @@ DeconQueueService::deconstruct(
         decon_queue.get_data().erase(decon_queue.begin(), (decon_queue.get_data().rbegin() + trim_diff).base());
     }
 
-    if (SVR_LOG_LEVEL > LOG_LEVEL_T::TRACE) return;
+    if (common::PropertiesFileReader::S_log_threshold > boost::log::trivial::severity_level::trace) return;
 
     const auto chunk_len_res = common::C_default_kernel_max_chunk_len * res_ratio;
     const auto start_rms = decon_queue.size() > chunk_len_res ? decon_queue.size() - chunk_len_res : 0;
@@ -223,7 +224,7 @@ void DeconQueueService::dummy_decon(
         std::vector v(levct, 0.);
         const auto p_inrow = *(initer + i);
         for (size_t l = 0; l < levct; l += LEVEL_STEP)
-            if (levct < MIN_LEVEL_COUNT || l != trans_levix)
+            if (l != trans_levix)
                 v[l] = iq_scaler(p_inrow->at(levix)) / modct;
         *(outiter + i) = ptr<datamodel::DataRow>(p_inrow->get_value_time(), timenow, p_inrow->get_tick_volume(), v);
     }
@@ -342,7 +343,7 @@ void DeconQueueService::reconstruct(
             LOG4_THROW("Reconstruction type " << int(type) << " not supported!");
     }
 
-    const auto levct = decon.front()->size();
+    const auto levct = decon.levels();
     const auto trans_levix = SVRParametersService::get_trans_levix(levct);
     if (recon.size()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.end());
     const auto startout = recon.size();

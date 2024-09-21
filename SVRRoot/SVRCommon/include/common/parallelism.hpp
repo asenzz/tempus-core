@@ -37,12 +37,17 @@
 #define OMP_FOR_i_(__n, __x) \
     OMP_FOR_(__n, __x)      \
     for (dtype(__n) i = 0; i < __n; ++i)
+#if defined(__GNUC__)
+#define OMP_FOR_i(__n) OMP_FOR_i_(__n, )
+#define OMP_FOR(__n) OMP_FOR_(__n, )
+#else
 #define OMP_FOR_i(__n) OMP_FOR_i_(__n, simd)
 #define OMP_FOR(__n) OMP_FOR_(__n, simd)
+#endif
 
 #define NGRAIN(N) grainsize((unsigned) cdiv((N), C_n_cpu))
 
-constexpr auto C_yield_usleep = std::chrono::milliseconds(100);
+constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 #define thread_yield_wait__ { std::this_thread::yield(); std::this_thread::sleep_for(C_yield_usleep); }
 #define task_yield_wait__ { _Pragma("omp taskyield") std::this_thread::sleep_for(C_yield_usleep); }
 

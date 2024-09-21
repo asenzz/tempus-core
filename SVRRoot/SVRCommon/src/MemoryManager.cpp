@@ -1,5 +1,5 @@
 #include <util/MemoryManager.hpp>
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include <common/logging.hpp>
 #include <chrono>
 #include <thread>

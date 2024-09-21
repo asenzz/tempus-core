@@ -34,7 +34,7 @@ constexpr unsigned C_end_chunks = 1; // [1..1/offlap]
 constexpr double C_gamma_variance = 6e4;
 constexpr magma_int_t C_rbt_iter = 40; // default 30
 constexpr double C_rbt_threshold = 0; // [0..1] default 1
-constexpr double C_features_superset_coef = 1e2; // [1..+inf)
+constexpr unsigned C_features_superset_coef = 100; // [1..+inf)
 #ifdef EMO_DIFF
 constexpr double C_diff_coef = 1;
 #else
@@ -175,7 +175,7 @@ public:
             const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
             const magma_queue_t &magma_queue, const size_t gpu_phy_id);
 
-    static arma::mat do_ocl_solve(const double *host_a, double *host_b, const int m, const unsigned nrhs);
+    static arma::mat do_ocl_solve(CPTR(double) host_a, double *host_b, const int m, const unsigned nrhs);
 
     static arma::mat direct_solve(const arma::mat &a, const arma::mat &b);
 
@@ -295,7 +295,7 @@ public:
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
-__global__ void G_div_inplace(double *__restrict__ const x, const double a, const unsigned n);
+__global__ void G_div_inplace(RPTR(double) x, const double a, const unsigned n);
 
 
 } // datamodel
@@ -304,3 +304,5 @@ __global__ void G_div_inplace(double *__restrict__ const x, const double a, cons
 #define MANIFOLD_SET(_MX_, _MY_, _NX_, _NY_, _OX_, _OY_) {  \
     (_MX_) = arma::join_rows((_NX_), (_OY_));               \
     (_MY_) = (_NY_) - (_OY_); }
+
+#include "onlinesvr_persist.tpp"

@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include "../include/onlinesvr.hpp"
 #include "test_harness.hpp"
-#include "onlinesvr_persist.tpp"
+#include "onlinesvr.hpp"
 #include "util/math_utils.hpp"
 
 #define DEFAULT_ITERS (2)

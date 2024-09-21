@@ -24,36 +24,36 @@ typedef enum class kernel_type : int
     PATH = 7, // path kernel
     DEEP_PATH = 8,
     number_of_kernel_types = 9 // end of enum = invalid type
-} kernel_type_e;
+} e_kernel_type;
 
 template<typename ST>
-ST tostring(const datamodel::kernel_type_e kt)
+ST tostring(const datamodel::e_kernel_type kt)
 {
     switch (kt) {
-        case kernel_type_e::LINEAR:
+        case e_kernel_type::LINEAR:
             return "LINEAR";
-        case kernel_type_e::POLYNOMIAL:
+        case e_kernel_type::POLYNOMIAL:
             return "POLYNOMIAL";
-        case kernel_type_e::RBF:
+        case e_kernel_type::RBF:
             return "RBF";
-        case kernel_type_e::RBF_GAUSSIAN:
+        case e_kernel_type::RBF_GAUSSIAN:
             return "RBF_GAUSSIAN";
-        case kernel_type_e::RBF_EXPONENTIAL:
+        case e_kernel_type::RBF_EXPONENTIAL:
             return "RBF_EXPONENTIAL";
-        case kernel_type_e::GA:
+        case e_kernel_type::GA:
             return "GA";
-        case kernel_type_e::PATH:
+        case e_kernel_type::PATH:
             return "PATH";
-        case kernel_type_e::DEEP_PATH:
+        case e_kernel_type::DEEP_PATH:
             return "DEEP_PATH";
         default:
             return "UNKNOWN";
     }
 }
 
-kernel_type_e operator++(kernel_type_e &k_type);
+e_kernel_type operator++(e_kernel_type &k_type);
 
-kernel_type_e operator++(kernel_type_e &k_type, int);
+e_kernel_type operator++(e_kernel_type &k_type, int);
 
 class SVRParameters;
 
@@ -78,8 +78,8 @@ constexpr double C_default_svrparam_kernel_param1 = 0;
 constexpr double C_default_svrparam_kernel_param2 = 0;
 constexpr unsigned C_default_svrparam_decrement_distance = common::C_default_kernel_max_chunk_len;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
-constexpr svr::datamodel::kernel_type_e C_default_svrparam_kernel_type = svr::datamodel::kernel_type_e::PATH;
-constexpr unsigned C_default_svrparam_kernel_type_uint = unsigned(svr::datamodel::kernel_type_e::PATH);
+constexpr svr::datamodel::e_kernel_type C_default_svrparam_kernel_type = svr::datamodel::e_kernel_type::PATH;
+constexpr unsigned C_default_svrparam_kernel_type_uint = unsigned(svr::datamodel::e_kernel_type::PATH);
 constexpr unsigned C_default_svrparam_lag_count = 1000;
 const unsigned C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
@@ -113,7 +113,7 @@ class SVRParameters : public Entity
     u_int64_t svr_decremental_distance = C_default_svrparam_decrement_distance;
     double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio;
     std::set<unsigned> adjacent_levels;
-    kernel_type_e kernel_type = C_default_svrparam_kernel_type;
+    e_kernel_type kernel_type = C_default_svrparam_kernel_type;
     unsigned lag_count = C_default_svrparam_lag_count;
 
     t_feature_mechanics feature_mechanics;
@@ -137,7 +137,7 @@ public:
             const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
             const u_int64_t svr_decremental_distance = C_default_svrparam_decrement_distance,
             const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
-            const kernel_type_e kernel_type = C_default_svrparam_kernel_type,
+            const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
             const unsigned lag_count = C_default_svrparam_lag_count,
             const std::set<unsigned> &adjacent_levels = {});
 
@@ -217,11 +217,11 @@ public:
 
     const std::set<unsigned> &get_adjacent_levels() const;
 
-    kernel_type_e get_kernel_type() const;
+    e_kernel_type get_kernel_type() const;
 
     bool is_manifold() const;
 
-    void set_kernel_type(const kernel_type_e _kernel_type);
+    void set_kernel_type(const e_kernel_type _kernel_type);
 
     // Lag count across all models should be the same with the current infrastructure inplace // Only head param (chunk 0, grad 0, manifold 0) takes effect
     unsigned get_lag_count() const;

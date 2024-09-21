@@ -20,7 +20,7 @@ double nm_wrapper3(const std::vector<double> &params, const arma::mat &learning_
 {
 #if 0
     SVRParameters model_svr_parameters(
-            0, 0, "", "", 0, 152168000, 0, params[0], 1, 20000, 0.640625, static_cast<const kernel_type_e>(7), 400);
+            0, 0, "", "", 0, 152168000, 0, params[0], 1, 20000, 0.640625, static_cast<const e_kernel_type>(7), 400);
     double mae = 0.;
     PROFILE_EXEC_TIME(mae = train_predict_cycle(
             model_svr_parameters, labels_mx, features_mx, n_total_samples, num_values_trained_batch,
@@ -29,7 +29,7 @@ double nm_wrapper3(const std::vector<double> &params, const arma::mat &learning_
 #else
     double cur_variance_diff;
     SVRParameters model_svr_parameters(
-            0, 0, "", "", 0, 0, 0, params[0], 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, static_cast<const kernel_type_e>(7),
+            0, 0, "", "", 0, 0, 0, params[0], 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, static_cast<const e_kernel_type>(7),
             DEFAULT_LAG);
     // PROFILE_EXEC_TIME(cur_variance_diff = svr::OnlineSVR::produce_kernel_matrices_variance(model_svr_parameters, learning_data, reference_data, false),
 //                      "produce_kernel_matrices_variance");
@@ -54,7 +54,7 @@ void run_file3(const std::pair<std::string /* labels full path */, std::string /
     const auto num_values_trained_batch = n_total_samples - TEST_FUTURE_PREDICT_COUNT - ONLINE_LUFTA;
     double err = 0;
     SVRParameters best_parameters(
-            0, 0, "", "", 0, 2521, 1e-9, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, static_cast<const kernel_type_e>(7), DEFAULT_LAG);
+            0, 0, "", "", 0, 2521, 1e-9, 1, 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, static_cast<const e_kernel_type>(7), DEFAULT_LAG);
     svr::nm::NM_parameters nm_param;
     nm_param.max_iteration_number_ = 30;
     nm_param.tolerance_ = 1E-5;

@@ -33,14 +33,14 @@ datamodel::DeconQueue_ptr DeconQueue::clone_empty() const
 
 datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t end_ix) const
 {
-    auto p_new_decon_queue = clone_empty();
-    if (data_.empty()) return p_new_decon_queue;
-    else if (data_.size() > start_ix) p_new_decon_queue->data_ = clone_datarows(
+    auto p_new_queue = clone_empty();
+    if (data_.empty()) return p_new_queue;
+    else if (data_.size() > start_ix) p_new_queue->data_ = clone_datarows(
             data_.cbegin() + std::min(start_ix, data_.size() - 1),
             data_.cbegin() + std::min(end_ix, data_.size()));
     else
         LOG4_ERROR("Start index " << start_ix << " exceeds data size " << data_.size());
-    return p_new_decon_queue;
+    return p_new_queue;
 }
 
 void DeconQueue::erase_until(const data_row_container::iterator &target_iter)

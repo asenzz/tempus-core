@@ -27,6 +27,12 @@ void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const 
 #endif
 }
 
+void cu_sync_destroy(cudaStream_t strm)
+{
+    cu_errchk(cudaStreamSynchronize(strm));
+    cu_errchk(cudaStreamDestroy(strm));
+}
+
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream)
 {
     NppStreamContext res;

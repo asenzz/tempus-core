@@ -7,7 +7,7 @@
 #include <cuda_runtime_api.h>
 #include "common/cuda_util.cuh"
 #include "model/DeconQueue.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "online_emd.hpp"
 #include "common/barrier.hpp"
 #include "SVRParametersService.hpp"
@@ -19,24 +19,22 @@
 #include <thrust/host_vector.h>
 #include <cufft.h>
 
-#define CUFFT_INPUT_LIMIT // 64e5 // TODO Implement chunking and multi GPU support
-
 #endif
 
 namespace svr {
 namespace oemd {
 
-__global__ void G_subtract_inplace(double *__restrict__ const x, const double y, const unsigned n)
+__global__ void G_subtract_inplace(RPTR(double) x, const double y, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) x[i] -= y;
 }
 
-__global__ void G_subtract_inplace(double *__restrict__ const x, CRPTR(double) y, const unsigned n)
+__global__ void G_subtract_inplace(RPTR(double) x, CRPTR(double) y, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) x[i] -= y[i];
 }
 
-__global__ void G_subtract_inplace2(CRPTR(double) x, double *__restrict__ const y, const unsigned n)
+__global__ void G_subtract_inplace2(CRPTR(double) x, RPTR(double) y, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) y[i] = x[i] - y[i];
 }
@@ -49,7 +47,7 @@ G_apply_fir(
         CRPTR(double) mask,
         const unsigned mask_len,
         const unsigned stretched_mask_len,
-        double *__restrict__ const out,
+        RPTR(double) out,
         const unsigned in_start)
 {
     const auto i = blockIdx.x * blockDim.x + tid;
@@ -171,15 +169,15 @@ void transform_fir(
         const datamodel::t_iqscaler &scaler)
 {
 
-#define DEV_FOR_d_begin {                                                       \
-    PRAGMASTR(omp parallel ADJ_THREADS(max_gpus))                               \
-    PRAGMASTR(omp single)                                                       \
-    {                                                                           \
-        PRAGMASTR(omp taskloop mergeable default(shared) grainsize(1))          \
+#define DEV_FOR_d_begin {                                                           \
+    PRAGMASTR(omp parallel ADJ_THREADS(max_gpus))                                   \
+    PRAGMASTR(omp single)                                                           \
+    {                                                                               \
+        PRAGMASTR(omp taskloop mergeable default(shared) grainsize(1))              \
         for (unsigned d = 0; d < max_gpus; ++d) try { cu_errchk(cudaSetDevice(d));
 
 
-#define DEV_FOR_d_end } catch (const std::exception &e) {                       \
+#define DEV_FOR_d_end } catch (const std::exception &e) {                           \
         LOG4_ERROR("Error in FOR_MAX_GPU_" << d << ", " << e.what()); } } }
 
     const auto full_input_size = in.distance() + tail.size();
@@ -187,11 +185,11 @@ void transform_fir(
 
     std::deque<cudaStream_t> custreams(max_gpus);
     DEV_FOR_d_begin
-                    cu_errchk(cudaStreamCreate(&custreams[d]));
+                    cu_errchk(cudaStreamCreateWithFlags(&custreams[d], C_cu_default_stream_flags));
     DEV_FOR_d_end
 
     std::vector<double> h_input(full_input_size);
-    OMP_FOR_i(full_input_size)h_input[i] = i < tail.size() ? tail[i] : in[i - tail.size()]->at(in_col);
+    OMP_FOR_i(full_input_size)h_input[i] = scaler(i < tail.size() ? tail[i] : in[i - tail.size()]->at(in_col));
 
     std::deque<double *> d_imf(max_gpus), d_work(max_gpus);
     std::deque<unsigned> start_ix(max_gpus), job_len(max_gpus);
@@ -233,7 +231,11 @@ void transform_fir(
 #else
         const auto actual_l_2 = 2 * actual_l;
 #endif
-        OMP_FOR_i(out.distance()) out[i]->at(actual_l_2) = h_imf[i + tail.size()];
+        if (false /* !l */) {
+            OMP_FOR_i(out.distance()) out[i]->at(actual_l_2) = h_imf[i + tail.size()] / oemd_levels;
+        } else {
+            OMP_FOR_i(out.distance()) out[i]->at(actual_l_2) = h_imf[i + tail.size()];
+        }
         release_cont(h_imf);
 
         DEV_FOR_d_begin

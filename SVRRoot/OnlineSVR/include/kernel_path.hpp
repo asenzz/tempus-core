@@ -10,7 +10,7 @@
 
 #ifdef VIENNACL_WITH_OPENCL
 
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 
 #endif
 

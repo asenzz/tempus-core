@@ -5,6 +5,8 @@
 #ifndef SVR_MATMUL_CUH
 #define SVR_MATMUL_CUH
 
+#include "common/compatibility.hpp"
+
 namespace svr {
 
 /*
@@ -14,7 +16,7 @@ namespace svr {
             &c GPU device output purpose pointer to a m X k matrix (C)
             to store the result
  */
-void matmul(const double *d_a, const double *d_b, double *d_c, const unsigned m, const unsigned n, const unsigned k, const cudaStream_t &strm);
+void matmul(CPTR(double) d_a, CPTR(double) d_b, double *d_c, const unsigned m, const unsigned n, const unsigned k, const cudaStream_t &strm);
 
 }
 

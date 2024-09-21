@@ -155,8 +155,8 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
 
     auto p_manifold_parameters = otr(*p);
     switch (p->get_kernel_type()) {
-        case datamodel::kernel_type_e::DEEP_PATH:
-            p_manifold_parameters->set_kernel_type(datamodel::kernel_type_e::PATH);
+        case datamodel::e_kernel_type::DEEP_PATH:
+            p_manifold_parameters->set_kernel_type(datamodel::e_kernel_type::PATH);
             break;
         default:
             LOG4_ERROR("Kernel type " << int(p->get_kernel_type()) << " not handled.");

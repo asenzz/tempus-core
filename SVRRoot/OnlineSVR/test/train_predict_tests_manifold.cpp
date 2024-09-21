@@ -86,6 +86,14 @@ const unsigned C_test_features_len_h = C_overload_factor * (C_test_labels_len_h 
 
 }
 
+void prepare_test_queue(datamodel::Dataset &dataset, datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon)
+{
+    const auto table_name = input_queue.get_table_name();
+    PROFILE_EXEC_TIME(APP.input_queue_service.load(input_queue), "Loading " << table_name);
+    PROFILE_EXEC_TIME(APP.iq_scaling_factor_service.prepare(dataset, input_queue, false), "Prepare input scaling factors for " << table_name);
+    PROFILE_EXEC_TIME(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
+}
+
 TEST(manifold_tune_train_predict, basic_integration)
 {
     LOG4_BEGIN();
@@ -122,21 +130,9 @@ TEST(manifold_tune_train_predict, basic_integration)
 #pragma omp single
     {
 #pragma omp task
-        {
-            const auto table_name = p_dataset->get_input_queue()->get_table_name();
-            PROFILE_EXEC_TIME(APP.input_queue_service.load(*p_dataset->get_input_queue()), "Loading " << table_name);
-            PROFILE_EXEC_TIME(APP.iq_scaling_factor_service.prepare(*p_dataset, *p_dataset->get_input_queue(), false),
-                              "Prepare input scaling factors for " << table_name);
-            PROFILE_EXEC_TIME(business::DeconQueueService::deconstruct(*p_dataset, *p_dataset->get_input_queue(), *p_decon), "Deconstruct " << table_name);
-        }
+        prepare_test_queue(*p_dataset, *p_dataset->get_input_queue(), *p_decon);
 #pragma omp task
-        {
-            const auto table_name = p_dataset->get_aux_input_queue()->get_table_name();
-            PROFILE_EXEC_TIME(APP.input_queue_service.load(*p_dataset->get_aux_input_queue()), "Loading " << table_name);
-            PROFILE_EXEC_TIME(APP.iq_scaling_factor_service.prepare(*p_dataset, *p_dataset->get_aux_input_queue(), false),
-                              "Prepare input scaling factors for " << table_name);
-            PROFILE_EXEC_TIME(business::DeconQueueService::deconstruct(*p_dataset, *p_dataset->get_aux_input_queue(), *p_decon_aux), "Deconstruct " << table_name);
-        }
+        prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(), *p_decon_aux);
     }
 
     times_ptr p_times;
@@ -157,7 +153,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     for (auto &p_params: p_gradient->get_param_set()) {
                         if (!p_head_params) p_head_params = p_params;
 #ifdef TEST_MANIFOLD
-                        p_params->set_kernel_type(datamodel::kernel_type_e::DEEP_PATH);
+                        p_params->set_kernel_type(datamodel::e_kernel_type::DEEP_PATH);
 #endif
 #ifdef TEST_ACTUAL_DATA
                         p_params->set_svr_decremental_distance(C_test_decrement);
@@ -212,21 +208,22 @@ TEST(manifold_tune_train_predict, basic_integration)
     unsigned positive_mae_ct = 0, pos_direct = 0, price_hits = 0;
     const auto validated_ct = recon_actual.size();
     const auto resolution = p_dataset->get_input_queue()->get_resolution();
-    const auto offset_period = resolution * PROPS.get_prediction_offset();
+    const auto offset_period = resolution * PROPS.get_prediction_horizon();
     UNROLL()
     for (unsigned i = 0; i < validated_ct; ++i) {
         const auto i_div = i + 1.;
         const auto cur_time = p_times->at(p_times->size() - validated_ct + i);
-        const auto actual = ***lower_bound(*p_dataset->get_input_queue(), cur_time);
-        const auto last_known_iter = lower_bound_back_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - resolution * PROPS.get_prediction_offset());
+        const auto actual = recon_actual[i]; // ***lower_bound(*p_dataset->get_input_queue(), cur_time);
+        const auto last_known_iter = lower_bound_back_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - resolution * PROPS.get_prediction_horizon());
         const auto last_known = ***last_known_iter;
-        const double cur_mae = std::abs(recon_predicted[i] - actual);
+        const auto cur_mae = std::abs(recon_predicted[i] - actual);
         const auto diff_actual_last_known = actual - last_known;
-        const double cur_mae_lk = std::abs(diff_actual_last_known);
-        const double cur_alpha_pct = common::alpha(cur_mae_lk, cur_mae);
+        const auto cur_mae_lk = std::abs(diff_actual_last_known);
+        const auto cur_alpha_pct = common::alpha(cur_mae_lk, cur_mae);
 
-        const double cur_recon_error = std::abs(recon_actual[i] - actual);
-        const double cur_recon_lk_error = std::abs(recon_last_knowns[i] - last_known);
+        const auto cur_recon_diff = recon_actual[i] - ***lower_bound(*p_dataset->get_input_queue(), cur_time);
+        const auto cur_recon_error = std::abs(cur_recon_diff);
+        const auto cur_recon_lk_error = std::abs(recon_last_knowns[i] - last_known);
         const auto cml_alpha_pct = common::alpha(mae_lk, mae);
 
         mae += cur_mae;
@@ -280,8 +277,8 @@ TEST(manifold_tune_train_predict, basic_integration)
             ++pos_direct;
         }
         if (cur_recon_error > std::numeric_limits<double>::epsilon() || cur_recon_lk_error > std::numeric_limits<double>::epsilon())
-            LOG4_WARN("Recon differ at " << cur_time << " between actual price " << actual << " and recon price " << recon_actual[i] << ", is "
-                                         << actual - recon_actual[i] << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i] <<
+            LOG4_WARN("Recon differ at " << cur_time << " between actual price " << ***lower_bound(*p_dataset->get_input_queue(), cur_time) << " and recon price " << recon_actual[i] << ", is "
+                                         << cur_recon_diff << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i] <<
                                          ", last known difference " << last_known - recon_last_knowns[i]);
         const auto pips_pos = (pips_won - pips_lost) / i_div;
         const auto drawdown_pos = drawdown / i_div;

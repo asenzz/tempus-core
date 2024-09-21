@@ -90,7 +90,7 @@ string DetailedDebugString(const Tensor& tensor) {
 #define SVR_KERNEL_PARAM2 (1)
 #define SVR_DECREMENTAL_DISTANCE (30000)
 #define SVR_ADJACENT_LEVELS_RATIO (0.33)
-#define SVR_KERNEL_TYPE (kernel_type_e::PATH)
+#define SVR_KERNEL_TYPE (e_kernel_type::PATH)
 #define SVR_LAG_COUNT (50)
 
 TEST(lstm_train_predict_tf, basic_integration)

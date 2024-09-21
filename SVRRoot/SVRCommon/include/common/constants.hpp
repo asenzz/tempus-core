@@ -74,7 +74,7 @@ const auto C_integration_test_validation_window = []() {
 constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
 
-constexpr double C_bad_validation = 1e6;
+constexpr double C_bad_validation = 1e9;
 constexpr unsigned C_cu_tile_width = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
 constexpr unsigned C_cu_block_size = C_cu_tile_width * C_cu_tile_width;
 constexpr unsigned C_cu_clamp_n = C_cu_block_size * C_cu_block_size;
@@ -88,10 +88,9 @@ constexpr char C_default_DAO_type[] = "postgres";
 constexpr char C_default_online_iter_limit_str[] = TOSTR(DEFAULT_ONLINE_ITER_LIMIT);
 constexpr char C_default_stabilize_iterations_count_str[] = TOSTR(DEFAULT_STABILIZE_ITERATIONS_COUNT);
 constexpr char C_default_error_tolerance_str[] = "1e-7";
-constexpr char C_default_onlinesvr_log_file[] = "learn_log.txt";
 constexpr char C_default_tune_parameters_str[] = "0";
 constexpr char C_default_recombine_parameters_str[] = "0";
-constexpr char C_default_prediction_offset_str[] = "0.1"; // Prediction is ahead of last-known by main queue resolution * OFFSET_PRED_MUL
+constexpr char C_default_prediction_horizon_str[] = "0.1"; // Prediction is ahead of last-known by main queue resolution * OFFSET_PRED_MUL
 constexpr char C_default_feature_quantization_str[] = "10";
 constexpr char C_default_slide_count_str[] = "13";
 constexpr char C_default_tune_run_limit_str[] = "3600";

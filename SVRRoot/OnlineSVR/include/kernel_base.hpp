@@ -14,13 +14,13 @@
 #include <viennacl/linalg/prod.hpp>
 
 #include "model/SVRParameters.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 
 namespace svr
 {
 
-datamodel::kernel_type_e get_kernel_type_from_string(const std::string &kernel_type_str);
-std::string kernel_type_to_string(const datamodel::kernel_type_e kernel_type);
+datamodel::e_kernel_type get_kernel_type_from_string(const std::string &kernel_type_str);
+std::string kernel_type_to_string(const datamodel::e_kernel_type kernel_type);
 
 template<typename scalar_type>
 class kernel_base

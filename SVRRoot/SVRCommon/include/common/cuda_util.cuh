@@ -10,6 +10,7 @@
 #include <sstream>
 #include <thrust/device_vector.h>
 #include <nppdefs.h>
+#include <thrust/async/for_each.h>
 #include "common/logging.hpp"
 #include "common/defines.h"
 #include "common/constants.hpp"
@@ -18,11 +19,10 @@
 namespace svr {
 
 constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;
-
+constexpr unsigned C_cufft_input_limit = 64e5;
 // #define HETEROGENOUS_GPU_HW
 
 #define tid threadIdx.x
-#define CRPTR(T) const T *__restrict__ const
 #ifdef PRODUCTION_BUILD
 #define CU_STRIDED_FOR_i(N)                             \
     const auto __stride = blockDim.x * gridDim.x;       \
@@ -102,6 +102,21 @@ template<const unsigned block_size, typename T> __device__ __forceinline__ void 
     _DO_WARP_REDUCE_2SUM(2);
 }
 
+template<typename T> void cu_fill(T *const data, const unsigned n, const T value, const cudaStream_t custream = nullptr)
+{
+    (void) thrust::async::for_each(thrust::cuda::par.on(custream), data, data + n, [value] __device__ (T &d) { d = value; });
+}
+
+constexpr unsigned C_cu_default_stream_flags = cudaStreamDefault;
+
+#define CTX_CUSTREAM                                \
+    common::gpu_context ctx;                        \
+    cudaStream_t custream;                          \
+    cu_errchk(cudaSetDevice(ctx.phy_id()));         \
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
+
+void cu_sync_destroy(cudaStream_t strm);
+
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream);
 
 void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
@@ -109,6 +124,34 @@ void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const 
 
 __host__ __device__ inline constexpr unsigned clamp_n (const unsigned n) { return _MIN(n, svr::common::C_cu_clamp_n); }
 
+
+
+template<typename T> T *
+cumallocopy(const std::vector<T> &v, const cudaStream_t custream = nullptr)
+{
+    T *ptr;
+    cu_errchk(cudaMallocAsync((void **)&ptr, v.size() * sizeof(T), custream));
+    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    return ptr;
+}
+
+template<typename I, typename T = typename I::value_type> T *
+cumallocopy(const I &begin, const I &end, const cudaStream_t custream = nullptr)
+{
+    T *ptr;
+    const auto size = std::distance(begin, end) * sizeof(T);
+    cu_errchk(cudaMallocAsync((void **)&ptr, size, custream));
+    cu_errchk(cudaMemcpyAsync(ptr, &*begin, size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    return ptr;
+}
+
+template<typename T> inline T *cucalloc(const cudaStream_t custream = nullptr, const size_t count = 1)
+{
+    T *ptr;
+    cu_errchk(cudaMallocAsync((void **) &ptr, count * sizeof(T), custream));
+    cu_errchk(cudaMemsetAsync(ptr, 0, count * sizeof(T), custream));
+    return ptr;
+}
 
 template<typename T> T *
 cumallocopy(const T *source, const size_t len, const cudaMemcpyKind kind, const cudaStream_t custream = nullptr)
@@ -163,23 +206,6 @@ cucopy(const thrust::device_vector<T> &source, const cudaStream_t custream = nul
     std::vector<T> res(source.size());
     cu_errchk(cudaMemcpyAsync(res.data(), thrust::raw_pointer_cast(source.data()), source.size() * sizeof(T), cudaMemcpyDeviceToHost, custream));
     return res;
-}
-
-template<typename T> T *
-cumallocopy(const std::vector<T> &v, const cudaStream_t custream = nullptr)
-{
-    T *ptr;
-    cu_errchk(cudaMallocAsync((void **)&ptr, v.size() * sizeof(T), custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
-    return ptr;
-}
-
-template<typename T> inline T *cucalloc(const cudaStream_t custream = nullptr, const size_t count = 1)
-{
-    T *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, count * sizeof(T), custream));
-    cu_errchk(cudaMemsetAsync(ptr, 0, count * sizeof(T), custream));
-    return ptr;
 }
 
 
@@ -238,9 +264,5 @@ __device__ __forceinline__ double atomicMax(double *address, double val)
 }
 
 #endif //SVR_CUDA_UTIL_CUH
-
-#else
-
-#define CRPTR(T) CPTR(T)
 
 #endif //__CUDACC__

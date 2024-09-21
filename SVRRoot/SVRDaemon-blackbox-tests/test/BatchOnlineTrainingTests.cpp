@@ -204,7 +204,7 @@ compare_by_value_mean_erroraux(
         }
 
         const auto it_label_start = lower_bound_back(etalon, forecast_time);
-        const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * PROPS.get_prediction_offset());
+        const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * PROPS.get_prediction_horizon());
         const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : std::prev(last_known_iter)->get()->get_value(0);
         const auto last_known_time = std::prev(last_known_iter)->get()->get_value_time();
         const auto etalon_val = 0;// TODO Port generate_twap(std::prev(it_label_start), etalon.end(), forecast_time, forecast_time + forecast_resolution, onesec, 0);
@@ -293,7 +293,7 @@ compare_by_value_error_ohlcaux(
         const auto etalon_max = *std::max_element(etalon_aux_vals.begin(), etalon_aux_vals.end());
         const auto etalon_min = *std::min_element(etalon_aux_vals.begin(), etalon_aux_vals.end());
 
-        const auto last_known_time = forecast_row->get()->get_value_time() - forecast_resolution * PROPS.get_prediction_offset();
+        const auto last_known_time = forecast_row->get()->get_value_time() - forecast_resolution * PROPS.get_prediction_horizon();
         const auto last_known_iter = lower_bound_back_before(etalon, etalon_iter, last_known_time);
         const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : last_known_iter->get()->get_value(0);
 

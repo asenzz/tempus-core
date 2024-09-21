@@ -54,7 +54,7 @@ DataRow::DataRow(
         const bpt::ptime &value_time,
         const bpt::ptime &update_time,
         const double tick_volume,
-        const double *values_ptr,
+        CPTR(double) values_ptr,
         const unsigned values_size) :
         value_time_(value_time),
         update_time_(update_time),
@@ -635,9 +635,15 @@ lower_bound_back_before(data_row_container &data, const bpt::ptime &time_key)
 data_row_container::const_iterator
 lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
 {
-    auto found = lower_bound(data, time_key);
+    return lower_bound_before(data.cbegin(), data.cend(), time_key);
+}
+
+data_row_container::const_iterator
+lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key)
+{
+    auto found = lower_bound(cbegin, cend, time_key);
     if ((**found).get_value_time() == time_key) return found;
-    if (found == data.cbegin()) {
+    if (found == cbegin) {
         LOG4_ERROR("Couldn't find equal or before " << time_key << ", found " << (**found).get_value_time());
         return found;
     }
@@ -646,7 +652,6 @@ lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
         LOG4_ERROR("Couldn't find " << time_key << " lower bound or before, nearest found is " << (**found).get_value_time());
     return found;
 }
-
 
 data_row_container::iterator
 upper_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)

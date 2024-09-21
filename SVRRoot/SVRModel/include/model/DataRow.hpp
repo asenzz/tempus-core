@@ -100,7 +100,7 @@ public:
             const bpt::ptime &value_time,
             const bpt::ptime &update_time,
             const double tick_volume,
-            const double *values_ptr,
+            CPTR(double) values_ptr,
             const unsigned values_size);
 
     std::vector<double> &get_values();
@@ -322,6 +322,9 @@ data_row_container::const_iterator lower_bound_or_before_back(const data_row_con
 
 data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
 
+data_row_container::const_iterator
+lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
+
 data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
 
 datamodel::DataRow::container::const_iterator
@@ -394,8 +397,18 @@ generate_twap(
         const bpt::ptime &start_time, // Exact start time
         const boost::posix_time::ptime &end_time, // Exact end time
         const bpt::time_duration &hf_resolution, // Aux input queue resolution
-        const size_t colix, // Input column index
+        const unsigned colix, // Input column index
         C &out); // Output vector needs to be zeroed out before submitting to this function
+
+inline std::vector<unsigned>
+generate_twap_indexes(
+        const std::deque<bpt::ptime>::const_iterator &cbegin, // Begin of container
+        const std::deque<bpt::ptime>::const_iterator &start_it, // At start time or before
+        const std::deque<bpt::ptime>::const_iterator &it_end, // At end time or after
+        const bpt::ptime &start_time, // Exact start time
+        const boost::posix_time::ptime &end_time, // Exact end time
+        const bpt::time_duration &resolution, // Aux input queue resolution
+        const unsigned n_out); // Input column index
 
 bool
 generate_twav( // Time-weighted average volume

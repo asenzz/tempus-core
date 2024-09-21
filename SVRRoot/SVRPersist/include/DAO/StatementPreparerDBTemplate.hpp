@@ -4,7 +4,7 @@
 #include "common.hpp"
 #include "model/User.hpp"
 #include "model/Dataset.hpp"
-#include "onlinesvr_persist.tpp"
+#include "onlinesvr.hpp"
 
 
 namespace bpt = boost::posix_time;

@@ -35,7 +35,7 @@
 #include <kernel_global_alignment.hpp>
 #include <kernel_path.hpp>
 
-using svr::datamodel::kernel_type_e;
+using svr::datamodel::e_kernel_type;
 
 namespace svr{
 
@@ -48,7 +48,7 @@ public:
 
 
     virtual ~kernel_factory() {}
-    explicit kernel_factory(kernel_type_e kernel_type): kernel_type_(kernel_type){};
+    explicit kernel_factory(e_kernel_type kernel_type): kernel_type_(kernel_type){};
 
     class bad_kernel_creation : public std::exception {
         std::string reason;
@@ -61,7 +61,7 @@ public:
         }
     };
 
-    kernel_type_e kernel_type_;
+    e_kernel_type kernel_type_;
 
 
 };
@@ -69,7 +69,7 @@ public:
 //class IKernal provides access to kernel factory
 template<typename scalar_type>
 class IKernel {
-    static std::unordered_map<kernel_type_e, std::shared_ptr<kernel_factory<scalar_type>>> kernel_factories;
+    static std::unordered_map<e_kernel_type, std::shared_ptr<kernel_factory<scalar_type>>> kernel_factories;
     static std::once_flag kernel_init_flag;
 
 public:
@@ -81,7 +81,7 @@ public:
 };
 }
 
-#include <kernel_factory.tpp>
+#include "kernel_factory.tpp"
 
 
 #endif /* KERNEL_FACTORY_H */

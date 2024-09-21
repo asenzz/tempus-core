@@ -14,7 +14,7 @@
 #define DEFAULT_LAG 650
 #define DEFAULT_SVR_DECREMENT 20000
 #define DEFAULT_ADJACENT 1
-#define DEFAULT_KERNEL datamodel::kernel_type_e::PATH
+#define DEFAULT_KERNEL datamodel::e_kernel_type::PATH
 #define INPUT_LIMIT (DEFAULT_SVR_DECREMENT + DEFAULT_LAG + TEST_VALIDATION_WINDOW)
 
 using namespace svr;

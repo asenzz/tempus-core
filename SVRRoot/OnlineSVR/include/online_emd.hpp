@@ -36,26 +36,19 @@ class online_emd final : public spectral_transform {
 public:
     explicit online_emd(const unsigned levels, const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef);
 
-    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name,
-                                      const unsigned in_colix_, const datamodel::t_iqscaler &scaler) const;
+    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name, const unsigned in_colix_,
+                                      const datamodel::t_iqscaler &scaler, const boost::posix_time::time_duration &resolution,
+                                      const boost::posix_time::time_duration &main_resolution) const;
 
     void transform(const std::vector<double> &input, std::vector<std::vector<double>> &decon,
                    const size_t padding /* = 0 */) override
     {}; // Dummy
 
-    void transform(
-            datamodel::DeconQueue &decon_queue,
-            const unsigned decon_start_ix = 0,
-            const unsigned test_offset = 0,
-            const unsigned custom_residuals_ct = std::numeric_limits<unsigned>::max());
+    void transform(datamodel::DeconQueue &decon_queue, const unsigned decon_start_ix, const unsigned test_offset, const unsigned custom_residuals_ct,
+                   const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution);
 
-    void transform(
-            const datamodel::InputQueue &input_queue,
-            datamodel::DeconQueue &decon_queue,
-            const unsigned in_colix,
-            const unsigned test_offset,
-            const datamodel::t_iqscaler &scaler,
-            const unsigned custom_residuals_ct = std::numeric_limits<unsigned>::max());
+    void transform(const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const unsigned in_colix, const unsigned test_offset,
+                   const datamodel::t_iqscaler &scaler, const unsigned custom_residuals_ct, const boost::posix_time::time_duration &main_resolution);
 
     void inverse_transform(const std::vector<double> &decon, std::vector<double> &recon, const size_t padding /* = 0 */) const override;
 
@@ -68,9 +61,9 @@ public:
     static void expand_the_mask(const unsigned mask_size, const unsigned input_size, CPTR(double) dev_mask, double *const dev_expanded_mask, const cudaStream_t custream);
 };
 
-__global__ void G_subtract_inplace(double *__restrict__ const x, const double y, const unsigned n);
+__global__ void G_subtract_inplace(RPTR(double) x, const double y, const unsigned n);
 
-__global__ void G_subtract_inplace(double *__restrict__ const x, CRPTR(double) y, const unsigned n);
+__global__ void G_subtract_inplace(RPTR(double) x, CRPTR(double) y, const unsigned n);
 
 __global__ void G_apply_fir(
         const double stretch_coef,
@@ -79,7 +72,7 @@ __global__ void G_apply_fir(
         CRPTR(double) mask,
         const unsigned mask_len,
         const unsigned stretched_mask_len,
-        double *__restrict__ const out,
+        RPTR(double) out,
         const unsigned in_start);
 
 }

@@ -53,8 +53,8 @@ sw_transform::~sw_transform()
 {
 }
 
-void sw_transform::double_downsampling_convolution_periodization_cls(const double* const input, const size_t N,
-                                                       const double* const filter, const size_t F,
+void sw_transform::double_downsampling_convolution_periodization_cls(CPTR(double)  input, const size_t N,
+                                                       CPTR(double)  filter, const size_t F,
                                                        double * const output, const size_t step,
                                                        const size_t fstep) const
 {
@@ -134,8 +134,8 @@ void sw_transform::double_downsampling_convolution_periodization_cls(const doubl
     }
 }
 
-void sw_transform::double_upsampling_convolution_valid_sf_periodization_cls(const double * const input, const size_t N,
-                                                                     const double * const filter, const size_t F,
+void sw_transform::double_upsampling_convolution_valid_sf_periodization_cls(CPTR(double) input, const size_t N,
+                                                                     CPTR(double)  filter, const size_t F,
                                                                      double * const output, const size_t O) const
 {
     // TODO? Allow for non-2 step
@@ -235,8 +235,8 @@ void sw_transform::double_upsampling_convolution_valid_sf_periodization_cls(cons
     }
 }
 
-void sw_transform::double_upsampling_convolution_valid_sf_cls(const double * const input, const size_t N,
-                                                const double * const filter, const size_t F,
+void sw_transform::double_upsampling_convolution_valid_sf_cls(CPTR(double)  input, const size_t N,
+                                                CPTR(double)  filter, const size_t F,
                                                 double * const output, const size_t O) const
 {
     double_upsampling_convolution_valid_sf_periodization_cls(input, N, filter, F, output, O);
@@ -244,9 +244,9 @@ void sw_transform::double_upsampling_convolution_valid_sf_cls(const double * con
 
 /* basic SWT step (TODO: optimize) */
 void sw_transform::double_swt_cls(
-        const double *const input,
+        CPTR(double)  input,
         const size_t input_len,
-        const double *const filter,
+        CPTR(double)  filter,
         const size_t filter_len,
         double *const output,
         const size_t output_len,
@@ -293,7 +293,7 @@ void sw_transform::double_swt_cls(
 /* Details at specified level
  * input - approximation coeffs from upper level or signal if level == 1
  */
-void sw_transform::double_swt_d_cls(const double *const input, const size_t input_len,
+void sw_transform::double_swt_d_cls(CPTR(double)  input, const size_t input_len,
                                     const spectral_transform::wavelet &wavelet,
                                     double *const output, const size_t output_len,
                                     const size_t level) const{
@@ -301,7 +301,7 @@ void sw_transform::double_swt_d_cls(const double *const input, const size_t inpu
                             wavelet.dec_len(), output, output_len, level);
 }
 
-void sw_transform::double_swt_a_cls(const double *const input, const size_t input_len,
+void sw_transform::double_swt_a_cls(CPTR(double)  input, const size_t input_len,
                                     const sw_transform::wavelet &wavelet,
                                     double *const output, const size_t output_len, const size_t level) const
 {
@@ -309,8 +309,8 @@ void sw_transform::double_swt_a_cls(const double *const input, const size_t inpu
                             wavelet.dec_len(), output, output_len, level);
 }
 
-void sw_transform::double_idwt_cls(const double* const coeffs_a, const size_t coeffs_a_len,
-                     const double * const coeffs_d, const size_t coeffs_d_len,
+void sw_transform::double_idwt_cls(CPTR(double)  coeffs_a, const size_t coeffs_a_len,
+                     CPTR(double)  coeffs_d, const size_t coeffs_d_len,
                      double * const output, const size_t output_len,
                      const spectral_transform::wavelet& wavelet) const
 {

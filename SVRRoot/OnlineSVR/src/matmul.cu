@@ -31,7 +31,7 @@ return: none
 *********************************************************************
 */
 __global__ void
-gpu_matrix_mult(const double *__restrict__ a, const double *__restrict__ b, double *__restrict__ c, const unsigned m, const unsigned n, const unsigned k)
+gpu_matrix_mult(CRPTR(double) a, CRPTR(double) b, RPTR(double) c, const unsigned m, const unsigned n, const unsigned k)
 {
     const auto row = blockIdx.y * blockDim.y + threadIdx.y;
     const auto col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -62,7 +62,7 @@ Note:
 return: none
 *********************************************************************
 */
-__global__ void gpu_square_matrix_mult(const double *__restrict__ d_a, const double *__restrict__ d_b, double *__restrict__ d_result, const unsigned n)
+__global__ void gpu_square_matrix_mult(CRPTR(double) d_a, CRPTR(double) d_b, RPTR(double) d_result, const unsigned n)
 {
     __shared__ double tile_a[common::C_cu_tile_width][common::C_cu_tile_width];
     __shared__ double tile_b[common::C_cu_tile_width][common::C_cu_tile_width];
@@ -108,7 +108,7 @@ Note:
 return: none
 *********************************************************************
 */
-__global__ void gpu_matrix_transpose(const double *__restrict__ mat_in, double *__restrict__ mat_out, const unsigned rows, const unsigned cols)
+__global__ void gpu_matrix_transpose(CRPTR(double) mat_in, RPTR(double) mat_out, const unsigned rows, const unsigned cols)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
     const auto idy = blockIdx.y * blockDim.y + threadIdx.y;
@@ -144,7 +144,7 @@ void cpu_matrix_mult(int *h_a, int *h_b, int *h_result, int m, int n, int k)
     }
 }
 
-void matmul(const double *d_a, const double *d_b, double *d_c, const unsigned m, const unsigned n, const unsigned k, const cudaStream_t &strm)
+void matmul(CPTR(double) d_a, CPTR(double) d_b, double *d_c, const unsigned m, const unsigned n, const unsigned k, const cudaStream_t &strm)
 {
     const auto grid_rows = (m + common::C_cu_tile_width - 1) / common::C_cu_tile_width;
     const auto grid_cols = (k + common::C_cu_tile_width - 1) / common::C_cu_tile_width;

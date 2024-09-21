@@ -2,22 +2,37 @@
 
 #include <boost/format.hpp>
 #include <boost/date_time.hpp>
+#include <boost/log/expressions/formatters/date_time.hpp>
 #include <boost/stacktrace.hpp>
-#include <boost/log/trivial.hpp>
 #include <boost/timer/timer.hpp>
+#include <boost/log/sources/global_logger_storage.hpp>
+#include <boost/log/sources/severity_logger.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/sinks.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/utility/setup/console.hpp>
+#include <boost/log/support/date_time.hpp>
+#include <boost/log/sources/severity_channel_logger.hpp>
+#include <boost/log/common.hpp>
+#include <boost/core/null_deleter.hpp>
 #include "util/MemoryManager.hpp"
 #include "util/string_utils.hpp"
 #include "util/validation_utils.hpp"
+#include "util/PropertiesFileReader.hpp"
 
 namespace bpt = boost::posix_time;
 
-#define FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+// #define FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define FILE_NAME __FILE_NAME__
+#define LOG_FORMAT std::setprecision(std::numeric_limits<double>::max_digits10) << boost::format("%|_4|:%|_2| [%|-4|] %s")
 
-#define OUTPUT_FORMAT std::setprecision(std::numeric_limits<double>::max_digits10) << boost::format("%|_15|:%|-4| [%|-15|] %s")
-enum LOG_LEVEL_T {
-    TRACE = 1, DEBUG = 2, INFO = 3, WARN = 4, ERR = 5, FATAL = 6
+class logging {
+public:
+    logging();
+    void flush() const;
 };
-extern int SVR_LOG_LEVEL;
+
+extern const logging l__;
 
 #ifdef SVR_ENABLE_DEBUGGING
 
@@ -32,21 +47,47 @@ extern int SVR_LOG_LEVEL;
 #define EXCEPTION_FORMAT FILE_NAME << ":" << __LINE__ << " [" << __FUNCTION__ << "] "
 #define PRINT_STACK std::cout << "Executing thread " << std::this_thread::get_id() << ", Backtrace:\n" << boost::stacktrace::stacktrace() << '\n'
 
-#define THROW_EX_F(ex, msg) CMD_WRAP(::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
-#define THROW_EX_FS(ex, msg) CMD_WRAP(PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg);)
+#define THROW_EX_F(ex, msg) CMD_WRAP( ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg); )
+#define THROW_EX_FS(ex, msg) CMD_WRAP( PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg); )
 
-#define BOOST_CODE_LOCATION OUTPUT_FORMAT % FILE_NAME % __LINE__ % __FUNCTION__
+#define BOOST_CODE_LOCATION LOG_FORMAT % FILE_NAME % __LINE__ % __FUNCTION__
 
-#define LOG4_BEGIN() CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE)    BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % "Begin.";)
-#define LOG4_END() CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE)      BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % "End.";)
-#define LOG4_TRACE(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::TRACE) BOOST_LOG_TRIVIAL(trace)    << BOOST_CODE_LOCATION % msg;)
-#define LOG4_DEBUG(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::DEBUG) BOOST_LOG_TRIVIAL(debug)    << BOOST_CODE_LOCATION % msg;)
-#define LOG4_INFO(msg)  CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::INFO)  BOOST_LOG_TRIVIAL(info)     << BOOST_CODE_LOCATION % msg;)
-#define LOG4_WARN(msg)  CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::WARN)  BOOST_LOG_TRIVIAL(warning)  << BOOST_CODE_LOCATION % msg;)
-#define LOG4_ERROR(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg;)
-#define LOG4_FATAL(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::FATAL) BOOST_LOG_TRIVIAL(fatal)    << BOOST_CODE_LOCATION % msg;)
+#define LOG4_BEGIN() \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+                BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "Begin."; )
 
-#define LOG4_THROW(msg) CMD_WRAP(if(SVR_LOG_LEVEL <= LOG_LEVEL_T::ERR)   BOOST_LOG_TRIVIAL(error)    << BOOST_CODE_LOCATION % msg; THROW_EX_FS(::std::runtime_error, msg);)
+#define LOG4_END() \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+        BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "End."; )
+
+#define LOG4_TRACE(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+        BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % msg; )
+
+#define LOG4_DEBUG(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::debug) \
+        BOOST_LOG_TRIVIAL(debug) << BOOST_CODE_LOCATION % msg; )
+
+#define LOG4_INFO(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::info) \
+        BOOST_LOG_TRIVIAL(info) << BOOST_CODE_LOCATION % msg; )
+
+#define LOG4_WARN(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::warning) \
+        BOOST_LOG_TRIVIAL(warning) << BOOST_CODE_LOCATION % msg; )
+
+#define LOG4_ERROR(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::error) \
+        BOOST_LOG_TRIVIAL(error) << BOOST_CODE_LOCATION % msg; )
+
+#define LOG4_FATAL(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::fatal) \
+        BOOST_LOG_TRIVIAL(fatal) << BOOST_CODE_LOCATION % msg; )
+
+#define LOG4_THROW(msg) \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::error) \
+        BOOST_LOG_TRIVIAL(error) << BOOST_CODE_LOCATION % msg; THROW_EX_FS(::std::runtime_error, msg); )
+
 //#define LOG4_ASSERT(cond, failmsg) { if (!(cond)) LOG4_THROW((failmsg)); } // TODO Fix!
 #define LOG4_FILE(logfile, msg) { std::ofstream of( ::svr::common::formatter() << logfile, std::ofstream::out | std::ofstream::app); of.precision(std::numeric_limits<double>::max_digits10); of << msg << '\n'; }
 

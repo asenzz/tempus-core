@@ -15,11 +15,8 @@ namespace oemd {
 
 t_coefs_cache online_emd::oemd_coefs_cache;
 
-void online_emd::transform(
-        datamodel::DeconQueue &decon_queue,
-        const unsigned decon_start_ix,
-        const unsigned test_offset,
-        const unsigned custom_residuals_ct)
+void online_emd::transform(datamodel::DeconQueue &decon_queue, const unsigned decon_start_ix, const unsigned test_offset, const unsigned custom_residuals_ct,
+                           const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution)
 {
     const unsigned residuals_ct = custom_residuals_ct == std::numeric_limits<unsigned>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
     const unsigned in_colix = business::SVRParametersService::get_trans_levix(decon_queue.front()->size());
@@ -32,8 +29,9 @@ void online_emd::transform(
     } else {
         tail_len = residuals_ct - dist;
         start_decon_iter = decon_queue.begin();
-        if (decon_start_ix) LOG4_WARN("Not enough data " << dist <<  " to produce time invariant output " << residuals_ct << " for " << decon_queue.get_table_name() <<
-            ", generating tail of length " << tail_len);
+        if (decon_start_ix)
+            LOG4_WARN("Not enough data " << dist << " to produce time invariant output " << residuals_ct << " for " << decon_queue.get_table_name() <<
+                                         ", generating tail of length " << tail_len);
     }
 
     std::vector<double> tail;
@@ -43,7 +41,7 @@ void online_emd::transform(
     datamodel::datarow_crange in_range_test(start_decon_iter, decon_queue.end() - test_offset, decon_queue.get_data());
     if (in_range_test.distance() < ssize_t(residuals_ct))
         business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
-    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, std::identity());
+    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, std::identity(), resolution, main_resolution);
 #else
     const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name());
 #endif
@@ -60,14 +58,12 @@ void online_emd::transform(
             std::identity()), "OEMD inplace transform of " << in_crange.distance() + tail.size() << " values.");
 }
 
-void online_emd::transform(
-        const datamodel::InputQueue &input_queue,
-        datamodel::DeconQueue &decon_queue,
-        const unsigned in_colix,
-        const unsigned test_offset,
-        const datamodel::t_iqscaler &scaler,
-        const unsigned custom_residuals_ct)
+void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const unsigned in_colix, const unsigned test_offset,
+                           const datamodel::t_iqscaler &scaler, const unsigned custom_residuals_ct, const boost::posix_time::time_duration &main_resolution)
 {
+    LOG4_DEBUG("Transforming " << input_queue.get_table_name() << " to " << decon_queue.get_table_name() << " with " << levels << " levels, input column " << in_colix <<
+        ", test offset " << test_offset << ", custom residuals " << custom_residuals_ct << ", stretch " << stretch_coef << ", main resolution " << main_resolution);
+
     const unsigned residuals_ct = custom_residuals_ct == std::numeric_limits<unsigned>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
     data_row_container::const_iterator start_input_iter;
     if (decon_queue.empty()) start_input_iter = input_queue.cbegin();
@@ -84,12 +80,18 @@ void online_emd::transform(
     std::vector<double> tail;
     datamodel::datarow_crange in_range(start_input_iter, input_queue.cend(), input_queue.get_data());
     if (tail_len) business::DeconQueueService::mirror_tail(in_range, in_range.distance() + tail_len, tail, in_colix);
+    LOG4_DEBUG("Mirror for " << decon_queue.get_table_name() << ", range len " << in_range.distance() << " values, requested tail " << tail_len);
 
 #ifdef INTEGRATION_TEST
+
+    std::vector<double> test_tail;
     datamodel::datarow_crange in_range_test(start_input_iter, input_queue.cend() - test_offset, input_queue.get_data());
-    if (in_range_test.distance() < ssize_t(residuals_ct))
-        business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
-    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, scaler);
+    if (tail_len) {
+        business::DeconQueueService::mirror_tail(in_range_test, in_range_test.distance() + tail_len + test_offset, test_tail, in_colix);
+        LOG4_DEBUG("Mirror test for " << decon_queue.get_table_name() << ", range len " << in_range.distance() << " values, requested tail " << tail_len);
+    }
+    const auto p_coefs = get_masks(in_range_test, test_tail, decon_queue.get_table_name(), in_colix, scaler, input_queue.get_resolution(), main_resolution);
+
 #else
     const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name(), in_colix);
 #endif
@@ -101,8 +103,9 @@ void online_emd::transform(
 #else
     const auto out_levels = levels * 4;
 #endif
-    for (auto &in_iter: in_range) decon_queue.get_data().emplace_back(
-            std::make_shared<datamodel::DataRow>(in_iter->get_value_time(), time_now, in_iter->get_tick_volume() / out_levels, out_levels));
+    for (auto &in_iter: in_range)
+        decon_queue.get_data().emplace_back(
+                std::make_shared<datamodel::DataRow>(in_iter->get_value_time(), time_now, in_iter->get_tick_volume() / out_levels, out_levels));
     datamodel::datarow_range out_range(decon_queue.begin() + prev_size, decon_queue.end(), decon_queue.get_data());
     PROFILE_EXEC_TIME(transform(
             in_range,
@@ -117,29 +120,36 @@ void online_emd::transform(
 }
 
 t_oemd_coefficients_ptr online_emd::get_masks(
-        const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name, const unsigned in_colix, const datamodel::t_iqscaler &scaler) const
+        const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name, const unsigned in_colix,
+        const datamodel::t_iqscaler &scaler, const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution) const
 {
-    const oemd::oemd_coefficients_search oemd_search(levels);
-    const auto in_tail_size = input.distance() + tail.size();
+    const oemd::oemd_coefficients_search oemd_search(levels, resolution, main_resolution / resolution);
+    const auto full_len = input.distance() + tail.size();
     const auto coefs_key = std::pair{levels, queue_name};
     const auto it_coefs = oemd_coefs_cache.find(coefs_key);
     if (it_coefs != oemd_coefs_cache.end()) return it_coefs->second;
 
-    const size_t fir_search_input_window_start = in_tail_size > oemd_coefficients_search::C_fir_validation_window ?
-            in_tail_size - oemd_coefficients_search::C_fir_validation_window : 0;
+    size_t fir_search_input_window_start;
+    if (full_len < oemd_search.fir_validation_window) {
+        LOG4_WARN("Input size " << input.distance() << " with tail " << tail.size() << " smaller " << oemd_search.fir_validation_window - full_len << " than recommended " <<
+                                oemd_search.fir_validation_window);
+        fir_search_input_window_start = 0;
+    } else
+        fir_search_input_window_start = full_len - oemd_search.fir_validation_window;
 
     auto coefs = oemd_coefficients::load(levels, queue_name);
-    if (coefs && !coefs->siftings.empty() && *std::min_element(coefs->siftings.begin(), coefs->siftings.end()) && !coefs->masks.empty() && !common::empty(coefs->masks))
+    if (coefs && !coefs->siftings.empty()
+        && *std::min_element(C_default_exec_policy, coefs->siftings.cbegin(), coefs->siftings.cend())
+        && !coefs->masks.empty()
+        && !common::empty(coefs->masks))
         goto __bail;
 
-    if (in_tail_size < oemd_coefficients_search::C_fir_validation_window)
-        LOG4_WARN("Input size " << input.distance() << " smaller than recommended " << oemd_coefficients_search::C_fir_validation_window);
 
     if (!coefs) coefs = ptr<oemd_coefficients>();
     oemd::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
 
     PROFILE_EXEC_TIME(
-            oemd_search.optimize_levels(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, in_tail_size, queue_name, in_colix, scaler),
+            oemd_search.run(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, full_len, queue_name, in_colix, scaler),
             "OEMD FIR coefficients search");
 
     __bail:
@@ -222,24 +232,26 @@ unsigned online_emd::get_residuals_length(const oemd_coefficients &coefs, const 
     //return coefs.masks.back().size(); // Minimum
     //return coefs.masks.back().size() * p_oemd_coef->siftings.back(); // Tradeoff
     //return 6 * svr::common::next_power_of_two(coefs.masks.back().size() * coefs.siftings.back()); // Assured time invariance first
-    return mult_residuals(common::max_size(coefs.masks), stretch_coef, common::max(coefs.siftings)); /* time invariance 1: * oemd_level_coefs->second.siftings.back() * 7 */ //
+    return mult_residuals(common::max_size(coefs.masks), stretch_coef, *std::max_element(C_default_exec_policy, coefs.siftings.cbegin(), coefs.siftings.cend()));
 }
 
 
 unsigned online_emd::get_residuals_length(const double _stretch_coef, const unsigned siftings)
 {
-    return mult_residuals(oemd_coefficients_search::C_fir_mask_end_len, _stretch_coef, siftings);
+    return mult_residuals(oemd_coefficients_search::C_fir_max_len, _stretch_coef, siftings);
 }
 
 
 unsigned online_emd::get_residuals_length(const std::string &queue_name)
 {
     LOG4_WARN("Getting default masks residuals length.");
-    const auto oemd_coefs = oemd_coefs_cache.find({levels, queue_name});
     if (levels < 1)
         LOG4_THROW("Unsupported number of levels " << levels << ", " << queue_name << " requested for OEMD.");
-    if (levels == 1) return 0;
-    if (oemd_coefs == oemd_coefs_cache.end()) return get_residuals_length(stretch_coef);
+    if (levels == 1)
+        return 0;
+    const auto oemd_coefs = oemd_coefs_cache.find({levels, queue_name});
+    if (oemd_coefs == oemd_coefs_cache.end())
+        return std::max(get_residuals_length(stretch_coef), oemd_coefficients_search::C_fir_max_len);
     return get_residuals_length(*oemd_coefs->second, stretch_coef);
 }
 

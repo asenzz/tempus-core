@@ -15,7 +15,7 @@
 #include <mkl_cblas.h>
 #include "common/compatibility.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "common/parallelism.hpp"
 
 namespace svr {
@@ -39,6 +39,8 @@ template <typename A, typename B> using common_signed_t = std::conditional_t<std
 #define CDIV(X, Y) std::ceil(double(X) / double(Y))
 #define CDIVI(X, Y) ((X) / (Y) + ((X) % (Y) != 0))
 #define LDi(i, m, ld) (((i) % (m)) + ((i) / (m)) * (ld))
+
+constexpr double C_pi_2 = 2 * M_PI;
 
 template <typename Dividend, typename Divisor> inline constexpr common_signed_t<Dividend, Divisor> cdivi(Dividend x, Divisor y)
 {
@@ -602,6 +604,13 @@ template<typename T> T &unscale_I(T &v, const double sf, const double dc)
 
 arma::mat unscale(const arma::mat &m, const double sf, const double dc);
 
+template<typename T> inline T constrain(T v, const T min, const T max)
+{
+    if (v < min) v = min;
+    else if (v > max) v = max;
+    return v;
+}
+
 template<typename T> arma::Mat<T>
 norm(const arma::subview<std::complex<T>> &cxm)
 {
@@ -646,34 +655,28 @@ medianabs(const arma::Mat<T> &m)
 template<typename T> inline T
 meanabs(const std::vector<T> &v)
 {
-    double res = 0;
-OMP_FOR_(v.size(), reduction(+:res))
-    for (const auto _v: v) res += std::abs(_v);
-    return res / double(v.size());
+    return std::reduce(C_default_exec_policy, v.cbegin(), v.cend(), 0., [](const double acc, const double val) { return acc + std::abs(val); }) / double(v.size());
 }
 
-template<> double meanabs<double>(const std::vector<double> &v);
+template<> double meanabs(const std::vector<double> &v);
 
-template<> float meanabs<float>(const std::vector<float> &v);
+template<> float meanabs(const std::vector<float> &v);
 
 template<typename T> T
 meanabs(const std::deque<T> &v)
 {
-    double res = 0;
-#pragma omp parallel for reduction(+:res) shared(v) schedule(dynamic, 32) default(none) num_threads(adj_threads(v.size()))
-    for (const auto _v: v) res += std::abs(_v);
-    return res / double(v.size());
+    return std::reduce(C_default_exec_policy, v.cbegin(), v.cend(), 0., [](const double acc, const double val) { return acc + std::abs(val); }) / double(v.size());
 }
 
 
 template<typename scalar_t> scalar_t
 meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typename std::vector<scalar_t>::const_iterator &end)
 {
-    double res = 0;
-    for (auto iter = begin; iter != end; ++iter) res += std::abs(*iter);
-    return res / double(std::distance(begin, end));
+    return std::reduce(C_default_exec_policy, begin, end, 0., [](const double acc, const double v) { return acc + std::abs(v); }) / double(end - begin);
 }
 
+template<> double
+meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end);
 
 template<typename T> arma::Mat<T>
 extrude_rows(const arma::Mat<T> &m, const size_t ct)
@@ -684,8 +687,7 @@ extrude_rows(const arma::Mat<T> &m, const size_t ct)
     return r;
 }
 
-template<typename T> std::string
-present(const arma::Mat<T> &m)
+template<typename T> std::string present(const arma::Mat<T> &m)
 {
     std::stringstream res;
     const auto vm = arma::vectorise(m);
@@ -693,8 +695,9 @@ present(const arma::Mat<T> &m)
     if (m.has_nonfinite())
         res << (m.has_inf() ? ", has infinite" : m.has_nan() ? ", has nan" : "");
     else
-        res << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev " << arma::stddev(vm) << ", var " << arma::var(vm) <<
-            ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs " << meanabs(m);
+        res << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", index max " << vm.index_max() << ", min " << arma::min(vm) << ", index min " << vm.index_min() <<
+            ", stddev " << arma::stddev(vm) << ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " <<
+            arma::range(vm) << ", meanabs " << meanabs(m) << ", values " << common::to_string(m.mem,  std::min<size_t>(m.n_elem, 4));
     return res.str();
 }
 

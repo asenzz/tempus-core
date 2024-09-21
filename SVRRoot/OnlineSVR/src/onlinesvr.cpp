@@ -10,7 +10,7 @@
 #include <ipp.h>
 #include <osqp/osqp.h>
 #include "common/compatibility.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
 #include "onlinesvr.hpp"
@@ -28,17 +28,17 @@
 #include <matplotlibcpp.h>
 #endif
 
-class load_unload
+class onlinesvr_lib_init
 {
 public:
-    load_unload()
+    onlinesvr_lib_init()
     {
         mlockall(MCL_CURRENT | MCL_FUTURE);
         // ip_errchk(ippInit());
         ma_errchk(magma_init());
     }
 
-    ~load_unload()
+    ~onlinesvr_lib_init()
     {
         munlockall();
         ma_errchk(magma_finalize());
@@ -46,7 +46,7 @@ public:
 };
 
 const auto l = []() {
-    return load_unload();
+    return onlinesvr_lib_init();
 }();
 
 namespace svr {
@@ -261,7 +261,7 @@ void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved);
 void do_mkl_over_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved);
 
 // Unstable avoid! OpenCL
-arma::mat OnlineMIMOSVR::do_ocl_solve(const double *host_a, double *host_b, const int m, const unsigned nrhs)
+arma::mat OnlineMIMOSVR::do_ocl_solve(CPTR(double) host_a, double *host_b, const int m, const unsigned nrhs)
 {
     LOG4_THROW("Deprecated!");
     return {};
@@ -364,10 +364,10 @@ UNROLL()
 void OnlineMIMOSVR::solve_opt(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const unsigned iters)
 {
 #if 1
-    const auto loss_function = [&K, &rhs](const double *x, double *const f) {
+    const auto loss_function = [&K, &rhs](CPTR(double) x, double *const f) {
 #if 0
     const auto rhs_size = rhs.n_elem * sizeof(double);
-        const auto loss_function = [rhs_size, &K, &rhs](const double *x, double *const f) {
+        const auto loss_function = [rhs_size, &K, &rhs](CPTR(double) x, double *const f) {
         auto tmp = (double *) malloc(rhs_size);
         memcpy(tmp, rhs.memptr(), rhs_size);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, K.n_rows, rhs.n_cols, K.n_cols, 0, K.memptr(), K.n_rows, x, rhs.n_cols, -1., tmp, K.n_rows);
@@ -762,7 +762,7 @@ mat_ptr OnlineMIMOSVR::prepare_Z(business::calc_cache &ccache, const SVRParamete
 {
     auto p_Z = ptr<arma::mat>(features_t.n_cols, features_t.n_cols, arma::fill::none);
     switch (params.get_kernel_type()) {
-        case kernel_type_e::PATH: {
+        case e_kernel_type::PATH: {
             kernel::path::cu_distances_xx(features_t.n_cols, features_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(),
                                           ccache.get_cached_cumulatives(params, features_t, time).mem, p_Z->memptr());
             LOG4_TRACE("Returning path Z " << common::present(*p_Z) << " for " << params << ", features " << arma::size(features_t));
@@ -781,7 +781,7 @@ mat_ptr OnlineMIMOSVR::prepare_Z(const SVRParameters &params, const arma::mat &f
     const auto len = features_t.n_cols;
     auto p_Z = ptr<arma::mat>(len, len, arma::fill::none);
     switch (params.get_kernel_type()) {
-        case kernel_type_e::PATH: {
+        case e_kernel_type::PATH: {
             kernel::path::cu_distances_xx(len, features_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(),
                                           all_cumulatives(params, features_t)->mem, p_Z->memptr());
             LOG4_DEBUG("Returning path Z " << arma::size(*p_Z) << " for " << params << ", features " << arma::size(features_t));
@@ -801,7 +801,7 @@ mat_ptr OnlineMIMOSVR::prepare_Zy(business::calc_cache &ccache, const SVRParamet
     assert(features_t.n_rows == predict_features_t.n_rows);
     mat_ptr p_Zy;
     switch (params.get_kernel_type()) {
-        case kernel_type_e::PATH: {
+        case e_kernel_type::PATH: {
             p_Zy = ptr<arma::mat>(predict_features_t.n_cols, features_t.n_cols, arma::fill::none);
             kernel::path::cu_distances_xy(features_t.n_cols, predict_features_t.n_cols, features_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(),
                                           ccache.get_cached_cumulatives(params, features_t, time).mem,
@@ -811,7 +811,7 @@ mat_ptr OnlineMIMOSVR::prepare_Zy(business::calc_cache &ccache, const SVRParamet
                                        " for parameters " << params);
             break;
         }
-        case kernel_type_e::DEEP_PATH:
+        case e_kernel_type::DEEP_PATH:
         default:
             LOG4_THROW("Kernel type " << int(params.get_kernel_type()) << " not handled!");
     }
@@ -824,7 +824,7 @@ mat_ptr OnlineMIMOSVR::prepare_Zy(const SVRParameters &params, const arma::mat &
     assert(features_t.n_rows == predict_features_t.n_rows);
     mat_ptr p_Zy;
     switch (params.get_kernel_type()) {
-        case kernel_type_e::PATH: {
+        case e_kernel_type::PATH: {
             p_Zy = ptr<arma::mat>(predict_features_t.n_cols, features_t.n_cols, arma::fill::none);
             kernel::path::cu_distances_xy(
                     features_t.n_cols, predict_features_t.n_cols, features_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(),
@@ -833,7 +833,7 @@ mat_ptr OnlineMIMOSVR::prepare_Zy(const SVRParameters &params, const arma::mat &
                                        " for parameters " << params);
             break;
         }
-        case kernel_type_e::DEEP_PATH:
+        case e_kernel_type::DEEP_PATH:
         default:
             LOG4_THROW("Kernel type " << int(params.get_kernel_type()) << " not handled!");
     }
@@ -844,7 +844,7 @@ mat_ptr OnlineMIMOSVR::prepare_Zy(const SVRParameters &params, const arma::mat &
 mat_ptr OnlineMIMOSVR::prepare_K(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time)
 {
     switch (params.get_kernel_type()) {
-        case kernel_type_e::PATH: {
+        case e_kernel_type::PATH: {
             auto K = ptr<arma::mat>(x_t.n_cols, x_t.n_cols, arma::fill::none);
             const auto &cuml = ccache.get_cached_cumulatives(params, x_t, time);
             kernel::path::cu_kernel_xx(x_t.n_cols, x_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(), params.get_svr_kernel_param(), cuml.mem, K->memptr());
@@ -862,7 +862,7 @@ mat_ptr OnlineMIMOSVR::prepare_K(business::calc_cache &ccache, const SVRParamete
 mat_ptr OnlineMIMOSVR::prepare_K(const SVRParameters &params, const arma::mat &x_t)
 {
     switch (params.get_kernel_type()) {
-        case kernel_type_e::PATH: {
+        case e_kernel_type::PATH: {
             const auto K = ptr<arma::mat>(x_t.n_cols, x_t.n_cols, arma::fill::none);
             const auto cuml = all_cumulatives(params, x_t);
             kernel::path::cu_kernel_xy(x_t.n_cols, x_t.n_cols, x_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(),
@@ -884,7 +884,7 @@ mat_ptr OnlineMIMOSVR::prepare_Ky(
     assert(x_train_t.n_rows == x_predict_t.n_rows);
     const auto Ky = ptr<arma::mat>(x_predict_t.n_cols, x_train_t.n_cols, arma::fill::none);
     switch (params.get_kernel_type()) {
-        case datamodel::kernel_type_e::PATH: {
+        case datamodel::e_kernel_type::PATH: {
             // Calculating Ky from Zy seems to lower precision, disabled temporarily
             // solvers::kernel_from_distances(
             //        Ky->memptr(), ccache.get_cached_Zy(params, features_t, predict_features_t, time).mem, Ky->n_rows, Ky->n_cols, params.get_svr_kernel_param());
@@ -908,7 +908,7 @@ mat_ptr OnlineMIMOSVR::prepare_Ky(const datamodel::SVRParameters &params, const 
 {
     assert(x_train_t.n_rows == x_predict_t.n_rows);
     switch (params.get_kernel_type()) {
-        case datamodel::kernel_type_e::PATH: {
+        case datamodel::e_kernel_type::PATH: {
             auto Ky = ptr<arma::mat>(x_predict_t.n_cols, x_train_t.n_cols, arma::fill::none);
             auto cuml_train = all_cumulatives(params, x_train_t);
             auto cuml_predict = all_cumulatives(params, x_predict_t);

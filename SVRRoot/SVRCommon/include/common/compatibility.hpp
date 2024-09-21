@@ -28,7 +28,9 @@ namespace bpt = boost::posix_time;
 #define dtype(T) std::decay_t<decltype(T)>
 #define release_cont(x) dtype((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
-#define CPTR(x) const x *const
+#define CPTR(T) const T *const
+#define RPTR(T) T *__restrict__ const
+#define CRPTR(T) const T *__restrict__ const
 
 // General utility macro
 #define PP_CAT( A, B ) A ## B
@@ -173,6 +175,14 @@ template<typename... Args> \
 inline auto highLevelF(Args&&... args) -> dtype(lowLevelF(std::forward<Args>(args)...)) \
 { \
     return lowLevelF(std::forward<Args>(args)...); \
+}
+
+template<typename I, typename T = typename I::value_type> I
+before_bound(const I &begin, const I &end, const T val)
+{
+    auto rI = std::lower_bound(begin, end, val);
+    while (*rI > val) --rI;
+    return rI;
 }
 
 template<typename T> inline const T &operator^(const std::set<T> &s, const size_t i)

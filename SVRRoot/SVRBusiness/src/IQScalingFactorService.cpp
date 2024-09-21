@@ -46,23 +46,28 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     const auto columns_ct = input_queue.get_value_columns().size();
     const size_t row_ct = std::distance(iter_start, input_queue.cend());
 
-    LOG4_DEBUG("Calculating input queue " << input_queue.get_table_name() << ", dataset " << dataset_id << " scaling factors on last " << row_ct << " values.");
+    LOG4_DEBUG("Calculating input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id << " scaling factors on last " <<
+                row_ct << " values, requested " << use_tail);
 
     arma::mat iq_values(row_ct, columns_ct);
-#pragma omp parallel for collapse(2) num_threads(adj_threads(row_ct * columns_ct)) schedule(static, 1 + (row_ct * columns_ct) / C_n_cpu)
+    OMP_FOR(row_ct * columns_ct)
     for (size_t r = 0; r < row_ct; ++r)
         for (size_t c = 0; c < columns_ct; ++c)
             iq_values(r, c) = (**(iter_start + r))[c];
 
+    if (common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) {
+        OMP_FOR_i(columns_ct) LOG4_TRACE("Column " << i << " " << common::present(iq_values.col(i)));
+    }
+
     const arma::rowvec dc_offset = arma::mean(iq_values);
     LOG4_TRACE("DC offsets " << dc_offset);
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(iq_values.n_cols))
+#pragma omp parallel for schedule(static, 1) ADJ_THREADS(iq_values.n_cols)
     for (size_t c = 0; c < iq_values.n_cols; ++c)
         iq_values.col(c) -= dc_offset[c];
     iq_values = arma::median(arma::abs(iq_values)) / common::C_input_obseg_labels;
     LOG4_TRACE("Scaling factors " << iq_values);
     std::deque<datamodel::IQScalingFactor_ptr> result(columns_ct);
-#pragma omp parallel for num_threads(adj_threads(columns_ct)) schedule(static, 1)
+#pragma omp parallel for ADJ_THREADS(columns_ct) schedule(static, 1)
     for (size_t c = 0; c < columns_ct; ++c)
         result[c] = ptr<svr::datamodel::IQScalingFactor>(0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(c), iq_values[c], dc_offset[c]);
 
@@ -92,12 +97,14 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     if (check(dataset.get_iq_scaling_factors(input_queue), input_queue.get_value_columns())) return;
     const auto resolution_ratio = dataset.get_input_queue()->get_resolution() / input_queue.get_resolution();
 #ifdef INTEGRATION_TEST
-    auto test_input_queue = input_queue;
-    test_input_queue.get_data().erase(test_input_queue.end() - (common::C_integration_test_validation_window - 1) * resolution_ratio, test_input_queue.end());
+    auto p_test_input_queue = input_queue.clone(0, input_queue.size() - common::C_integration_test_validation_window * resolution_ratio);
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
-            test_input_queue, dataset.get_id(),
-            dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * PROPS.get_default_feature_quantization() / resolution_ratio + dataset.get_max_decrement() * resolution_ratio), true),
+            *p_test_input_queue, dataset.get_id(),
+            dataset.get_max_possible_residuals_length() +
+            dataset.get_max_lag_count() * ModelService::C_max_quantisation * datamodel::C_features_superset_coef +
+            dataset.get_max_decrement() * resolution_ratio), true),
                       "Calculate input queue scaling factors for " << input_queue.get_table_name());
+    p_test_input_queue.reset();
 #else
     PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
             input_queue, dataset.get_id(), dataset.get_max_possible_residuals_length() + dataset.get_max_decrement() * resolution_ratio), true),

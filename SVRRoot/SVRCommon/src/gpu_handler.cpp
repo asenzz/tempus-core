@@ -1,6 +1,6 @@
 #include <cuda_runtime_api.h>
 #include "common/semaphore.hpp"
-#include <common/gpu_handler.tpp>
+#include "common/gpu_handler.hpp"
 #include <mutex>
 
 namespace svr {

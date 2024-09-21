@@ -65,7 +65,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
 }
 
 
-void expand_the_mask(const size_t mask_size, const size_t input_size, const double *dev_mask, double *dev_expanded_mask)
+void expand_the_mask(const size_t mask_size, const size_t input_size, CPTR(double) dev_mask, double *dev_expanded_mask)
 {
     gpu_errchk(cudaMemset(dev_expanded_mask, 0, sizeof(double) * input_size));
     // gpu_errchk(cudaDeviceSynchronize());

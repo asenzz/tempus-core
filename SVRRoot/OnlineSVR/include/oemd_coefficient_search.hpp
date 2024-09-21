@@ -12,11 +12,19 @@
 #include "oemd_coefficients.hpp"
 #include "common/gpu_handler.hpp"
 #include "model/DataRow.hpp"
+#include "align_features.cuh"
 
 namespace svr {
 namespace oemd {
 
+constexpr unsigned C_max_label_ixs = 3600 + 1;
+typedef struct _label_ix {
+    unsigned n_ixs;
+    unsigned label_ixs[C_max_label_ixs];
+} t_label_ix, *t_label_ix_ptr;
+
 class oemd_coefficients_search {
+
     constexpr static unsigned particles = 100;
     constexpr static unsigned iterations = 100;
     constexpr static double lambda1 = .30;
@@ -24,31 +32,33 @@ class oemd_coefficients_search {
     constexpr static double allowed_eps_up = .1;
     constexpr static double norm_thresh = 1. + allowed_eps_up;
 
+    const bpt::time_duration resolution;
+    const double sample_rate;
     const unsigned levels;
     unsigned max_gpus;
     std::deque<unsigned> gpuids;
     const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef;
 
     static std::tuple<double, double, double, double> sift_the_mask(
-            const unsigned mask_size, const unsigned siftings, const double *d_mask, const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
-            const double *d_expanded_mask, const cufftDoubleComplex *d_expanded_mask_fft, const double *d_global_sift_matrix_ptr, const unsigned gpu_id);
+            const unsigned mask_size, const unsigned siftings, CPTR(double) d_mask, const cufftHandle plan_sift_forward, const cufftHandle plan_sift_backward,
+            CPTR(double) d_expanded_mask, const cufftDoubleComplex *d_expanded_mask_fft, CPTR(double) d_global_sift_matrix_ptr, const unsigned gpu_id);
 
     void smoothen_mask(std::vector<double> &mask, common::t_drand48_data_ptr buffer);
 
     std::vector<double>
-    fill_auto_matrix(const unsigned M, const unsigned siftings, const unsigned N, const double *x);
+    fill_auto_matrix(const unsigned M, const unsigned siftings, const unsigned N, CPTR(double) x);
 
     void
     transform(double *d_values, CPTR(double) d_mask, const unsigned input_len, const unsigned mask_size,
               const unsigned siftings, double *d_temp, const cudaStream_t custream) const;
 
     // 18k mask len is the maximum for 16GB video card that won't make OSQP crash
-    //int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsigned input_size, const double *x, const int gpu_id);
+    //int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsigned input_size, CPTR(double) x, const int gpu_id);
 
     void
     create_random_mask(
             const unsigned position, double step, const unsigned mask_size, std::vector<double> &mask,
-            const double *start_mask,
+            CPTR(double) start_mask,
             common::t_drand48_data_ptr buffer, cufftHandle plan_mask_forward, cufftHandle plan_mask_backward,
             const unsigned gpu_id);
 
@@ -57,22 +67,24 @@ class oemd_coefficients_search {
     static void do_diff_mult(const unsigned M, const unsigned N, const std::vector<double> &diff,
                              std::vector<double> &Bmatrix);
 
-    static void prep_x_matrix(const unsigned M, const unsigned N, const double *x, std::vector<double> &Bmatrix,
+    static void prep_x_matrix(const unsigned M, const unsigned N, CPTR(double) x, std::vector<double> &Bmatrix,
                               std::vector<double> &Fmatrix);
 
     static void save_mask(const std::vector<double> &mask, const std::string &queue_name, const unsigned level, const unsigned levels);
 
-    double find_mask(const unsigned siftings, const unsigned valid_start_ix, const std::vector<double> &workspace, std::vector<double> &mask, const unsigned level) const;
-
 public:
-    constexpr static unsigned label_len = 3600;
     constexpr static double C_smooth_factor = 1000;
-    constexpr static unsigned C_fir_mask_start_len = 500;
-    constexpr static unsigned C_fir_mask_end_len = 20'000;
-    constexpr static unsigned C_fir_validation_window = C_fir_mask_end_len * oemd_coefficients::default_siftings + common::C_default_kernel_max_chunk_len * label_len; // 5 * C_fir_mask_end_len; //
+    constexpr static unsigned C_fir_max_len = 20'000;
+    const unsigned max_row_len;
+    const unsigned label_len;
+    const unsigned fir_validation_window;
 
-    double evaluate_mask(const double freq, const unsigned mask_len, const std::vector<double> &workspace, const size_t validate_start_ix, const size_t validate_len,
-                         const unsigned siftings, const std::vector<unsigned int> &offsets, const double meanabs_input, const unsigned gpu_id) const;
+    explicit oemd_coefficients_search(const unsigned levels, const bpt::time_duration &resolution, const unsigned label_len);
+
+    double evaluate_mask(
+            const double att, const double fp, const double fs, const std::vector<double> &workspace, const unsigned validate_start_ix,
+            const unsigned validate_len, const unsigned siftings, const double meanabs_input,
+            const std::vector<unsigned> &times, const std::vector<t_label_ix> &label_ixs, const std::deque<t_feat_params> &feat_params) const;
 
     static double do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const unsigned siftings);
 
@@ -86,7 +98,7 @@ public:
 
     static void prepare_masks(std::deque<std::vector<double> > &masks, std::deque<unsigned> &siftings, const unsigned levels);
 
-    void optimize_levels(
+    void run(
             const datamodel::datarow_crange &input,
             const std::vector<double> &tail,
             std::deque<std::vector<double>> &masks,
@@ -97,13 +109,27 @@ public:
             const unsigned in_colix,
             const datamodel::t_iqscaler &scaler) const;
 
-    explicit oemd_coefficients_search(const unsigned levels);
-
     void sift(const unsigned siftings, const unsigned full_input_len, const unsigned mask_len, cudaStream_t const custream, CPTR(double) d_mask,
               double *const d_rx, double *const d_rx2) const noexcept;
 
-    static double compute_spectral_entropy_cufft(CPTR(double) d_signal, unsigned N, const cudaStream_t custream);
+    static double compute_spectral_entropy_cufft(double *d_signal, unsigned N, const cudaStream_t custream);
+
+    double dominant_frequency(const std::vector<double> &input, const double percentile_greatest_peak, const cudaStream_t custream) const;
 };
+
+__global__ void G_quantise_features_quick(
+        CRPTR(double) d_imf,
+        RPTR(double) d_features,
+        const unsigned rows_q,
+        const unsigned cols,
+        const unsigned quantisation,
+        const unsigned cols_q,
+        const unsigned cols_rows_q,
+        const unsigned interleave,
+        const unsigned start_col_q,
+        const unsigned start_row,
+        CRPTR(t_label_ix) d_label_ixs);
+
 }
 }
 

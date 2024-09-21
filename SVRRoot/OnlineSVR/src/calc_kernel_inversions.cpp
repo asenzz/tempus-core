@@ -157,7 +157,7 @@ size_t merge_compute_inversions(double *arr, size_t N)
 }
 
 
-calc_kernel_inversions::calc_kernel_inversions(const double *Z, const arma::mat &Y)
+calc_kernel_inversions::calc_kernel_inversions(CPTR(double) Z, const arma::mat &Y)
 {
     //Compute sum of number of inversions of the distance_matrix vs Y,
     //i.e. i , j, k where i closer to k than j by distance_matrix, but Y(j) farther

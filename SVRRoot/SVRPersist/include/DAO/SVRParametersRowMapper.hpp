@@ -26,7 +26,7 @@ public:
                 rowSet["svr_kernel_param2"].as<double>(datamodel::C_default_svrparam_kernel_param2),
                 rowSet["svr_decremental_distance"].as<bigint>(datamodel::C_default_svrparam_decrement_distance),
                 rowSet["svr_adjacent_levels_ratio"].as<double>(datamodel::C_default_svrparam_adjacent_levels_ratio),
-                static_cast<datamodel::kernel_type_e>(rowSet["svr_kernel_type"].as<size_t>(datamodel::C_default_svrparam_kernel_type_uint)),
+                static_cast<datamodel::e_kernel_type>(rowSet["svr_kernel_type"].as<size_t>(datamodel::C_default_svrparam_kernel_type_uint)),
                 rowSet["lag_count"].as<size_t>(datamodel::C_default_svrparam_lag_count)
         );
     }

@@ -1,28 +1,24 @@
 MESSAGE("CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}")
 LINK_DIRECTORIES(/lib /libexec /usr/lib /usr/lib/libexec /usr/local/lib /usr/local/libexec)
 
-FILE(GLOB SOURCE_FILES
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO/*.cpp"
-)
-
-FILE(GLOB HEADERS
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.tpp"
-)
-
-IF(USE_CUDA)
-    FILE(GLOB SOURCE_FILES_CUDA "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu")
-    FILE(GLOB HEADERS_CUDA "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cuh")
-    FILE(GLOB COMMON_SOURCE_FILES_CUDA "../SVRCommon/src/*.cu")
-    LIST(APPEND SOURCE_FILES ${SOURCE_FILES_CUDA})
-    LIST(APPEND HEADERS ${HEADERS_CUDA})
-    IF(USE_LTO)
-        LIST(APPEND COMMON_SOURCE_FILES ${COMMON_SOURCE_FILES_CUDA})
+MACRO(GLOB_SOURCES DIR)
+    FILE(GLOB SOURCE_FILES_
+            "${DIR}/*.c"
+            "${DIR}/*.cpp"
+            "${DIR}/include/*.h"
+            "${DIR}/include/*.hpp"
+            "${DIR}/include/*.tpp"
+    )
+    IF(USE_CUDA)
+        FILE(GLOB SOURCE_FILES_CUDA "${DIR}/*.cu" "${DIR}/*.cuh")
+        LIST(APPEND SOURCE_FILES_ ${SOURCE_FILES_CUDA})
+        IF(USE_LTO)
+            LIST(APPEND COMMON_SOURCE_FILES ${COMMON_SOURCE_FILES_CUDA})
+        ENDIF()
     ENDIF()
-ENDIF()
+    LIST(APPEND SOURCE_FILES ${SOURCE_FILES_})
+ENDMACRO()
 
-LIST(APPEND SOURCE_FILES ${HEADERS})
+GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/src")
+GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/src/*DAO")
+GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/include")

@@ -1,5 +1,4 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
-SET(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
 INCLUDE("../../cmake/Util.cmake")
 
@@ -38,6 +37,3 @@ list (FIND MODULES "SVRFix" idx)
 if (${idx} GREATER -1)
     TARGET_LINK_LIBRARIES(${PROJECT_NAME} SVRFix-shared)
 endif()
-
-# Linker crashes with ICPX/LLD enabled
-REMOVE_BUILD_FLAG(${PROJECT_NAME} "$<$<COMPILE_LANGUAGE:CXX>:-flto=full>")

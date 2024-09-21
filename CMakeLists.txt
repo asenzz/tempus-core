@@ -18,6 +18,7 @@ IF (PROGRAM_CCACHE)
     SET(CMAKE_OPENCL_COMPILER_LAUNCHER ${PROGRAM_CCACHE})
 ENDIF ()
 
+OPTION(USE_LLD ON "Use LLD linker, instead of default (usually BFD)")
 OPTION(USE_INTEL_COMPILER "Use Intel's ICX compiler")
 FIND_PROGRAM(PROGRAM_ICPX icpx)
 IF (PROGRAM_ICPX AND USE_INTEL_COMPILER)
@@ -27,17 +28,12 @@ IF (PROGRAM_ICPX AND USE_INTEL_COMPILER)
     FIND_PROGRAM(PROGRAM_ICX icx REQUIRED)
     SET(CMAKE_C_COMPILER ${PROGRAM_ICX} CACHE STRING "CMAKE_C_COMPILER")
     CMAKE_PATH(GET PROGRAM_ICX PARENT_PATH ICX_DIR)
-    SET(CMAKE_LINKER "${ICX_DIR}/compiler/ld.lld" CACHE STRING "CMAKE_LINKER")
+    IF (USE_LLD)
+        SET(CMAKE_LINKER "${ICX_DIR}/compiler/ld.lld" CACHE STRING "CMAKE_LINKER")
+    ENDIF()
 ELSE ()
     SET(CMAKE_CXX_COMPILER g++ CACHE STRING "CMAKE_CXX_COMPILER")
     SET(CMAKE_C_COMPILER gcc CACHE STRING "CMAKE_C_COMPILER")
-ENDIF ()
-
-FIND_PROGRAM(PROGRAM_MOLD mold)
-IF (PROGRAM_MOLD)
-    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -fuse-ld=mold) # Mold doesn't work with Intel
-ELSE ()
-    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -fuse-ld=lld)
 ENDIF ()
 
 IF (USE_CUDA)
@@ -66,31 +62,39 @@ ENDIF ()
 
 SET(COMPILER_EXTENSIONS -fPIC -std=c++${CXX_STANDARD})
 SET(COMPILER_EXTENSIONS_CC -std=c${C_STANDARD}) # Deprecated -fcilkplus -lcilkrts
-SET(COMPILER_EXTENSIONS_ICX -qopenmp -fopenmp-version=51 -fopenmp=libiomp5 -stdlib=libstdc++ -Wno-unused-command-line-argument -Wno-embedded-directive -Wno-pass-failed -Wno-unsupported-floating-point-opt -fdiagnostics-show-option -fhonor-infinities -fhonor-nans -pc80 -fhonor-nan-compares -no-ftz) # -qnextgen-diag -fimf-precision=high
+SET(COMPILER_EXTENSIONS_ICX -qopenmp -fopenmp-version=51 -fopenmp=libiomp5 -stdlib=libstdc++ -Wno-unused-command-line-argument -Wno-embedded-directive -Wno-pass-failed -Wno-unsupported-floating-point-opt -fdiagnostics-show-option -pc80 -fhonor-infinities -fhonor-nans -fhonor-nan-compares -no-ftz)
 SET(COMPILER_EXTENSIONS_GCC -fopenmp -ggdb -mno-daz-ftz)
 IF (USE_LTO)
     SET(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-    LIST(APPEND COMPILER_EXTENSIONS_ICX -flto=full) # Crashes linker -funified-lto
-    # LIST(APPEND COMPILER_EXTENSIONS_GCC -flto) # Crashes cufft
+    LIST(APPEND COMPILER_EXTENSIONS_ICX -flto=full -funified-lto)
+    IF (USE_LLD)
+        LIST(APPEND COMPILER_EXTENSIONS_ICX -Wl,--fat-lto-objects)
+    ENDIF()
+    # LIST(APPEND COMPILER_EXTENSIONS_GCC -flto) # Crashes calls to cufft
 ENDIF ()
-
+# UNSET(CXX_OPTIMIZATION_FLAGS COMMON_OPTIMIZATION_FLAGS_GCC COMMON_OPTIMIZATION_FLAGS_ICX LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC LINKER_OPTIMIZATION_FLAGS_ICX)
 IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-    SET(CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -fassociative-math -ffp-contract=fast -O3 -mcmodel=large) # Intel linker crash with -fsplit-stack
-    SET(COMMON_OPTIMIZATION_FLAGS_GCC -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -finline-limit=${INLINE_INSTR_LIMIT} -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -fdisable-tree-cunrolli -floop-block -floop-strip-mine -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited) # Kills a bit of precision -funsafe-math-optimizations
-    SET(COMMON_OPTIMIZATION_FLAGS_ICX -qopt-prefetch -qopt-dynamic-align -fvec-peel-loops -fvec-remainder-loops -fvec-with-mask -vec-threshold=0 -qopt-multiple-gather-scatter-by-shuffles -qopt-mem-layout-trans=4  -fdiagnostics-show-option -mprefer-vector-width=${CPU_VECTOR_WIDTH} -fslp-vectorize -fjump-tables -fma -Wno-overriding-option -fp-model=precise -fp-speculation=safe -fimf-use-svml=true -mbranches-within-32B-boundaries -vec -finline -qopt-matmul -qopt-jump-tables)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -fno-trapping-math -fno-signed-zeros -fassociative-math -ffp-contract=fast -O3 -mcmodel=large) # Intel linker crash with -fsplit-stack
+    LIST(APPEND COMMON_OPTIMIZATION_FLAGS_GCC -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -finline-limit=${INLINE_INSTR_LIMIT} -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -floop-block -floop-strip-mine -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited) # Kills a bit of precision -funsafe-math-optimizations
+    LIST(APPEND COMMON_OPTIMIZATION_FLAGS_ICX -qopt-prefetch -qopt-dynamic-align -fvec-peel-loops -fvec-remainder-loops -fvec-with-mask -vec-threshold=0 -qopt-multiple-gather-scatter-by-shuffles -qopt-mem-layout-trans=4  -fdiagnostics-show-option -mprefer-vector-width=${CPU_VECTOR_WIDTH} -fslp-vectorize -fjump-tables -fma -Wno-overriding-option -fp-model=precise -fp-speculation=safe -fimf-use-svml=true -mbranches-within-32B-boundaries -vec -finline -qopt-matmul -qopt-jump-tables)
     IF (ENABLE_OMP_OFFLOAD)
-        LIST(APPEND COMMON_OPTIMIZATION_FLAGS_ICX -fopenmp-target-loopopt -fopenmp-target-buffers=4GB -fopenmp-targets=spir64_x86_64 -fopenmp-concurrent-host-device-compile) # Crashes linker -fopenmp-target-simd
+        LIST(APPEND COMMON_OPTIMIZATION_FLAGS_ICX -fopenmp-target-loopopt -fopenmp-target-buffers=4GB -fopenmp-targets=spir64 -fopenmp-concurrent-host-device-compile) # Crashes linker -fopenmp-target-simd, # Is this correct? -fopenmp-targets=spir64_x86_64
     ENDIF ()
-    SET(CXX_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC})
-    SET(CXX_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -inline-level=2) # -ffp-eval-method=extended
-    SET(LINKER_OPTIMIZATION_FLAGS -O3)
-    SET(LINKER_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC} -fwhole-program -liomp5)
-    SET(LINKER_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -Wl,--icf=safe -qopenmp-link=static -fuse-ld=lld -Wl,--apply-dynamic-relocs -Wl,-z,muldefs -static-intel) # -static-libstdc++ not supported with -fsycl
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC})
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -inline-level=2) # -ffp-eval-method=extended
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS -O3)
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC} -fwhole-program)
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -qopenmp-link=static  -Wl,-z,muldefs -static-intel) # -static-libstdc++ not supported with -fsycl
+    IF(USE_LLD)
+        LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -Wl,--icf=safe -Wl,--apply-dynamic-relocs)
+    ENDIF()
     IF (ENABLE_OMP_OFFLOAD)
         LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX --offload-arch=native) # -Xopenmp-target-backend=spir64_x86_64 "-device=cpu -march=sse4.2" not supported with MKL
     ENDIF ()
     IF (USE_LTO)
-        LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX) #  Crash with -Wl,--lto=full # -Wl,--no-fat-lto-objects -Wl,--no-lto-legacy-pass-manager # -Wl,--lto-CGO3 -Wl,--lto-O3 -Wl,--lto-whole-program-visibility
+        IF(USE_LLD)
+            LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -Wl,--lto=full -Wl,--no-lto-legacy-pass-manager -Wl,--lto-CGO3 -Wl,--lto-O3 -Wl,--lto-whole-program-visibility) # -Wl,--no-fat-lto-objects
+        ENDIF()
         LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -flto-partition=one)
     ENDIF ()
     SET($ENV {MKL_ENABLE_INSTRUCTIONS} "AVX2")
@@ -99,12 +103,27 @@ ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
     # SET(UBSAN_BLACKLIST "ubsan-blacklist.txt" CACHE STRING "")
     SET(SANITIZE address CACHE STRING address)
     SET_PROPERTY(CACHE SANITIZE PROPERTY STRINGS address thread undefined "")
-    SET(CXX_OPTIMIZATION_FLAGS -DDEBUG_BUILD -ggdb -fno-omit-frame-pointer -fstack-protector-all -fstack-clash-protection) # -fsanitize-blacklist=${LSAN_BLACKLIST}
-    SET(CXX_OPTIMIZATION_FLAGS_ICX -debug extended -g3 -fp-model=strict -pc80 -fimf-precision=high -fimf-use-svml=false -fstack-security-check)
-    SET(CXX_OPTIMIZATION_FLAGS_GCC -fharden-compares -fharden-conditional-branches -finstrument-functions) # -fvtv-debug -fvtable-verify=std
-    SET(LINKER_OPTIMIZATION_FLAGS) # Memory profilers -lduma -ldmallocthcxx -ldmallocthcxx
-    SET(LINKER_OPTIMIZATION_FLAGS_ICX -debug extended -g3 -fuse-ld=lld)
-    SET(LINKER_OPTIMIZATION_FLAGS_GCC -liomp5)
+    LIST(APPEND COMPILER_EXTENSIONS_ICX -qnextgen-diag -fimf-precision=high)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS -DDEBUG_BUILD -ggdb -fno-omit-frame-pointer -fstack-protector-all -fstack-clash-protection) # -fsanitize-blacklist=${LSAN_BLACKLIST}
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_ICX -debug extended -g3 -fp-model=strict -pc80 -fimf-precision=high -fimf-use-svml=false -fstack-security-check)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_GCC -fharden-compares -fharden-conditional-branches -finstrument-functions) # -fvtv-debug -fvtable-verify=std
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS) # Memory profilers -lduma -ldmallocthcxx -ldmallocthcxx
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -debug extended -g3)
+    IF(USE_LLD)
+        LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -fuse-ld=lld)
+    ENDIF()
+ENDIF ()
+IF(USE_LLD)
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS -fuse-ld=lld)
+ENDIF()
+OPTION(USE_INTEL_OPENMP "Use Intel OpenMP" ON)
+IF (USE_INTEL_OPENMP)
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS -liomp5)
+ENDIF()
+FIND_PROGRAM(PROGRAM_MOLD mold)
+IF (PROGRAM_MOLD)
+    MESSAGE("Found Mold linker at ${PROGRAM_MOLD}, using it with GCC only.")
+    LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -fuse-ld=mold) # Mold doesn't work with Intel
 ENDIF ()
 
 IF (SANITIZE)
@@ -201,6 +220,8 @@ IF (USE_KNITRO)
     LINK_LIBRARIES(knitro)
     INCLUDE_DIRECTORIES(${KNITRODIR}/include)
     ADD_COMPILE_DEFINITIONS(USE_KNITRO)
+ELSE()
+    ADD_COMPILE_DEFINITIONS(USE_BITEOPT) # Open-source alternative to KNitro
 ENDIF ()
 
 FILE(GLOB_RECURSE PERF_DATA_FILES FOLLOW_SYMLINKS "*.perf.data")
@@ -284,10 +305,10 @@ if (USE_CUDA)
     SET(CMAKE_CUDA_STANDARD_REQUIRED ON)
     SET(CMAKE_CUDA_EXTENSIONS ON)
     SET(CUDA_USE_STATIC_RUNTIME ON)
-    ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-lto>") # TODO BFD linker crashes when seeing CUDA fatbinData segments
+    # ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-lto>") # TODO BFD linker crashes when seeing CUDA fatbinData segments
     ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Wno-error>")
     ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=3012>")
-    ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:--relocatable-device-code=true>") # Slows down CUDA performance
+    ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CUDA>:--relocatable-device-code=true>") # Slows down CUDA performance nut is necessary
 ENDIF ()
 
 OPTION(ENABLE_OPENCL "Use the Vienna OpenCL backend for BLAS" ON)
@@ -363,7 +384,7 @@ ENDIF ()
 IF (WITH_TOOLS)
     LIST(APPEND MODULES zTools)
 ENDIF ()
-SET(LIBS_BUILD_TYPE STATIC CACHE STRING "LIBS_BUILD_TYPE")
+SET(LIBS_BUILD_TYPE STATIC CACHE STRING "Internal libraries build static or dynamic (static is needed by CUDA dynamic parallelism)")
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 PKG_CHECK_MODULES(JEMALLOC jemalloc)

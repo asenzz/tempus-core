@@ -20,7 +20,7 @@
 #include "common/compatibility.hpp"
 #include "common/cuda_util.cuh"
 #include "common/logging.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "common/constants.hpp"
 #include "cuqrsolve.cuh"
 #include "cuda_path.hpp"
@@ -33,18 +33,18 @@
 namespace svr {
 namespace datamodel {
 
-__global__ void G_div_inplace(double *__restrict__ const  x, const double a, const unsigned n)
+__global__ void G_div_inplace(RPTR(double)  x, const double a, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) x[i] /= a;
 }
 
-__global__ void G_mul_inplace(double *__restrict__ const x, const double a, const unsigned n)
+__global__ void G_mul_inplace(RPTR(double) x, const double a, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) x[i] *= a;
 }
 
 
-double cu_calc_gamma(const double *Z, const double L_mean, const double train_len, const unsigned n_elem, const cudaStream_t &stm)
+double cu_calc_gamma(CPTR(double) Z, const double L_mean, const double train_len, const unsigned n_elem, const cudaStream_t &stm)
 {
     const auto Z_mm = solvers::mean(Z, n_elem, stm);
     const auto g = kernel::path::calc_g(train_len, Z_mm, L_mean);
@@ -62,7 +62,7 @@ double OnlineMIMOSVR::calc_qgamma(const double Z_mean, const double Z_minmax, co
     return g;
 }
 
-std::tuple<double, double> cu_calc_minmax_gamma(const double *Z, const mmm_t &train_L_m, const double train_len, const unsigned Z_n_elem, const cudaStream_t &stm)
+std::tuple<double, double> cu_calc_minmax_gamma(CPTR(double) Z, const mmm_t &train_L_m, const double train_len, const unsigned Z_n_elem, const cudaStream_t &stm)
 {
     const auto [Z_mean, Z_min, Z_max] = solvers::meanminmax(Z, Z_n_elem, stm);
     return {OnlineMIMOSVR::calc_qgamma(Z_mean, Z_min, train_L_m.mean, train_L_m.min, train_len, C_gamma_variance),
@@ -71,7 +71,7 @@ std::tuple<double, double> cu_calc_minmax_gamma(const double *Z, const mmm_t &tr
 
 
 // error = abs(labels_train - K_train * solved)
-__global__ void G_absdif(const double *__restrict__ labels_train, double *__restrict__ error_mat, const unsigned mn)
+__global__ void G_absdif(CRPTR(double) labels_train, RPTR(double) error_mat, const unsigned mn)
 {
     CU_STRIDED_FOR_i(mn) {
         error_mat[i] = abs(labels_train[i] - error_mat[i]);
@@ -79,12 +79,12 @@ __global__ void G_absdif(const double *__restrict__ labels_train, double *__rest
 }
 
 // work = abs(j_test_labels - (j_K_test * best_solution - svr_epsilon))
-__global__ void G_pred_absdif_inplace(const double *__restrict__ j_test_labels, double *__restrict__ work, const double svr_epsilon, const unsigned test_len_n)
+__global__ void G_pred_absdif_inplace(CRPTR(double) j_test_labels, RPTR(double) work, const double svr_epsilon, const unsigned test_len_n)
 {
     CU_STRIDED_FOR_i(test_len_n) work[i] = abs(j_test_labels[i] - work[i] + svr_epsilon);
 }
 
-__global__ void G_set_diag(double *__restrict__ K, const double d, const unsigned m)
+__global__ void G_set_diag(RPTR(double) K, const double d, const unsigned m)
 {
     CU_STRIDED_FOR_i(m) K[i * m + i] = d;
 }
@@ -167,8 +167,10 @@ UNROLL(C_max_j)
         const auto test_len_n = test_len * n;
         const auto test_n_size = test_len_n * sizeof(double);
         if (test_len > train_len) LOG4_THROW("Test " << test_len << " length should be smaller than train dimension " << train_len);
+#ifndef NDEBUG
         LOG4_TRACE("Try " << j << ", train start " << train_start << ", train final " << train_end << ", test start " <<
                           test_start << ", test len " << test_len << ", train len " << train_len << ", current score " << total_score);
+#endif
         auto best_solve_score = std::numeric_limits<double>::infinity();
         unsigned best_iter = 0;
         solvers::solve_hybrid(d_K_epsco + train_start + train_start * m, n, train_len, j_solved, magma_iters, C_rbt_threshold, ma_queue, irwls_iters, d_tune_labels + train_start,

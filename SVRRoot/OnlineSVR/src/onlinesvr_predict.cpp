@@ -11,7 +11,7 @@
 #include <vector>
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "util/math_utils.hpp"
 #include "onlinesvr.hpp"
 #include "cuqrsolve.cuh"
@@ -30,7 +30,7 @@ arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uve
         for (unsigned r = 0; r < ixs.size(); ++r) {
             const auto i = ixs[r] - fm.shifts[c];
             const auto st = fm.stretches[c];
-            const auto sk = fm.skips[c];
+            // const auto sk = fm.skips[c];
             v(c, r) = m(STRETCHSKIP_(i), c);
             // v(c, r) = stretch_ix(m.colptr(c), ixs[r] - shifts[c], m.n_rows, stretches[c]);
         }

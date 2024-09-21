@@ -5,6 +5,9 @@ PROJECT(SVRCommon)
 
 INCLUDE("../../cmake/SourceList.cmake")
 
+GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/include/util")
+GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/include/common")
+
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS regex date_time serialization REQUIRED)
 FIND_PACKAGE(OpenCL REQUIRED)
 FIND_PACKAGE(TBB REQUIRED)

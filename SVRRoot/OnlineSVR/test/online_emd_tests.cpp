@@ -33,6 +33,7 @@ constexpr unsigned TEST_LEVELS = MIN_LEVEL_COUNT;
 const std::string TEST_QUEUE_NAME("test_queue");
 constexpr double TEST_STRETCH_COEF = 1;
 constexpr double TEST_ERROR_THRESHOLD = 1e-13;
+const auto TEST_RES = bpt::hours(1);
 
 class onlineEmdTransformTest : public testing::Test
 {
@@ -68,7 +69,7 @@ public:
             vals[levels * 2] = std::strtod(line.c_str(), nullptr);
 #endif
             input->get_data().emplace_back(std::make_shared<datamodel::DataRow>(time_iter, time_now, 1., vals));
-            time_iter += bpt::hours(1);
+            time_iter += TEST_RES;
             if (input->size() > INPUT_LIMIT) break;
         }
         result_f.open(exp_output_filename);
@@ -113,7 +114,7 @@ TEST_F(onlineEmdTransformTest, test_transform_correctness)
 
     const auto residuals_len = oemd::online_emd::get_residuals_length();
 
-    const auto masks_siftings = transformer->get_masks(datamodel::datarow_crange{input->get_data()}, tail, input->get_table_name(), 0, std::identity());
+    const auto masks_siftings = transformer->get_masks(datamodel::datarow_crange{input->get_data()}, tail, input->get_table_name(), 0, std::identity(), TEST_RES, TEST_RES);
 OMP_FOR_i_(masks_siftings->masks.size(), ordered) {
         const auto meanabs_mask = common::meanabs(masks_siftings->masks[i]);
         const auto sum_mask = common::sum(masks_siftings->masks[i]);
@@ -121,12 +122,12 @@ OMP_FOR_i_(masks_siftings->masks.size(), ordered) {
         LOG4_DEBUG("Power level of mask " << i << " " << meanabs_mask << ", sum " << sum_mask << " should be one!");
     }
 
-    PROFILE_EXEC_TIME(transformer->transform(*input), "OEMD transformation.");
+    PROFILE_EXEC_TIME(transformer->transform(*input, 0, 0, 0, TEST_RES, TEST_RES), "OEMD transformation.");
 
     auto delayed_input = input->clone(DECON_OFFSET);
     delayed_input->set_table_name(input->get_table_name());
     LOG4_DEBUG("Input size " << input->size() << ", delayed input size " << delayed_input->size() << ", residuals " << residuals_len << ", tail " << tail.size());
-    PROFILE_EXEC_TIME(transformer->transform(*delayed_input), "OEMD transformation with " << DECON_OFFSET << " offset.");
+    PROFILE_EXEC_TIME(transformer->transform(*delayed_input, 0, 0, 0, TEST_RES, TEST_RES), "OEMD transformation with " << DECON_OFFSET << " offset.");
 
     LOG4_DEBUG("Input queue: " << *input);
     LOG4_DEBUG("Delayed input queue: " << *delayed_input);

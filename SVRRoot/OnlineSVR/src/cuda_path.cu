@@ -5,7 +5,7 @@
 #include "common/defines.h"
 #include "cuda_path.hpp"
 #include "common/cuda_util.cuh"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 #include "common/constants.hpp"
 #include "onlinesvr.hpp"
 #include "model/SVRParameters.hpp"
@@ -29,7 +29,7 @@ namespace kernel::path {
 
 __global__  void
 G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t lag_TILE_WIDTH, const double lambda,
-            const double *__restrict__ X, const double *__restrict__ Y, double *__restrict__ Z)
+            CRPTR(double) X, CRPTR(double) Y, RPTR(double) Z)
 {
     if (blockIdx.x * blockDim.x >= X_cols || blockIdx.y * blockDim.y >= Y_cols) return;
 
@@ -95,7 +95,7 @@ UNROLL(common::C_cu_tile_width)
 
 __global__  void
 G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t lag_TILE_WIDTH,
-            const double lambda, const double gamma, const double *X, const double *Y, double *Z)
+            const double lambda, const double gamma, CPTR(double) X, CPTR(double) Y, double *Z)
 {
     if (blockIdx.x * blockDim.x >= X_cols || blockIdx.y * blockDim.y >= Y_cols) return;
 
@@ -161,7 +161,7 @@ UNROLL(common::C_cu_tile_width)
 
 __global__  void
 G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t lag, const unsigned lag_TILE_WIDTH, const double lambda,
-            const double *__restrict__ X, const double *__restrict__ Y, double *__restrict__ Z)
+            CRPTR(double) X, CRPTR(double) Y, RPTR(double) Z)
 {
     if (blockIdx.x * blockDim.x >= X_cols || blockIdx.y * blockDim.y >= Y_cols) return;
 
@@ -211,141 +211,117 @@ UNROLL()
     if (do_matrix_product_sum) Z[kk * Y_cols + mm] = matrix_prod_sum;
 }
 
-void cu_distances_xx(const uint32_t cols, const uint32_t lag, const double *X, const double lambda, double *Z) // rows == lag
+void cu_distances_xx(const uint32_t cols, const uint32_t lag, CPTR(double) X, const double lambda, double *Z) // rows == lag
 {
     const uint32_t X_size = cols * lag * sizeof(double);
     const uint32_t Z_size = cols * cols * sizeof(double);
     double *d_Z, *d_X;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cudaStream_t cu_stream;
-    cu_errchk(cudaStreamCreateWithFlags(&cu_stream, cudaStreamNonBlocking));
-    cu_errchk(cudaMallocAsync(&d_X, X_size, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Z, Z_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, cu_stream));
-    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(cols), 0, cu_stream>>>(cols, cols, lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_X, d_Z);
-    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Z, cu_stream));
-    cu_errchk(cudaFreeAsync(d_X, cu_stream));
-    cu_errchk(cudaStreamSynchronize(cu_stream));
-    cu_errchk(cudaStreamDestroy(cu_stream));
+    CTX_CUSTREAM;
+    cu_errchk(cudaMallocAsync(&d_X, X_size, custream));
+    cu_errchk(cudaMallocAsync(&d_Z, Z_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, custream));
+    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(cols), 0, custream>>>(cols, cols, lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_X, d_Z);
+    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_Z, custream));
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_sync_destroy(custream);
 }
 
-void cu_distances_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const double lambda, const double *X, double *Z)
+void cu_distances_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const double lambda, CPTR(double) X, double *Z)
 {
     const uint32_t X_size = cols * rows * sizeof(double);
     const uint32_t Z_size = cols * cols * sizeof(double);
     double *d_Z, *d_X;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cudaStream_t cu_stream;
-    cu_errchk(cudaStreamCreateWithFlags(&cu_stream, cudaStreamNonBlocking));
-    cu_errchk(cudaMallocAsync(&d_X, X_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Z, Z_size, cu_stream));
-    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(cols), 0, cu_stream>>>(cols, cols, rows, lag, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_X, d_Z);
-    cu_errchk(cudaFreeAsync(d_X, cu_stream));
-    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Z, cu_stream));
-    cu_errchk(cudaStreamSynchronize(cu_stream));
-    cu_errchk(cudaStreamDestroy(cu_stream));
+    CTX_CUSTREAM;
+    cu_errchk(cudaMallocAsync(&d_X, X_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Z, Z_size, custream));
+    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(cols), 0, custream>>>(cols, cols, rows, lag, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_X, d_Z);
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_Z, custream));
+    cu_sync_destroy(custream);
 }
 
-void cu_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const double lambda, const double gamma, const double *X, double *Z)
+void cu_kernel_xx(const uint32_t cols, const uint32_t rows, const uint32_t lag, const double lambda, const double gamma, CPTR(double) X, double *Z)
 {
     const uint32_t X_size = cols * rows * sizeof(double);
     const uint32_t Z_size = cols * cols * sizeof(double);
     double *d_Z, *d_X;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cudaStream_t cu_stream;
-    cu_errchk(cudaStreamCreateWithFlags(&cu_stream, cudaStreamNonBlocking));
-    cu_errchk(cudaMallocAsync(&d_X, X_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Z, Z_size, cu_stream));
-    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(cols), 0, cu_stream>>>(cols, cols, rows, lag, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, DIST(gamma), d_X, d_X, d_Z);
-    cu_errchk(cudaFreeAsync(d_X, cu_stream));
-    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Z, cu_stream));
-    cu_errchk(cudaStreamSynchronize(cu_stream));
-    cu_errchk(cudaStreamDestroy(cu_stream));
+    CTX_CUSTREAM;
+    cu_errchk(cudaMallocAsync(&d_X, X_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Z, Z_size, custream));
+    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(cols), 0, custream>>>(cols, cols, rows, lag, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, DIST(gamma), d_X, d_X, d_Z);
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_Z, custream));
+    cu_sync_destroy(custream);
 }
 
 
-void cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t lag, const double lambda, const double *X, const double *Xy, double *Z)
+void cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t lag, const double lambda, CPTR(double) X, CPTR(double) Xy, double *Z)
 {
     const auto X_size = X_cols * lag * sizeof(double);
     const auto Xy_size = Xy_cols * lag * sizeof(double);
     const auto Z_size = X_cols * Xy_cols * sizeof(double);
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cudaStream_t cu_stream;
-    cu_errchk(cudaStreamCreateWithFlags(&cu_stream, cudaStreamNonBlocking));
+    CTX_CUSTREAM;
     double *d_X, *d_Xy, *d_Z;
-    cu_errchk(cudaMallocAsync(&d_X, X_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Xy, Xy_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Z, Z_size, cu_stream));
-    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(X_cols), 0, cu_stream>>>(X_cols, Xy_cols, lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_Xy, d_Z);
-    cu_errchk(cudaFreeAsync(d_X, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Xy, cu_stream));
-    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Z, cu_stream));
-    cu_errchk(cudaStreamSynchronize(cu_stream));
-    cu_errchk(cudaStreamDestroy(cu_stream));
+    cu_errchk(cudaMallocAsync(&d_X, X_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Xy, Xy_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Z, Z_size, custream));
+    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(X_cols), 0, custream>>>(X_cols, Xy_cols, lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_Xy, d_Z);
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_errchk(cudaFreeAsync(d_Xy, custream));
+    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_Z, custream));
+    cu_sync_destroy(custream);
 }
 
 
 void
-cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint32_t lag, const double lambda, const double *X, const double *Xy, double *Z)
+cu_distances_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint32_t lag, const double lambda, CPTR(double) X, CPTR(double) Xy, double *Z)
 {
     const uint32_t X_size = X_cols * lag * sizeof(double);
     const uint32_t Xy_size = Xy_cols * lag * sizeof(double);
     const uint32_t Z_size = X_cols * Xy_cols * sizeof(double);
     double *d_X, *d_Xy, *d_Z;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cudaStream_t cu_stream;
-    cu_errchk(cudaStreamCreateWithFlags(&cu_stream, cudaStreamNonBlocking));
-    cu_errchk(cudaMallocAsync(&d_X, X_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Xy, Xy_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Z, Z_size, cu_stream));
-    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(X_cols), 0, cu_stream>>>(X_cols, Xy_cols, lag, rows, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_Xy, d_Z);
-    cu_errchk(cudaFreeAsync(d_X, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Xy, cu_stream));
-    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Z, cu_stream));
-    cu_errchk(cudaStreamSynchronize(cu_stream));
-    cu_errchk(cudaStreamDestroy(cu_stream));
+    CTX_CUSTREAM;
+    cu_errchk(cudaMallocAsync(&d_X, X_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Xy, Xy_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Z, Z_size, custream));
+    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(X_cols), 0, custream>>>(X_cols, Xy_cols, lag, rows, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, d_X, d_Xy, d_Z);
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_errchk(cudaFreeAsync(d_Xy, custream));
+    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_Z, custream));
+    cu_sync_destroy(custream);
 }
 
 
 void cu_kernel_xy(const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint32_t lag, const double lambda, const double gamma,
-                  const double *X, const double *Xy, double *Z)
+                  CPTR(double) X, CPTR(double) Xy, double *Z)
 {
     const auto X_size = X_cols * rows * sizeof(double);
     const auto Xy_size = Xy_cols * rows * sizeof(double);
     const auto Z_size = X_cols * Xy_cols * sizeof(double);
     double *d_X, *d_Xy, *d_Z;
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cudaStream_t cu_stream;
-    cu_errchk(cudaStreamCreateWithFlags(&cu_stream, cudaStreamNonBlocking));
-    cu_errchk(cudaMallocAsync(&d_X, X_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Xy, Xy_size, cu_stream));
-    cu_errchk(cudaMemcpyAsync(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice, cu_stream));
-    cu_errchk(cudaMallocAsync(&d_Z, Z_size, cu_stream));
-    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(X_cols), 0, cu_stream>>>(X_cols, Xy_cols, rows, lag, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, DIST(gamma), d_X, d_Xy, d_Z);
-    cu_errchk(cudaFreeAsync(d_X, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Xy, cu_stream));
-    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, cu_stream));
-    cu_errchk(cudaFreeAsync(d_Z, cu_stream));
-    cu_errchk(cudaStreamSynchronize(cu_stream));
-    cu_errchk(cudaStreamDestroy(cu_stream));
+    CTX_CUSTREAM;
+    cu_errchk(cudaMallocAsync(&d_X, X_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_X, X, X_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Xy, Xy_size, custream));
+    cu_errchk(cudaMemcpyAsync(d_Xy, Xy, Xy_size, cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync(&d_Z, Z_size, custream));
+    G_kernel_xy<<<CU_BLOCKS_THREADS_2D(X_cols), 0, custream>>>(X_cols, Xy_cols, rows, lag, rows / lag, CDIV(lag, common::C_cu_tile_width), lambda, DIST(gamma), d_X, d_Xy, d_Z);
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_errchk(cudaFreeAsync(d_Xy, custream));
+    cu_errchk(cudaMemcpyAsync(Z, d_Z, Z_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_Z, custream));
+    cu_sync_destroy(custream);
 }
 
 }

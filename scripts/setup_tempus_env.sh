@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 export NICENESS=0
-export CUBLAS_WORKSPACE_CONFIG=:4096:8 
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_trial_knitro_97-65-2f-5a-81.txt
 # export CUBLAS_LOGINFO_DBG=1 CUBLAS_LOGDEST_DBG=cublas.log
 # export CUBLASLT_LOG_LEVEL=5 CUBLASLT_LOG_FILE=cublasLt.log
 

@@ -35,7 +35,7 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.tpp"
+#include "common/gpu_handler.hpp"
 
 #ifdef FIREFLY_CUDA
 #include "firefly.cuh"

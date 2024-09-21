@@ -103,7 +103,7 @@ int compute_cos_sin(const std::vector<double> &omega, std::vector<double> &phase
     }
 }
 
-extern int step_decompose_matrix(const std::vector<double> &phase_cos, const std::vector<double> &phase_sin, size_t len, const double *values, const std::vector<double> &previous,
+extern int step_decompose_matrix(const std::vector<double> &phase_cos, const std::vector<double> &phase_sin, size_t len, CPTR(double) values, const std::vector<double> &previous,
                                  std::vector<double> &decomposition);
 
 double loss_func_quadratic(size_t K, size_t len, double *UV, double *cos_phases, double *sin_phases)
@@ -121,7 +121,7 @@ double loss_func_quadratic(size_t K, size_t len, double *UV, double *cos_phases,
 }
 
 
-int create_solve_problem(size_t K, size_t n, const double *previous, const double *values, const double *phase_cos, const double *phase_sin, arma::mat &H, arma::mat &f, arma::mat &A, arma::mat &b,
+int create_solve_problem(size_t K, size_t n, CPTR(double) previous, const double *values, const double *phase_cos, const double *phase_sin, arma::mat &H, arma::mat &f, arma::mat &A, arma::mat &b,
                          double &const_sum, bool do_H)
 {
     A = arma::zeros(n, n * 2 * K);

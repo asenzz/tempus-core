@@ -55,7 +55,7 @@ act_parametric    maybe
 #   direct = 1 = use Interior (barrier) Direct algorithm
 #   cg     = 2 = use Interior (barrier) CG algorithm
 #   active = 3 = use Active Set SLQP algorithm
-act_qpalg    auto
+act_qpalg    1
 
 # Constraint penalization for QP subproblems.
 #   auto       = -1
@@ -261,7 +261,7 @@ convex            no
 #   avx        =  3 = AVX
 #   avx2       =  4 = AVX-2
 #   avx512     =  5 = AVX-512 (experimental)
-cpuplatform       compatible
+cpuplatform  avx2    
 
 # Whether to perform extra data checks on the model.
 #   no     = 0 = no extra data checks
@@ -324,7 +324,7 @@ findiff_estnoise  no
 # Number of threads to use in finite-differencing.
 #   choose any positive integer, or
 #   0 = determine automatically based on numthreads
-findiff_numthreads 0
+findiff_numthreads 1
 
 # Relative stepsize for finite-difference gradients.
 findiff_relstepsize 0

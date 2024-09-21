@@ -62,7 +62,7 @@ public:
 
     static constexpr unsigned C_num_quantisations = 61; // 30
 
-    static const std::deque<unsigned> C_quantizations;
+    static const std::deque<unsigned> C_quantisations;
 
     explicit ModelService(dao::ModelDAO &model_dao);
 

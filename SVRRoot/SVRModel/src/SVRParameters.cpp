@@ -10,14 +10,14 @@
 namespace svr {
 namespace datamodel {
 
-kernel_type_e operator++(kernel_type_e &k_type)
+e_kernel_type operator++(e_kernel_type &k_type)
 {
     int *tmp = (int *) &k_type;
     ++(*tmp);
     return k_type;
 }
 
-kernel_type_e operator++(kernel_type_e &k_type, int)
+e_kernel_type operator++(e_kernel_type &k_type, int)
 {
     auto tmp = k_type;
     ++k_type;
@@ -61,7 +61,7 @@ SVRParameters::SVRParameters(
         const double svr_kernel_param2,
         const u_int64_t svr_decremental_distance,
         const double svr_adjacent_levels_ratio,
-        const kernel_type_e kernel_type,
+        const e_kernel_type kernel_type,
         const unsigned lag_count,
         const std::set<unsigned> &adjacent_levels)
         : Entity(id),
@@ -363,19 +363,19 @@ const std::set<unsigned> &SVRParameters::get_adjacent_levels() const
     return adjacent_levels;
 }
 
-kernel_type_e SVRParameters::get_kernel_type() const
+e_kernel_type SVRParameters::get_kernel_type() const
 {
     return kernel_type;
 }
 
 bool SVRParameters::is_manifold() const
 {
-    return kernel_type == kernel_type_e::DEEP_PATH;
+    return kernel_type == e_kernel_type::DEEP_PATH;
 }
 
-void SVRParameters::set_kernel_type(const kernel_type_e _kernel_type)
+void SVRParameters::set_kernel_type(const e_kernel_type _kernel_type)
 {
-    if (_kernel_type < kernel_type_e::number_of_kernel_types)
+    if (_kernel_type < e_kernel_type::number_of_kernel_types)
         kernel_type = _kernel_type;
     else
         THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << (ssize_t) _kernel_type);
@@ -478,7 +478,7 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
     set_svr_kernel_param2(atof(tokens[11].c_str()));
     set_svr_decremental_distance(atoll(tokens[12].c_str()));
     set_svr_adjacent_levels_ratio(atof(tokens[13].c_str()));
-    set_kernel_type(kernel_type_e(atol(tokens[14].c_str())));
+    set_kernel_type(e_kernel_type(atol(tokens[14].c_str())));
     set_lag_count(atoll(tokens[15].c_str()));
 
     LOG4_DEBUG("Successfully loaded parameters " << to_sql_string());

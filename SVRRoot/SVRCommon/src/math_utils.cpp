@@ -341,7 +341,7 @@ arma::mat pdist(const arma::mat &input)
     return foo;
 }
 
-template<> double sumabs(const std::vector<double> &v)
+template<> double sumabs(const std::vector<double> &v) // TODO Unify *ASUM usage and MAT and Vector iterator usage
 {
     return cblas_dasum(v.size(), v.data(), 1);
 }
@@ -362,21 +362,35 @@ template<> float sumabs(const arma::Mat<float> &m)
 }
 
 template<> double
-meanabs<double>(const std::vector<double> &v)
+meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
 {
-    return cblas_dasum(v.size(), v.data(), 1) / double(v.size());
-}
-
-template<> float
-meanabs<float>(const std::vector<float> &v)
-{
-    return cblas_sasum(v.size(), v.data(), 1) / float(v.size());
+    return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
 }
 
 template<> double
-meanabs<double>(const arma::Mat<double> &m)
+meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
 {
-    return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
+    const auto n = end - begin;
+    return cblas_dasum(n, &*begin, 1) / n;
+}
+
+template<> float
+meanabs(const typename std::vector<float>::const_iterator &begin, const typename std::vector<float>::const_iterator &end)
+{
+    const auto n = end - begin;
+    return cblas_sasum(n, &*begin, 1) / n;
+}
+
+template<> double
+meanabs<double>(const std::vector<double> &v)
+{
+    return meanabs<double>(v.cbegin(), v.cend());
+}
+
+template<> float
+meanabs(const std::vector<float> &v)
+{
+    return meanabs<float>(v.cbegin(), v.cend());
 }
 
 double fdsum(CPTR(float) v, const unsigned len)

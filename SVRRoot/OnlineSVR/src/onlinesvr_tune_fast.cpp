@@ -69,7 +69,7 @@ void OnlineMIMOSVR::tune_fast()
     weight_chunks.resize(num_chunks);
 
     constexpr unsigned opt_particles = 100;
-    constexpr unsigned opt_iters = 35;
+    constexpr unsigned opt_iters = 40;
     constexpr unsigned D = 2;
     // static const auto equiexp = std::log(std::sqrt(C_tune_range_max_lambda)) / M_LN2;
     static const arma::mat bounds = []() {
@@ -83,7 +83,7 @@ void OnlineMIMOSVR::tune_fast()
                                     << common::present_chunk(ixs.front(), C_chunk_header) << ", last chunk "
                                     << common::present_chunk(ixs.back(), C_chunk_header) << " labels " << common::present(*p_labels) << ", features "
                                     << common::present(*p_features) << ", last-knowns " << common::present(*p_last_knowns) << ", max lambda " << C_tune_range_max_lambda
-                                    << ", gamma variance " << C_gamma_variance << ", Prima particles " << opt_particles << ", iterations " << opt_iters);
+                                    << ", gamma variance " << C_gamma_variance << ", particles " << opt_particles << ", iterations " << opt_iters);
 
     const arma::uvec test_ixs = arma::regspace<arma::uvec>(p_labels->n_rows - C_test_len, p_labels->n_rows - 1);
     std::array<arma::mat, C_max_j> test_labels;

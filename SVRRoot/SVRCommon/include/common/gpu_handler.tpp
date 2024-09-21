@@ -1,7 +1,7 @@
 //
 // Created by zarko on 5/5/24.
 //
-
+// TODO Refactor and clean up old logic
 #pragma once
 
 #include "gpu_handler.hpp"
@@ -138,13 +138,18 @@ void gpu_handler<context_per_gpu>::sort_free_gpus()
 #endif
 }
 
+constexpr unsigned C_retries = 5;
+
 template<const unsigned context_per_gpu>
 unsigned gpu_handler<context_per_gpu>::get_free_gpu()
 {
 #ifdef GPU_QUEUE
     // (void) p_gpu_sem_->wait();
     unsigned gpu_id;
-    while (!available_devices_.try_pop(gpu_id)) thread_yield_wait__;
+    bool popped = false;
+    unsigned ct = 0;
+    while (!(popped = available_devices_.try_pop(gpu_id)) && ++ct < C_retries) thread_yield_wait__;
+    if (!popped) available_devices_.pop(gpu_id);
 
     return gpu_id;
 #else
@@ -171,7 +176,10 @@ unsigned gpu_handler<context_per_gpu>::get_free_gpus(const unsigned gpu_ct)
 template<const unsigned context_per_gpu>
 void gpu_handler<context_per_gpu>::return_gpu(const unsigned id)
 {
-    available_devices_.push(id);
+    unsigned ct = 0;
+    bool pushed = false;
+    while (!(pushed = available_devices_.try_push(id)) && ++ct < C_retries) thread_yield_wait__;
+    if (!pushed) available_devices_.push(id);
     // p_gpu_sem_->post();
 }
 

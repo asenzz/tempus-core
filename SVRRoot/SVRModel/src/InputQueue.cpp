@@ -44,6 +44,18 @@ datamodel::InputQueue_ptr InputQueue::clone_empty() const
     return ptr<InputQueue>("clone_" + table_name_, logical_name_, owner_user_name_, description_, resolution_, legal_time_deviation_, time_zone_, value_columns_);
 }
 
+datamodel::InputQueue_ptr InputQueue::clone(const size_t start_ix, const size_t end_ix) const
+{
+    auto p_new_queue = clone_empty();
+    if (data_.empty()) return p_new_queue;
+    else if (data_.size() > start_ix) p_new_queue->data_ = clone_datarows(
+            data_.cbegin() + std::min(start_ix, data_.size() - 1),
+            data_.cbegin() + std::min(end_ix, data_.size()));
+    else
+        LOG4_ERROR("Start index " << start_ix << " exceeds data size " << data_.size());
+    return p_new_queue;
+}
+
 const std::string &InputQueue::get_description() const
 { return description_; }
 

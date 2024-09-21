@@ -16,7 +16,6 @@ struct oemd_coefficients {
     static constexpr unsigned default_siftings = 1;
     static constexpr unsigned mask_file_max_ver = 0x20;
     static constexpr double C_oemd_stretch_coef = 1;
-
     static const std::string oemd_fir_coefs_dir;
 
     static std::string get_mask_file_name(const unsigned ctr, const unsigned level, const unsigned level_count, const std::string &queue_name);

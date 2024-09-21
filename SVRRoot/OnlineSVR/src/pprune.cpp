@@ -2,9 +2,7 @@
 // Created by zarko on 3/24/24.
 //
 
-#undef USE_PRIMA
-#define USE_BITEOPT
-#undef USE_KNITRO
+// #undef USE_PRIMA
 
 #ifdef USE_BITEOPT
 
@@ -26,12 +24,15 @@ constexpr unsigned C_max_population = 3333;
 #include "util/string_utils.hpp"
 
 constexpr std::array<double, 1> C_maxfun_drop_coefs{.5};
-constexpr double C_default_rhoend = 5e-10;
-constexpr double C_default_rhobeg = .25;
 
 #ifdef USE_KNITRO
 
 #include "knitro.h"
+
+#else
+
+constexpr double C_default_rhoend = 5e-10;
+constexpr double C_default_rhobeg = .25;
 
 #endif
 
@@ -52,9 +53,10 @@ struct t_calfun_data {
     bool drop(const unsigned keep_particles);
 };
 
-constexpr unsigned C_elect_threshold = 10;
-
 #ifdef USE_KNITRO
+
+#define kn_errchk(cmd) { const auto __err = (cmd); \
+    if (__err) LOG4_THROW("KNitro call " #cmd " failed with error " << __err); }
 
 int callbackEvalF(KN_context_ptr kc,
                   CB_context_ptr cb,
@@ -67,9 +69,18 @@ int callbackEvalF(KN_context_ptr kc,
         return -1;
     }
     auto p_cost_cb = (t_pprune_cost_fun_ptr) user_params;
-    (*p_cost_cb)(eval_request->x, eval_result->obj);
+    int num_iters, D;
+    kn_errchk(KN_get_number_iters(kc, &num_iters));
+    kn_errchk(KN_get_number_vars(kc, &D));
+    PROFILE_EXEC_TIME( (*p_cost_cb)(eval_request->x, eval_result->obj),
+       "Cost, score " << *eval_result->obj << ", index " << eval_request->threadID << ", iterations " << num_iters << ", parameters " <<
+       common::to_string(eval_request->x, std::min<unsigned>(4, D)));
     return 0;
 }
+
+#else
+
+constexpr unsigned C_elect_threshold = 10;
 
 #endif
 
@@ -169,7 +180,7 @@ void prima_progress_callback(
 
 #endif
 
-arma::vec pprune::ensure_bounds(const double *x, const arma::mat &bounds)
+arma::vec pprune::ensure_bounds(CPTR(double) x, const arma::mat &bounds)
 {
     arma::vec xx(bounds.n_rows);
     for (unsigned i = 0; i < xx.size(); ++i)
@@ -181,13 +192,10 @@ arma::vec pprune::ensure_bounds(const double *x, const arma::mat &bounds)
 
 #ifdef USE_KNITRO // TODO Test this
 
-#define kn_errchk(cmd) { const auto __err = (cmd); \
-    if (__err) LOG4_THROW("KNitro call " #cmd " failed with error " << __err); }
-
 pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma::mat &bounds,
                const t_pprune_cost_fun &cost_f,
-               const unsigned maxfun, const double rhobeg, const double rhoend,
-               arma::mat x0, const arma::vec &pows) :
+               const unsigned maxfun, double rhobeg, double rhoend,
+               arma::mat x0, const arma::vec &pows, const unsigned depth) :
         n(n_particles), D(bounds.n_rows), bounds(bounds), pows(pows), ranges(bounds.col(1) - bounds.col(0))
 {
     if (x0.n_rows != D || x0.n_cols != n) {
@@ -212,7 +220,7 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
     kn_errchk(KN_add_vars(kc, D, nullptr));
     kn_errchk(KN_set_var_lobnds_all(kc, bounds.colptr(0)));
     kn_errchk(KN_set_var_upbnds_all(kc, bounds.colptr(1)));
-    // kn_errchk(KN_set_var_primal_init_values_all(kc, x0.colptr(i)));
+    kn_errchk(KN_set_var_primal_init_values_all(kc, x0.memptr()));
 
     /** Add a callback function "callbackEvalF" to evaluate the nonlinear
      *  (non-quadratic) objective.  Note that the linear and
@@ -233,10 +241,13 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
      *  evaluations. */
     kn_errchk(KN_set_int_param(kc, KN_PARAM_ALGORITHM, KN_ALG_ACT_SQP));
     /** Enable multi-start */
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_MULTISTART, KN_MULTISTART_YES));
+    kn_errchk(KN_set_int_param(kc, KN_PARAM_MULTISTART, KN_MS_ENABLE_YES));
+
+    kn_errchk(KN_set_int_param(kc, KN_PARAM_MS_MAXSOLVES, n_particles));
+    kn_errchk(KN_set_int_param(kc, KN_PARAM_MAXIT, maxfun));
 
     /** Perform multistart in parallel using max number of available threads */
-    const auto n_threads = omp_get_max_threads();
+    const auto n_threads = C_n_cpu;
     if (n_threads > 1) {
         LOG4_TRACE("Running KNitro multistart in parallel with " << n_threads << " threads.");
         kn_errchk(KN_set_int_param(kc, KN_PARAM_PAR_MSNUMTHREADS, n_threads));
@@ -263,15 +274,17 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
     /** Allocate arrays to hold solution.
      *  Notice lambda has multipliers for both constraints and bounds
      *  (a common mistake is to allocate its size as m). */
-    auto x = (double *) malloc(D * sizeof(double));
     auto lambda = (double *) malloc(2 * D * sizeof(double));
+    result.best_parameters = arma::vec(D);
+    int total_iterations;
+    KN_get_number_iters(kc, &total_iterations);
+    result.total_iterations = total_iterations ? total_iterations : maxfun * n_particles;
 
     /** An example of obtaining solution information. */
-    kn_errchk(KN_get_solution(kc, &n_status, &result.best_score, x, lambda));
+    kn_errchk(KN_get_solution(kc, &n_status, &result.best_score, result.best_parameters.memptr(), lambda));
     LOG4_DEBUG("Optimal objective value " << result.best_score << ", status " << n_status);
     LOG4_DEBUG("Optimal x (with corresponding multiplier)");
-    result.best_parameters = arma::vec(x, D, true, true);
-    for (unsigned i = 0; i < D; ++i) LOG4_DEBUG("  x[" << i << "] " << x[i] << " (lambda " << lambda[D + i]);
+    for (unsigned i = 0; i < std::min<unsigned>(4, D); ++i) LOG4_TRACE("  x[" << i << "] " << result.best_parameters[i] << " (lambda " << lambda[D + i]);
     double feas_error, opt_error;
     kn_errchk(KN_get_abs_feas_error(kc, &feas_error));
     LOG4_DEBUG("Feasibility violation " << feas_error);
@@ -280,12 +293,10 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
 
     /** Delete the Knitro solver instance. */
     KN_free(&kc);
-    free(x);
     free(lambda);
     LOG4_DEBUG(
-            "PPrune type " << type << ", score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n << ", parameters " << D
-                           << ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", bounds " << bounds << ", ranges "
-                           << ranges);
+            "PPrune type KNitro, score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n << ", parameters " << D
+           << ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", bounds " << bounds << ", ranges " << ranges);
 }
 
 #else
@@ -299,11 +310,11 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
     if (!std::isnormal(rhobeg)) rhobeg = ranges.front() * C_default_rhobeg;
     if (!std::isnormal(rhoend)) rhoend = ranges.front() * C_default_rhoend;
     if (x0.n_rows != D || x0.n_cols != n) {
-        arma::mat x0_;
-        if (x0.n_rows == D && x0.n_cols) x0_ = x0;
+        arma::mat x0_backup;
+        if (x0.n_rows == D && x0.n_cols) x0_backup = x0;
         x0.set_size(D, n);
         common::equispaced(x0, bounds, pows);
-        if (x0_.n_elem) x0.cols(x0.n_cols - x0_.n_cols, x0.n_cols - 1) = x0_;
+        if (x0_backup.n_elem) x0.cols(x0.n_cols - x0_backup.n_cols, x0.n_cols - 1) = x0_backup;
     }
 
 #ifdef USE_PRIMA
@@ -320,7 +331,6 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
     all_prima_options.rhoend = rhoend;
     all_prima_options.maxfun = maxfun;
     all_prima_options.callback = prima_progress_callback;
-
 #endif
 
     const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
@@ -332,7 +342,7 @@ pprune::pprune(const unsigned algo_type, const unsigned n_particles, const arma:
 #pragma omp parallel ADJ_THREADS(n_particles)
 #pragma omp single
     {
-#pragma omp taskloop simd mergeable untied default(shared) grainsize(1) firstprivate(maxfun, no_elect, C_rand_disperse, C_biteopt_depth)
+#pragma omp taskloop simd mergeable default(shared) grainsize(1) firstprivate(maxfun, no_elect, C_rand_disperse, C_biteopt_depth) untied // Untied task is a must
         for (unsigned i = 0; i < n_particles; ++i) {
             auto const calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun, D};
 #endif
@@ -358,8 +368,7 @@ UNROLL()
             if (biteopt.back()->getBestCost() < result.best_score) {
                 result.best_score = biteopt.back()->getBestCost();
                 result.best_parameters = arma::vec((double *) biteopt.back()->getBestParams(), D, true, true);
-                LOG4_TRACE("New best score " << result.best_score << " at particle " << i << ", parameters " <<
-                                             common::present(result.best_parameters));
+                LOG4_TRACE("New best score " << result.best_score << " at particle " << i << ", parameters " << common::present(result.best_parameters));
             }
             result.total_iterations += maxfun;
             res_l.unset();
@@ -413,7 +422,7 @@ UNROLL()
 
 pprune::operator t_pprune_res()
 {
-    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !std::isnormal(result.total_iterations)) LOG4_THROW("No valid solution found.");
+    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !common::isnormalz(result.total_iterations)) LOG4_THROW("No valid solution found.");
     return result;
 }
 

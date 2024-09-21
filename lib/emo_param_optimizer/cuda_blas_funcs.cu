@@ -141,7 +141,7 @@ int do_gpu_solve(size_t m, double*Left, double*Right, double*output){
 }
 
 
-void gpu_blas_mmul(const double *A, const double *B, double *C, const int m, const int k, const int n) {
+void gpu_blas_mmul(CPTR(double) A, CPTR(double) B, double *C, const int m, const int k, const int n) {
      int lda=m,ldb=k,ldc=m;
      const double alf = 1;
      const double bet = 0;
