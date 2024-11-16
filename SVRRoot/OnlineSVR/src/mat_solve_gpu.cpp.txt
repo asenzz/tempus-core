@@ -715,7 +715,7 @@ int magma_get_dgetrf_nb(const int m)
 
 
 void
-magmablas_dtranspose_inplace(
+magmablas_dtranspose_I(
         const int n,
         cl_mem dA, size_t dA_offset, int ldda,
         viennacl::ocl::context &ctx)
@@ -744,9 +744,9 @@ magmablas_dtranspose_inplace(
         size_t grid[2] = {(size_t) nblock, (size_t) (nblock + 1) / 2};
         grid[0] *= threads[0];
         grid[1] *= threads[1];
-        svr::common::gpu_kernel::ensure_compiled_kernel(ctx, "dtranspose_inplace_odd", "dtranspose_inplace");
+        svr::common::gpu_kernel::ensure_compiled_kernel(ctx, "dtranspose_inplace_odd", "dtranspose_I");
         svr::cl12::ocl_kernel dtranspose_kernel(
-                ctx.get_kernel("dtranspose_inplace", "dtranspose_inplace_odd").handle());
+                ctx.get_kernel("dtranspose_I", "dtranspose_inplace_odd").handle());
 
         dtranspose_kernel.set_args(n, dA, dA_offset, ldda);
         err = cq_command_queue.finish();
@@ -765,9 +765,9 @@ magmablas_dtranspose_inplace(
         grid[0] *= threads[0];
         grid[1] *= threads[1];
 
-        svr::common::gpu_kernel::ensure_compiled_kernel(ctx, "dtranspose_inplace_even", "dtranspose_inplace");
+        svr::common::gpu_kernel::ensure_compiled_kernel(ctx, "dtranspose_inplace_even", "dtranspose_I");
         svr::cl12::ocl_kernel dtranspose_kernel(
-                ctx.get_kernel("dtranspose_inplace", "dtranspose_inplace_even").handle());
+                ctx.get_kernel("dtranspose_I", "dtranspose_inplace_even").handle());
         dtranspose_kernel.set_args(n, dA, dA_offset, ldda);
         err = cq_command_queue.finish();
         CL_CHECK(err);
@@ -990,7 +990,7 @@ dgetrf_gpu(
             dAT = dA;
             dAT_offset = dA_offset;
             lddat = ldda;
-            magmablas_dtranspose_inplace(m, dAT_dgetrf(0, 0), lddat, ctx);
+            magmablas_dtranspose_I(m, dAT_dgetrf(0, 0), lddat, ctx);
         } else {
             lddat = maxn;  // N-by-M
             dAT_offset = 0;
@@ -1108,7 +1108,7 @@ dgetrf_gpu(
 
         // undo transpose
         if (dA == dAT) {
-            magmablas_dtranspose_inplace(m, dAT_dgetrf(0, 0), lddat, ctx);
+            magmablas_dtranspose_I(m, dAT_dgetrf(0, 0), lddat, ctx);
         } else {
             magmablas_dtranspose(n, m, dAT_dgetrf(0, 0), lddat, dA_dgetrf(0, 0), ldda, ctx);
             magma_free(dAT);

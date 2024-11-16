@@ -68,6 +68,14 @@ public:
             const unsigned level_ct,
             const bool merge);
 
+    static void insert_rows(
+            container &rows_container,
+            const arma::mat &data,
+            const container &times,
+            const unsigned level,
+            const unsigned level_ct,
+            const bool merge);
+
     static container
     construct(const std::deque<datamodel::MultivalResponse_ptr> &responses);
 
@@ -100,7 +108,7 @@ public:
             const bpt::ptime &value_time,
             const bpt::ptime &update_time,
             const double tick_volume,
-            CPTR(double) values_ptr,
+            CPTRd values_ptr,
             const unsigned values_size);
 
     std::vector<double> &get_values();
@@ -203,6 +211,12 @@ public:
     C_range_iter contbegin() const;
 
     C_range_iter contend() const;
+
+    C_citer contcbegin() const;
+
+    C_citer contcend() const;
+
+    unsigned contsize() const;
 
     C_range_iter begin() const;
 

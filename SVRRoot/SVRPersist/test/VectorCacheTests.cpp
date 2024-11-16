@@ -17,7 +17,7 @@ const auto deep = [] (User const & one, User const & another)  { return one.user
 TEST(VectorCacheTests, BasicTests)
 {
     size_t const sz = 10;
-    svr::dao::VectorMruCache<User, dtype(User::shallow), dtype(deep)>
+    svr::dao::VectorMruCache<User, DTYPE(User::shallow), DTYPE(deep)>
         mru(sz, User::shallow, deep );
 
     ASSERT_EQ(sz, mru.cont.size());
@@ -56,7 +56,7 @@ TEST(VectorCacheTests, BasicTests)
 TEST(VectorCacheTests, RandomTests)
 {
     size_t const sz = 10;
-    svr::dao::VectorMruCache<User, dtype(User::shallow), dtype(deep)>
+    svr::dao::VectorMruCache<User, DTYPE(User::shallow), DTYPE(deep)>
         mru(sz, User::shallow, deep);
 
     for(int i = 0; i < 10; ++i)
@@ -91,7 +91,7 @@ TEST(VectorCacheTests, PerformanceTests)
     const size_t iterations = 1e+5;
     for(auto cacheSize : std::vector<size_t>{10, 50, 100, 500, 1000})
     {
-        svr::dao::VectorMruCache<User, dtype(User::shallow), dtype(deep)>
+        svr::dao::VectorMruCache<User, DTYPE(User::shallow), DTYPE(deep)>
             mru(cacheSize, User::shallow,deep);
 
         std::default_random_engine generator;

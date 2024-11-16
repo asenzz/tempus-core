@@ -18,7 +18,7 @@ class has_size
     typedef long two;
 
     template<typename C>
-    static one test(dtype(&C::size));
+    static one test(DTYPE(&C::size));
 
     template<typename C>
     static two test(...);

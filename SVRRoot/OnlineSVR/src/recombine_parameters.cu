@@ -40,8 +40,8 @@ template<const unsigned k_block_size> __global__ void cu_recombine_parameters(
         const t_param_preds_cu *__restrict__ p_params_preds, // Len of col_ct * C_tune_keep_preds
         uint8_t *__restrict__ best_param_ixs, // Len of gridDim.x * col_ct
         RPTR(double) p_best_score,
-        CRPTR(double) recon_signs,
-        CRPTR(double) recon_last_knowns
+        CRPTRd recon_signs,
+        CRPTRd recon_last_knowns
 )
 {
     const auto g_tid = tid + blockIdx.x * k_block_size;
@@ -139,8 +139,8 @@ __global__ void cu_recombine_parameters(
         const t_param_preds_cu *__restrict__ p_params_preds, // Len of col_ct * C_tune_keep_preds
         uint8_t *__restrict__ best_param_ixs, // Len of rowct * col_ct
         RPTR(double) p_best_score,
-        CRPTR(double) recon_signs,
-        CRPTR(double) recon_last_knowns
+        CRPTRd recon_signs,
+        CRPTRd recon_last_knowns
 )
 {
     if (tid >= rowct) return;
@@ -264,7 +264,7 @@ UNROLL()
     cu_errchk(cudaFreeAsync(d_best_scores, custream));
     cu_errchk(cudaFreeAsync(d_recon_last_knowns, custream));
     cu_errchk(cudaFreeAsync(d_recon_signs, custream));
-    cu_sync_destroy(custream);
+    cusyndestroy(custream);
 }
 
 }

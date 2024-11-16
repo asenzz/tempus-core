@@ -6,7 +6,7 @@ namespace svr { namespace dao {
 struct StoreBufferInterface
 {
     virtual ~StoreBufferInterface() {}
-    virtual unsigned long  storeOne() = 0;
+    virtual uint64_t  storeOne() = 0;
 };
 
 } }

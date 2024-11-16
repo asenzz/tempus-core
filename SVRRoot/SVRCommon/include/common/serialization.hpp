@@ -37,7 +37,7 @@ namespace serialization {
 
 
 template<class Archive>
-void save(Archive & ar, const arma::mat &a, const unsigned int version)
+void save(Archive & ar, const arma::mat &a, const unsigned version)
 {
     std::ostringstream oss;
     a.save(oss, arma::file_type::arma_binary);
@@ -46,7 +46,7 @@ void save(Archive & ar, const arma::mat &a, const unsigned int version)
 }
 
 template<class Archive>
-void load(Archive & ar, arma::mat &a, const unsigned int version)
+void load(Archive & ar, arma::mat &a, const unsigned version)
 {
     std::string os;
     ar & BOOST_SERIALIZATION_NVP(os);
@@ -56,7 +56,7 @@ void load(Archive & ar, arma::mat &a, const unsigned int version)
 }
 
 template<class Archive>
-void save(Archive & ar, const arma::uvec &a, const unsigned int version)
+void save(Archive & ar, const arma::uvec &a, const unsigned version)
 {
     std::ostringstream oss;
     a.save(oss, arma::file_type::arma_binary);
@@ -65,7 +65,7 @@ void save(Archive & ar, const arma::uvec &a, const unsigned int version)
 }
 
 template<class Archive>
-void load(Archive & ar, arma::uvec &a, const unsigned int version)
+void load(Archive & ar, arma::uvec &a, const unsigned version)
 {
     std::string os;
     ar & BOOST_SERIALIZATION_NVP(os);

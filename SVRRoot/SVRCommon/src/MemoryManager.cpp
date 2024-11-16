@@ -71,7 +71,7 @@ bool memory_manager::threads_available()
     LOG4_TRACE("Number of cores " << num_of_cores << ", number of threads " << num_of_threads);
     if (num_of_cores < 1 || num_of_threads < 1)
         throw std::runtime_error("Number of cores or number of threads cannot be zero!");
-    return num_of_threads <= (svr::common::gpu_handler_hid::get().get_max_gpu_threads() +
+    return num_of_threads <= (svr::common::gpu_handler_1::get().get_max_gpu_threads() +
                               num_of_cores * THREADS_CORES_MULTIPLIER);
 }
 
@@ -172,7 +172,7 @@ void memory_manager::process_mem_usage(double &vm_usage, double &resident_set)
 
     // the two fields we want
     //
-    unsigned long vsize;
+    uint64_t vsize;
     long rss;
 
     stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
@@ -220,7 +220,7 @@ memory_manager::read_threads()
 {
     if (read_threads_running) {
         LOG4_ERROR("Memory manager thread hit collision!");
-        return 1;// std::numeric_limits<dtype(num_of_threads)>::max();
+        return 1;// std::numeric_limits<DTYPE(num_of_threads)>::max();
     }
     read_threads_running = true;
     const auto proc_pid = getpid();
@@ -231,7 +231,7 @@ memory_manager::read_threads()
     if (nftw(proc_tasks_path, read_contents, 10000, ftw_flags) == -1) {
         perror("nftw");
         read_threads_running = false;
-        return errno == ENOENT ? std::numeric_limits<dtype(num_of_threads)>::max() : num_of_threads;
+        return errno == ENOENT ? std::numeric_limits<DTYPE(num_of_threads)>::max() : num_of_threads;
     }
     read_threads_running = false;
     return num_of_threads;

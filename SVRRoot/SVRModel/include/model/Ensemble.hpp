@@ -11,7 +11,7 @@ namespace datamodel {
 
 struct t_level_predict_features
 {
-    std::deque<bpt::ptime> times;
+    data_row_container times;
     mat_ptr p_features;
 };
 using t_predict_features = std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, t_level_predict_features>;

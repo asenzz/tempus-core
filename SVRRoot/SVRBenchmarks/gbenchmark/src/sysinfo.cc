@@ -245,7 +245,7 @@ void InitializeSystemInfo() {
 #if __FreeBSD__ >= 7
   uint64_t hz = 0;
 #else
-  unsigned int hz = 0;
+  unsigned hz = 0;
 #endif
   size_t sz = sizeof(hz);
   const char* sysctl_path = "machdep.tsc_freq";

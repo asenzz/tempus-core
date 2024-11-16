@@ -49,26 +49,24 @@ public:
 
 
 #ifdef VIENNACL_WITH_OPENCL
-    void distances(
-            const viennacl::matrix<scalar_type> &d_features,
-            viennacl::matrix<scalar_type> &d_kernel_matrix)
+    virtual viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &d_features) override
     {
-        d_kernel_matrix = viennacl::linalg::prod(d_features, viennacl::trans(d_features));
+        viennacl::matrix<scalar_type> d_kernel_matrix = viennacl::linalg::prod(d_features, viennacl::trans(d_features));
         viennacl::vector<scalar_type> dia = viennacl::diag(d_kernel_matrix, 0);
         viennacl::vector<scalar_type> i = viennacl::scalar_vector<scalar_type>(dia.size(), 1., d_features.handle().opencl_handle().context()); // d_features.memory_domain() == viennacl::memory_types::OPENCL_MEMORY ? d_features.handle().opencl_handle() : d_features.handle().ram_handle() );
         viennacl::matrix<scalar_type> tmp = viennacl::linalg::outer_prod(i, dia);
         d_kernel_matrix = viennacl::linalg::element_sqrt(tmp + viennacl::trans(tmp) - 2. * d_kernel_matrix);
+        return d_kernel_matrix;
     }
 
     void operator() (
             const viennacl::matrix<scalar_type> &d_features,
-            viennacl::matrix<scalar_type> &d_kernel_matrix)
+            viennacl::matrix<scalar_type> &d_kernel_matrix) override
     {
-        distances(d_features, d_kernel_matrix);
-        d_kernel_matrix = viennacl::linalg::element_exp(d_kernel_matrix / (-2. * std::pow<double>(this->parameters.get_svr_kernel_param(), 2.)));
+        d_kernel_matrix = viennacl::linalg::element_exp(distances(d_features) / (-2. * std::pow<double>(this->parameters.get_svr_kernel_param(), 2.)));
     }
 
-    virtual void operator()(const arma::mat &features, arma::mat &kernel_matrix)
+    virtual void operator()(const arma::mat &features, arma::mat &kernel_matrix) override
     {
         const svr::common::gpu_context c;
         viennacl::matrix<scalar_type> d_kernel_matrix(kernel_matrix.n_rows, kernel_matrix.n_cols, c.ctx());
@@ -87,18 +85,23 @@ public:
     }
 
 
-    void operator()(const arma::mat &x_train, const arma::mat &x_test, arma::mat &kernel_matrix)
+    virtual void operator()(const arma::mat &x_train, const arma::mat &x_test, arma::mat &kernel_matrix) override
     {
         kernel_matrix.resize(x_train.n_rows, x_test.n_rows);
-#pragma omp parallel for collapse(2) num_threads(adj_threads(x_train.n_rows * x_test.n_rows))
-        for (size_t i = 0; i < x_train.n_rows; ++i)
-            for (size_t j = 0; j < x_test.n_rows; ++j)
+        OMP_FOR_(x_train.n_rows * x_test.n_rows, collapse(2))
+        for (unsigned i = 0; i < x_train.n_rows; ++i)
+            for (unsigned j = 0; j < x_test.n_rows; ++j)
                 kernel_matrix(i, j) = this->operator()(x_train.row(i), x_test.row(j));
     }
 
-    virtual double operator()(const arma::rowvec &a, const arma::rowvec &b)
+    inline virtual double distance(const arma::rowvec &a, const arma::rowvec &b)
     {
-        return std::exp(/* distance */arma::norm(a - b, 2) / (this->parameters.get_svr_kernel_param() ? -(2. * std::pow(this->parameters.get_svr_kernel_param(), 2.)) : -2.));
+        return arma::norm(a - b, 2);
+    }
+
+    inline virtual double operator()(const arma::rowvec &a, const arma::rowvec &b) override
+    {
+        return distance(a, b) / (this->parameters.get_svr_kernel_param() ? -(2. * std::pow(this->parameters.get_svr_kernel_param(), 2.)) : -2.);
     }
 
 

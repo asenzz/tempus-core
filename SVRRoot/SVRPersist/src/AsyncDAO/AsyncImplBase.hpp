@@ -35,7 +35,7 @@ public:
     {
     }
 
-    unsigned long storeOne()
+    uint64_t storeOne()
     {
         my_value_t value;
         if(store_buffer.pop(value))

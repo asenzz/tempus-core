@@ -24,8 +24,8 @@ lag_count = get_lag_count(file_name)
 os.system("cut -d ' ' -f 3- " + orig_dataset_file + " > " + dataset_file)
 with open(dataset_file) as f:
     ncols = len(f.readline().split(' '))
-labels = np.loadtxt(dataset_file, dtype=np.float64, usecols=0)
-# features = np.loadtxt(dataset_file, dtype=np.float64, usecols=range(1,ncols))
+labels = np.loadtxt(dataset_file, DTYPE=np.float64, usecols=0)
+# features = np.loadtxt(dataset_file, DTYPE=np.float64, usecols=range(1,ncols))
 
 
 fig1 = plt.figure()

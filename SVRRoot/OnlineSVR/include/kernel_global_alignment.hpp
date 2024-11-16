@@ -144,9 +144,9 @@ kernel_global_alignment<scalar_type>::logGAK_t_noexp(const vektor<scalar_type> &
     if (triangular > 0) {
         /* initialize */
         auto limit = trimax < triangular ? trimax + 1 : triangular;
-        for (dtype(limit) i = 0; i < limit; ++i)log_triangular_coefficients[i] = log(
+        for (DTYPE(limit) i = 0; i < limit; ++i)log_triangular_coefficients[i] = log(
                     1. - (double) i / (double) triangular);
-        for (dtype(limit) i = limit; i <= trimax; ++i)
+        for (DTYPE(limit) i = limit; i <= trimax; ++i)
             log_triangular_coefficients[i] = LOG0; /* Set all to zero */
     } else
         for (int i = 0; i <= trimax; ++i)
@@ -220,7 +220,7 @@ kernel_global_alignment<scalar_type>::logGAK_t(
     const int dimvect = va.size() / lag_count;
     if (dimvect <= 0)
         throw std::invalid_argument(svr::common::formatter() << "GA dimvect <= 0 !" << dimvect);
-    if (va.size() != dtype(va.size())(lag_count * dimvect))
+    if (va.size() != DTYPE(va.size())(lag_count * dimvect))
         throw std::invalid_argument(
                 svr::common::formatter() << "We don't know what is happening!" << va.size() << " " << lag_count
                                          << " " << dimvect);
@@ -264,9 +264,9 @@ kernel_global_alignment<scalar_type>::logGAK_t(
     if (triangular > 0) {
         /* initialize */
         auto limit = trimax < triangular ? trimax + 1 : triangular;
-        for (dtype(limit) i = 0; i < limit; ++i)
+        for (DTYPE(limit) i = 0; i < limit; ++i)
             log_triangular_coefficients[i] = log(1. - (double) i / (double) triangular);
-        for (dtype(limit) i = limit; i <= trimax; ++i)
+        for (DTYPE(limit) i = limit; i <= trimax; ++i)
             log_triangular_coefficients[i] = LOG0; /* Set all to zero */
     } else
         for (int i = 0; i <= trimax; ++i)
@@ -426,7 +426,7 @@ kernel_global_alignment<scalar_type>::operator()(
         throw std::invalid_argument(
                 svr::common::formatter() << "Lag count <= 0 !" << this->parameters.get_lag_count());
     const int dimvect = va.size() / lag_count;
-    if (dimvect < 1 || dtype(va.size())(dimvect * lag_count) != va.size())
+    if (dimvect < 1 || DTYPE(va.size())(dimvect * lag_count) != va.size())
         throw std::invalid_argument(
                 svr::common::formatter() << "GA dimvect <= 0 or otherwise BAD!   dimvect is " << dimvect
                                          << " va.size() is " << va.size() << " and lag_count is " << lag_count);
@@ -515,7 +515,7 @@ kernel_global_alignment<scalar_type>::operator()(
                  for (unsigned j = 0; j < learning.get_length_cols(); ++j)
             temp_copy_vector[i * features_gpu.internal_size2() + j] = learning.get_value(i, j);
     )
-    for (unsigned int j = 0; j < learning.get_length_cols(); ++j)
+    for (unsigned j = 0; j < learning.get_length_cols(); ++j)
         temp_copy_vector[learning.get_length_rows() * features_gpu.internal_size2() + j] = features[j];
     viennacl::fast_copy(&(temp_copy_vector[0]), &(temp_copy_vector[0]) + temp_copy_vector.size(), features_gpu);
     const double copied_dif = fabs(features[1] - features_gpu(learning.get_length_rows(), 1));
@@ -769,8 +769,8 @@ kernel_global_alignment<scalar_type>::operator()(
     CL_CHECK(err);
 
     const auto memory_acceptable =
-            svr::common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
-    const auto num_kernels = std::min<size_t>(std::min<size_t>(0.5 * memory_acceptable / cl, svr::common::gpu_handler_hid::get().get_max_gpu_kernels()), size1_sqr);
+            svr::common::gpu_handler_1::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
+    const auto num_kernels = std::min<size_t>(std::min<size_t>(0.5 * memory_acceptable / cl, svr::common::gpu_handler_1::get().get_max_gpu_kernels()), size1_sqr);
     const cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
     CL_CHECK(err);
 
@@ -987,8 +987,8 @@ kernel_global_alignment<scalar_type>::operator()(
     CL_CHECK(err);
 
     const size_t memory_acceptable =
-            svr::common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
-    size_t num_kernels = std::min<size_t>(std::min<size_t>(0.5 * memory_acceptable / cl, svr::common::gpu_handler_hid::get().get_max_gpu_kernels()), size1_sqr);
+            svr::common::gpu_handler_1::get().get_max_gpu_data_chunk_size() / sizeof(double) * 0.4;
+    size_t num_kernels = std::min<size_t>(std::min<size_t>(0.5 * memory_acceptable / cl, svr::common::gpu_handler_1::get().get_max_gpu_kernels()), size1_sqr);
     cl::Buffer logM_XY_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * 2 * cl * num_kernels, NULL, &err);
     CL_CHECK(err);
     // put results from diagonal compute back into GPU.

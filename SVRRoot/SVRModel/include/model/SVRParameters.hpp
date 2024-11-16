@@ -76,11 +76,11 @@ constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
 constexpr double C_default_svrparam_kernel_param2 = 0;
-constexpr unsigned C_default_svrparam_decrement_distance = common::C_default_kernel_max_chunk_len;
+constexpr unsigned C_default_svrparam_decrement_distance = common::C_best_decrement;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
 constexpr svr::datamodel::e_kernel_type C_default_svrparam_kernel_type = svr::datamodel::e_kernel_type::PATH;
 constexpr unsigned C_default_svrparam_kernel_type_uint = unsigned(svr::datamodel::e_kernel_type::PATH);
-constexpr unsigned C_default_svrparam_lag_count = 1000;
+constexpr unsigned C_default_svrparam_lag_count = 100; // All parameters should have the same lag count because of kernel function limitations
 const unsigned C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
 struct t_feature_mechanics
@@ -94,6 +94,8 @@ struct t_feature_mechanics
     bool needs_tuning() const noexcept;
 };
 
+std::ostream &operator <<(std::ostream &s, const t_feature_mechanics &fm);
+
 class SVRParameters : public Entity
 {
     bigint dataset_id = 0; /* TODO Replace with pointer to dataset id */
@@ -105,18 +107,20 @@ class SVRParameters : public Entity
     unsigned step_ = C_default_svrparam_step;
     unsigned chunk_ix_ = C_default_svrparam_chunk_ix;
     unsigned grad_level_ = C_default_svrparam_grad_level;
+    // TODO Implement manifold projection index
 
-    double svr_C = C_default_svrparam_svr_cost;
+    double svr_C = C_default_svrparam_svr_cost; // TODO Remove
+    arma::vec epsco; // TODO Save to DB and init properly
     double svr_epsilon = C_default_svrparam_svr_epsilon;
     double svr_kernel_param = C_default_svrparam_kernel_param1;
+    arma::vec gamma; // TODO Save to DB and init properly
     double svr_kernel_param2 = C_default_svrparam_kernel_param2;
-    u_int64_t svr_decremental_distance = C_default_svrparam_decrement_distance;
     double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio;
     std::set<unsigned> adjacent_levels;
     e_kernel_type kernel_type = C_default_svrparam_kernel_type;
     unsigned lag_count = C_default_svrparam_lag_count;
 
-    t_feature_mechanics feature_mechanics;
+    t_feature_mechanics feature_mechanics; // TODO Save to DB and init properly
 
 public:
     explicit SVRParameters() : Entity(0) {}
@@ -165,68 +169,77 @@ public:
 
     void set_input_queue_table_name(const std::string &value);
 
-    unsigned get_level_count() const;
+    unsigned get_level_count() const noexcept;
 
-    void set_level_count(const unsigned levels);
+    void set_level_count(const unsigned levels) noexcept;
 
-    unsigned get_decon_level() const;
+    unsigned get_decon_level() const noexcept;
 
-    void set_decon_level(const unsigned _decon_level);
+    void set_decon_level(const unsigned _decon_level) noexcept;
 
-    unsigned get_step() const;
+    unsigned get_step() const noexcept;
 
-    void set_step(const unsigned _step);
+    void set_step(const unsigned _step) noexcept;
 
-    unsigned get_chunk_index() const;
+    unsigned get_chunk_index() const noexcept;
 
-    void set_chunk_index(const unsigned _chunk_ix);
+    void set_chunk_index(const unsigned _chunk_ix) noexcept;
 
-    unsigned get_grad_level() const;
+    unsigned get_grad_level() const noexcept;
 
-    void set_grad_level(const unsigned _grad_level);
+    void set_grad_level(const unsigned _grad_level) noexcept;
 
-    void decrement_gradient();
+    void decrement_gradient() noexcept;
 
-    double get_svr_C() const;
+    double get_svr_C() const noexcept;
 
-    void set_svr_C(const double _svr_C);
+    void set_svr_C(const double _svr_C) noexcept;
 
-    double get_svr_epsilon() const;
+    void set_epsco(const arma::vec &epsco) noexcept;
 
-    void set_svr_epsilon(const double _svr_epsilon);
+    arma::vec get_epsco() const noexcept;
 
-    double get_svr_kernel_param() const;
+    double get_svr_epsilon() const noexcept;
 
-    void set_svr_kernel_param(const double _svr_kernel_param);
+    void set_svr_epsilon(const double _svr_epsilon) noexcept;
 
-    double get_svr_kernel_param2() const;
+    arma::vec get_gamma() const noexcept;
 
-    void set_svr_kernel_param2(const double _svr_kernel_param2);
+    arma::vec &get_gamma() noexcept;
+
+    void set_gamma(const arma::vec &gamma) noexcept;
+
+    double get_svr_kernel_param() const noexcept;
+
+    void set_svr_kernel_param(const double _svr_kernel_param) noexcept;
+
+    double get_svr_kernel_param2() const noexcept;
+
+    void set_svr_kernel_param2(const double _svr_kernel_param2) noexcept;
+
+    PROPERTY(double, kernel_param3, .75);
+
+    PROPERTY(unsigned, svr_decremental_distance, C_default_svrparam_decrement_distance) // TODO Refactor all class properties to use the PROPERTY macro
 
     // Only head param (chunk 0, grad 0, manifold 0) takes effect
-    u_int64_t get_svr_decremental_distance() const;
+    double get_svr_adjacent_levels_ratio() const noexcept;
 
-    void set_svr_decremental_distance(const uint64_t _svr_decremental_distance);
-
-    // Only head param (chunk 0, grad 0, manifold 0) takes effect
-    double get_svr_adjacent_levels_ratio() const;
-
-    void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio);
+    void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio) noexcept;
 
     std::set<unsigned> &get_adjacent_levels();
 
     const std::set<unsigned> &get_adjacent_levels() const;
 
-    e_kernel_type get_kernel_type() const;
+    e_kernel_type get_kernel_type() const noexcept;
 
     bool is_manifold() const;
 
-    void set_kernel_type(const e_kernel_type _kernel_type);
+    void set_kernel_type(const e_kernel_type _kernel_type) noexcept;
 
     // Lag count across all models should be the same with the current infrastructure inplace // Only head param (chunk 0, grad 0, manifold 0) takes effect
-    unsigned get_lag_count() const;
+    unsigned get_lag_count() const noexcept;
 
-    void set_lag_count(const unsigned _lag_count);
+    void set_lag_count(const unsigned _lag_count) noexcept;
 
     t_feature_mechanics &get_feature_mechanics();
 
@@ -257,7 +270,7 @@ struct t_param_preds
     svr::datamodel::SVRParameters params{};
     t_predictions_ptr p_predictions = nullptr;
 
-    static void free_predictions(t_predictions_ptr &p_predictions_);
+    static void free_predictions(const t_predictions_ptr &p_predictions_);
 
     void free();
 };

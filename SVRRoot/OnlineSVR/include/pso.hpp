@@ -28,6 +28,7 @@
 #include <atomic>
 #include <mutex>
 #include "common/compatibility.hpp"
+#include "optimizer.hpp"
 
 namespace svr {
 namespace optimizer {
@@ -106,9 +107,8 @@ void pso_set_default_settings(pso_settings_t *p_settings);
 
 // minimize the provided obj_fun using PSO with the specified settings
 // and store the result in *solution
-std::vector<std::pair<double, std::vector<double>>>
-pso_solve(
-        const std::function<double(std::vector<double> &)> &f,
+std::vector<std::pair<double, std::vector<double>>> pso_solve(
+        const loss_callback_t &f,
         pso_settings_t *settings,
         const size_t decon_level,
         const std::string &column_name);
@@ -149,7 +149,7 @@ struct pso_state
     std::string save_to_string();
 
     template<class Archive>
-    void serialize(Archive &ar, const unsigned int version)
+    void serialize(Archive &ar, const unsigned version)
     {
         ar & pos_;
         ar & vel_;

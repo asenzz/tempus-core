@@ -10,18 +10,18 @@ namespace
 {
     static const auto cmp_primary_key = [] (ScalingFactorsTask_ptr const & lhs, ScalingFactorsTask_ptr const & rhs)
     {
-        return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+        return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
                 && lhs->get_id() == rhs->get_id();
     };
     static const auto cmp_whole_value = [] (ScalingFactorsTask_ptr const & lhs, ScalingFactorsTask_ptr const & rhs)
     {
-        return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+        return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
                 && *lhs == *rhs;
     };
 }
 
 struct AsyncScalingFactorsTaskDAO::AsyncImpl
-    : AsyncImplBase<ScalingFactorsTask_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgScalingFactorsTaskDAO>
+    : AsyncImplBase<ScalingFactorsTask_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgScalingFactorsTaskDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
     :AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)

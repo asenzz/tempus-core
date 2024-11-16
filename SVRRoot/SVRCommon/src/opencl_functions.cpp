@@ -91,7 +91,7 @@ char *shrFindFilePath(const char *filename, const char *executable_path)
     }
 
     // Loop over all search paths and return the first hit
-    for (unsigned int i = 0; i < sizeof(searchPath) / sizeof(char *); ++i) {
+    for (unsigned i = 0; i < sizeof(searchPath) / sizeof(char *); ++i) {
         std::string path(searchPath[i]);
         size_t executable_name_pos = path.find("<executable_name>");
 

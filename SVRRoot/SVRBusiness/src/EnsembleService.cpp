@@ -18,7 +18,7 @@ namespace svr {
 namespace business {
 
 datamodel::t_predict_features
-EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &times)
+EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times)
 {
     LOG4_BEGIN();
 
@@ -87,11 +87,10 @@ void EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &en
 }
 
 datamodel::DeconQueue_ptr
-EnsembleService::predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &times) noexcept
+EnsembleService::predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times) noexcept
 {
     try {
-        return predict(dataset, ensemble,
-                       EnsembleService::prepare_prediction_data(dataset, ensemble, times));
+        return predict(dataset, ensemble, EnsembleService::prepare_prediction_data(dataset, ensemble, times));
     } catch (const std::exception &ex) {
         LOG4_ERROR("Failed predicting " << ensemble.get_column_name() << ", " << ex.what());
         return nullptr;

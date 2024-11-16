@@ -32,7 +32,7 @@ def svrload(K, y, Lambda):
     LastEventPoint = resultsMatrixToLoad['LastEventPoint']  
     LastEvent = resultsMatrixToLoad['LastEvent']
      
-#    Kstar = np.zeros(shape=[1,1], dtype=globaltype)
+#    Kstar = np.zeros(shape=[1,1], DTYPE=globaltype)
 #    Kstar = updateKStar(Kstar, K, Lambda, [], [], ElbowRight, ElbowLeft);
 #    LeftRegion, ElbowLeft, Center, ElbowRight, RightRegion, alphas, gammas, beta0, error  
     return LeftRegion, ElbowLeft, Center, ElbowRight, RightRegion, alphas, gammas, beta0, mae;

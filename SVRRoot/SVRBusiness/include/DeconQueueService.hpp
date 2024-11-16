@@ -33,6 +33,7 @@ namespace svr { namespace business { class InputQueueService; }}
 namespace svr {
 namespace business {
 
+constexpr unsigned C_mirror_fade_in = 100;
 
 typedef enum class recon_type : uint
 {

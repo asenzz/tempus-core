@@ -2,6 +2,8 @@
 // Created by zarko on 8/8/24.
 //
 
+#if 0
+
 #include <eigen3/Eigen/Core>
 #define ARMA_DONT_USE_LAPACK
 #define ARMA_DONT_USE_BLAS
@@ -239,3 +241,5 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
 
 }
 }
+
+#endif

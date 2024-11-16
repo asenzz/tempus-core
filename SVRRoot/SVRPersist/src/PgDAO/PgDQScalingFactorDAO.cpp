@@ -52,9 +52,8 @@ svr::datamodel::dq_scaling_factor_container_t PgDQScalingFactorDAO::find_all_by_
 {
     DQScalingFactorRowMapper row_mapper;
     auto sfs = data_source.query_for_array(row_mapper, AbstractDAO::get_sql("find_all_by_model_id"), dataset_id);
-
     svr::datamodel::dq_scaling_factor_container_t result;
-    for (auto &sf: sfs) result.insert(sf);
+    std::copy(C_default_exec_policy, sfs.begin(), sfs.end(), std::inserter(result, result.end()));
     return result;
 }
 

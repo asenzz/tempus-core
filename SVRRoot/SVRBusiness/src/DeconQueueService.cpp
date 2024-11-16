@@ -187,11 +187,11 @@ DeconQueueService::deconstruct(
 #endif
 #endif
 
-// Trim not needed data
-    auto trim_diff = std::max<size_t>(
+    // Trim not needed data
+    const auto trim_diff = std::max<size_t>(
             dataset.get_max_lag_count() * dataset.get_max_quantise() + decon_queue.size() - pre_decon_size,
             dataset.get_residuals_length(decon_queue.get_table_name()) /* leave next decon residuals */);
-    if (trim_diff < ssize_t(decon_queue.size())) {
+    if (trim_diff < decon_queue.size()) {
         LOG4_DEBUG("Trimming to " << trim_diff << " rows decon queue " << decon_queue.get_table_name());
         decon_queue.get_data().erase(decon_queue.begin(), (decon_queue.get_data().rbegin() + trim_diff).base());
     }
@@ -355,7 +355,7 @@ void DeconQueueService::reconstruct(
         const datamodel::DataRow &d = **(decon.cbegin() + i);
         double v = 0;
 UNROLL()
-        for (dtype(levct) l = 0; l < levct; l += LEVEL_STEP)
+        for (DTYPE(levct) l = 0; l < levct; l += LEVEL_STEP)
             if (l != trans_levix)
                 op(v, d.get_value(l));
         recon[startout + i] = ptr<datamodel::DataRow>(d.get_value_time(), time_nau, d.get_tick_volume(), std::vector{iq_unscaler(v)});
@@ -464,9 +464,12 @@ void DeconQueueService::mirror_tail(const datamodel::datarow_crange &input, cons
     const auto empty_ct = needed_data_ct - input_size;
     LOG4_WARN("Adding mirrored tail of size " << empty_ct << ", to input of size " << input_size << ", total size " << needed_data_ct);
     tail.resize(empty_ct);
+    const auto fade_in = std::min<unsigned>(empty_ct, C_mirror_fade_in);
     OMP_FOR_i(empty_ct) {
         const auto phi = double(i) / double(input_size);
-        tail[empty_ct - 1 - i] = input[(size_t) std::round((input_size - 1) * std::abs(std::round(phi) - phi))]->at(in_colix);
+        const auto out_i = empty_ct - 1 - i;
+        tail[out_i] = input[(size_t) std::round((input_size - 1) * std::abs(std::round(phi) - phi))]->at(in_colix);
+        if (out_i < fade_in) tail[out_i] *= out_i / fade_in;
     }
 }
 

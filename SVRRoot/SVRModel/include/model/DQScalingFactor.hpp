@@ -19,17 +19,17 @@ namespace svr {
 namespace datamodel {
 
 struct DQScalingFactorsLess;
-typedef tbb::concurrent_set<DQScalingFactor_ptr, DQScalingFactorsLess> dq_scaling_factor_container_t;
+typedef std::set<DQScalingFactor_ptr, DQScalingFactorsLess> dq_scaling_factor_container_t;
 
 class DQScalingFactor : public Entity
 {
 private:
     bigint model_id_ = 0;  // TODO Replace with pointer to Dataset
 
-    size_t decon_level_ = C_default_svrparam_decon_level;
-    size_t step_ = C_default_svrparam_step;
-    size_t grad_depth_ = C_default_svrparam_grad_level;
-    size_t chunk_ix_ = C_default_svrparam_chunk_ix;
+    unsigned decon_level_ = C_default_svrparam_decon_level;
+    unsigned step_ = C_default_svrparam_step;
+    unsigned grad_depth_ = C_default_svrparam_grad_level;
+    unsigned chunk_ix_ = C_default_svrparam_chunk_ix;
 
     double scaling_factor_features = std::numeric_limits<double>::quiet_NaN();
     double scaling_factor_labels = std::numeric_limits<double>::quiet_NaN();
@@ -39,7 +39,7 @@ private:
 public:
     DQScalingFactor(
             const bigint id, const bigint model_id,
-            const size_t decon_level, const size_t step, const size_t grad_depth, const size_t chunk_index,
+            const unsigned decon_level, const unsigned step, const unsigned grad_depth, const unsigned chunk_index,
             const double scale_feat = std::numeric_limits<double>::quiet_NaN(),
             const double scale_labels = std::numeric_limits<double>::quiet_NaN(),
             const double dc_offset_feat = std::numeric_limits<double>::quiet_NaN(),
@@ -57,21 +57,21 @@ public:
 
     void set_model_id(const bigint model_id);
 
-    size_t get_decon_level() const;
+    unsigned get_decon_level() const;
 
-    void set_decon_level(const size_t decon_level);
+    void set_decon_level(const unsigned decon_level);
 
-    size_t get_step() const;
+    unsigned get_step() const;
 
-    void set_step(const size_t step);
+    void set_step(const unsigned step);
 
-    size_t get_grad_depth() const;
+    unsigned get_grad_depth() const;
 
-    void set_grad_depth(const size_t grad_level);
+    void set_grad_depth(const unsigned grad_level);
 
-    size_t get_chunk_index() const;
+    unsigned get_chunk_index() const;
 
-    void set_chunk_index(const size_t chunk_index);
+    void set_chunk_index(const unsigned chunk_index);
 
     double get_features_factor() const;
 
@@ -112,7 +112,8 @@ bool operator<(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs);
 template<typename T> inline std::basic_ostream<T> &
 operator<<(std::basic_ostream<T> &s, const dq_scaling_factor_container_t &c)
 {
-    return s << c;
+    std::for_each(C_default_exec_policy, c.cbegin(), c.cend(), [&s](const auto &d) { s << d->to_string() << ", "; });
+    return s;
 }
 
 

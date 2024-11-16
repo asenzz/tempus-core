@@ -22,24 +22,30 @@ constexpr unsigned C_test_len = 1;
 #else
 constexpr unsigned C_slide_skip = 10;
 constexpr unsigned C_max_j = 10;
-constexpr unsigned C_test_len = 1000;
+constexpr unsigned C_test_len = 500;
 #endif
 constexpr unsigned C_tune_min_validation_window = C_test_len - C_slide_skip * (C_max_j - 1);
-constexpr double C_slides_len = [](){
+constexpr double C_slides_len = [] {
     double r = 0;
     for (unsigned j = 0; j < C_max_j; ++j) r += C_test_len - C_slide_skip * (C_max_j - j - 1);
     return r;
-} ();
+}();
 
+#ifdef REMOVE_OUTLIERS
+constexpr uint32_t C_shift_lim = 1;
+constexpr uint32_t C_outlier_slack = 100;
+#endif
 
 namespace common {
 
+// For Postgres queries
 constexpr unsigned C_min_cursor_rows = 1e4;
 constexpr unsigned C_cursors_per_query = 8;
 
 const double C_input_obseg_labels = 1;
 constexpr double C_input_obseg_features = 1;
 
+// Save first N forecasts to database for later analysis
 constexpr unsigned C_forecast_focus = 115;
 
 constexpr uint8_t C_tune_keep_preds = 2;
@@ -52,23 +58,20 @@ constexpr char C_decon_queue_table_name_prefix[] = "z";
 constexpr char C_decon_queue_column_level_prefix[] = "level_";
 constexpr char C_mt4_date_time_format[] = "%Y.%m.%d %H:%M:%S";
 
-constexpr double C_kernel_path_tau = .25;
-
-const unsigned C_omp_max_active_levels = []() {
-    const auto p_env_max_active_levels = getenv("MAX_ACTIVE_LEVELS");
-    return p_env_max_active_levels ? strtoul(p_env_max_active_levels, nullptr, 10) : 10 * C_n_cpu;
-} ();
-const unsigned C_omp_teams_thread_limit = []() {
-    const auto p_env_teams_thread_limit = getenv("OMP_THREAD_LIMIT");
-    return p_env_teams_thread_limit ? strtoul(p_env_teams_thread_limit, nullptr, 10) : 100 * C_n_cpu;
-} ();
-
 #ifdef INTEGRATION_TEST
-const auto C_integration_test_validation_window = []() {
+
+const auto C_integration_test_validation_window = [] {
     constexpr unsigned test_offset_default = 345;
     const auto p = getenv("SVRWAVE_TEST_WINDOW");
-    return p ? (unsigned) strtoul(p, nullptr, 10) : test_offset_default;
+    if (!p) {
+        std::cout << "Environment variable SVRWAVE_TEST_WINDOW not set, using default " << test_offset_default << std::endl;
+        return test_offset_default;
+    } else {
+        const auto r = (unsigned) strtoul(p, nullptr, 10);
+        return r;
+    }
 }();
+
 #endif
 
 constexpr double C_itersolve_delta = 1e-4;
@@ -100,7 +103,7 @@ constexpr char C_default_multistep_len_str[] = "1";
 constexpr char C_default_multiout_str[] = "1";
 
 constexpr unsigned C_max_csv_token_size = 0xFF;
-constexpr unsigned C_default_kernel_max_chunk_len = 4000; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernel updated
+constexpr unsigned C_default_kernel_max_chunk_len = 4500; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernels modified for 2D indexing
 const unsigned C_default_multistep_len = std::stoul(C_default_multistep_len_str);
 const unsigned C_default_multiout = std::stoul(C_default_multiout_str);
 constexpr unsigned C_default_gradient_count = 1;
@@ -109,11 +112,12 @@ constexpr unsigned C_default_level_count = 1;
 constexpr unsigned C_default_hardware_concurrency = 16;
 const boost::posix_time::time_duration C_default_features_max_time_gap = boost::posix_time::hours(60);
 
-constexpr double C_FFA_alpha = .5;   // Starting randomness
-constexpr double C_FFA_betamin = .5;   // Attraction
-constexpr double C_FFA_gamma = 1.;   // Visibility
-
 constexpr char C_test_primary_column[] = "xauusd_avg_bid"; // Ignore tuning or validating other input queue columns in case of aux columns
+
+// decrement = chunk len + test_len + shift_lim + outlier_slack
+#ifdef REMOVE_OUTLIERS
+constexpr uint32_t C_best_decrement = C_default_kernel_max_chunk_len + C_test_len + C_shift_lim + C_outlier_slack;
+#endif
 
 }
 

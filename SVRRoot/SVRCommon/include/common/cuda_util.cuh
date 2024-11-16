@@ -18,7 +18,7 @@
 
 namespace svr {
 
-constexpr unsigned long long C_sign_mask_dbl = 0x7FFFFFFF;
+constexpr uint64_t C_sign_mask_dbl = 0x7FFFFFFF;
 constexpr unsigned C_cufft_input_limit = 64e5;
 // #define HETEROGENOUS_GPU_HW
 
@@ -39,11 +39,16 @@ constexpr unsigned C_cufft_input_limit = 64e5;
 #define CU_BLOCKS_THREADS(n) CU_BLOCKS(n), CU_THREADS(n)
 #define CU_BLOCKS_THREADS_t(n) std::pair{CU_BLOCKS_THREADS(n)}
 
-#define CU_THREADS_2D(x_size) unsigned((x_size) > common::C_cu_tile_width ? common::C_cu_tile_width : (x_size))
-#define CU_BLOCKS_2D(x_size) (unsigned) CDIV((x_size), common::C_cu_tile_width)
-#define CU_BLOCKS_THREADS_2D(x_size) dim3(CU_BLOCKS_2D(x_size), CU_BLOCKS_2D(x_size)), dim3(CU_THREADS_2D(x_size), CU_THREADS_2D(x_size))
+#define CU_THREADS_2D(x) unsigned((x) > common::C_cu_tile_width ? common::C_cu_tile_width : (x))
+#define CU_BLOCKS_2D(x) (unsigned) CDIV((x), common::C_cu_tile_width)
+#define CU_BLOCKS_THREADS_2D(x) dim3(CU_BLOCKS_2D(x), CU_BLOCKS_2D(x)), dim3(CU_THREADS_2D(x), CU_THREADS_2D(x))
+#define CU_BLOCKS_THREADS_2D2(x, y) dim3(CU_BLOCKS_2D(x), CU_BLOCKS_2D(y)), dim3(CU_THREADS_2D(x), CU_THREADS_2D(y))
+#define CU_BLOCKS_THREADS_2D2_t(x, y) std::pair{CU_BLOCKS_THREADS_2D2((x), (y))}
 
-template<typename T> inline __device__ __host__ dtype(T::x) cunorm(const T &v) { return v.x * v.x + v.y * v.y; };
+constexpr dim3 C_cu_tile_dim(common::C_cu_tile_width, common::C_cu_tile_width);
+
+template<typename T> inline __device__ __host__ DTYPE(T::x) cunorm(const T &v)
+{ return v.x * v.x + v.y * v.y; };
 
 template<typename T> __device__ __forceinline__ void warp_reduce_sum(volatile T *sumdata, const unsigned ix, const unsigned n)
 {
@@ -104,43 +109,73 @@ template<const unsigned block_size, typename T> __device__ __forceinline__ void 
 
 template<typename T> void cu_fill(T *const data, const unsigned n, const T value, const cudaStream_t custream = nullptr)
 {
-    (void) thrust::async::for_each(thrust::cuda::par.on(custream), data, data + n, [value] __device__ (T &d) { d = value; });
+    (void) thrust::async::for_each(thrust::cuda::par.on(custream), data, data + n,[value]
+            __device__(T & d)
+    { d = value; });
 }
 
-constexpr unsigned C_cu_default_stream_flags = cudaStreamDefault;
+constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set to cudaStreamNonBlocking
 
-#define CTX_CUSTREAM                                \
-    common::gpu_context ctx;                        \
+#define CTX_CUSTREAM_(x)                            \
+    common::gpu_context_<(x)> ctx;                  \
     cudaStream_t custream;                          \
     cu_errchk(cudaSetDevice(ctx.phy_id()));         \
     cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
 
-void cu_sync_destroy(cudaStream_t strm);
+#define CTX_CUSTREAM CTX_CUSTREAM_(CTX_PER_GPU)
+
+#define CTX4_CUSTREAM CTX_CUSTREAM_(4)
+
+#define CTX8_CUSTREAM                               \
+    common::gpu_context_<8> ctx;                    \
+    cudaStream_t custream;                          \
+    cu_errchk(cudaSetDevice(ctx.phy_id()));         \
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
+
+void cusyndestroy(cudaStream_t strm);
 
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream);
 
-void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
+void copy_submat(CPTRd in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
                  const unsigned in_end_n, const unsigned ldout, cudaMemcpyKind kind, const cudaStream_t stm);
 
-__host__ __device__ inline constexpr unsigned clamp_n (const unsigned n) { return _MIN(n, svr::common::C_cu_clamp_n); }
+__host__ __device__ inline constexpr unsigned clamp_n(const unsigned n)
+{ return _MIN(n, svr::common::C_cu_clamp_n); }
 
 
-
-template<typename T> T *
+template<typename T> inline T *
 cumallocopy(const std::vector<T> &v, const cudaStream_t custream = nullptr)
 {
     T *ptr;
-    cu_errchk(cudaMallocAsync((void **)&ptr, v.size() * sizeof(T), custream));
+    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * sizeof(T), custream));
     cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
-template<typename I, typename T = typename I::value_type> T *
+template<typename T> inline T *
+cumallocopy(const std::span<T> &v, const cudaStream_t custream = nullptr)
+{
+    std::decay_t<T> *ptr;
+    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * sizeof(T), custream));
+    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    return ptr;
+}
+
+template<typename T> inline T *
+cumallocopy(const arma::Mat<T> &v, const cudaStream_t custream = nullptr)
+{
+    T *ptr;
+    cu_errchk(cudaMallocAsync((void **) &ptr, v.n_elem * sizeof(T), custream));
+    cu_errchk(cudaMemcpyAsync(ptr, v.mem, v.n_elem * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    return ptr;
+}
+
+template<typename I, typename T = typename I::value_type> inline T *
 cumallocopy(const I &begin, const I &end, const cudaStream_t custream = nullptr)
 {
     T *ptr;
     const auto size = std::distance(begin, end) * sizeof(T);
-    cu_errchk(cudaMallocAsync((void **)&ptr, size, custream));
+    cu_errchk(cudaMallocAsync((void **) &ptr, size, custream));
     cu_errchk(cudaMemcpyAsync(ptr, &*begin, size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
@@ -153,8 +188,8 @@ template<typename T> inline T *cucalloc(const cudaStream_t custream = nullptr, c
     return ptr;
 }
 
-template<typename T> T *
-cumallocopy(const T *source, const size_t len, const cudaMemcpyKind kind, const cudaStream_t custream = nullptr)
+template<typename T> inline T *
+cumallocopy(const T *source, const cudaStream_t custream = nullptr, const unsigned len = 1, const cudaMemcpyKind kind = cudaMemcpyHostToDevice)
 {
     const auto size = len * sizeof(T);
     T *ptr;
@@ -165,17 +200,11 @@ cumallocopy(const T *source, const size_t len, const cudaMemcpyKind kind, const 
             break;
         case cudaMemcpyDeviceToDevice:
         case cudaMemcpyHostToDevice:
-        case cudaMemcpyDefault: cu_errchk(cudaMallocAsync((void **)&ptr, size, custream));
+        case cudaMemcpyDefault: cu_errchk(cudaMallocAsync((void **) &ptr, size, custream));
             break;
     }
     cu_errchk(cudaMemcpyAsync(ptr, source, size, kind, custream));
     return ptr;
-}
-
-template<typename T> T *
-cumallocopy(const T *source, const cudaStream_t custream, const size_t len = 1, const cudaMemcpyKind kind = cudaMemcpyHostToDevice)
-{
-    return cumallocopy(source, len, kind, custream);
 }
 
 template<typename T> void cufreecopy(T *output, const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)
@@ -192,8 +221,7 @@ template<typename T> std::vector<T> cufreecopy(const T *source, const cudaStream
     return res;
 }
 
-template<typename T> std::vector<T>
-cucopy(const T *source, const size_t length, const cudaStream_t custream = nullptr)
+template<typename T> std::vector<T> cucopy(const T *source, const size_t length, const cudaStream_t custream = nullptr)
 {
     std::vector<T> res(length);
     cu_errchk(cudaMemcpyAsync(res.data(), source, length * sizeof(T), cudaMemcpyDeviceToHost, custream));
@@ -208,15 +236,19 @@ cucopy(const thrust::device_vector<T> &source, const cudaStream_t custream = nul
     return res;
 }
 
+template<typename T> inline void cucopy(RPTR(T) dest, CRPTR(T) src, const size_t length = 1, const cudaStream_t custream = nullptr, const cudaMemcpyKind kind = cudaMemcpyDeviceToDevice, const unsigned stride = 1)
+{
+    cu_errchk(cudaMemcpy2DAsync(dest, sizeof(T), src, stride * sizeof(T), sizeof(T), length / stride, kind));
+}
+
 
 // float atomicMin
 __device__ __forceinline__ float atomicMin(float *address, float val)
 {
     int ret = __float_as_int(*address);
-    while(val < __int_as_float(ret))
-    {
+    while (val < __int_as_float(ret)) {
         int old = ret;
-        if((ret = atomicCAS((int *)address, old, __float_as_int(val))) == old)
+        if ((ret = atomicCAS((int *) address, old, __float_as_int(val))) == old)
             break;
     }
     return __int_as_float(ret);
@@ -226,10 +258,9 @@ __device__ __forceinline__ float atomicMin(float *address, float val)
 __device__ __forceinline__ float atomicMax(float *address, float val)
 {
     int ret = __float_as_int(*address);
-    while(val > __int_as_float(ret))
-    {
+    while (val > __int_as_float(ret)) {
         int old = ret;
-        if((ret = atomicCAS((int *)address, old, __float_as_int(val))) == old)
+        if ((ret = atomicCAS((int *) address, old, __float_as_int(val))) == old)
             break;
     }
     return __int_as_float(ret);
@@ -239,10 +270,9 @@ __device__ __forceinline__ float atomicMax(float *address, float val)
 __device__ __forceinline__ double atomicMin(double *address, double val)
 {
     unsigned long long ret = __double_as_longlong(*address);
-    while(val < __longlong_as_double(ret))
-    {
+    while (val < __longlong_as_double(ret)) {
         unsigned long long old = ret;
-        if((ret = atomicCAS((unsigned long long *)address, old, __double_as_longlong(val))) == old)
+        if ((ret = atomicCAS((unsigned long long *) address, old, __double_as_longlong(val))) == old)
             break;
     }
     return __longlong_as_double(ret);
@@ -252,13 +282,35 @@ __device__ __forceinline__ double atomicMin(double *address, double val)
 __device__ __forceinline__ double atomicMax(double *address, double val)
 {
     unsigned long long ret = __double_as_longlong(*address);
-    while(val > __longlong_as_double(ret))
-    {
+    while (val > __longlong_as_double(ret)) {
         unsigned long long old = ret;
-        if((ret = atomicCAS((unsigned long long *)address, old, __double_as_longlong(val))) == old)
+        if ((ret = atomicCAS((unsigned long long *) address, old, __double_as_longlong(val))) == old)
             break;
     }
     return __longlong_as_double(ret);
+}
+
+
+__device__ __forceinline__ double atomicMul(double *const address, double val)
+{
+    auto const address_as_ull = (unsigned long long int *) address;
+    unsigned long long int old = *address_as_ull, assumed;
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val * __longlong_as_double(assumed)));
+    } while (assumed != old);
+    return __longlong_as_double(old);
+}
+
+__device__ __forceinline__ float atomicMul(float *const address, float val)
+{
+    auto const address_as_int = (int *) address;
+    int old = *address_as_int, assumed;
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_int, assumed, __float_as_int(val * __float_as_int(assumed)));
+    } while (assumed != old);
+    return __int_as_float(old);
 }
 
 }

@@ -36,78 +36,41 @@ namespace common {
 
 class formatter
 {
-public:
-    formatter() = default;
-
-    ~formatter() = default;
-
-    template<typename Type>
-    formatter &operator<<(const Type &value)
-    {
-        stream_ << value;
-        return *this;
-    }
-
-    std::string str() const
-    { return stream_.str(); }
-
-    operator std::string() const
-    { return stream_.str(); }
-
-    explicit operator const char *() const
-    {
-        const std::string &s = stream_.str();
-        return s.c_str();
-    }
-
     enum ConvertToString
     {
         to_str
     };
 
-    std::string operator>>(ConvertToString)
-    { return stream_.str(); }
+    std::stringstream stream_;
+
+public:
+    formatter() = default;
+
+    ~formatter() = default;
+
+    template<typename Type> formatter &operator<<(const Type &value)
+    {
+        stream_ << value;
+        return *this;
+    }
+
+    std::string str() const;
+    operator std::string() const;
+    explicit operator const char *() const;
+    std::string operator>>(ConvertToString);
 
     formatter &operator=(formatter &) = delete;
 
     formatter(const formatter &) = delete;
-
-private:
-    std::stringstream stream_;
 };
 
-
-static inline std::string &ltrim(std::string &s)
-{
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](const int c) { return !std::isspace(c); }));
-    return s;
-}
-
+std::string &ltrim(std::string &s);
 // trim from end
-static inline std::string &rtrim(std::string &s)
-{
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](const int c) { return !std::isspace(c); }).base(), s.end());
-    return s;
-}
-
+std::string &rtrim(std::string &s);
 // trim from both ends
-static inline std::string &trim(std::string &s)
-{
-    return ltrim(rtrim(s));
-}
-
-static inline std::string tolower(std::string str)
-{
-    std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::tolower);
-    return str;
-}
-
-static inline std::string toupper(std::string str)
-{
-    std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::toupper);
-    return str;
-}
-
+std::string &trim(std::string &s);
+std::string tolower(std::string str);
+std::string toupper(std::string str);
 
 template<typename T> std::string
 to_binary_string(const std::set<T> &values)

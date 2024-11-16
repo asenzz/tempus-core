@@ -15,18 +15,18 @@ namespace dao {
 namespace {
 bool cmp_primary_key(datamodel::DeconQueue_ptr const & lhs, datamodel::DeconQueue_ptr const & rhs)
 {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
             && lhs->get_table_name() == rhs->get_table_name();
 }
 bool cmp_whole_value(datamodel::DeconQueue_ptr const & lhs, datamodel::DeconQueue_ptr const & rhs)
 {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
             && lhs->get_table_name() == rhs->get_table_name();
 }
 }
 
 struct AsyncDeconQueueDAO::AsyncImpl
-    : public AsyncImplBase<datamodel::DeconQueue_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), class PgDeconQueueDAO>
+    : public AsyncImplBase<datamodel::DeconQueue_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), class PgDeconQueueDAO>
 {
 
     AsyncImpl(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)

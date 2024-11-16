@@ -35,16 +35,7 @@
 namespace svr {
 namespace oemd {
 
-
-namespace {
-
-constexpr unsigned C_column_interleave = datamodel::C_features_superset_coef;
-
-constexpr unsigned C_quantisation_interleave = 3;
-#ifdef PRODUCTION_BUILD
-constexpr unsigned unroll_ct = CDIVI(datamodel::C_default_svrparam_lag_count * datamodel::C_features_superset_coef / C_column_interleave, 10);
-#endif
-}
+const auto C_freq_ceil = .5;
 
 bool cu_fix_mask(double *const d_mask, const unsigned mask_len, const cudaStream_t custream)
 {
@@ -53,22 +44,21 @@ bool cu_fix_mask(double *const d_mask, const unsigned mask_len, const cudaStream
         LOG4_WARN("Zero mask sum.");
         return false;
     }
-    datamodel::G_div_inplace<<<CU_BLOCKS_THREADS(mask_len), 0, custream>>>(d_mask, mask_sum, mask_len);
+    datamodel::G_div_I<<<CU_BLOCKS_THREADS(mask_len), 0, custream>>>(d_mask, mask_sum, mask_len);
     return true;
 }
 
-void fix_mask(CPTR(double) h_in, double *const h_out, const unsigned mask_len, const cudaStream_t custream)
+void fix_mask(CPTRd h_in, double *const h_out, const unsigned mask_len, const cudaStream_t custream)
 {
-    auto d_in = cumallocopy(h_in, mask_len, cudaMemcpyHostToDevice, custream);
+    auto d_in = cumallocopy(h_in, custream, mask_len);
     cu_fix_mask(d_in, mask_len, custream);
     cufreecopy(h_out, d_in, custream, mask_len);
 }
 
-// This function should be equivalent to align_features.cu:cu_align_features
 template<const unsigned block_size> __global__ void G_autocorrelation_sum(
-        RPTR(double) d_sum, CRPTR(double) x, CRPTR(double) y, const unsigned n_min, const unsigned qt, const unsigned n_qt)
+        RPTR(double) d_sum, CRPTRd x, CRPTRd y, const unsigned n_min, const unsigned qt, const unsigned n_qt)
 {
-    static __shared__ double sh_dist[block_size];
+    __shared__ double sh_dist[block_size];
     sh_dist[tid] = 0;
     CU_STRIDED_FOR_i(n_qt) {
         double y_qi = 0;
@@ -101,7 +91,7 @@ template<const unsigned block_size> __global__ void G_autocorrelation_sum(
 }
 
 template<const unsigned block_size> __global__ void G_autocorrelation_block(
-        RPTR(double) d_sum, CRPTR(double) x, CRPTR(double) y, const unsigned n, const unsigned n_min, const float st)
+        RPTR(double) d_sum, CRPTRd x, CRPTRd y, const unsigned n, const unsigned n_min, const float st)
 {
 //    constexpr float sk = 1; // Skip is disabled for now
     static __shared__ double sh_dist[block_size];
@@ -123,7 +113,7 @@ template<const unsigned block_size> __global__ void G_autocorrelation_block(
     d_sum[blockIdx.x] = *sh_dist;
 }
 
-__global__ void G_autocorr_driver(CRPTR(double) in, CRPTR(double) in_n, CRPTR(unsigned) offsets, RPTR(double) res, const unsigned n_offsets)
+__global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(unsigned) offsets, RPTR(double) res, const unsigned n_offsets)
 {
     CU_STRIDED_FOR_i(n_offsets) {
         const auto off = offsets[i];
@@ -140,7 +130,7 @@ __global__ void G_autocorr_driver(CRPTR(double) in, CRPTR(double) in_n, CRPTR(un
     }
 }
 
-double autocorrelation_n(CPTR(double) d_in, const unsigned n, const std::vector<unsigned> &offsets, const cudaStream_t &stm)
+double autocorrelation_n(CPTRd d_in, const unsigned n, const std::vector<unsigned> &offsets, const cudaStream_t &stm)
 {
     const auto d_offsets = cumallocopy(offsets, stm);
     const unsigned n_offsets = offsets.size();
@@ -171,7 +161,7 @@ G_multiply_complex(
     }
 }
 
-__global__ void G_vec_power_inplace(
+__global__ void G_vec_power_I(
         cufftDoubleComplex *__restrict__ x,
         const unsigned x_size_2_1,
         const unsigned siftings)
@@ -252,8 +242,8 @@ __global__ void G_vec_sift(
 }
 
 __global__ void G_sum_expanded(
-        RPTR(double) d_sum_imf, RPTR(double) d_sum_rem, RPTR(double) d_sum_corr, CRPTR(double) d_imf_mask, CRPTR(double) d_rem_mask,
-        const unsigned expand_size, CRPTR(double) d_global_sift_matrix)
+        RPTR(double) d_sum_imf, RPTR(double) d_sum_rem, RPTR(double) d_sum_corr, CRPTRd d_imf_mask, CRPTRd d_rem_mask,
+        const unsigned expand_size, CRPTRd d_global_sift_matrix)
 {
     const double expand_size_2 = expand_size * expand_size;
 
@@ -293,12 +283,12 @@ __global__ void G_sum_expanded(
 
 
 void oemd_coefficients_search::transform(
-        double *d_values, CPTR(double) d_mask, const unsigned input_len, const unsigned mask_len,
+        double *d_values, CPTRd d_mask, const unsigned input_len, const unsigned mask_len,
         const unsigned siftings, double *d_temp, const cudaStream_t custream) const
 {
-    auto d_imf = cumallocopy(d_values, input_len, cudaMemcpyDeviceToDevice, custream);
+    auto d_imf = cumallocopy(d_values, custream, input_len, cudaMemcpyDeviceToDevice);
     sift(siftings, input_len, mask_len, custream, d_mask, d_imf, d_temp);
-    oemd::G_subtract_inplace<<<CU_BLOCKS_THREADS(input_len), 0, custream>>>(d_values, d_imf, input_len);
+    oemd::G_subtract_I<<<CU_BLOCKS_THREADS(input_len), 0, custream>>>(d_values, d_imf, input_len);
     cu_errchk(cudaFreeAsync(d_imf, custream));
 }
 
@@ -307,12 +297,12 @@ std::tuple<double, double, double, double>
 oemd_coefficients_search::sift_the_mask(
         const unsigned mask_size,
         const unsigned siftings,
-        CPTR(double) d_mask,
+        CPTRd d_mask,
         const cufftHandle plan_sift_forward,
         const cufftHandle plan_sift_backward,
-        CPTR(double) d_expanded_mask,
+        CPTRd d_expanded_mask,
         const cufftDoubleComplex *d_expanded_mask_fft,
-        CPTR(double) d_global_sift_matrix_ptr,
+        CPTRd d_global_sift_matrix_ptr,
         const unsigned gpu_id)
 {
     cu_errchk(cudaSetDevice(gpu_id));
@@ -459,7 +449,7 @@ oemd_coefficients_search::gauss_smoothen_mask(
 
 void
 oemd_coefficients_search::create_random_mask(
-        const unsigned position, double step, const unsigned mask_size, std::vector<double> &mask, CPTR(double) start_mask,
+        const unsigned position, double step, const unsigned mask_size, std::vector<double> &mask, CPTRd start_mask,
         common::t_drand48_data_ptr buffer, cufftHandle plan_mask_forward, cufftHandle plan_mask_backward, const unsigned gpu_id)
 {
     step *= common::drander(buffer);
@@ -500,12 +490,12 @@ __global__ void compute_power_spectrum(CRPTR(cufftDoubleComplex) d_freq, double 
     }
 }
 
-__global__ void normalize_psd(double *const d_psd, CRPTR(double) d_psd_sum, const unsigned N_2_1)
+__global__ void normalize_psd(double *const d_psd, CRPTRd d_psd_sum, const unsigned N_2_1)
 {
     CU_STRIDED_FOR_i(N_2_1) d_psd[i] /= *d_psd_sum;
 }
 
-__global__ void compute_spectral_entropy(CRPTR(double) d_psd, double *const d_entropy, const unsigned N_2_1)
+__global__ void compute_spectral_entropy(CRPTRd d_psd, double *const d_entropy, const unsigned N_2_1)
 {
     CU_STRIDED_FOR_i(N_2_1) if (d_psd[i] > 0) atomicAdd(d_entropy, -d_psd[i] * log2f(d_psd[i]));
 }
@@ -563,9 +553,9 @@ double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal
 void cu_normalize(double *const d_in, const unsigned n, const cudaStream_t custream)
 {
     const auto mean = solvers::mean(d_in, n, custream);
-    if (mean != 0) oemd::G_subtract_inplace<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, mean, n);
+    if (mean != 0) oemd::G_subtract_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, mean, n);
     const auto meanabs = solvers::meanabs(d_in, n, custream);
-    if (meanabs != 1) datamodel::G_div_inplace<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, meanabs, n);
+    if (meanabs != 1) datamodel::G_div_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, meanabs, n);
 }
 
 template<typename T> __device__ inline T sinc(const T x)
@@ -593,14 +583,15 @@ double *generate_fir_mask(const unsigned len, const double f, const cudaStream_t
 }
 
 // TODO Port to CUDA
-std::vector<double> lbp_fir(const double As_, const double fp, const double fs_, const double Fs)
+std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_, const double Fs)
 {
     constexpr bool Kaiser = false;
-    const auto fs = std::min<double>(Fs, fp + fs_);
-    const auto As = _MIN(1, As_) * 74;
+    const auto fp = fp_;
+    const auto fs = common::constrain<double>(fp + fs_, fp, Fs * C_freq_ceil);
+    const auto As = common::constrain<double>(As_, 0, 1) * 74;
 
     // Cut-off frequency
-    const double fc = (fs + fp) / 2;
+    const double fc = (fs + fp) * .5;
 
     // Transition band (rad/sec)
     const double Tb = C_pi_2 * (fs - fp) / Fs;
@@ -660,34 +651,26 @@ std::vector<double> lbp_fir(const double As_, const double fp, const double fs_,
 
     // Multiplying the ideal filter response to window function
     std::vector<double> FIR_lowpass(N);
-    OMP_FOR_i(N) FIR_lowpass[i] = (i == alpha ? fc_2 / Fs : std::sin(fc_2_pi / Fs * (i - alpha)) / (M_PI * (i - alpha))) * w[i];
+    OMP_FOR_i(N) {
+        FIR_lowpass[i] = w[i];
+        if (i == alpha) FIR_lowpass[i] *= fc_2 / Fs;
+        else {
+            const auto i_alpha = i - alpha;
+            FIR_lowpass[i] *= std::sin(i_alpha * fc_2_pi / Fs) / (M_PI * i_alpha);
+        }
+    }
 
     LOG4_TRACE("Returning " << N << " FIR coefficients.");
     return FIR_lowpass;
 }
 
 
-__global__ void G_quantise_labels_quick(
-        CRPTR(double) d_imf, RPTR(double) d_labels, const unsigned validate_len, const unsigned q_validate_len, const unsigned label_len,
-        CRPTR(t_label_ix) d_label_ixs, CRPTR(unsigned) ix_end_F)
-{
-    CU_STRIDED_FOR_i(q_validate_len) {
-        double v = 0;
-        UNROLL(C_max_label_ixs / 100)
-        for (auto j = 0; j < d_label_ixs[i].n_ixs; ++j) v += d_imf[d_label_ixs[i].label_ixs[j]];
-        d_labels[i] = v / d_label_ixs[i].n_ixs;
-#ifdef EMO_DIFF
-        d_labels[i] -= d_imf[ix_end_F[i] - 1];
-#endif
-    }
-}
-
-
 double
 oemd_coefficients_search::evaluate_mask(
-        const double att, const double fp, const double fs, const std::vector<double> &workspace, const unsigned validate_start_ix,
-        const unsigned validate_len, const unsigned siftings, const double meanabs_input,
-        const std::vector<unsigned> &times, const std::vector<t_label_ix> &label_ixs, const std::deque<t_feat_params> &feat_params) const
+        const double att, const double fp, const double fs, const std::span<double> &workspace,
+        const uint8_t siftings, const uint32_t prev_masks_len,
+        const double meanabs_input, const std::vector<unsigned> &times,
+        const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const
 {
     const auto mask = lbp_fir(att, fp, fs, sample_rate);
     if (mask.empty()) {
@@ -695,64 +678,66 @@ oemd_coefficients_search::evaluate_mask(
         return common::C_bad_validation;
     }
 
-    const auto full_input_len = workspace.size();
-    const unsigned mask_len = mask.size();
-    CTX_CUSTREAM;
+    const uint32_t mask_len = mask.size();
+    CTX4_CUSTREAM;
     const auto d_mask = cumallocopy(mask, custream);
     const auto d_workspace = cumallocopy(workspace, custream);
     double *d_tmp;
-    cu_errchk(cudaMallocAsync((void **) &d_tmp, full_input_len * sizeof(double), custream));
-    sift(siftings, full_input_len, mask_len, custream, d_mask, d_workspace, d_tmp);
+    cu_errchk(cudaMallocAsync((void **) &d_tmp, workspace.size() * sizeof(double), custream));
+    sift(siftings, workspace.size(), mask_len, custream, d_mask, d_workspace, d_tmp);
     cu_errchk(cudaFreeAsync(d_tmp, custream));
     cu_errchk(cudaFreeAsync(d_mask, custream));
 
-    const auto d_imf = d_workspace + validate_start_ix;
+    const uint32_t mask_offset = siftings * mask_len + prev_masks_len;
+    const auto d_imf_len = workspace.size() - mask_offset;
+    const auto d_imf = d_workspace + mask_offset;
 #if 1 // Component power
-    const auto meanabs_imf = solvers::meanabs(d_imf, validate_len, custream);
+    const auto meanabs_imf = solvers::meanabs(d_imf, d_imf_len, custream);
     if (!std::isnormal(meanabs_imf)) {
-        LOG4_WARN("Bad IMF " << meanabs_imf);
+        LOG4_WARN("Bad IMF " << meanabs_imf << ", workspace " << common::present(workspace) << ", siftings " << siftings << ", mask size " << mask_len <<
+                             ", attenuation " << att << ", pass frequency " << fp << ", stop frequency " << fs << ", prev mask len " << prev_masks_len);
         cu_errchk(cudaFreeAsync(d_workspace, custream));
-        cu_sync_destroy(custream);
+        cu_errchk(cudaStreamDestroy(custream));
         return common::C_bad_validation;
     }
-    const auto rel_pow = std::abs(meanabs_input / meanabs_imf - levels + 1.); // It was -1 for meanabs_input
+    const auto rel_pow = std::abs(meanabs_input / meanabs_imf - levels + 1.);
 #else
     constexpr double meanabs_imf = 1;
     constexpr double rel_pow = 1;
 #endif
 
-    double *d_labels, *d_features, *d_scores;
-    const unsigned validate_rows = label_ixs.size();
-    cu_errchk(cudaMallocAsync(&d_labels, validate_rows * sizeof(*d_labels), custream));
-    const auto d_label_ixs = cumallocopy(label_ixs, custream);
-    std::vector<unsigned> ix_end_F(validate_rows);
-    OMP_FOR_i(validate_rows) ix_end_F[i] = feat_params[i].ix_end;
+    double *d_features, *d_scores;
+    auto feat_params_it = feat_params.cbegin();
+    while (feat_params_it != feat_params.cend() && feat_params_it->ix_end < max_row_len && feat_params_it->ix_end - max_row_len < mask_offset) ++feat_params_it;
+    const std::span feat_params_trimmed(feat_params_it, feat_params.cend());
+    const uint32_t validate_rows = feat_params_trimmed.size();
+    auto d_labels = cucalloc<double>(custream, validate_rows);
+    const auto d_label_ixs = cumallocopy(label_ixs.cend() - validate_rows, label_ixs.cend(), custream);
+    std::vector<uint32_t> ix_end_F(validate_rows);
+    OMP_FOR_i(validate_rows) ix_end_F[i] = feat_params_trimmed[i].ix_end;
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
-    G_quantise_labels_quick<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(d_imf, d_labels, validate_len, validate_rows, label_len, d_label_ixs, d_ix_end_F);
-    cu_errchk(cudaFreeAsync(d_label_ixs, custream));
+    release_cont(ix_end_F);
+    G_quantise_labels_quick<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
+            d_imf, d_labels, validate_rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
+    cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
     cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
-
     constexpr auto full_feat_cols = datamodel::C_features_superset_coef * datamodel::C_default_svrparam_lag_count;
     constexpr auto feat_cols_ileave = full_feat_cols / C_column_interleave;
-
     auto autocor = common::C_bad_validation;
-    const unsigned cols_rows_q = validate_rows * feat_cols_ileave;
-    const auto features_size = cols_rows_q * sizeof(*d_features);
+    const uint32_t cols_rows_q = validate_rows * feat_cols_ileave;
+    const auto features_size = cols_rows_q * sizeof(double);
     cu_errchk(cudaMallocAsync((void **) &d_features, features_size, custream));
-    cu_errchk(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(*d_scores), custream));
-    std::vector<t_feat_params> feat_params_q(feat_params.size());
-    OMP_FOR_i(feat_params.size()) {
-        feat_params_q[i].end_time = feat_params[i].end_time;
-        feat_params_q[i].ix_end = feat_params[i].ix_end;
-    }
-    const auto d_times = cumallocopy(times.cbegin() + validate_start_ix, times.cend(), custream);
-
-    UNROLL(business::ModelService::C_num_quantisations / C_quantisation_interleave)
-    for (unsigned q = 0; q < business::ModelService::C_num_quantisations; q += C_quantisation_interleave) {
+    cu_errchk(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(double), custream));
+    std::vector<t_feat_params> feat_params_q(feat_params_trimmed.begin(), feat_params_trimmed.end());
+    LOG4_TRACE("Allocating " << cols_rows_q << " features and " << feat_cols_ileave << " scores, rows " << validate_rows << ", feat params " << feat_params_q.size());
+    const auto times_offset = times.cbegin() + mask_offset;
+    const auto d_times = cumallocopy(times_offset, times.cend(), custream);
+    UNROLL(business::ModelService::C_num_quantisations / C_quantisation_interleave / 2)
+    for (uint8_t q = 0; q < business::ModelService::C_num_quantisations; q += std::max(1., double(q) / C_quantisation_skipdiv)) {
         const auto qt = business::ModelService::C_quantisations[q];
-        OMP_FOR_i(feat_params.size()) {
-            feat_params_q[i].time_start = feat_params[i].end_time - full_feat_cols * qt;
-            feat_params_q[i].ix_start = before_bound(times.cbegin(), times.cend(), feat_params_q[i].time_start) - times.cbegin() - validate_start_ix;
+        OMP_FOR_i(validate_rows) {
+            feat_params_q[i].time_start = feat_params_q[i].end_time - full_feat_cols * qt;
+            feat_params_q[i].ix_start = before_bound(times.cbegin(), times.cend(), feat_params_q[i].time_start) - times_offset;
         }
         const auto d_feat_params_q = cumallocopy(feat_params_q, custream);
         const auto interleave_qt = C_column_interleave * qt;
@@ -760,10 +745,15 @@ oemd_coefficients_search::evaluate_mask(
         G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
                 d_features, d_imf, d_times, d_feat_params_q, validate_rows, feat_cols_ileave, qt, interleave_qt, interleave_qt * .5);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
-        cu_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave);
+        cu_errchk(cudaStreamSynchronize(custream));
+        G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
+                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave,
+                validate_rows); /* no integration test offset here, already in call to run() */
+        cu_errchk(cudaStreamSynchronize(custream));
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
             thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
+            cu_errchk(cudaStreamSynchronize(custream));
             score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
         } else
             score = solvers::sum(d_scores, feat_cols_ileave, custream);
@@ -775,13 +765,13 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaFreeAsync(d_labels, custream));
 
     // Spectral entropy
-    const auto inv_entropy = 1.; // compute_spectral_entropy_cufft(d_imf, validate_len, custream);
-    cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is a part of d_workspace
-    cu_sync_destroy(custream);
+    constexpr auto inv_entropy = 1.; // compute_spectral_entropy_cufft(d_imf, workspace.size(), custream);
+    cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is part of d_workspace
+    cu_errchk(cudaStreamDestroy(custream));
 
     // Weights and final score
-    constexpr double autocor_w = 1;
-    constexpr double rel_pow_w = 2;
+    constexpr double autocor_w = 2;
+    constexpr double rel_pow_w = .1;
     constexpr double inv_entropy_w = 1;
     const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(autocor, autocor_w) * std::pow(inv_entropy, inv_entropy_w);
     LOG4_TRACE("Returning autocorrelation " << autocor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy << ", meanabs imf " <<
@@ -791,14 +781,14 @@ oemd_coefficients_search::evaluate_mask(
 
 
 void oemd_coefficients_search::sift(
-        const unsigned siftings, const unsigned full_input_len, const unsigned mask_len, const cudaStream_t custream, CPTR(double) d_mask, double *const d_rx,
+        const unsigned siftings, const unsigned full_input_len, const unsigned mask_len, const cudaStream_t custream, CPTRd d_mask, double *const d_rx,
         double *const d_rx2) const noexcept
 {
     UNROLL()
     for (unsigned s = 0; s < siftings; ++s) {
         oemd::G_apply_fir<<<CU_BLOCKS_THREADS(full_input_len), 0, custream>>>(
                 stretch_coef, d_rx, full_input_len, d_mask, mask_len, mask_len * stretch_coef, d_rx2, 0);
-        oemd::G_subtract_inplace<<<CU_BLOCKS_THREADS(full_input_len), 0, custream>>>(d_rx, d_rx2, full_input_len);
+        oemd::G_subtract_I<<<CU_BLOCKS_THREADS(full_input_len), 0, custream>>>(d_rx, d_rx2, full_input_len);
     }
 }
 
@@ -821,15 +811,17 @@ unsigned find_nth_peak(const std::vector<double> &data, const double n)
         for (unsigned j = 1; j < std::abs<int>(i - data.size()); ++j) {
             bool peak_left = false;
             bool peak_right = false;
-            if (i < j)
+            if (i < j) {
+                // peak_width += 1;
                 peak_left = true;
-            else if (data[i] > data[i - j]) {
+            } else if (data[i] > data[i - j]) {
                 peak_width += 1;
                 peak_left = true;
             }
-            if (i + j >= data.size())
+            if (i + j >= data.size()) {
+                // peak_width += 1;
                 peak_right = true;
-            else if (data[i] > data[i + j]) {
+            } else if (data[i] > data[i + j]) {
                 peak_width += 1;
                 peak_right = true;
             }
@@ -849,7 +841,7 @@ unsigned find_nth_peak(const std::vector<double> &data, const double n)
     return res.second;
 }
 
-double oemd_coefficients_search::dominant_frequency(const std::vector<double> &input, const double percentile_greatest_peak, const cudaStream_t custream) const
+double oemd_coefficients_search::dominant_frequency(const std::span<double> &input, const double percentile_greatest_peak, const cudaStream_t custream) const
 {
     const unsigned n = input.size() - input.size() % 2;
     const unsigned fft_n = common::fft_len(n);
@@ -883,7 +875,7 @@ double oemd_coefficients_search::dominant_frequency(const std::vector<double> &i
     cu_errchk(cudaFreeAsync(d_magnitudes, custream));
     cu_errchk(cudaStreamSynchronize(custream));
     cf_errchk(cufftDestroy(plan));
-    return find_nth_peak(magnitudes, percentile_greatest_peak) * sample_rate / n;
+    return .5 * find_nth_peak(magnitudes, percentile_greatest_peak) * sample_rate / n;
 }
 
 
@@ -899,8 +891,6 @@ oemd_coefficients_search::run(
         const unsigned in_colix,
         const datamodel::t_iqscaler &scaler) const
 {
-    if (gpuids.empty()) LOG4_THROW("No GPUs found, aborting.");
-    const auto gpu_id = gpuids.front();
     const auto window_len = window_end - window_start;
     const auto window_size = window_len * sizeof(double);
     assert(masks.size() == levels - 1);
@@ -909,7 +899,7 @@ oemd_coefficients_search::run(
 #endif
     std::vector<double> workspace(window_len);
     std::deque<bpt::ptime> times(window_len);
-    std::vector<unsigned> times_i(window_len);
+    std::vector<uint32_t> times_i(window_len);
     const auto first_time = input.front()->get_value_time();
     const auto first_time_t = bpt::to_time_t(first_time);
     OMP_FOR(window_len)
@@ -924,144 +914,134 @@ oemd_coefficients_search::run(
             value = p_row->at(in_colix);
             time = p_row->get_value_time();
         }
-        workspace[i - window_start] = scaler(value);
-        times[i - window_start] = time;
-        times_i[i - window_start] = bpt::to_time_t(time) - first_time_t;
+        const auto i_start = i - window_start;
+        workspace[i_start] = scaler(value);
+        times[i_start] = time;
+        times_i[i_start] = bpt::to_time_t(time) - first_time_t;
     }
-    // LOG4_TRACE("Tail " << common::present(arma::vec(tail)) << ", workspace " << common::present(arma::vec(workspace)));
 
     const auto label_duration = label_len * resolution;
     const auto label_times = [&] {
         std::deque<bpt::ptime> r;
-        UNROLL(16)
+        UNROLL(64)
         for (boost::posix_time::ptime it_time(times.front().date(), bpt::hours(times.front().time_of_day().hours()) + onehour);
              it_time < times.back();
              it_time += label_duration)
             r.emplace_back(it_time);
         return r;
     }();
-    const auto label_half_duration = label_duration * .5;
     const auto horizon_duration = label_duration * PROPS.get_prediction_horizon();
-    std::deque<t_label_ix> label_ixs;
-    std::deque<t_feat_params> feat_params;
-    const unsigned horizon_samples_1 = label_len * PROPS.get_prediction_horizon() + 1;
+    std::vector<t_label_ix> label_ixs;
+    label_ixs.reserve(label_times.size());
+    std::vector<t_feat_params> feat_params;
+    feat_params.reserve(label_times.size());
+    const unsigned horizon_len_1 = label_len * PROPS.get_prediction_horizon() * 2;
+    const auto max_row_duration = horizon_duration + max_row_len * resolution;
+    const auto label_len_1 = label_len + 1;
+    // TODO Unify with ModelService::prepare_labels()
     OMP_FOR_(label_times.size(), ordered)
-    for (const auto &it_time: label_times) {
-        const auto L_start_it = std::lower_bound(times.cbegin(), times.cend(), it_time);
-        if (L_start_it == times.cend() || *L_start_it - it_time > label_half_duration) continue;
-        const unsigned L_start_ix = L_start_it - times.cbegin();
-        if (L_start_ix < max_row_len) continue;
+    for (const auto &L_start_time: label_times) {
+        if (L_start_time - max_row_duration < first_time) continue;
+        auto L_start_it = std::lower_bound(times.cbegin(), times.cend(), L_start_time);
+        if (L_start_it == times.cend()) continue;
+        if (*L_start_it != L_start_time) {
+            if (L_start_it == times.cbegin()) continue;
+            else --L_start_it;
+            if (*L_start_it > L_start_time) continue;
+        }
+        const auto L_end_time = L_start_time + label_duration;
+        const auto L_end_it = std::lower_bound(L_start_it, times.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : times.cend(), L_end_time);
+        if (L_end_it == L_start_it) continue;
 
-        const auto L_end_time = it_time + label_duration;
-        const auto L_end_it = std::lower_bound(L_start_it, std::min(L_start_it + label_len + 1, times.cend()), L_end_time);
-        const unsigned L_end_ix = L_end_it - times.cbegin();
-
-        const auto F_time = it_time - horizon_duration;
-        auto F_end_it = lower_bound(std::max(L_start_it - horizon_samples_1, times.cbegin()), L_start_it, F_time);
+        const auto F_end_time = L_start_time - horizon_duration;
+        auto F_end_it = lower_bound(L_start_it - times.cbegin() > horizon_len_1 ? L_start_it - horizon_len_1 : times.cbegin(), L_start_it, F_end_time);
         if (F_end_it == times.cend() || F_end_it == times.cbegin()) continue;
         const unsigned F_end_ix = F_end_it - times.cbegin();
         if (F_end_ix < max_row_len) continue;
-
-        t_label_ix label_ix{label_len};
-        const auto this_label_ixs = generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, it_time, L_end_time, resolution, label_len);
-        memcpy(label_ix.label_ixs, this_label_ixs.data(), label_len * sizeof(unsigned));
+        t_label_ix *L_ins;
+        t_feat_params *F_ins;
 #pragma omp ordered
         {
-            label_ixs.emplace_back(label_ix);
-            feat_params.emplace_back(t_feat_params{.end_time = unsigned(bpt::to_time_t(F_time) - first_time_t), .ix_end = F_end_ix});
-        };
+            L_ins = &label_ixs.emplace_back(t_label_ix{.n_ixs = label_len});
+            F_ins = &feat_params.emplace_back(t_feat_params{.ix_end = F_end_ix});
+        }
+        generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution, label_len, L_ins->label_ixs);
+        F_ins->end_time = bpt::to_time_t(F_end_time) - first_time_t;
     }
     assert(label_ixs.size() == feat_params.size());
     release_cont(times);
 
     LOG4_DEBUG(
-            "Optimizing " << masks.size() << " masks for queue " << queue_name << " using " << gpuids.size() << " GPUs, tail len " << tail.size() << ", window len "
-                          << window_len << ", window start " << window_start << ", window end " << window_end << ", levels " << levels << ", input column index " << in_colix <<
-                          ", label ixs " << label_ixs.size() << ", first label last feature ix " << feat_params.front().ix_end);
+            "Optimizing " << masks.size() << " masks for queue " << queue_name << ", tail len " << tail.size() << ", window len " << window_len << ", window start " << window_start
+                          << ", window end " << window_end << ", levels " << levels << ", input column index " << in_colix << ", label ixs " << label_ixs.size() <<
+                          ", first label last feature ix " << feat_params.front().ix_end);
 
-    cu_errchk(cudaSetDevice(gpu_id));
-    cudaStream_t custream;
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
-    unsigned validation_start_ix = std::max<unsigned>(tail.size(), C_fir_max_len);
+    CTX4_CUSTREAM;
     UNROLL()
-    for (unsigned m = 0; m < masks.size(); ++m) {
-        const auto level = levels - m - 1;
-
-        const unsigned in_window_len = workspace.size() - validation_start_ix;
-        const auto meanabs_input = common::meanabs<double>(workspace.cbegin() + validation_start_ix, workspace.cend());
-
-        const auto min_feat_ix = validation_start_ix + max_row_len;
-        unsigned l_start;
-        for (l_start = 0; l_start < feat_params.size(); ++l_start)
-            if (feat_params[l_start].ix_end >= min_feat_ix) break;
-        const auto feat_params_level_len = label_ixs.size() - l_start;
-        std::vector<t_label_ix> label_ixs_level(feat_params_level_len);
-        std::deque<t_feat_params> feat_params_level(feat_params_level_len);
-        OMP_FOR_i(feat_params_level_len) {
-            const auto i_l_start = i + l_start;
-            t_label_ix label_ix = label_ixs[i_l_start];
-            UNROLL(C_max_label_ixs / 100)
-            for (auto &lix: label_ix.label_ixs) lix -= validation_start_ix;
-            label_ixs_level[i] = label_ix;
-
-            feat_params_level[i] = feat_params[i_l_start];
-            feat_params_level[i].ix_end -= validation_start_ix;
+    for (uint16_t m = 0; m < masks.size(); ++m) {
+        if (masks[m].size()) {
+            LOG4_DEBUG("Mask " << m << " already exists.");
+            goto __prepare_level_below;
         }
+        {
+            uint32_t prev_masks_len = 0;
+            for (uint16_t i = 0; i < m; ++i) prev_masks_len += masks[i].size() * siftings[i];
+            assert(workspace.size() > prev_masks_len);
+            const auto level = levels - m - 1;
+            const auto meanabs_input = common::meanabs<double>(workspace.cbegin() + prev_masks_len, workspace.cend());
 
-        LOG4_DEBUG(
-                "Optimizing " << siftings[m] << " siftings, " << in_window_len << " window len, " << workspace.size() << " workspace len, valid start ix " << validation_start_ix <<
-              ", level " << level << ", meanabs input " << meanabs_input << ", max quantisation " << business::ModelService::C_max_quantisation << ", level label ixs " <<
-              label_ixs_level.size() << ", latest label last feature ix " << feat_params.back().ix_end << ", max row len " << max_row_len);
-
-        const auto loss_function = [&, validation_start_ix, in_window_len, siftings, meanabs_input]
+            // TODO Move pprune instantiation to a cpp file to combat unithreading bug in KNitro
+            LOG4_DEBUG(
+                    "Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", meanabs input " << meanabs_input <<
+                                  ", max quantisation " << business::ModelService::C_max_quantisation << ", label ixs " << label_ixs.size() << ", latest label last feature ix " <<
+                                  feat_params.back().ix_end << ", max row len " << max_row_len << ", prev masks len " << prev_masks_len);
+            const auto loss_function = [&, siftings, meanabs_input]
 #ifdef USE_FIREFLY
-                (const std::vector<double> &x) {
-            return
+                    (const std::vector<double> &x) {
+                return
 #else
-                (const double *x, double *const f) {
-            *f =
+                    (const double *x, double *const f) {
+                *f =
 #endif
-                    evaluate_mask(x[0], x[1], x[2], workspace, validation_start_ix, in_window_len, siftings[m], meanabs_input, times_i, label_ixs_level, feat_params_level);
-        };
-        auto freq = common::constrain(dominant_frequency(workspace, .95, custream), 1. / in_window_len, 1.);
-        arma::vec x0(3, arma::fill::none);
-        x0[0] = .5;
-        x0[1] = freq;
-        x0[2] = .01;
-        constexpr double freq_range = 1.25;
-        arma::mat bounds(3, 2, arma::fill::none);
-        bounds(0, 0) = 1e-1; // Min attenuation
-        bounds(0, 1) = 1; // Max attenuation
-        bounds(1, 0) = std::max(freq / freq_range, 1. / in_window_len); // Min pass frequency
-        bounds(1, 1) = std::min(freq * freq_range, 1.); // Max pass frequency
-        bounds(2, 0) = 5e-4; // Min frequency stop band
-        bounds(2, 1) = 1; // Max frequency stop band
+                        evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, meanabs_input, times_i, label_ixs, feat_params);
+            };
+            arma::vec x0(3, arma::fill::none);
+            x0[0] = .5;
+            x0[1] = .5 * C_freq_ceil; // common::constrain(dominant_frequency(workspace_window, .95, custream), 1. / workspace_len, 1.);
+            x0[2] = .01;
+            arma::mat bounds(3, 2, arma::fill::none);
+            bounds(0, 0) = 1e-1; // Min gain
+            bounds(0, 1) = 1; // Max gain
+            bounds(1, 0) = C_freq_ceil / (workspace.size() - prev_masks_len); // Min pass frequency
+            bounds(1, 1) = C_freq_ceil; // Max pass frequency
+            bounds(2, 0) = 5e-4; // Min frequency transition band
+            bounds(2, 1) = C_freq_ceil; // Max frequency transition band
 #ifdef USE_FIREFLY
-        double score;
-        std::tie(score, h_mask) = optimizer::firefly(
-                h_mask.size(), particles, iterations, common::C_FFA_alpha, common::C_FFA_betamin, common::C_FFA_gamma, bounds,
-                arma::vec(h_mask.size(), arma::fill::ones), loss_function).operator std::pair<double, std::vector<double>>();
-        return score;
+            double score;
+            std::tie(score, h_mask) = optimizer::firefly(
+                    h_mask.size(), particles, iterations, optimizer::C_FFA_alpha, optimizer::C_FFA_betamin, optimizer::C_FFA_gamma, bounds,
+                    arma::vec(h_mask.size(), arma::fill::ones), loss_function).operator std::pair<double, std::vector<double>>();
+            return score;
 #else
-        optimizer::pprune opt(0, particles, bounds, loss_function, 1, 0, 0, x0);
-        const optimizer::t_pprune_res res = opt;
-        masks[m] = lbp_fir(res.best_parameters[0], res.best_parameters[1], res.best_parameters[2], sample_rate);
-        if (masks[m].empty()) LOG4_THROW("Bad mask for parameters " << res.best_parameters);
+            const optimizer::pprune opt(optimizer::pprune::C_default_algo, 10, bounds, loss_function, 40, 0, 0, x0);
+            const optimizer::t_pprune_res res = opt;
+            masks[m] = lbp_fir(res.best_parameters[0], res.best_parameters[1], res.best_parameters[2], sample_rate);
+            if (masks[m].empty()) LOG4_THROW("Bad mask for parameters " << res.best_parameters);
 #endif
-        const auto mask_len = masks[m].size();
-        LOG4_DEBUG("Level " << level << ", mask " << m << ", queue " << queue_name << ", score " << res.best_score);
-        save_mask(masks[m], queue_name, m, masks.size() + 1);
-        cu_errchk(cudaSetDevice(gpu_id));
+            LOG4_DEBUG("Level " << level << ", mask " << m << ", queue " << queue_name << ", score " << res.best_score);
+            save_mask(masks[m], queue_name, m, masks.size() + 1);
+        }
+        __prepare_level_below:
+        cu_errchk(cudaSetDevice(ctx.phy_id()));
         auto d_level_imf = cumallocopy(workspace, custream);
         const auto d_mask = cumallocopy(masks[m], custream);
         double *d_workspace;
         cu_errchk(cudaMallocAsync((void **) &d_workspace, window_size, custream));
-        transform(d_level_imf, d_mask, window_len, mask_len, siftings[m], d_workspace, custream);
+        transform(d_level_imf, d_mask, window_len, masks[m].size(), siftings[m], d_workspace, custream);
         cu_errchk(cudaFreeAsync(d_mask, custream));
         cu_errchk(cudaMemcpyAsync(d_workspace, workspace.data(), window_size, cudaMemcpyHostToDevice, custream));
-        G_subtract_inplace<<<CU_BLOCKS_THREADS(window_len), 0, custream>>>(d_workspace, d_level_imf, window_len);
+        G_subtract_I<<<CU_BLOCKS_THREADS(window_len), 0, custream>>>(d_workspace, d_level_imf, window_len);
         cu_errchk(cudaFreeAsync(d_level_imf, custream));
-        validation_start_ix += siftings[m] * mask_len;
         cu_errchk(cudaMemcpyAsync(workspace.data(), d_workspace, window_size, cudaMemcpyDeviceToHost, custream));
         cu_errchk(cudaFreeAsync(d_workspace, custream));
         cu_errchk(cudaStreamSynchronize(custream));

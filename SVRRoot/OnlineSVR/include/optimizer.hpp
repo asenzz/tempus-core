@@ -3,6 +3,7 @@
 #include <vector>
 #include <functional>
 #include <string>
+#include "common/compatibility.hpp"
 
 namespace svr {
 namespace optimizer {
@@ -12,7 +13,7 @@ constexpr unsigned MAX_ITERATIONS_OPT = 50;
 constexpr unsigned OPT_PARTICLES = 100;
 
 
-typedef std::function<double (const std::vector<double>&)> loss_callback_t;
+typedef std::function<double (CRPTRd, const uint32_t)> loss_callback_t;
 typedef std::vector<std::pair<double, std::vector<double>>> pso_returns_t;
 
 enum class PsoTopology : size_t {global = 0, ring = 1, random = 2};

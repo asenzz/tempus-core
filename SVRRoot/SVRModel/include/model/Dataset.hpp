@@ -47,7 +47,7 @@ class Dataset : public Entity
     std::string description_; // Textual description of the dataset
     unsigned gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
     unsigned max_chunk_size_ = common::C_default_kernel_max_chunk_len; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
-    unsigned multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multiout of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
+    unsigned multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multistep of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<svr::oemd::online_emd> p_oemd_transformer_fat;
     std::unique_ptr<svr::vmd::fast_cvmd> p_cvmd_transformer;
@@ -76,7 +76,7 @@ public:
             const std::string &description = "",
             const unsigned gradients = common::C_default_gradient_count,
             const unsigned chunk_size = common::C_default_kernel_max_chunk_len,
-            const unsigned multiout = common::C_default_multistep_len,
+            const unsigned multistep = common::C_default_multistep_len,
             const unsigned transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
             const bpt::time_duration &max_lookback_time_gap = common::C_default_features_max_time_gap,
@@ -94,7 +94,7 @@ public:
             const std::string &description = "",
             const unsigned gradients = common::C_default_gradient_count,
             const unsigned chunk_size = common::C_default_kernel_max_chunk_len,
-            const unsigned multiout = common::C_default_multistep_len,
+            const unsigned multistep = common::C_default_multistep_len,
             const unsigned transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
             const bpt::time_duration &max_lookback_time_gap_ = common::C_default_features_max_time_gap,
@@ -140,7 +140,7 @@ public:
 
     unsigned get_spectrum_levels_cvmd() const;
 
-    unsigned int get_spectrum_levels_oemd() const noexcept;
+    unsigned get_spectrum_levels_oemd() const noexcept;
 
     unsigned get_model_count() const;
 
@@ -150,7 +150,7 @@ public:
 
     unsigned get_multistep() const;
 
-    void set_spectrum_levels(const unsigned int spectrum_levels);
+    void set_spectrum_levels(const unsigned spectrum_levels);
 
     void set_gradients(const unsigned grads);
 
@@ -176,9 +176,9 @@ public:
 
     datamodel::Ensemble_ptr get_ensemble(const std::string &table_name, const std::string &column_name) noexcept;
 
-    datamodel::Ensemble_ptr get_ensemble(const unsigned int idx = 0);
+    datamodel::Ensemble_ptr get_ensemble(const unsigned idx = 0);
 
-    unsigned int get_ensemble_count() const;
+    unsigned get_ensemble_count() const;
 
     void set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensembles, const bool overwrite);
 
@@ -218,11 +218,11 @@ public:
 
     unsigned get_max_quantise() const;
 
-    unsigned int get_max_residuals_length() const;
+    unsigned get_max_residuals_length() const;
 
-    unsigned int get_max_possible_residuals_length() const;
+    unsigned get_max_possible_residuals_length() const;
 
-    unsigned int get_residuals_length(const std::string &decon_queue_table_name = {}) const;
+    unsigned get_residuals_length(const std::string &decon_queue_table_name = {}) const;
 
     static size_t get_residuals_length(const unsigned levels);
 

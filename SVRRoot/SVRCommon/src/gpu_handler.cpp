@@ -6,43 +6,6 @@
 namespace svr {
 namespace common {
 
-// GPU Context, set the worker as blocked during its lifetime.
-__attribute_noinline__ gpu_context::gpu_context() :
-        context_id_(gpu_handler_hid::get().get_free_gpu()), dev_ct(gpu_handler_hid::get().get_gpu_devices_count())
-{
-    LOG4_TRACE("Enter ctx " << context_id_);
-}
-
-__attribute_noinline__ gpu_context::gpu_context(const gpu_context &context) :
-        context_id_(context.context_id_), dev_ct(gpu_handler_hid::get().get_gpu_devices_count())
-{};
-
-unsigned gpu_context::id() const
-{
-    return context_id_;
-}
-
-unsigned gpu_context::phy_id() const
-{
-    const unsigned gpu_id = context_id_ % dev_ct;
-    LOG4_TRACE("Returning GPU with ID " << gpu_id);
-    return gpu_id;
-}
-
-viennacl::ocl::context &gpu_context::ctx() const
-{
-    return viennacl::ocl::get_context(context_id_);
-}
-
-gpu_context::~gpu_context()
-{
-#ifdef GPU_QUEUE
-    gpu_handler_hid::get().return_gpu(context_id_);
-#else
-    gpu_handler_hid::get().return_gpu();
-#endif
-    LOG4_TRACE("Exit ctx " << context_id_);
-}
 
 namespace {
 std::unordered_map<std::string, std::stringstream> kernel_file_cache;
@@ -80,10 +43,46 @@ gpu_kernel::gpu_kernel(const std::string &kernel_name) : kernel_name_(kernel_nam
 }
 
 
+void gpu_kernel::ensure_compiled_kernel(viennacl::ocl::context &ctx, const std::string &kernel_name)
+{
+    LOG4_BEGIN();
+
+    if (ctx.has_program(kernel_name)) return;
+
+    const std::string kernel_path(KERNEL_DIRECTORY_PATH + kernel_name + ".cl");
+    LOG4_DEBUG("Looking for the source of " << kernel_name << " in " << KERNEL_DIRECTORY_PATH);
+    std::ifstream file_kernel(kernel_path);
+    std::stringstream ss_kernel;
+    ss_kernel << file_kernel.rdbuf();
+//        ctx.build_options(OCL_BUILD_OPTIONS);
+    ctx.add_program(ss_kernel.str(), kernel_name);
+
+    LOG4_END();
+}
+
+
+void gpu_kernel::ensure_compiled_kernel(viennacl::ocl::context &ctx, const std::string &kernel_name, const std::string &kernel_file_name)
+{
+    LOG4_BEGIN();
+
+    if (ctx.has_program(kernel_name)) return;
+
+    const std::string kernel_file_path(KERNEL_DIRECTORY_PATH + kernel_file_name + ".cl");
+
+    LOG4_DEBUG("Looking for the source of " << kernel_name << " at " << kernel_file_path);
+    std::ifstream file_kernel(kernel_file_path);
+    std::stringstream ss_kernel;
+    ss_kernel << file_kernel.rdbuf();
+//        ctx.build_options(OCL_BUILD_OPTIONS);
+    ctx.add_program(ss_kernel.str(), kernel_file_name);
+
+    LOG4_END();
+}
+
+
 gpu_kernel::~gpu_kernel()
 {
-    viennacl::ocl::context &ctx = viennacl::ocl::get_context(context_id_);
-    ctx.delete_program(kernel_name_);
+    viennacl::ocl::get_context(context_id_).delete_program(kernel_name_);
 }
 
 

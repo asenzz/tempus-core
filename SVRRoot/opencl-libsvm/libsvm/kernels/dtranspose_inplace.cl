@@ -33,7 +33,7 @@ typedef long magma_int_t;  // MKL uses long long int, not int64_t
 //
 // See dtranspose_inplace_even for description of threads.
 
-__kernel void dtranspose_inplace_odd( int n, __global double *matrix, unsigned long matrix_offset, int lda )
+__kernel void dtranspose_inplace_odd( int n, __global double *matrix, uint64_t matrix_offset, int lda )
 {
     matrix += matrix_offset;
 
@@ -97,7 +97,7 @@ __kernel void dtranspose_inplace_odd( int n, __global double *matrix, unsigned l
 // syncs, then saves sA(i,j) to B(i,j) and sB(i,j) to A(i,j).
 // Threads outside the matrix do not touch memory.
 
-__kernel void dtranspose_inplace_even( int n, __global double *matrix, unsigned long matrix_offset, int lda )
+__kernel void dtranspose_inplace_even( int n, __global double *matrix, uint64_t matrix_offset, int lda )
 {
     matrix += matrix_offset;
 

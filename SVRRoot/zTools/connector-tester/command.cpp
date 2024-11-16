@@ -8,7 +8,7 @@
 namespace {
     struct Exposure
     {
-        typedef std::map<dtype(CommandText::command), Command *> my_cont_t;
+        typedef std::map<DTYPE(CommandText::command), Command *> my_cont_t;
         my_cont_t commands;
 
         ~Exposure()

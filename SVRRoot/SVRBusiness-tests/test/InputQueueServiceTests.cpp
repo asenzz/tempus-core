@@ -146,7 +146,7 @@ TEST_F(DaoTestFixture, GetDBColumnsTests)
 
     auto columns = aci.input_queue_service.get_db_table_column_names(queue);
 
-    dtype(columns) must_be {"eenie", "meenie", "miney", "mo", "catch", "a", "tiger", "by", "its", "toe"};
+    DTYPE(columns) must_be {"eenie", "meenie", "miney", "mo", "catch", "a", "tiger", "by", "its", "toe"};
 
     ASSERT_EQ(must_be.size(), columns.size());
 

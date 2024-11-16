@@ -16,6 +16,7 @@
 #include "model/Entity.hpp"
 #include "util/string_utils.hpp"
 #include "util/math_utils.hpp"
+#include "ScalingFactorService.hpp"
 
 class DaoTestFixture_DQScalingFactorScalingUnscaling_Test;
 
@@ -26,8 +27,7 @@ namespace dao { class DQScalingFactorDAO; }
 namespace business {
 
 
-class DQScalingFactorService
-{
+class DQScalingFactorService : public ScalingFactorService {
     friend class ::DaoTestFixture_DQScalingFactorScalingUnscaling_Test;
 
     dao::DQScalingFactorDAO &dq_scaling_factor_dao;
@@ -50,36 +50,20 @@ public:
 
     static datamodel::DQScalingFactor_ptr find(
             const datamodel::dq_scaling_factor_container_t &scaling_factors,
-            const size_t model_id, const size_t chunk, const size_t gradient, const size_t step, const size_t level,
+            const size_t model_id, const unsigned chunk, const unsigned gradient, const unsigned step, const unsigned level,
             const bool check_features, const bool check_labels);
 
-    static datamodel::dq_scaling_factor_container_t slice(const datamodel::dq_scaling_factor_container_t &sf, const size_t chunk, const size_t gradient, const size_t step);
+    static datamodel::dq_scaling_factor_container_t slice(const datamodel::dq_scaling_factor_container_t &sf, const unsigned chunk, const unsigned gradient, const unsigned step);
 
-    static double calc_scaling_factor(const arma::mat &v);
-    static double calc_dc_offset(const arma::mat &v);
-    static std::pair<double, double> calc(const arma::mat &v);
+    static datamodel::dq_scaling_factor_container_t calculate(const unsigned chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, const arma::mat &features_t, const arma::mat &labels);
 
-    static datamodel::dq_scaling_factor_container_t calculate(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, const arma::mat &features_t, const arma::mat &labels);
-
-    template<typename T> inline static T scale(const T &v)
-    {
-        const auto [dc, sf] = calc(v);
-        return common::scale(v, sf, dc);
-    }
-
-    template<typename T> inline static T &scale_I(T &v)
-    {
-        const auto [dc, sf] = calc(v);
-        return common::scale_I(v, sf, dc);
-    }
-
-    static void scale_features(const size_t chunk_ix, const size_t grad_level, const size_t step, const size_t lag,
+    static void scale_features(const unsigned chunk_ix, const unsigned grad_level, const unsigned step, const unsigned lag,
                                const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t);
-    static void scale_features(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &features_t);
-    static void scale_labels(const size_t chunk, const size_t gradient, const size_t step, const size_t level, const datamodel::dq_scaling_factor_container_t &sf,
+    static void scale_features(const unsigned chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &features_t);
+    static void scale_labels(const unsigned chunk, const unsigned gradient, const unsigned step, const unsigned level, const datamodel::dq_scaling_factor_container_t &sf,
                              arma::mat &labels);
     static double scale_label(const datamodel::DQScalingFactor &sf, double &label);
-    static void scale_labels(const size_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &labels);
+    static void scale_labels(const unsigned chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &labels);
     static void scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels);
     template<typename T> static inline void unscale_labels(const datamodel::DQScalingFactor &sf, T &labels)
     {

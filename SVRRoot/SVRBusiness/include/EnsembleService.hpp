@@ -12,7 +12,7 @@
 #include "model/Model.hpp"
 #include "model/User.hpp"
 
-constexpr unsigned C_parallel_train_models = 1;
+constexpr unsigned C_parallel_train_models = 1; // Adjust with RAM
 
 namespace svr {
 namespace dao { class EnsembleDAO; }
@@ -88,7 +88,7 @@ public:
             const datamodel::t_predict_features &features);
 
     static datamodel::DeconQueue_ptr
-    predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &times) noexcept;
+    predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times) noexcept;
 
     static bool
     is_ensemble_input_queue(const datamodel::Ensemble &ensemble, const datamodel::InputQueue &input_queue);
@@ -96,7 +96,7 @@ public:
     static void
     update_ensemble_decon_queues(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<datamodel::DeconQueue_ptr> &new_decon_queues);
 
-    static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const std::deque<bpt::ptime> &times);
+    static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times);
 };
 } /* namespace business */
 } /* namespace svr */

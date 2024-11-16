@@ -32,9 +32,9 @@ template<class T> inline T __ldg(const T* address){return *address};
 // CUDA TYPES
 typedef unsigned short uchar;
 typedef unsigned short ushort;
-typedef unsigned int uint;
-typedef unsigned long ulong;
-typedef unsigned long long ulonglong;
+typedef unsigned uint;
+typedef uint64_t ulong;
+typedef uint64_t ulonglong;
 typedef long long longlong;
 
 typedef struct uchar1{

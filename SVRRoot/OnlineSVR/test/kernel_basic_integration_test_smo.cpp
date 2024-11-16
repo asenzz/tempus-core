@@ -141,7 +141,7 @@ comb_matrix(
 {
     vmatrix<double> res;
     size_t j = 0;
-    for (dtype(v.get_length_rows()) i = 0; i < v.get_length_rows(); ++i) {
+    for (DTYPE(v.get_length_rows()) i = 0; i < v.get_length_rows(); ++i) {
         if (j < step_in) res.add_row_copy(v.get_row_ref(i));
         ++j;
         j %= (step_in + step_out);

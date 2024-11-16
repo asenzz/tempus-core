@@ -150,7 +150,7 @@ unsigned SVRParametersService::get_trans_levix(const unsigned levels)
 #endif
 }
 
-std::set<unsigned int> SVRParametersService::get_adjacent_indexes(const unsigned int level, const double ratio, const int level_count)
+std::set<unsigned> SVRParametersService::get_adjacent_indexes(const unsigned level, const double ratio, const int level_count)
 {
     if (level_count < MIN_LEVEL_COUNT or ratio == 0) return {level};
     //const unsigned full_count = level_count * ratio - 1;

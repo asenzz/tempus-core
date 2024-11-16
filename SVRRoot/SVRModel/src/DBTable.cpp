@@ -168,7 +168,7 @@ DataRow::container Queue::get_data(const size_t row_count, const bpt::ptime &tim
     auto end_iter = lower_bound(this->data_, time_to);
     auto start_iter = end_iter;
     const auto distance_lag = std::distance(data_.begin(), start_iter);
-    if (distance_lag < (dtype(distance_lag)) row_count)
+    if (distance_lag < (DTYPE(distance_lag)) row_count)
         THROW_EX_FS(std::runtime_error, "Missing data, distance from begin is " << distance_lag);
     std::advance(start_iter, -row_count);
     for (; start_iter != end_iter; ++start_iter) new_data.emplace_back(*start_iter);
@@ -183,7 +183,7 @@ DataRow::container Queue::get_data(const size_t tail_length, const bpt::time_per
     auto end_iter = upper_bound(data_, range.end());
     auto start_iter = lower_bound(data_, range.begin());
     const auto distance_lag = std::distance(data_.begin(), start_iter);
-    if (distance_lag < (dtype(distance_lag)) tail_length)
+    if (distance_lag < (DTYPE(distance_lag)) tail_length)
         THROW_EX_FS(std::runtime_error, "Missing data, distance from begin is " << distance_lag);
     std::advance(start_iter, -tail_length);
     for (; start_iter != end_iter; ++start_iter) new_data.emplace_back(*start_iter);

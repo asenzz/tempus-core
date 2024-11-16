@@ -73,7 +73,7 @@ QueueRunnerDef BuildQueueRunnerDef(
 }
 
 string DetailedDebugString(const Tensor& tensor) {
-    return strings::StrCat("Tensor<type: ", DataTypeString(tensor.dtype()),
+    return strings::StrCat("Tensor<type: ", DataTypeString(tensor.DTYPE()),
                            " shape: ", tensor.shape().DebugString(),
                            " values: ", tensor.SummarizeValue(-1, true), ">");
 }

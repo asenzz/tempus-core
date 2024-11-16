@@ -53,9 +53,7 @@ int main(const int argc, const char** argv)
     (void) signal(SIGTERM, signal_handler);
 
     omp_set_nested(true);
-    omp_set_max_active_levels(common::C_omp_max_active_levels);
-    omp_set_teams_thread_limit(common::C_omp_teams_thread_limit);
-    if (common::gpu_handler_hid::get().get_gpu_devices_count()) omp_set_default_device(0);
+    if (common::gpu_handler_1::get().get_gpu_devices_count()) omp_set_default_device(0);
 
     std::shared_ptr<daemon::DaemonFacade> p_daemon_facade;
     int rc = 0;

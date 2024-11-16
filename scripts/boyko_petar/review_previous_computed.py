@@ -28,7 +28,7 @@ beta0 =  resultsMatrixToLoad['beta0'][numRows]
 mae = resultsMatrixToLoad['maes'][numRows]       
 
 #results_ongoing_at10k.pickle
-#Kstar = np.zeros(shape=[1,1], dtype=globaltype)
+#Kstar = np.zeros(shape=[1,1], DTYPE=globaltype)
 #Kstar = updateKstar(K, Kstar, Lambda, [], [], ElbowRight, ElbowLeft);
 #f0 = np.repeat(beta0,len(K))
 

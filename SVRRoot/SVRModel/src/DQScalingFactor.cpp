@@ -83,7 +83,7 @@ bool operator<(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs)
 
 DQScalingFactor::DQScalingFactor(
         const bigint id, const bigint model_id,
-        const size_t decon_level, const size_t step, const size_t grad_depth, const size_t chunk_index,
+        const unsigned decon_level, const unsigned step, const unsigned grad_depth, const unsigned chunk_index,
         const double scale_feat, const double scale_labels, const double dc_offset_feat, const double dc_offset_labels) :
         Entity(id),
         model_id_(model_id),
@@ -111,42 +111,42 @@ void DQScalingFactor::set_model_id(const bigint model_id)
     model_id_ = model_id;
 }
 
-size_t DQScalingFactor::get_decon_level() const
+unsigned DQScalingFactor::get_decon_level() const
 {
     return decon_level_;
 }
 
-void DQScalingFactor::set_decon_level(const size_t decon_level)
+void DQScalingFactor::set_decon_level(const unsigned decon_level)
 {
     decon_level_ = decon_level;
 }
 
-size_t DQScalingFactor::get_step() const
+unsigned DQScalingFactor::get_step() const
 {
     return step_;
 }
 
-void DQScalingFactor::set_step(const size_t step)
+void DQScalingFactor::set_step(const unsigned step)
 {
     step_ = step;
 }
 
-size_t DQScalingFactor::get_grad_depth() const
+unsigned DQScalingFactor::get_grad_depth() const
 {
     return grad_depth_;
 }
 
-void DQScalingFactor::set_grad_depth(const size_t grad_level)
+void DQScalingFactor::set_grad_depth(const unsigned grad_level)
 {
     grad_depth_ = grad_level;
 }
 
-size_t DQScalingFactor::get_chunk_index() const
+unsigned DQScalingFactor::get_chunk_index() const
 {
     return chunk_ix_;
 }
 
-void DQScalingFactor::set_chunk_index(const size_t chunk_index)
+void DQScalingFactor::set_chunk_index(const unsigned chunk_index)
 {
     chunk_ix_ = chunk_index;
 }

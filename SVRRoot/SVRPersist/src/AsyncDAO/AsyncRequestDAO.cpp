@@ -8,20 +8,20 @@ namespace dao {
 
 namespace {
 static const auto cmp_primary_key = [](datamodel::MultivalResponse_ptr const &lhs, datamodel::MultivalResponse_ptr const &rhs) {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
            && lhs->request_id == rhs->request_id
            && lhs->value_column == rhs->value_column
            && lhs->value_time == rhs->value_time;
 };
 static const auto cmp_whole_value = [](datamodel::MultivalResponse_ptr const &lhs, datamodel::MultivalResponse_ptr const &rhs) {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
            && cmp_primary_key(lhs, rhs)
            && lhs->value == rhs->value;
 };
 }
 
 struct AsyncRequestDAO::AsyncImpl
-        : AsyncImplBase<datamodel::MultivalResponse_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgRequestDAO>
+        : AsyncImplBase<datamodel::MultivalResponse_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgRequestDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)

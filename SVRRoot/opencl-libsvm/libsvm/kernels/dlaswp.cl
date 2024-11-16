@@ -37,7 +37,7 @@ typedef struct {
 // Each thread goes down a column of A,
 // swapping rows according to pivots stored in params.
 __kernel void dlaswp_kernel(
-    int n, __global double *dAT, unsigned long dAT_offset, int ldda, dlaswp_params_t params )
+    int n, __global double *dAT, uint64_t dAT_offset, int ldda, dlaswp_params_t params )
 {
     dAT += dAT_offset;
 
@@ -72,7 +72,7 @@ __kernel void dlaswp_kernel(
 // Each thread goes down a column of A,
 // swapping rows according to pivots stored in params.
 __kernel void dlaswpx_kernel(
-    int n, __global double *dA, unsigned long dA_offset, int ldx, int ldy, dlaswp_params_t params )
+    int n, __global double *dA, uint64_t dA_offset, int ldx, int ldy, dlaswp_params_t params )
 {
     dA += dA_offset;
 
@@ -106,8 +106,8 @@ __kernel void dlaswpx_kernel(
 // (including copying pivots to the GPU).
 
 __kernel void dlaswp2_kernel(
-    int n, __global double *dAT, unsigned long dAT_offset, int ldda, int npivots,
-    const __global magma_int_t *d_ipiv, unsigned long d_ipiv_offset, int inci )
+    int n, __global double *dAT, uint64_t dAT_offset, int ldda, int npivots,
+    const __global magma_int_t *d_ipiv, uint64_t d_ipiv_offset, int inci )
 {
     dAT += dAT_offset;
     d_ipiv += d_ipiv_offset;

@@ -10,18 +10,18 @@ namespace dao {
 
 namespace {
 static const auto cmp_primary_key = [](datamodel::IQScalingFactor_ptr const &lhs, datamodel::IQScalingFactor_ptr const &rhs) {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
            && lhs->get_id() == rhs->get_id();
 };
 
 static const auto cmp_whole_value = [](datamodel::IQScalingFactor_ptr const &lhs, datamodel::IQScalingFactor_ptr const &rhs) {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
            && *lhs == *rhs;
 };
 }
 
 struct AsyncIQScalingFactorDAO::AsyncImpl
-        : AsyncImplBase<datamodel::IQScalingFactor_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgIQScalingFactorDAO>
+        : AsyncImplBase<datamodel::IQScalingFactor_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgIQScalingFactorDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)

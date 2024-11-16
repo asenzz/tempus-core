@@ -25,17 +25,22 @@ public:
     }
 #endif
 
-    void operator() (
-            const viennacl::matrix<scalar_type> &features,
-            viennacl::matrix<scalar_type> &kernel_matrix)
+    viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &features) override
     {
-        kernel_matrix = viennacl::linalg::prod(features, viennacl::trans(features));
+        viennacl::matrix<scalar_type> kernel_matrix = viennacl::linalg::prod(features, viennacl::trans(features));
         viennacl::vector<scalar_type> diagonal = viennacl::diag(kernel_matrix, 0);
         viennacl::vector<scalar_type> i = viennacl::scalar_vector<scalar_type>(diagonal.size(), 1.);
         viennacl::matrix<scalar_type> temp = viennacl::linalg::outer_prod(i, diagonal);
 
-        kernel_matrix = (temp + viennacl::trans(temp) - 2. * kernel_matrix) * -this->parameters.get_svr_kernel_param();
-        kernel_matrix = viennacl::linalg::element_exp(kernel_matrix);
+        kernel_matrix = (temp + viennacl::trans(temp) - 2. * kernel_matrix);
+        return kernel_matrix;
+    }
+
+    void operator() (
+            const viennacl::matrix<scalar_type> &features,
+            viennacl::matrix<scalar_type> &kernel_matrix) override
+    {
+        kernel_matrix = viennacl::linalg::element_exp(distances(features) * -this->parameters.get_svr_kernel_param());
     }
 
 #ifdef VIENNACL_WITH_OPENCL

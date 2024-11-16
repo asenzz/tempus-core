@@ -15,7 +15,7 @@
 namespace svr {
 namespace common {
 
-std::string base64_encode(unsigned char const* , unsigned int len);
+std::string base64_encode(unsigned char const* , unsigned len);
 std::string base64_decode(const std::string & encodedString);
 
 std::string compress(const char * input, int size);

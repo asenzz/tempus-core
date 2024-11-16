@@ -69,7 +69,7 @@ def svrload(K, y, Lambda):
     LastEventPoint = resultsMatrixToLoad['LastEventPoint']  
     LastEvent = resultsMatrixToLoad['LastEvent']
      
-    Kstar = np.zeros(shape=[1,1], dtype=globaltype)
+    Kstar = np.zeros(shape=[1,1], DTYPE=globaltype)
     Kstar = updateKstar(K, Kstar, Lambda, [], [], ElbowRight, ElbowLeft);
   
     return eps, Kstar, fl, LeftRegion, ElbowLeft, Center, ElbowRight, RightRegion, alphas, gammas, beta0, mae, LastEventPoint, LastEvent;
@@ -227,7 +227,7 @@ def update_eps(eps, x, y, fl, K, Kstar, Lambda, LeftRegion, ElbowLeft, Center, E
             if DebugPrint:    
                 print('nER',ElbowRight)
                 print('nEL',ElbowLeft)
-            Kstar = updateKstar(K, np.zeros(shape=[1,1], dtype=globaltype), Lambda, [], [], ElbowRight, ElbowLeft)
+            Kstar = updateKstar(K, np.zeros(shape=[1,1], DTYPE=globaltype), Lambda, [], [], ElbowRight, ElbowLeft)
             if DebugPrint:  
                 print('newKstar',Kstar)
             return update_eps(eps=eps, x=x, y=y, fl=fl, K=K, Kstar=Kstar, Lambda=Lambda, 
@@ -299,7 +299,7 @@ def update_eps(eps, x, y, fl, K, Kstar, Lambda, LeftRegion, ElbowLeft, Center, E
 #        RightRegionNew = resultsMatrixToLoad['RightRegionNew'][numRows]
 #        gammasNew =  resultsMatrixToLoad['gammasNew'][numRows]
 #        
-#        Kstar = updateKstar(K, np.zeros(shape=[1,1], dtype=globaltype), Lambda, [], [], ElbowRight, ElbowLeft)
+#        Kstar = updateKstar(K, np.zeros(shape=[1,1], DTYPE=globaltype), Lambda, [], [], ElbowRight, ElbowLeft)
 #        return eps_new, fl, Kstar, LeftRegion, ElbowLeft, Center, ElbowRight, RightRegion, alphas, gammas, beta0, LastEventPoint, LastEvent
         #print("Value from libsvm is:", m)
         
@@ -336,7 +336,7 @@ def update_eps(eps, x, y, fl, K, Kstar, Lambda, LeftRegion, ElbowLeft, Center, E
     if DebugPrint:
         print('after register events alphas:',list(alphas),'\ngammas:',list(gammas))
         print('sum of alphas gammas after registerEvents: %e ' % np.sum(alphas - gammas))
-    Kstar = updateKstar(K, np.zeros(shape=[1,1], dtype=globaltype), Lambda, [], [], ElbowRight, ElbowLeft)
+    Kstar = updateKstar(K, np.zeros(shape=[1,1], DTYPE=globaltype), Lambda, [], [], ElbowRight, ElbowLeft)
     
     
     assert(np.sum(alphas - gammas) < 1e-10)
@@ -353,7 +353,7 @@ def updateKstar(K, Kstar_old, Lambda, ElbowRight, ElbowLeft, ptsToAddER, ptsToAd
     newElbowRight = ElbowRight + ptsToAddER;
     newElbowLeft = ElbowLeft + ptsToAddEL;
     n = len(newElbowLeft) + len(newElbowRight) + 1
-    Kstar_new = np.ndarray(shape=[n,n],dtype=globaltype)
+    Kstar_new = np.ndarray(shape=[n,n],DTYPE=globaltype)
     
 #    Kstar_new[1:1+len(newElbowRight),0] = 1
 #    Kstar_new[-len(newElbowRight):,0] = -1
@@ -389,8 +389,8 @@ def svrinit(K, y, Lambda):
     RightRegion = []
     ElbowLeft = []
     ElbowRight = []
-    alphas = np.zeros(len(y), dtype=globaltype)
-    gammas = np.zeros(len(y), dtype=globaltype)
+    alphas = np.zeros(len(y), DTYPE=globaltype)
+    gammas = np.zeros(len(y), DTYPE=globaltype)
     beta0 = (np.max(y) + np.min(y)) / 2
     mae = np.sum(np.abs(y - beta0));
     eps = (np.max(y) - np.min(y)) / 2
@@ -414,7 +414,7 @@ def svrinit(K, y, Lambda):
     if DebugPrint:
         print('beta0: %.20f, eps: %.20f' % ((beta0,eps)))
       
-    Kstar = np.zeros(shape=[1,1], dtype=globaltype)
+    Kstar = np.zeros(shape=[1,1], DTYPE=globaltype)
     Kstar = updateKstar(K, Kstar, Lambda, [], [], ElbowRight, ElbowLeft);
     f0 = np.repeat(beta0,len(K))
     
@@ -710,11 +710,11 @@ def find_h(K, Kstar, b, Lambda, ElbowLeft, ElbowRight):
     if DebugPrint:
         print('\nfind_h')
     # Ker, Kel: extract just the rows of K for EL and ER
-    Ker = np.ndarray(shape=[len(K), len(ElbowRight)], dtype=globaltype)
-    Kel = np.ndarray(shape=[len(K), len(ElbowLeft)], dtype=globaltype)
-    hl = np.ndarray(shape=[len(K)], dtype=globaltype)
-    bEr = np.ndarray(shape=[len(ElbowRight)], dtype=globaltype)
-    bEl = np.ndarray(shape=[len(ElbowLeft)], dtype=globaltype)
+    Ker = np.ndarray(shape=[len(K), len(ElbowRight)], DTYPE=globaltype)
+    Kel = np.ndarray(shape=[len(K), len(ElbowLeft)], DTYPE=globaltype)
+    hl = np.ndarray(shape=[len(K)], DTYPE=globaltype)
+    bEr = np.ndarray(shape=[len(ElbowRight)], DTYPE=globaltype)
+    bEl = np.ndarray(shape=[len(ElbowLeft)], DTYPE=globaltype)
     for idx, point in enumerate(ElbowRight):
         Ker[:,idx] = K[point,:]
         bEr[idx] = b[idx+1]
@@ -760,10 +760,10 @@ def exit_elbows_events(eps, alphas, gammas, Lambda, b, ElbowLeft, ElbowRight):
 def enter_elbows_events(fl, eps, y, hl, LeftRegion, ElbowLeft, Center, ElbowRight, RightRegion):
     if DebugPrint:
         print('\nenter_elbows_events')
-    eps_R_to_ER = np.ndarray(shape=[len(RightRegion)], dtype=globaltype)
-    eps_C_to_ER = np.ndarray(shape=[len(Center)], dtype=globaltype)
-    eps_C_to_EL = np.ndarray(shape=[len(Center)], dtype=globaltype)
-    eps_L_to_EL = np.ndarray(shape=[len(LeftRegion)], dtype=globaltype)
+    eps_R_to_ER = np.ndarray(shape=[len(RightRegion)], DTYPE=globaltype)
+    eps_C_to_ER = np.ndarray(shape=[len(Center)], DTYPE=globaltype)
+    eps_C_to_EL = np.ndarray(shape=[len(Center)], DTYPE=globaltype)
+    eps_L_to_EL = np.ndarray(shape=[len(LeftRegion)], DTYPE=globaltype)
     for idx, item in enumerate(RightRegion):
         eps_R_to_ER[idx] = (fl[item] + eps*hl[item] - y[item]) / (hl[item] - 1)
     for idx, item in enumerate(LeftRegion):

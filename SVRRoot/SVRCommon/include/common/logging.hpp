@@ -39,7 +39,7 @@ extern const logging l__;
 #ifdef PRODUCTION_BUILD
 #define FLUSH_OUTS
 #else
-#define FLUSH_OUTS  // (void) ::fflush(stdout); (void) ::fflush(stderr);
+#define FLUSH_OUTS (void) ::fflush(stdout); (void) ::fflush(stderr);
 #endif
 
 #define CMD_WRAP(cmd) do { cmd; FLUSH_OUTS; } while (0)

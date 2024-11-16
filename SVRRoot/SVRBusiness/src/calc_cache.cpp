@@ -19,7 +19,7 @@ calc_cache::calc_cache()
 {}
 
 
-double calc_cache::get_cached_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const double meanabs_labels)
+double calc_cache::get_cached_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const arma::mat &L)
 {
     const auto k = std::tuple{
             params.get_input_queue_column_name(),
@@ -28,11 +28,12 @@ double calc_cache::get_cached_gamma(const datamodel::SVRParameters &params, cons
             params.get_grad_level(),
             params.get_chunk_index(),
             common::hash_lambda(params.get_svr_kernel_param2()),
+            common::hash_lambda(params.get_kernel_param3()),
             params.get_adjacent_levels(),
             arma::size(Z)};
 
-    const auto prepare_f = [&Z, &meanabs_labels]() { return datamodel::OnlineMIMOSVR::calc_gamma(Z, meanabs_labels); };
-    return cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
+    const auto prepare_f = [&Z, &L] { return datamodel::OnlineMIMOSVR::calc_gamma(Z, L); };
+    return cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
 
@@ -44,8 +45,8 @@ arma::mat &calc_cache::get_cached_cumulatives(const datamodel::SVRParameters &pa
             params.get_adjacent_levels(),
             arma::size(features_t),
             time};
-    const auto prepare_f = [&params, &features_t]() { return datamodel::OnlineMIMOSVR::all_cumulatives(params, features_t); };
-    return *cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
+    const auto prepare_f = [&params, &features_t] { return datamodel::OnlineMIMOSVR::all_cumulatives(params, features_t); };
+    return *cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
 
@@ -55,30 +56,34 @@ arma::mat &calc_cache::get_cached_Z(const datamodel::SVRParameters &params, cons
             params.get_grad_level(),
             params.get_chunk_index(),
             common::hash_lambda(params.get_svr_kernel_param2()),
+            common::hash_lambda(params.get_kernel_param3()),
             params.get_adjacent_levels(),
             arma::size(features_t),
             time};
-    const auto prepare_f = [&params, &features_t, &time, this](){ return datamodel::OnlineMIMOSVR::prepare_Z(*this, params, features_t, time); };
-    return *cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
+    const auto prepare_f = [&params, &features_t, &time, this]{
+        return datamodel::OnlineMIMOSVR::prepare_Z(*this, params, features_t, time); };
+    return *cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
 
-arma::mat &calc_cache::get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &time,
+arma::mat &calc_cache::get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &predict_time,
                                      const bpt::ptime &trained_time)
 {
     const auto k = std::tuple{
             params.get_grad_level(),
             params.get_chunk_index(),
             common::hash_lambda(params.get_svr_kernel_param2()),
+            common::hash_lambda(params.get_kernel_param3()),
             params.get_adjacent_levels(),
             arma::size(features_t),
             arma::size(predict_features_t),
-            time};
+            predict_time,
+            trained_time};
 
-    const auto prepare_f = [&params, &features_t, &predict_features_t, &time, &trained_time, this]() {
-        return datamodel::OnlineMIMOSVR::prepare_Zy(*this, params, features_t, predict_features_t, time, trained_time);
+    const auto prepare_f = [&params, &features_t, &predict_features_t, &predict_time, &trained_time, this] {
+        return datamodel::OnlineMIMOSVR::prepare_Zy(*this, params, features_t, predict_features_t, predict_time, trained_time);
     };
-    return *cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
+    return *cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
 arma::mat &calc_cache::get_cached_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time)
@@ -86,6 +91,7 @@ arma::mat &calc_cache::get_cached_K(const datamodel::SVRParameters &params, cons
     const auto k = std::tuple{
             params.get_grad_level(),
             params.get_chunk_index(),
+            common::hash_lambda(params.get_kernel_param3()),
             common::hash_lambda(params.get_svr_kernel_param2()),
             common::hash_lambda(params.get_svr_kernel_param()),
             params.get_adjacent_levels(),
@@ -93,30 +99,31 @@ arma::mat &calc_cache::get_cached_K(const datamodel::SVRParameters &params, cons
             time};
 
     const auto prepare_f = [&params, &features_t, &time, this](){ return datamodel::OnlineMIMOSVR::prepare_K(*this, params, features_t, time); };
-    return *cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
+    return *cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
 
-std::tuple<mat_ptr, vec_ptr, times_ptr> calc_cache::get_cached_labels(
-        const size_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap, const size_t level,
-        const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_queue_resolution, const size_t multistep)
+std::tuple<mat_ptr, vec_ptr, data_row_container_ptr>
+calc_cache::get_cached_labels(const unsigned step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
+                              const unsigned level, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
+                              const bpt::time_duration &main_queue_resolution, const unsigned multistep, const unsigned lag)
 {
     const auto k = std::tuple{(**main_data.begin()).get_value_time(), main_data.distance(), level, multistep, main_queue_resolution, aux_queue_res};
 
     const auto prepare_f = [&] () {
         auto p_labels = ptr<arma::mat>();
         auto p_last_knowns = ptr<arma::vec>();
-        auto p_label_times = ptr<std::deque<bpt::ptime>>();
+        auto p_label_times = ptr<data_row_container>();
         ModelService::prepare_labels(*p_labels, *p_last_knowns, *p_label_times, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
-                                     main_queue_resolution, multistep);
+                                     main_queue_resolution, multistep, lag);
         return std::tuple{p_labels, p_last_knowns, p_label_times};
     };
-    const auto [p_labels, p_last_knowns, p_label_times] = cached<dtype(k), dtype(prepare_f)>::get()(k, prepare_f);
+    const auto [p_labels, p_last_knowns, p_label_times] = cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
     return {ptr<arma::mat>(p_labels->col(step)), p_last_knowns, p_label_times};
 }
 
 
-datamodel::t_parameter_predictions_set &calc_cache::checkin_tuner(const datamodel::OnlineMIMOSVR &svr, const size_t chunk_ix)
+datamodel::t_parameter_predictions_set &calc_cache::checkin_tuner(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix)
 {
     bool rc;
     const auto tune_predictions_key = std::tuple{svr.get_params_ptr()->get_input_queue_column_name(), svr.get_step(), svr.get_gradient_level(), chunk_ix};
@@ -142,7 +149,7 @@ datamodel::t_parameter_predictions_set &calc_cache::checkin_tuner(const datamode
 }
 
 
-void calc_cache::checkout_tuner(const datamodel::OnlineMIMOSVR &svr, const size_t chunk_ix)
+void calc_cache::checkout_tuner(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix)
 {
     bool rc;
     const auto tune_predictions_key = std::make_tuple(svr.get_params_ptr()->get_input_queue_column_name(), svr.get_step(), svr.get_gradient_level(), chunk_ix);
@@ -161,7 +168,7 @@ void calc_cache::checkout_tuner(const datamodel::OnlineMIMOSVR &svr, const size_
 }
 
 // Decrement distance and max chunk size of all levels need to be equal
-datamodel::t_level_tuned_parameters *calc_cache::recombine_go(const datamodel::OnlineMIMOSVR &svr, const size_t chunk_ix)
+datamodel::t_level_tuned_parameters *calc_cache::recombine_go(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix)
 {
     const auto tune_predictions_key = std::make_tuple(svr.get_params_ptr()->get_input_queue_column_name(), svr.get_step(), svr.get_gradient_level(), chunk_ix);
     const auto tune_iter = tune_results.find(tune_predictions_key);

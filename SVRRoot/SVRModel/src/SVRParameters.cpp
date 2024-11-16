@@ -2,13 +2,25 @@
 // Created by zarko on 1/13/24.
 //
 
+#include <ostream>
 #include <set>
 #include "common/parallelism.hpp"
+#include "util/math_utils.hpp"
 #include "SVRParametersService.hpp"
 #include "model/SVRParameters.hpp"
 
 namespace svr {
 namespace datamodel {
+
+std::ostream &operator<<(std::ostream &s, const t_feature_mechanics &fm)
+{
+    s << "quantization " << common::present(fm.quantization)
+      << ", stretches " << common::present(fm.stretches)
+      << ", shifts " << common::present(fm.shifts)
+      << ", skips " << common::present(fm.skips)
+      << ", trims front " << (fm.trims.empty() ? std::string("empty") : common::present(fm.trims.front()));
+    return s;
+}
 
 e_kernel_type operator++(e_kernel_type &k_type)
 {
@@ -29,7 +41,7 @@ bool less_SVRParameters_ptr::operator()(const datamodel::SVRParameters_ptr &lhs,
     return lhs->operator<(*rhs);
 }
 
-void t_param_preds::free_predictions(t_predictions_ptr &p_predictions_)
+void t_param_preds::free_predictions(const t_predictions_ptr &p_predictions_)
 {
     if (!p_predictions_) return;
     UNROLL(C_max_j)
@@ -37,7 +49,7 @@ void t_param_preds::free_predictions(t_predictions_ptr &p_predictions_)
         if (p_predictions_->at(j))
             delete p_predictions_->at(j);
     delete p_predictions_;
-    p_predictions_ = nullptr;
+    // p_predictions_ = nullptr;
 }
 
 void t_param_preds::free()
@@ -77,11 +89,11 @@ SVRParameters::SVRParameters(
           svr_epsilon(svr_epsilon),
           svr_kernel_param(svr_kernel_param),
           svr_kernel_param2(svr_kernel_param2),
-          svr_decremental_distance(svr_decremental_distance),
           svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
           adjacent_levels(adjacent_levels),
           kernel_type(kernel_type),
-          lag_count(lag_count)
+          lag_count(lag_count),
+        svr_decremental_distance(svr_decremental_distance)
 {
     if (adjacent_levels.empty()) (void) get_adjacent_levels();
 #ifdef ENTITY_INIT_ID
@@ -109,7 +121,11 @@ SVRParameters::SVRParameters(const SVRParameters &o) :
                 o.kernel_type,
                 o.lag_count,
                 o.adjacent_levels)
-{}
+{
+    feature_mechanics = o.feature_mechanics;
+    gamma = o.gamma;
+    epsco = o.epsco;
+}
 
 SVRParameters &SVRParameters::operator=(const SVRParameters &v)
 {
@@ -123,6 +139,7 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &v)
     decon_level_ = v.decon_level_;
     chunk_ix_ = v.chunk_ix_;
     grad_level_ = v.grad_level_;
+    step_ = v.step_;
     svr_C = v.svr_C;
     svr_epsilon = v.svr_epsilon;
     svr_kernel_param = v.svr_kernel_param;
@@ -132,6 +149,9 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &v)
     adjacent_levels = v.adjacent_levels;
     kernel_type = v.kernel_type;
     lag_count = v.lag_count;
+    feature_mechanics = v.feature_mechanics;
+    gamma = v.gamma;
+    epsco = v.epsco;
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
@@ -146,6 +166,7 @@ void SVRParameters::init_id()
         boost::hash_combine(id, decon_level_);
         boost::hash_combine(id, grad_level_);
         boost::hash_combine(id, chunk_ix_);
+        boost::hash_combine(id, step_);
     }
 }
 
@@ -223,125 +244,139 @@ void SVRParameters::set_input_queue_table_name(const std::string &value)
     input_queue_table_name = value;
 }
 
-unsigned SVRParameters::get_decon_level() const
+unsigned SVRParameters::get_decon_level() const noexcept
 {
     return decon_level_;
 }
 
-void SVRParameters::set_decon_level(const unsigned _decon_level)
+void SVRParameters::set_decon_level(const unsigned _decon_level) noexcept
 {
     decon_level_ = _decon_level;
     adjacent_levels.clear();
     (void) get_adjacent_levels();
 }
 
-unsigned SVRParameters::get_level_count() const
+unsigned SVRParameters::get_level_count() const noexcept
 {
     return levels_ct;
 }
 
-unsigned SVRParameters::get_step() const
+unsigned SVRParameters::get_step() const noexcept
 {
     return step_;
 }
 
-void SVRParameters::set_step(const unsigned _step)
+void SVRParameters::set_step(const unsigned _step) noexcept
 {
     step_ = _step;
 }
 
-void SVRParameters::set_level_count(const unsigned levels)
+void SVRParameters::set_level_count(const unsigned levels) noexcept
 {
     levels_ct = levels;
     adjacent_levels.clear();
     (void) get_adjacent_levels();
 }
 
-unsigned SVRParameters::get_chunk_index() const
+unsigned SVRParameters::get_chunk_index() const noexcept
 {
     return chunk_ix_;
 }
 
-void SVRParameters::set_chunk_index(const unsigned _chunk_ix)
+void SVRParameters::set_chunk_index(const unsigned _chunk_ix) noexcept
 {
     chunk_ix_ = _chunk_ix;
 }
 
-unsigned SVRParameters::get_grad_level() const
+unsigned SVRParameters::get_grad_level() const noexcept
 {
     return grad_level_;
 }
 
-void SVRParameters::set_grad_level(const unsigned _grad_level)
+void SVRParameters::set_grad_level(const unsigned _grad_level) noexcept
 {
     grad_level_ = _grad_level;
 }
 
-void SVRParameters::decrement_gradient()
+void SVRParameters::decrement_gradient() noexcept
 {
     if (grad_level_) --grad_level_;
 }
 
-double SVRParameters::get_svr_C() const
+double SVRParameters::get_svr_C() const noexcept
 {
     return svr_C;
 }
 
-void SVRParameters::set_svr_C(const double _svr_C)
+void SVRParameters::set_svr_C(const double _svr_C) noexcept
 {
     svr_C = _svr_C;
 }
 
-double SVRParameters::get_svr_epsilon() const
+void SVRParameters::set_epsco(const arma::vec &epsco_) noexcept
+{
+    epsco = epsco_;
+}
+
+arma::vec SVRParameters::get_epsco() const noexcept
+{
+    return epsco;
+}
+
+double SVRParameters::get_svr_epsilon() const noexcept
 {
     return svr_epsilon;
 }
 
 
-void SVRParameters::set_svr_epsilon(const double _svr_epsilon)
+void SVRParameters::set_svr_epsilon(const double _svr_epsilon) noexcept
 {
     svr_epsilon = _svr_epsilon;
 }
 
 
-double SVRParameters::get_svr_kernel_param() const
+double SVRParameters::get_svr_kernel_param() const noexcept
 {
     return svr_kernel_param;
 }
 
-void SVRParameters::set_svr_kernel_param(const double _svr_kernel_param)
+void SVRParameters::set_svr_kernel_param(const double _svr_kernel_param) noexcept
 {
     svr_kernel_param = _svr_kernel_param;
 }
 
-double SVRParameters::get_svr_kernel_param2() const
+arma::vec SVRParameters::get_gamma() const noexcept
+{
+    return gamma;
+}
+
+arma::vec &SVRParameters::get_gamma() noexcept
+{
+    return gamma;
+}
+
+void SVRParameters::set_gamma(const arma::vec &_gamma) noexcept
+{
+    gamma = _gamma;
+}
+
+double SVRParameters::get_svr_kernel_param2() const noexcept
 {
     return svr_kernel_param2;
 }
 
-void SVRParameters::set_svr_kernel_param2(const double _svr_kernel_param2)
+void SVRParameters::set_svr_kernel_param2(const double _svr_kernel_param2) noexcept
 {
     svr_kernel_param2 = _svr_kernel_param2;
 }
 
-u_int64_t SVRParameters::get_svr_decremental_distance() const
-{
-    return svr_decremental_distance;
-}
-
-
-void SVRParameters::set_svr_decremental_distance(const uint64_t _svr_decremental_distance)
-{
-    svr_decremental_distance = _svr_decremental_distance;
-}
-
-double SVRParameters::get_svr_adjacent_levels_ratio() const
+double SVRParameters::get_svr_adjacent_levels_ratio() const noexcept
 {
     return svr_adjacent_levels_ratio;
 }
 
 
-void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio)
+void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio) noexcept
 {
     if (_svr_adjacent_levels_ratio < 0 || _svr_adjacent_levels_ratio > 1)
         THROW_EX_FS(std::range_error, "Adjacent levels ratio " << _svr_adjacent_levels_ratio << " is out of 0..1 range.");
@@ -363,7 +398,7 @@ const std::set<unsigned> &SVRParameters::get_adjacent_levels() const
     return adjacent_levels;
 }
 
-e_kernel_type SVRParameters::get_kernel_type() const
+e_kernel_type SVRParameters::get_kernel_type() const noexcept
 {
     return kernel_type;
 }
@@ -373,7 +408,7 @@ bool SVRParameters::is_manifold() const
     return kernel_type == e_kernel_type::DEEP_PATH;
 }
 
-void SVRParameters::set_kernel_type(const e_kernel_type _kernel_type)
+void SVRParameters::set_kernel_type(const e_kernel_type _kernel_type) noexcept
 {
     if (_kernel_type < e_kernel_type::number_of_kernel_types)
         kernel_type = _kernel_type;
@@ -381,12 +416,12 @@ void SVRParameters::set_kernel_type(const e_kernel_type _kernel_type)
         THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << (ssize_t) _kernel_type);
 }
 
-unsigned SVRParameters::get_lag_count() const
+unsigned SVRParameters::get_lag_count() const noexcept
 {
     return lag_count;
 }
 
-void SVRParameters::set_lag_count(const unsigned _lag_count)
+void SVRParameters::set_lag_count(const unsigned _lag_count) noexcept
 {
     if (_lag_count == 0) THROW_EX_FS(std::invalid_argument, "Lag count parameter cannot be zero.");
     lag_count = _lag_count;
@@ -414,9 +449,12 @@ std::string SVRParameters::to_string() const
     s << "id " << id
       << ", dataset id " << dataset_id
       << ", cost " << svr_C
+      << ", epsco " << common::present(epsco)
       << ", epsilon " << svr_epsilon
       << ", kernel param " << svr_kernel_param
+      << ", gamma " << common::present(gamma)
       << ", kernel param 2 " << svr_kernel_param2
+      << ", kernel param 3 " << kernel_param3
       << ", decrement distance " << svr_decremental_distance
       << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
       << ", kernel type " << static_cast<int>(kernel_type)
@@ -443,6 +481,7 @@ std::string SVRParameters::to_sql_string() const
       << "\t" << decon_level_
       << "\t" << chunk_ix_
       << "\t" << grad_level_
+      << "\t" << step_
       << "\t" << svr_C
       << "\t" << svr_epsilon
       << "\t" << svr_kernel_param
@@ -472,14 +511,15 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
     set_decon_level(atol(tokens[5].c_str()));
     set_chunk_index(atol(tokens[6].c_str()));
     set_grad_level(atol(tokens[7].c_str()));
-    set_svr_C(atof(tokens[8].c_str()));
-    set_svr_epsilon(atof(tokens[9].c_str()));
-    set_svr_kernel_param(atof(tokens[10].c_str()));
-    set_svr_kernel_param2(atof(tokens[11].c_str()));
-    set_svr_decremental_distance(atoll(tokens[12].c_str()));
-    set_svr_adjacent_levels_ratio(atof(tokens[13].c_str()));
-    set_kernel_type(e_kernel_type(atol(tokens[14].c_str())));
-    set_lag_count(atoll(tokens[15].c_str()));
+    set_step(atol(tokens[8].c_str()));
+    set_svr_C(atof(tokens[9].c_str()));
+    set_svr_epsilon(atof(tokens[10].c_str()));
+    set_svr_kernel_param(atof(tokens[11].c_str()));
+    set_svr_kernel_param2(atof(tokens[12].c_str()));
+    set_svr_decremental_distance(atoll(tokens[13].c_str()));
+    set_svr_adjacent_levels_ratio(atof(tokens[14].c_str()));
+    set_kernel_type(e_kernel_type(atol(tokens[15].c_str())));
+    set_lag_count(atoll(tokens[16].c_str()));
 
     LOG4_DEBUG("Successfully loaded parameters " << to_sql_string());
 

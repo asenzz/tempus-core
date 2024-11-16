@@ -31,7 +31,7 @@ public:
     {
         if (!id) return std::make_shared<T>(id, args...);
 
-        typename dtype(cached_db_entities)::iterator search_obj;
+        typename DTYPE(cached_db_entities)::iterator search_obj;
         std::unique_lock ul(mx_obj);
         if ((search_obj = cached_db_entities.find(id)) != cached_db_entities.end()) {
             ul.unlock();
@@ -52,7 +52,7 @@ public:
         const auto new_obj_id = new_obj_ptr->get_id();
         if (!new_obj_id) return new_obj_ptr;
 
-        typename dtype(cached_db_entities)::iterator search_obj;
+        typename DTYPE(cached_db_entities)::iterator search_obj;
         std::unique_lock ul(mx_obj);
         if ((search_obj = cached_db_entities.find(new_obj_id)) != cached_db_entities.end()) {
             ul.unlock();
@@ -72,7 +72,7 @@ public:
         const auto new_obj_id = arg.get_id();
         if (!new_obj_id) return std::make_shared<actual_T>(arg);
 
-        typename dtype(cached_db_entities)::iterator search_obj;
+        typename DTYPE(cached_db_entities)::iterator search_obj;
         std::unique_lock ul(mx_obj);
         if ((search_obj = cached_db_entities.find(new_obj_id)) != cached_db_entities.end()) {
             ul.unlock();

@@ -57,7 +57,7 @@ public:
 
     static unsigned get_trans_levix(const unsigned levels);
 
-    static std::set<unsigned int> get_adjacent_indexes(const unsigned int level, const double ratio, const int level_count);
+    static std::set<unsigned> get_adjacent_indexes(const unsigned level, const double ratio, const int level_count);
 };
 
 }

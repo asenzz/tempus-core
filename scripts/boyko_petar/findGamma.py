@@ -34,7 +34,7 @@ def mean_dist(xes, gamma, trimmed_ratio, meanOrMedian):
     
 #    RBF_dists = 2 - 2*np.exp(-gamma * RBF_dists);
     RBF_dists = 1 - np.exp(-gamma * RBF_dists);
-    mask = np.ones(RBF_dists.shape, dtype=bool);
+    mask = np.ones(RBF_dists.shape, DTYPE=bool);
     np.fill_diagonal(mask,0);
     if trimmed_ratio == 0:
         if meanOrMedian == 'median':

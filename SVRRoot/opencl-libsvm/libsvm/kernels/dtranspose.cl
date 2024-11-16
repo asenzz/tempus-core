@@ -45,8 +45,8 @@
 __kernel void
 dtranspose_kernel(
     int m, int n,
-    const __global double *A, unsigned long A_offset, int lda,
-    __global double *AT, unsigned long AT_offset,      int ldat)
+    const __global double *A, uint64_t A_offset, int lda,
+    __global double *AT, uint64_t AT_offset,      int ldat)
 {
     A += A_offset;
     AT += AT_offset;

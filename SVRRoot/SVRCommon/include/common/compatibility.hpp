@@ -1,36 +1,40 @@
 #pragma once
 
-#include <boost/date_time/posix_time/ptime.hpp>
 #include <memory>
 #include <sstream>
 #include <type_traits>
 #include <vector>
 #include <map>
 #include <set>
+#include <execution>
+#include <functional>
+#include <thread>
 #include <armadillo>
 #include <viennacl/matrix.hpp>
-#include <execution>
 #include <oneapi/tbb/concurrent_map.h>
 #include <oneapi/tbb/concurrent_set.h>
 #include <oneapi/tbb/concurrent_unordered_set.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/functional/hash.hpp>
-#include <functional>
-#include <thread>
-
+#include <boost/math/special_functions.hpp>
+#include <boost/date_time/posix_time/ptime.hpp>
 #include "types.hpp"
 #include "defines.h"
 #include "constants.hpp"
 #include "util/string_utils.hpp"
 
+
 namespace bpt = boost::posix_time;
 
-#define dtype(T) std::decay_t<decltype(T)>
-#define release_cont(x) dtype((x)){}.swap((x));
+
+#define DTYPE(T) std::decay_t<decltype(T)>
+#define release_cont(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
 #define CPTR(T) const T *const
 #define RPTR(T) T *__restrict__ const
 #define CRPTR(T) const T *__restrict__ const
+#define CPTRd CPTR(double)
+#define CRPTRd CRPTR(double)
 
 // General utility macro
 #define PP_CAT( A, B ) A ## B
@@ -48,6 +52,18 @@ namespace bpt = boost::posix_time;
 
 #define PP_OVERLOAD_SELECT(NAME, NUM) PP_CAT( NAME ## _, NUM)
 #define PP_MACRO_OVERLOAD(NAME, ...) PP_OVERLOAD_SELECT(NAME, PP_VA_ARG_SIZE(__VA_ARGS__))(__VA_ARGS__)
+
+
+#define PROPERTY(...) PP_MACRO_OVERLOAD(PROPERTY, __VA_ARGS__)
+
+#define PROPERTY_PUBLISHED(T, X) \
+    public:                      \
+        inline T get_##X() const { return X; } \
+        inline T &get_##X() { return X; } \
+        inline void set_##X(const T &X) { this->X = X; }
+
+#define PROPERTY_2(T, X) private: T X; PROPERTY_PUBLISHED(T, X)
+#define PROPERTY_3(T, X, D) private: T X = D; PROPERTY_PUBLISHED(T, X)
 
 
 template <typename T>
@@ -131,7 +147,6 @@ typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
 typedef std::shared_ptr<arma::cube> cube_ptr;
 typedef std::shared_ptr<arma::mat> mat_ptr;
 typedef std::shared_ptr<arma::vec> vec_ptr;
-typedef std::shared_ptr<std::deque<bpt::ptime>> times_ptr;
 typedef arma::Col<std::time_t> tvec;
 
 std::string demangle(const std::string &name);
@@ -172,7 +187,7 @@ struct equal_to
 
 #define ALIAS_TEMPLATE_FUNCTION(highLevelF, lowLevelF) \
 template<typename... Args> \
-inline auto highLevelF(Args&&... args) -> dtype(lowLevelF(std::forward<Args>(args)...)) \
+inline auto highLevelF(Args&&... args) -> DTYPE(lowLevelF(std::forward<Args>(args)...)) \
 { \
     return lowLevelF(std::forward<Args>(args)...); \
 }
@@ -557,62 +572,6 @@ typename Container::iterator remove_constness(Container &c, ConstIterator it)
     return c.erase(it, it);
 }
 
-template<class T>
-class wrap_vector : public std::vector<T>
-{
-public:
-    wrap_vector()
-    {
-        this->_M_impl._M_start = this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = NULL;
-    }
-
-    wrap_vector(const wrap_vector &o)
-    {
-        if (this == &o) return;
-        this->_M_impl._M_start = o._M_impl._M_start;
-        this->_M_impl._M_finish = o._M_impl._M_finish;
-        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
-    }
-
-    wrap_vector(wrap_vector &&o) noexcept
-    {
-        if (this == &o) return;
-        this->_M_impl._M_start = o._M_impl._M_start;
-        this->_M_impl._M_finish = o._M_impl._M_finish;
-        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
-        o._M_impl._M_start = o._M_impl._M_finish = o._M_impl._M_end_of_storage = NULL;
-    }
-
-    wrap_vector &operator=(const wrap_vector &o)
-    {
-        if (this == &o) return *this;
-        this->_M_impl._M_start = o._M_impl._M_start;
-        this->_M_impl._M_finish = o._M_impl._M_finish;
-        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
-        return *this;
-    }
-
-    wrap_vector &operator=(wrap_vector &&o) noexcept
-    {
-        if (this == &o) return *this;
-        this->_M_impl._M_start = o._M_impl._M_start;
-        this->_M_impl._M_finish = o._M_impl._M_finish;
-        this->_M_impl._M_end_of_storage = o._M_impl._M_end_of_storage;
-        o._M_impl._M_start = o._M_impl._M_finish = o._M_impl._M_end_of_storage = NULL;
-        return *this;
-    }
-
-    wrap_vector(T *sourceArray, const uint size)
-    {
-        this->_M_impl._M_start = sourceArray;
-        this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = sourceArray + size;
-    }
-
-    ~wrap_vector()
-    {
-        this->_M_impl._M_start = this->_M_impl._M_finish = this->_M_impl._M_end_of_storage = NULL;
-    }
-};
 
 template<typename T>
 struct copyatomic

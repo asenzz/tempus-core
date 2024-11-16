@@ -184,7 +184,7 @@ spectral_transform::wavelet::wavelet(std::string name) : name_(name)
 
         /* Biorthogonal wavelets family */
     else if (name == std::string("bior")) {
-        unsigned int N = order_ / 10, M = order_ % 10;
+        unsigned N = order_ / 10, M = order_ % 10;
         size_t M_idx;
         size_t M_max;
         switch (N) {

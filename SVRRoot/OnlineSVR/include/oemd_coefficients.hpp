@@ -13,10 +13,10 @@ typedef std::shared_ptr<oemd_coefficients> t_oemd_coefficients_ptr;
 typedef tbb::concurrent_map<std::pair<const unsigned, const std::string>, const t_oemd_coefficients_ptr> t_coefs_cache;
 
 struct oemd_coefficients {
-    static constexpr unsigned default_siftings = 1;
-    static constexpr unsigned mask_file_max_ver = 0x20;
+    static constexpr unsigned C_default_siftings = 2;
+    static constexpr unsigned C_mask_file_max_ver = 0x20;
     static constexpr double C_oemd_stretch_coef = 1;
-    static const std::string oemd_fir_coefs_dir;
+    static const std::string C_oemd_fir_coefs_dir;
 
     static std::string get_mask_file_name(const unsigned ctr, const unsigned level, const unsigned level_count, const std::string &queue_name);
 

@@ -36,7 +36,7 @@
     PRAGMASTR(omp parallel for __x schedule(static, ADJ_ITERS_CTR) num_threads((unsigned) CDIV(__n, ADJ_ITERS_CTR)) default(shared))
 #define OMP_FOR_i_(__n, __x) \
     OMP_FOR_(__n, __x)      \
-    for (dtype(__n) i = 0; i < __n; ++i)
+    for (DTYPE(__n) i = 0; i < __n; ++i)
 #if defined(__GNUC__)
 #define OMP_FOR_i(__n) OMP_FOR_i_(__n, )
 #define OMP_FOR(__n) OMP_FOR_(__n, )
@@ -55,10 +55,10 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 #define non_stpfor__(TY, IX, FROM, TO, STEP, ...) \
     for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; }
 #define non_tpfor__(TY, IX, FROM, TO, ...) non_stpfor__(TY, IX, FROM, TO, ++IX, __VA_ARGS__)
-#define non_pfor__(IX, FROM, TO, ...) non_stpfor__(dtype(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
+#define non_pfor__(IX, FROM, TO, ...) non_stpfor__(DTYPE(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
 #define non_pfor_i__(FROM, TO, ...) non_pfor__(i, FROM, TO, __VA_ARGS__)
 #define non_tpfor_i__(TY, FROM, TO, ...) non_stpfor__(TY, i, FROM, TO,  ++i, __VA_ARGS__)
-#define non_spfor__(IX, FROM, TO, STEP, ...) non_stpfor__(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define non_spfor__(IX, FROM, TO, STEP, ...) non_stpfor__(DTYPE(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define non_spfor_i__(FROM, TO, STEP, ...) non_spfor__(i, FROM, TO, (STEP), __VA_ARGS__)
 #define non_stpfor_i__(TY, FROM, TO, STEP, ...) non_stpfor__(TY, i, FROM, TO, (STEP), __VA_ARGS__)
 
@@ -74,9 +74,9 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
                 for (auto &__t_##IX: __thr_q_##IX) __t_##IX.join(); \
             };
 #endif
-#define pxt_spfor__(IX, FROM, TO, STEP, ...) pxt_stpfor__(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define pxt_spfor__(IX, FROM, TO, STEP, ...) pxt_stpfor__(DTYPE(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define pxt_tpfor__(TYPE, IX, FROM, TO, ...) pxt_stpfor__(TYPE, IX, FROM, TO, ++IX, __VA_ARGS__)
-#define pxt_pfor__(IX, FROM, TO, ...) pxt_tpfor__(dtype(TO), IX, FROM, TO, __VA_ARGS__)
+#define pxt_pfor__(IX, FROM, TO, ...) pxt_tpfor__(DTYPE(TO), IX, FROM, TO, __VA_ARGS__)
 #define pxt_pfor_i__(FROM, TO, ...) pxt_pfor__(i, FROM, TO, __VA_ARGS__)
 #define pxt_pfor_i0__(TO, ...) pxt_pfor_i__(0, TO, __VA_ARGS__)
 
@@ -87,10 +87,10 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
     for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; } // CilkPLUS is replaced with OpenMP // cilk_for(TY IX = FROM; IX < TO; STEP) { __VA_ARGS__; };
 #endif
 #define omp_tpfor__(TY, IX, FROM, TO, ...) omp_stpfor__(TY, IX, FROM, TO, ++IX, __VA_ARGS__)
-#define omp_pfor__(IX, FROM, TO, ...) omp_stpfor__(dtype(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
+#define omp_pfor__(IX, FROM, TO, ...) omp_stpfor__(DTYPE(TO), IX, FROM, TO, ++IX, __VA_ARGS__)
 #define omp_pfor_i__(FROM, TO, ...) omp_pfor__(i, FROM, TO, __VA_ARGS__)
 #define omp_tpfor_i__(TY, FROM, TO, ...) omp_stpfor__(TY, i, FROM, TO,  ++i, __VA_ARGS__)
-#define omp_spfor__(IX, FROM, TO, STEP, ...) omp_stpfor__(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define omp_spfor__(IX, FROM, TO, STEP, ...) omp_stpfor__(DTYPE(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define omp_spfor_i__(FROM, TO, STEP, ...) omp_spfor__(i, FROM, TO, (STEP), __VA_ARGS__)
 #define omp_stpfor_i__(TY, FROM, TO, STEP, ...) omp_stpfor__(TY, i, FROM, TO, (STEP), __VA_ARGS__)
 
@@ -105,21 +105,21 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
             { __VA_ARGS__; }} );  }); // Custom stepping is impossible with random starts
 #endif
 #define tbb_tpfor__(TY, IX, FROM, TO, ...) tbb_stpfor__(TY, IX, FROM, TO, 1, __VA_ARGS__)
-#define tbb_pfor__(IX, FROM, TO, ...) tbb_tpfor__(dtype(TO), IX, FROM, TO, __VA_ARGS__)
+#define tbb_pfor__(IX, FROM, TO, ...) tbb_tpfor__(DTYPE(TO), IX, FROM, TO, __VA_ARGS__)
 #define tbb_pfor_i__(FROM, TO, ...) tbb_pfor__(i, FROM, TO, __VA_ARGS__)
-#define tbb_zpfor_i__(TO, ...) tbb_pfor_i__(dtype(TO)(0), TO, __VA_ARGS__)
+#define tbb_zpfor_i__(TO, ...) tbb_pfor_i__(DTYPE(TO)(0), TO, __VA_ARGS__)
 #define tbb_tpfor_i__(TY, FROM, TO, ...) tbb_stpfor__(TY, i, FROM, TO, 1, __VA_ARGS__)
-#define tbb_spfor__(IX, FROM, TO, STEP, ...) tbb_stpfor__(dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
-#define tbb_spfor_i__(FROM, TO, STEP, ...) tbb_stpfor__(dtype(TO), i, FROM, TO, STEP, __VA_ARGS__)
+#define tbb_spfor__(IX, FROM, TO, STEP, ...) tbb_stpfor__(DTYPE(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define tbb_spfor_i__(FROM, TO, STEP, ...) tbb_stpfor__(DTYPE(TO), i, FROM, TO, STEP, __VA_ARGS__)
 #define tbb_stpfor_i__(TY, FROM, TO, STEP, ...) tbb_stpfor__(TY, i, FROM, TO, STEP, __VA_ARGS__)
 
 
 // TBB Parallel plus reductor
 #define tbb_stppred__(RESULT, INIT_RESULT, TYPE, IX, FROM, TO, STEP, ...) \
-    RESULT = tbb::parallel_reduce(tbb::blocked_range<TYPE>(FROM, TO, STEP), INIT_RESULT, [&](const tbb::blocked_range<TYPE> &__bprange_##IX, dtype(INIT_RESULT) RESULT) { \
-        for (auto IX = __bprange_##IX.begin(); IX < __bprange_##IX.end(); IX += STEP) { __VA_ARGS__; } return RESULT; }, std::plus<dtype(INIT_RESULT)>() );
+    RESULT = tbb::parallel_reduce(tbb::blocked_range<TYPE>(FROM, TO, STEP), INIT_RESULT, [&](const tbb::blocked_range<TYPE> &__bprange_##IX, DTYPE(INIT_RESULT) RESULT) { \
+        for (auto IX = __bprange_##IX.begin(); IX < __bprange_##IX.end(); IX += STEP) { __VA_ARGS__; } return RESULT; }, std::plus<DTYPE(INIT_RESULT)>() );
 
-#define tbb_sppred__(RESULT, INIT_RESULT, IX, FROM, TO, STEP, ...) tbb_stppred__(RESULT, INIT_RESULT, dtype(TO), IX, FROM, TO, STEP, __VA_ARGS__)
+#define tbb_sppred__(RESULT, INIT_RESULT, IX, FROM, TO, STEP, ...) tbb_stppred__(RESULT, INIT_RESULT, DTYPE(TO), IX, FROM, TO, STEP, __VA_ARGS__)
 #define tbb_ppred__(RESULT, INIT_RESULT, IX, FROM, TO, ...) tbb_sppred__(RESULT, INIT_RESULT, IX, FROM, TO, 1, __VA_ARGS__)
 #define tbb_ppred_i__(RESULT, INIT_RESULT, FROM, TO, ...) tbb_ppred__(RESULT, INIT_RESULT, i, FROM, TO, __VA_ARGS__)
 #define tbb_rpred_i__(RESULT, FROM, TO, ...) tbb_ppred__(RESULT, RESULT, i, FROM, TO, __VA_ARGS__)

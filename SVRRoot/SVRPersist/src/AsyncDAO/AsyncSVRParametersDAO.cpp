@@ -11,19 +11,19 @@ using svr::datamodel::SVRParameters;
 namespace {
 static const auto cmp_primary_key = [] (datamodel::SVRParameters_ptr const &lhs, datamodel::SVRParameters_ptr const &rhs)
 {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
            && lhs->get_id() == rhs->get_id();
 };
 
 static const auto cmp_whole_value = [] (datamodel::SVRParameters_ptr const &lhs, datamodel::SVRParameters_ptr const &rhs)
 {
-    return reinterpret_cast<unsigned long>(lhs.get()) && reinterpret_cast<unsigned long>(rhs.get())
+    return reinterpret_cast<uint64_t>(lhs.get()) && reinterpret_cast<uint64_t>(rhs.get())
            && *lhs == *rhs;
 };
 }
 
 struct AsyncSVRParametersDAO::AsyncImpl
-        : AsyncImplBase<datamodel::SVRParameters_ptr, dtype(cmp_primary_key), dtype(cmp_whole_value), PgSVRParametersDAO>
+        : AsyncImplBase<datamodel::SVRParameters_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgSVRParametersDAO>
 {
     AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)

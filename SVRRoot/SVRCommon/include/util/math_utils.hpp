@@ -36,6 +36,7 @@ template <typename A, typename B> using common_signed_t = std::conditional_t<std
 #define MINAS(X, Y) if ((X) > (Y)) (X) = (Y) // (((X) > (Y)) && ((X) = (Y))) // Y assigned to X only if Y smaller than X
 #define OMPMINAS(X, Y) X = _MIN(X, Y)
 #define OMPMAXAS(X, Y) X = _MAX(X, Y)
+
 #define CDIV(X, Y) std::ceil(double(X) / double(Y))
 #define CDIVI(X, Y) ((X) / (Y) + ((X) % (Y) != 0))
 #define LDi(i, m, ld) (((i) % (m)) + ((i) / (m)) * (ld))
@@ -316,13 +317,26 @@ template<> double sumabs(const arma::Mat<double> &m);
 
 template<> float sumabs(const arma::Mat<float> &m);
 
-template<typename T>
-arma::uvec find(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
+template<typename T> arma::uvec find(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
 {
     arma::uvec r;
 OMP_FOR_(m2.n_elem, ordered)
-    for (const auto e: m2) {
-        const arma::uvec r_e = arma::find(m1 == e);
+    for (const auto e2: m2) {
+        const arma::uvec r_e = arma::find(m1 == e2);
+        if (r_e.empty()) continue;
+#pragma omp ordered
+        r.insert_rows(r.n_rows, r_e);
+    }
+    return r;
+}
+
+template<typename T> arma::uvec find_ge(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
+{
+    arma::uvec r;
+OMP_FOR_(m2.n_elem, ordered)
+    for (const auto e2: m2) {
+        const arma::uvec r_e = arma::find(m1 >= e2);
+        if (r_e.empty()) continue;
 #pragma omp ordered
         r.insert_rows(r.n_rows, r_e);
     }
@@ -582,27 +596,37 @@ join_rows(const size_t arg_ct...)
     return res;
 }
 
-template<typename T> T scale(const T &v, const double sf, const double dc)
+template<typename T> inline T scale(const T &v, const double sf, const double dc)
 {
     return (v - dc) / sf;
 }
 
-template<typename T> T &scale_I(T &v, const double sf, const double dc)
+template<> arma::mat scale(const arma::mat &m, const double sf, const double dc);
+
+
+template<typename T> inline T &scale_I(T &v, const double sf, const double dc)
 {
     return v = (v - dc) / sf;
 }
 
-template<typename T> T unscale(const T &v, const double sf, const double dc)
+template<> arma::mat &scale_I(arma::mat &m, const double sf, const double dc);
+
+
+template<typename T> inline T unscale(const T &v, const double sf, const double dc)
 {
     return v * sf + dc;
 }
 
-template<typename T> T &unscale_I(T &v, const double sf, const double dc)
+template<> arma::mat unscale(const arma::mat &m, const double sf, const double dc);
+
+
+template<typename T> inline T &unscale_I(T &v, const double sf, const double dc)
 {
     return v = v * sf + dc;
 }
 
-arma::mat unscale(const arma::mat &m, const double sf, const double dc);
+template<> arma::mat &unscale_I(arma::mat &m, const double sf, const double dc);
+
 
 template<typename T> inline T constrain(T v, const T min, const T max)
 {
@@ -645,22 +669,26 @@ meanabs(const arma::Mat<T> &m)
 
 template<> double meanabs<double>(const arma::Mat<double> &m);
 
-template<typename T> inline T
-medianabs(const arma::Mat<T> &m)
+template<typename T> inline T medianabs(const arma::Mat<T> &m)
 {
     return arma::median(arma::abs(arma::vectorise(m)));
 }
 
+template<typename T> inline T
+meanabs(const std::span<T> &v)
+{
+    return std::reduce(C_default_exec_policy, v.begin(), v.end(), 0., [](const double acc, const double val) { return acc + std::abs(val); }) / double(v.size());
+}
+
+template<> double meanabs(const std::span<double> &v);
+
+template<> float meanabs(const std::span<float> &v);
 
 template<typename T> inline T
 meanabs(const std::vector<T> &v)
 {
-    return std::reduce(C_default_exec_policy, v.cbegin(), v.cend(), 0., [](const double acc, const double val) { return acc + std::abs(val); }) / double(v.size());
+    return meanabs(std::span(v));
 }
-
-template<> double meanabs(const std::vector<double> &v);
-
-template<> float meanabs(const std::vector<float> &v);
 
 template<typename T> T
 meanabs(const std::deque<T> &v)
@@ -687,10 +715,14 @@ extrude_rows(const arma::Mat<T> &m, const size_t ct)
     return r;
 }
 
-template<typename T> std::string present(const arma::Mat<T> &m)
+template<typename T> std::stringstream present_s(const arma::Mat<T> &m)
 {
     std::stringstream res;
-    const auto vm = arma::vectorise(m);
+    if (m.empty()) {
+        res << "empty";
+        return res;
+    }
+    const arma::Col<T> vm((T *)m.memptr(), m.n_elem, false, true);
     res << "elements " << m.n_elem << ", size " << arma::size(m);
     if (m.has_nonfinite())
         res << (m.has_inf() ? ", has infinite" : m.has_nan() ? ", has nan" : "");
@@ -698,14 +730,30 @@ template<typename T> std::string present(const arma::Mat<T> &m)
         res << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", index max " << vm.index_max() << ", min " << arma::min(vm) << ", index min " << vm.index_min() <<
             ", stddev " << arma::stddev(vm) << ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " <<
             arma::range(vm) << ", meanabs " << meanabs(m) << ", values " << common::to_string(m.mem,  std::min<size_t>(m.n_elem, 4));
-    return res.str();
+    return res;
+}
+
+template<typename T> std::string present(const arma::Mat<T> &m)
+{
+    if constexpr (std::is_integral_v<T>) return present_s(arma::conv_to<arma::mat>::from(m)).str();
+    else return present_s(m).str();
+}
+
+template<typename T> std::string present(const std::span<T> &v)
+{
+    return present(arma::vec(v.data(), v.size(), false, true));
+}
+
+template<typename T> std::string present(const std::vector<T> &v)
+{
+    return present(arma::vec(v.data(), v.size(), false, true));
 }
 
 template<typename T> std::string
 present(const arma::subview<T> &m)
 {
     std::stringstream res;
-    const auto vm = arma::vectorise(m);
+    const arma::vec vm = arma::conv_to<arma::vec>::from(m);
     res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
         << arma::stddev(vm) <<
         ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "

@@ -13,6 +13,9 @@
 namespace svr {
 namespace business {
 
+IQScalingFactorService::IQScalingFactorService(dao::IQScalingFactorDAO &iq_scaling_factor_dao) noexcept : iq_scaling_factor_dao_(iq_scaling_factor_dao)
+{}
+
 const std::function<double(double)> IQScalingFactorService::C_default_scaler = [](const double v) -> double { return v; };
 
 bool IQScalingFactorService::exists(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor)
@@ -46,11 +49,8 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     const auto columns_ct = input_queue.get_value_columns().size();
     const size_t row_ct = std::distance(iter_start, input_queue.cend());
 
-    LOG4_DEBUG("Calculating input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id << " scaling factors on last " <<
-                row_ct << " values, requested " << use_tail);
-
     arma::mat iq_values(row_ct, columns_ct);
-    OMP_FOR(row_ct * columns_ct)
+    OMP_FOR_(row_ct * columns_ct, simd collapse(2))
     for (size_t r = 0; r < row_ct; ++r)
         for (size_t c = 0; c < columns_ct; ++c)
             iq_values(r, c) = (**(iter_start + r))[c];
@@ -58,19 +58,15 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     if (common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) {
         OMP_FOR_i(columns_ct) LOG4_TRACE("Column " << i << " " << common::present(iq_values.col(i)));
     }
-
-    const arma::rowvec dc_offset = arma::mean(iq_values);
-    LOG4_TRACE("DC offsets " << dc_offset);
-#pragma omp parallel for schedule(static, 1) ADJ_THREADS(iq_values.n_cols)
-    for (size_t c = 0; c < iq_values.n_cols; ++c)
-        iq_values.col(c) -= dc_offset[c];
-    iq_values = arma::median(arma::abs(iq_values)) / common::C_input_obseg_labels;
-    LOG4_TRACE("Scaling factors " << iq_values);
+    arma::rowvec dc_offset(iq_values.n_cols, arma::fill::none), scaling_factors(iq_values.n_cols, arma::fill::none);
     std::deque<datamodel::IQScalingFactor_ptr> result(columns_ct);
-#pragma omp parallel for ADJ_THREADS(columns_ct) schedule(static, 1)
-    for (size_t c = 0; c < columns_ct; ++c)
-        result[c] = ptr<svr::datamodel::IQScalingFactor>(0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(c), iq_values[c], dc_offset[c]);
-
+    OMP_FOR_i(columns_ct) {
+        std::tie(dc_offset[i], scaling_factors[i]) = calc(iq_values.col(i));
+        result[i] = ptr<svr::datamodel::IQScalingFactor>(
+                    0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
+    }
+    LOG4_DEBUG("Calculated scaling factors for input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id << " scaling factors on last " <<
+                row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors);
     return result;
 }
 
@@ -130,7 +126,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool sav
 
 datamodel::t_iqscaler IQScalingFactorService::get_scaler(const datamodel::IQScalingFactor &sf)
 {
-    const double scaling_factor = sf.get_scaling_factor(), dc_offset = sf.get_dc_offset();
+    const auto scaling_factor = sf.get_scaling_factor(), dc_offset = sf.get_dc_offset();
     return [scaling_factor, dc_offset](const double v) -> double { return common::scale(v, scaling_factor, dc_offset); };
 }
 

@@ -36,9 +36,60 @@ std::string to_string(const float v)
 }
 
 namespace svr {
-
-
 namespace common {
+
+std::string formatter::str() const
+{
+    return stream_.str();
+}
+
+formatter::operator std::string() const
+{
+    return stream_.str();
+}
+
+formatter::operator const char *() const
+{
+    const std::string &s = stream_.str();
+    return s.c_str();
+}
+
+std::string formatter::operator>>(ConvertToString)
+{
+    return stream_.str();
+}
+
+std::string &ltrim(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](const int c) { return !std::isspace(c); }));
+    return s;
+}
+
+// trim from end
+std::string &rtrim(std::string &s)
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](const int c) { return !std::isspace(c); }).base(), s.end());
+    return s;
+}
+
+// trim from both ends
+std::string &trim(std::string &s)
+{
+    return ltrim(rtrim(s));
+}
+
+std::string tolower(std::string str)
+{
+    std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::tolower);
+    return str;
+}
+
+std::string toupper(std::string str)
+{
+    std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::toupper);
+    return str;
+}
+
 
 template<>
 std::string to_string(const std::vector<uint8_t> &v)
@@ -158,10 +209,10 @@ std::string make_md5_hash(const std::string &in)
 
     // MD5_Final
     auto md5_digest = (unsigned char *) OPENSSL_malloc(md5_digest_len);
-    EVP_DigestFinal_ex(mdctx, md5_digest, (unsigned int *) &md5_digest_len);
+    EVP_DigestFinal_ex(mdctx, md5_digest, (unsigned *) &md5_digest_len);
     EVP_MD_CTX_free(mdctx);
     std::stringstream mds;
-    for (dtype(md5_digest_len) i = 0; i < md5_digest_len; ++i)
+    for (DTYPE(md5_digest_len) i = 0; i < md5_digest_len; ++i)
         mds << std::hex << std::setfill('0') << std::setw(sizeof(*md5_digest) * 2) << unsigned(md5_digest[i]);
     return mds.str();
 }

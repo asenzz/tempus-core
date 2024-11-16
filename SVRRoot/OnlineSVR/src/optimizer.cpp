@@ -4,9 +4,7 @@
 namespace svr {
 namespace optimizer {
 
-pso_returns_t
-pso(const loss_callback_t &f, const PSO_parameters& pso_parameters,
-    const size_t& decon_level, const std::string& column_name)
+pso_returns_t pso(const loss_callback_t &f, const PSO_parameters& pso_parameters, const size_t& decon_level, const std::string &column_name)
 {
     // set the default settings
     pso_settings_t settings;

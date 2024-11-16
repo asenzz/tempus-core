@@ -23,7 +23,7 @@ void online_emd::transform(datamodel::DeconQueue &decon_queue, const unsigned de
     auto start_decon_iter = decon_queue.begin() + decon_start_ix;
     const auto dist = std::distance(decon_queue.begin(), start_decon_iter);
     size_t tail_len;
-    if (dist >= dtype(dist)(residuals_ct)) {
+    if (dist >= DTYPE(dist)(residuals_ct)) {
         start_decon_iter -= residuals_ct;
         tail_len = 0;
     } else {
@@ -69,8 +69,9 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
     if (decon_queue.empty()) start_input_iter = input_queue.cbegin();
     else start_input_iter = upper_bound(input_queue.get_data(), decon_queue.back()->get_value_time());
     unsigned tail_len;
-    if (start_input_iter - input_queue.cbegin() < residuals_ct) {
-        tail_len = residuals_ct - (start_input_iter - input_queue.cbegin());
+    const unsigned start_offset = start_input_iter - input_queue.cbegin();
+    if (start_offset < residuals_ct) {
+        tail_len = residuals_ct - start_offset;
         start_input_iter = input_queue.cbegin();
     } else {
         start_input_iter -= residuals_ct;
@@ -85,10 +86,10 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
 #ifdef INTEGRATION_TEST
 
     std::vector<double> test_tail;
-    datamodel::datarow_crange in_range_test(start_input_iter, input_queue.cend() - test_offset, input_queue.get_data());
+    const datamodel::datarow_crange in_range_test(start_input_iter, input_queue.cend() - test_offset, input_queue.get_data());
     if (tail_len) {
         business::DeconQueueService::mirror_tail(in_range_test, in_range_test.distance() + tail_len + test_offset, test_tail, in_colix);
-        LOG4_DEBUG("Mirror test for " << decon_queue.get_table_name() << ", range len " << in_range.distance() << " values, requested tail " << tail_len);
+        LOG4_DEBUG("Mirror test for " << decon_queue.get_table_name() << ", range len " << in_range.distance() << " values, requested tail " << tail_len << ", test offset " << test_offset);
     }
     const auto p_coefs = get_masks(in_range_test, test_tail, decon_queue.get_table_name(), in_colix, scaler, input_queue.get_resolution(), main_resolution);
 
@@ -224,14 +225,14 @@ void online_emd::inverse_transform(
 
 unsigned mult_residuals(const unsigned mask_len, const double stretch, const unsigned siftings)
 {
+// return coefs.masks.back().size(); // Minimum
+// return coefs.masks.back().size() * p_oemd_coef->siftings.back(); // Tradeoff
+// return 6 * svr::common::next_power_of_two(coefs.masks.back().size() * coefs.siftings.back()); // Assured time invariance first
     return mask_len * stretch * siftings * 8;
 }
 
 unsigned online_emd::get_residuals_length(const oemd_coefficients &coefs, const double stretch_coef)
 {
-    //return coefs.masks.back().size(); // Minimum
-    //return coefs.masks.back().size() * p_oemd_coef->siftings.back(); // Tradeoff
-    //return 6 * svr::common::next_power_of_two(coefs.masks.back().size() * coefs.siftings.back()); // Assured time invariance first
     return mult_residuals(common::max_size(coefs.masks), stretch_coef, *std::max_element(C_default_exec_policy, coefs.siftings.cbegin(), coefs.siftings.cend()));
 }
 
@@ -242,7 +243,7 @@ unsigned online_emd::get_residuals_length(const double _stretch_coef, const unsi
 }
 
 
-unsigned online_emd::get_residuals_length(const std::string &queue_name)
+unsigned online_emd::get_residuals_length(const std::string &queue_name) const noexcept
 {
     LOG4_WARN("Getting default masks residuals length.");
     if (levels < 1)

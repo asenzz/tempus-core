@@ -24,17 +24,17 @@
 namespace svr {
 namespace oemd {
 
-__global__ void G_subtract_inplace(RPTR(double) x, const double y, const unsigned n)
+__global__ void G_subtract_I(RPTR(double) x, const double y, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) x[i] -= y;
 }
 
-__global__ void G_subtract_inplace(RPTR(double) x, CRPTR(double) y, const unsigned n)
+__global__ void G_subtract_I(RPTR(double) x, CRPTRd y, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) x[i] -= y[i];
 }
 
-__global__ void G_subtract_inplace2(CRPTR(double) x, RPTR(double) y, const unsigned n)
+__global__ void G_subtract_inplace2(CRPTRd x, RPTR(double) y, const unsigned n)
 {
     CU_STRIDED_FOR_i(n) y[i] = x[i] - y[i];
 }
@@ -42,9 +42,9 @@ __global__ void G_subtract_inplace2(CRPTR(double) x, RPTR(double) y, const unsig
 __global__ void
 G_apply_fir(
         const double stretch_coef,
-        CRPTR(double) in,
+        CRPTRd in,
         const unsigned len,
-        CRPTR(double) mask,
+        CRPTRd mask,
         const unsigned mask_len,
         const unsigned stretched_mask_len,
         RPTR(double) out,
@@ -86,7 +86,7 @@ void transform_fft(
     const unsigned in_colix = levels * 2;
     const auto full_input_size = inout.distance() + tail.size();
     cu_errchk(cudaSetDevice(0));
-    const auto max_gpus = common::gpu_handler_hid::get().get_gpu_devices_count();
+    const auto max_gpus = common::gpu_handler_1::get().get_gpu_devices_count();
     std::deque<unsigned> gpuids(max_gpus);
     for (unsigned d = 0; d < max_gpus; ++d) gpuids[d] = d;
     std::vector<double> h_rx(full_input_size);
@@ -140,7 +140,7 @@ void transform_fft(
         cufft_errchk(cufftExecZ2D(plan_full_backward, d_rem_fft_ptr, d_rem_ptr));
 
         std::vector<double> h_tmp(full_input_size);
-        vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(full_input_size)>>>(d_imf_ptr, d_rem_ptr, full_input_size);
+        vec_subtract_I<<<CUDA_THREADS_BLOCKS(full_input_size)>>>(d_imf_ptr, d_rem_ptr, full_input_size);
         cu_errchk(cudaMemcpy(h_tmp.data(), d_imf_ptr, sizeof(double) * full_input_size, cudaMemcpyDeviceToHost));
         for (unsigned t = 0; t < full_input_size; ++t)
             if (t >= tail.size()) inout[t - tail.size()]->set_value(2 * i, h_tmp[t]);
@@ -181,7 +181,7 @@ void transform_fir(
         LOG4_ERROR("Error in FOR_MAX_GPU_" << d << ", " << e.what()); } } }
 
     const auto full_input_size = in.distance() + tail.size();
-    const auto max_gpus = 1; // common::gpu_handler_hid::get().get_gpu_devices_count(); // TODO Buggy when using multiple GPUs, fix
+    const auto max_gpus = 1; // common::gpu_handler_1::get().get_gpu_devices_count(); // TODO Buggy when using multiple GPUs, fix
 
     std::deque<cudaStream_t> custreams(max_gpus);
     DEV_FOR_d_begin
@@ -211,12 +211,12 @@ void transform_fir(
         DEV_FOR_d_end
 
         std::vector<double> h_imf(full_input_size);
-        UNROLL(oemd_coefficients::default_siftings)
+        UNROLL(oemd_coefficients::C_default_siftings)
         for (unsigned s = 0; s < siftings[l]; ++s) {
             DEV_FOR_d_begin
                             G_apply_fir<<<CU_BLOCKS_THREADS(job_len[d]), 0, custreams[d]>>>(
                                     stretch_coef, d_imf[d], full_input_size, d_mask_ptr[d], mask[l].size(), stretched_mask_size, d_work[d], start_ix[d]);
-                            G_subtract_inplace<<<CU_BLOCKS_THREADS(job_len[d]), 0, custreams[d]>>>(d_imf[d] + start_ix[d], d_work[d], job_len[d]);
+                            G_subtract_I<<<CU_BLOCKS_THREADS(job_len[d]), 0, custreams[d]>>>(d_imf[d] + start_ix[d], d_work[d], job_len[d]);
                             cu_errchk(cudaMemcpyAsync(h_imf.data() + start_ix[d], d_imf[d] + start_ix[d], job_len[d] * sizeof(double), cudaMemcpyDeviceToHost, custreams[d]));
                             cu_errchk(cudaStreamSynchronize(custreams[d]));
             DEV_FOR_d_end
@@ -258,7 +258,7 @@ void transform_fir(
 
 #endif
 
-void online_emd::expand_the_mask(const unsigned mask_size, const unsigned input_size, CPTR(double) dev_mask, double *const dev_expanded_mask, const cudaStream_t custream)
+void online_emd::expand_the_mask(const unsigned mask_size, const unsigned input_size, CPTRd dev_mask, double *const dev_expanded_mask, const cudaStream_t custream)
 {
     if (input_size > mask_size) cu_errchk(cudaMemsetAsync(dev_expanded_mask + mask_size, 0, sizeof(double) * (input_size - mask_size), custream));
     cu_errchk(cudaMemcpyAsync(dev_expanded_mask, dev_mask, sizeof(double) * mask_size, cudaMemcpyDeviceToDevice, custream));

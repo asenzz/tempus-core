@@ -7,12 +7,12 @@
 namespace svr {
 
 __global__ void
-G_copy_submat(CRPTR(double) in, double *const out, const unsigned in_m, const unsigned out_m, const unsigned out_mn)
+G_copy_submat(CRPTRd in, double *const out, const unsigned in_m, const unsigned out_m, const unsigned out_mn)
 {
     CU_STRIDED_FOR_i(out_mn) out[i] = in[LDi(i, out_m, in_m)];
 }
 
-void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
+void copy_submat(CPTRd in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
                  const unsigned in_end_n, const unsigned ldout, cudaMemcpyKind kind, const cudaStream_t stm)
 {
 #if 1
@@ -27,7 +27,7 @@ void copy_submat(CPTR(double) in, double *const out, const unsigned ldin, const 
 #endif
 }
 
-void cu_sync_destroy(cudaStream_t strm)
+void cusyndestroy(cudaStream_t strm)
 {
     cu_errchk(cudaStreamSynchronize(strm));
     cu_errchk(cudaStreamDestroy(strm));

@@ -47,7 +47,7 @@ fcvmd_frequency_outputs fast_cvmd::compute_cos_sin(const arma::vec &omega, const
     return {phase_cos, phase_sin};
 }
 
-fast_cvmd::fast_cvmd(const unsigned int levels_) :
+fast_cvmd::fast_cvmd(const unsigned levels_) :
         spectral_transform(std::string("cvmd"), levels_),
         levels(levels_),
         K(levels_ / 2),
@@ -78,7 +78,7 @@ bool fast_cvmd::initialized(const std::string &decon_queue_table_name)
 
 
 inline void
-calc_omega(arma::vec &omega, const unsigned int k, const arma::vec &freqs, const arma::cx_mat &u_hat_plus, const unsigned int T)
+calc_omega(arma::vec &omega, const unsigned k, const arma::vec &freqs, const arma::cx_mat &u_hat_plus, const unsigned T)
 {
     const auto T_2 = T / 2;
     const auto T_1 = T - 1;
@@ -89,7 +89,7 @@ calc_omega(arma::vec &omega, const unsigned int k, const arma::vec &freqs, const
 #if 1
 
 void
-fast_cvmd::initialize(const datamodel::datarow_crange &input, const unsigned int input_column_index, const std::string &decon_queue_table_name,
+fast_cvmd::initialize(const datamodel::datarow_crange &input, const unsigned input_column_index, const std::string &decon_queue_table_name,
                       const datamodel::t_iqscaler &scaler)
 {
     if (input.distance() < 1) LOG4_THROW("Illegal input size " << input.distance());
@@ -238,8 +238,8 @@ void
 fast_cvmd::transform(
         const data_row_container &input,
         datamodel::DeconQueue &decon,
-        const unsigned int in_colix,
-        const unsigned int test_offset,
+        const unsigned in_colix,
+        const unsigned test_offset,
         const datamodel::t_iqscaler &scaler)
 {
 #ifdef ORIG_VMD

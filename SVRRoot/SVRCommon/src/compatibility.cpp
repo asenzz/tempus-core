@@ -128,7 +128,7 @@ to_times(
 }
 
 
-static const unsigned int max_frames = 63;
+static const unsigned max_frames = 63;
 
 /** Print a demangled stack backtrace of the caller function to FILE* out. */
 void print_stacktrace()
@@ -224,7 +224,10 @@ double Round(const double &dbl)
 
 size_t hash_lambda(const double param_val)
 {
-    return param_val * 1e6;
+    assert(sizeof(param_val) <= sizeof(size_t));
+    size_t res = 0;
+    memcpy(&res, &param_val, sizeof(param_val));
+    return res;
 }
 
 } // common

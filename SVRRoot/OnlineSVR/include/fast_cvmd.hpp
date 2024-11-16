@@ -56,7 +56,7 @@ public:
 
     void set_vmd_frequencies(const tbb::concurrent_map<freq_key_t, fcvmd_frequency_outputs> &_vmd_frequencies);
 
-    explicit fast_cvmd(const unsigned int levels_);
+    explicit fast_cvmd(const unsigned levels_);
 
     ~fast_cvmd() final = default;
 
@@ -70,8 +70,8 @@ public:
     transform(
             const data_row_container &input,
             datamodel::DeconQueue &decon,
-            const unsigned int in_colix = 0,
-            const unsigned int test_offset = 0,
+            const unsigned in_colix = 0,
+            const unsigned test_offset = 0,
             const datamodel::t_iqscaler &scaler = std::identity());
 
     void inverse_transform(
@@ -85,7 +85,7 @@ public:
 
     bool initialized(const std::string &decon_queue_table_name);
 
-    void initialize(const datamodel::datarow_crange &input, const unsigned int input_column_index, const std::string &decon_queue_table_name,
+    void initialize(const datamodel::datarow_crange &input, const unsigned input_column_index, const std::string &decon_queue_table_name,
                     const datamodel::t_iqscaler &scaler);
 };
 

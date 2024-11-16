@@ -36,12 +36,12 @@ os.system("./svm-train -h 0 -s 3 "+ kernel_type+" " + gamma_arg+" "+epsilon_arg+
 os.system("./svm-predict "+validate_rows+" "+model_file+" "+predicted_data)
 
 
-labels = np.loadtxt(validate_rows, dtype=np.float64, usecols=0)
-predictions = np.loadtxt(predicted_data, dtype=np.float64)
+labels = np.loadtxt(validate_rows, DTYPE=np.float64, usecols=0)
+predictions = np.loadtxt(predicted_data, DTYPE=np.float64)
 # print(predictions)
 residuals = labels - predictions
-abs_residuals = np.abs(residuals, dtype=np.float64)
-print("Mean Average Error " + str(np.mean(abs_residuals, dtype=np.float64)))
+abs_residuals = np.abs(residuals, DTYPE=np.float64)
+print("Mean Average Error " + str(np.mean(abs_residuals, DTYPE=np.float64)))
 
 fig1 = plt.figure()
 plt1 = fig1.add_subplot(111)

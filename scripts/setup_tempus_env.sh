@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export NICENESS=0
+export NICENESS=19
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_trial_knitro_97-65-2f-5a-81.txt
 # export CUBLAS_LOGINFO_DBG=1 CUBLAS_LOGDEST_DBG=cublas.log
@@ -64,11 +64,11 @@ export LD_PRELOAD=`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jema
 export OMP_NESTED=true
 # export KMP_AFFINITY=compact # Kills performance
 # export KMP_HW_SUBSET=2s,10c,2t # Slows down noticeably, find better values
-export OMP_WAIT_POLICY=PASSIVE                            # Sets spincount to zero
-# export OMP_SCHEDULE=dynamic,1                           # May disable nesting (bug in OMP?)
-export MAX_ACTIVE_LEVELS=1000                             # Nested depth
+export OMP_WAIT_POLICY=PASSIVE                             # Sets spincount to zero
+export OMP_SCHEDULE=static,1                               # May disable nesting (bug in OMP?)
+export MAX_ACTIVE_LEVELS=10000                             # Nested depth
 export OMP_THREAD_LIMIT=10000 # $(( 10 * $NUM_THREADS ))   # Increase with RAM size
-export OMP_NUM_THREADS=2 # ${NUM_THREADS}
+export OMP_NUM_THREADS=4 # ${NUM_THREADS}
 # export CILK_NWORKERS=${NUM_THREADS}
 export MKL_NUM_THREADS=4 # ${NUM_THREADS}
 export MAGMA_NUM_THREADS=4 # ${NUM_THREADS}
@@ -76,6 +76,12 @@ export MKL_DYNAMIC="FALSE"
 # export VISIBLE_GPUS="0" # Disable GPUs
 # export CUDA_VISIBLE_DEVICES=VISIBLE_GPUS
 export MKL_ENABLE_INSTRUCTIONS=AVX2
+export MKL_THREADING_LAYER=INTEL
+export MKL_INTERFACE_LAYER=LP64
+
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MPICH_ASYNC_PROGRESS=1
+export MPICH_NEMESIS_ASYNC_PROGRESS=1
 
 ulimit -s 8192
 ulimit -i unlimited
@@ -98,7 +104,7 @@ then
   echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 fi
 
-
+/usr/sbin/sysctl --system > /dev/null
 # Recommended sysctl config from https://www.xomedia.io/linux-system-tuning/
 # kernel.shmmax = 709743345664
 # kernel.shmall = 173015040
@@ -141,3 +147,4 @@ fi
 # fs.file-max = 6815744
 # fs.aio-max-nr = 3145728
 # vm.nr_hugepages = 512
+

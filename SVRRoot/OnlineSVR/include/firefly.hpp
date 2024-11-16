@@ -27,6 +27,10 @@ struct ffa_particle {
     double I = 0;
 };
 
+constexpr double C_FFA_alpha = .5;   // Starting randomness
+constexpr double C_FFA_betamin = .5;   // Attraction
+constexpr double C_FFA_gamma = 1.;   // Visibility
+
 class firefly {
     static constexpr double delta_base = 1e-3 / .9;
     static constexpr double b_1 = 1;
@@ -43,9 +47,9 @@ class firefly {
     const arma::vec lb;	        // upper bound
     const arma::vec ub;         // lower bound
 
-    double alpha = common::C_FFA_alpha;	    // alpha parameter
-    const double betamin = common::C_FFA_betamin;  // beta parameter
-    const double gamma = common::C_FFA_gamma;	   // gamma parameter
+    double alpha = C_FFA_alpha;	    // alpha parameter
+    const double betamin = C_FFA_betamin;  // beta parameter
+    const double gamma = C_FFA_gamma;	   // gamma parameter
 
     double delta = 0; // delta parameter for calculating alpha_new
     arma::mat ffa;	    // firefly agents
@@ -54,7 +58,7 @@ class firefly {
 
     double best_score = std::numeric_limits<double>::max();   // the best objective function
 
-    const loss_callback_t function = [&](const std::vector<double> &args) -> double
+    const loss_callback_t function = [&](CRPTRd args, const uint32_t n) -> double
     {
         return std::numeric_limits<double>::quiet_NaN();
     };

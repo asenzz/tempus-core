@@ -1,4 +1,6 @@
+#ifdef USE_IPP
 #include <ipp.h>
+#endif
 #include <viennacl/vector_proxy.hpp>
 #include <common.hpp>
 #include <map>
@@ -353,44 +355,39 @@ template<> float sumabs(const std::vector<float> &v)
 
 template<> double sumabs(const arma::Mat<double> &m)
 {
-    return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
+    return cblas_dasum(m.n_elem, m.mem, 1);
 }
 
 template<> float sumabs(const arma::Mat<float> &m)
 {
-    return cblas_sasum(m.n_elem, m.mem, 1) / double(m.n_elem);
+    return cblas_sasum(m.n_elem, m.mem, 1);
 }
 
-template<> double
-meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
+template<> double meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
 {
     return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
 }
 
-template<> double
-meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
+template<> double meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
 {
     const auto n = end - begin;
     return cblas_dasum(n, &*begin, 1) / n;
 }
 
-template<> float
-meanabs(const typename std::vector<float>::const_iterator &begin, const typename std::vector<float>::const_iterator &end)
+template<> float meanabs(const typename std::vector<float>::const_iterator &begin, const typename std::vector<float>::const_iterator &end)
 {
     const auto n = end - begin;
     return cblas_sasum(n, &*begin, 1) / n;
 }
 
-template<> double
-meanabs<double>(const std::vector<double> &v)
+template<> double meanabs<double>(const std::span<double> &v)
 {
-    return meanabs<double>(v.cbegin(), v.cend());
+    return cblas_dasum(v.size(), v.data(), 1) / v.size();
 }
 
-template<> float
-meanabs(const std::vector<float> &v)
+template<> float meanabs(const std::span<float> &v)
 {
-    return meanabs<float>(v.cbegin(), v.cend());
+    return cblas_sasum(v.size(), v.data(), 1) / v.size();
 }
 
 double fdsum(CPTR(float) v, const unsigned len)
@@ -403,7 +400,7 @@ double fdsum(CPTR(float) v, const unsigned len)
 
 double max(const arma::mat &input)
 {
-#if 0 // IPP freezes on init
+#ifdef USE_IPP // IPP freezes on init
     double r;
     ip_errchk(ippsMax_64f(input.mem, input.n_elem, &r));
     return r;
@@ -414,7 +411,7 @@ double max(const arma::mat &input)
 
 double min(const arma::mat &input)
 {
-#if 0
+#ifdef USE_IPP
     double r;
     ip_errchk(ippsMin_64f(input.mem, input.n_elem, &r));
     return r;
@@ -425,7 +422,7 @@ double min(const arma::mat &input)
 
 double mean(const arma::mat &input)
 {
-#if 0 // IPP freezes when initialized in multiple shared objects
+#ifdef USE_IPP // IPP freezes when initialized in multiple shared objects
     double r;
     ip_errchk(ippsMean_64f(input.mem, input.n_elem, &r));
     return r;
@@ -448,17 +445,42 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle)
     constexpr size_t prime_multiplier = 6700417;
     constexpr size_t remainder = 42;
     auto result = to_shuffle;
-// #pragma omp parallel for num_threads(adj_threads(to_shuffle.n_elem)) schedule(static, 1)
-    for (size_t i = 0; i < to_shuffle.size(); ++i)
-        result((i * prime_multiplier + remainder) % to_shuffle.n_elem) = to_shuffle(i);
+    OMP_FOR_i(to_shuffle.size()) result((i * prime_multiplier + remainder) % to_shuffle.n_elem) = to_shuffle(i);
     return result;
 }
 
-arma::mat unscale(const arma::mat &m, const double sf, const double dc)
+template<> arma::mat scale(const arma::mat &m, const double sf, const double dc)
 {
-    arma::mat r(arma::size(m));
+    arma::mat r(arma::size(m), arma::fill::none);
+#ifdef USE_IPP
+    ip_errchk(ippsNormalize_64f(m.mem, r.memptr(), m.n_elem, dc, sf));
+#else
+    vdLinearFrac(m.n_elem, m.mem, m.mem, 1., -dc, 0, sf, r.memptr());
+#endif
+    return r;
+}
+
+template<> arma::mat &scale_I(arma::mat &m, const double sf, const double dc)
+{
+#ifdef USE_IPP
+    ip_errchk(ippsNormalize_64f_I(m.memptr(), m.n_elem, dc, sf));
+#else
+    vdLinearFrac(m.n_elem, m.mem, m.mem, 1., -dc, 0, sf, m.memptr());
+#endif
+    return m;
+}
+
+template<> arma::mat unscale(const arma::mat &m, const double sf, const double dc)
+{
+    arma::mat r(arma::size(m), arma::fill::none);
     vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, r.memptr());
     return r;
+}
+
+template<> arma::mat &unscale_I(arma::mat &m, const double sf, const double dc)
+{
+    vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, m.memptr());
+    return m;
 }
 
 std::atomic<double> pseudo_random_dev::state = .54321;
@@ -510,7 +532,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
 double alpha(const double reference_error, const double prediction_error)
 {
     return 100. * (reference_error / prediction_error - 1.);
-    // return 100. * (1. - prediction_error / reference_error);
+    // return 100. * (1. - prediction_error / reference_error); // Alternative way to calculate alpha
 }
 
 double mape(const double absolute_error, const double absolute_label)

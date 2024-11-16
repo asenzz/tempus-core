@@ -160,9 +160,7 @@ void firefly::move_ffa_adaptive(const double rate)
 
 void firefly::run_iteration()
 {
-#pragma omp parallel for num_threads(adj_threads(n)) schedule(static, 1)
-    for (unsigned i = 0; i < n; ++i)
-        particles[i].I = particles[i].f = function(common::wrap_vector(const_cast<double *>(ffa.col(i).colmem), ffa.n_rows));
+    OMP_FOR_i(n) particles[i].I = particles[i].f = function(ffa.colptr(i), ffa.n_rows);
 }
 
 /* display syntax messages */

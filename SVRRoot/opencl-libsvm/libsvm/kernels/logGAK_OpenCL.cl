@@ -27,13 +27,13 @@
 
 __kernel void
 logGAK_OpenCL_run(__global double *seq1, __global double *seq2, const int nX, const int dimvect, const double sigma,
-                  const int triangular, const double lambda, const unsigned long size1,
-                  const unsigned long size2,
-                  const unsigned long features_internal_vienna_size2,
-                  const unsigned long kernel_matrix_internal_vienna_size2,
-                  const unsigned long flagxxxyyy,
-                  const unsigned long offset,
-                  const unsigned long work_chunks,//work_chunks can be less than the total number of started kernels
+                  const int triangular, const double lambda, const uint64_t size1,
+                  const uint64_t size2,
+                  const uint64_t features_internal_vienna_size2,
+                  const uint64_t kernel_matrix_internal_vienna_size2,
+                  const uint64_t flagxxxyyy,
+                  const uint64_t offset,
+                  const uint64_t work_chunks,//work_chunks can be less than the total number of started kernels
                   __global double *results_diagonal_GPU_d,
                   __global double *kernel_matrix_GPU_d,
                   __global double *logM)
@@ -57,7 +57,7 @@ logGAK_OpenCL_run(__global double *seq1, __global double *seq2, const int nX, co
 {
         __private const long i_kernel = get_global_id(0);
 
-        __private const unsigned long index = i_kernel + offset;
+        __private const uint64_t index = i_kernel + offset;
         __private const int local_offset1 = index / size2;
         __private const int local_offset2 = index % size2;
         //size1 and size2 are different only when calling with two matrices

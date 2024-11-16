@@ -21,20 +21,21 @@
 #include "appcontext.hpp"
 #include "recombine_parameters.cuh"
 #include "common/logging.hpp"
+#include "cuqrsolve.cuh"
 
 #define TUNE_THREADS(MAX_THREADS) num_threads(adj_threads(std::min<unsigned>((MAX_THREADS), 4)))
 
 namespace svr {
 namespace datamodel {
 
-arma::mat get_reference_Z(const arma::mat &y, const size_t train_len)
+arma::mat get_reference_Z(const arma::mat &y, const unsigned train_len)
 {
     assert(y.n_rows - C_test_len - train_len == 0);
-    const size_t n = y.n_rows;
+    const unsigned n = y.n_rows;
     const arma::mat y_t = y.t();
     arma::mat r(n, n);
     OMP_FOR(n)
-    for (size_t i = 0; i < n; ++i) r.row(i) = arma::abs(y_t - arma::mean(y.row(i)));
+    for (unsigned i = 0; i < n; ++i) r.row(i) = arma::abs(y_t - arma::mean(y.row(i)));
     return r;
 }
 
@@ -45,14 +46,12 @@ void OnlineMIMOSVR::tune_fast()
         return;
     }
     ixs = generate_indexes();
-    const auto num_chunks = ixs.size();
+    const unsigned num_chunks = ixs.size();
     train_feature_chunks_t.resize(num_chunks);
     train_label_chunks.resize(num_chunks);
     t_omp_lock param_set_l;
     OMP_FOR(num_chunks)
-    for (size_t i = 0; i < num_chunks; ++i) {
-        train_feature_chunks_t[i] = feature_chunk_t(ixs[i]);
-        train_label_chunks[i] = p_labels->rows(ixs[i]);
+    for (unsigned i = 0; i < num_chunks; ++i) {
         SVRParameters_ptr p;
         if (!(p = get_params_ptr(i))) {
             p = otr(get_params());
@@ -64,81 +63,113 @@ void OnlineMIMOSVR::tune_fast()
     }
 
     if (chunks_score.size() != num_chunks) chunks_score.resize(num_chunks);
-    t_omp_lock params_l;
     p_kernel_matrices->resize(num_chunks);
     weight_chunks.resize(num_chunks);
 
-    constexpr unsigned opt_particles = 100;
-    constexpr unsigned opt_iters = 40;
-    constexpr unsigned D = 2;
+    constexpr unsigned opt_particles = 50;
+    constexpr unsigned opt_iters = 50;
+    constexpr unsigned D = 3;
     // static const auto equiexp = std::log(std::sqrt(C_tune_range_max_lambda)) / M_LN2;
-    static const arma::mat bounds = []() {
+    static const auto bounds = [] {
         arma::mat r(D, 2);
         r.col(0).zeros();
         r.col(1).ones();
         return r;
-    }();
+    } ();
+    static const auto x0 = [&] () -> arma::mat {
+        arma::mat r(2, opt_particles, arma::fill::none);
+        common::equispaced(r, bounds.tail_rows(2), {});
+        return arma::join_cols(arma::mat(1, opt_particles, arma::fill::value(.5)), r);
+    } ();
+
     LOG4_TRACE("Tuning slide skip " << C_slide_skip << ", max j " << C_max_j << ", tune min validation window " << C_tune_min_validation_window << ", test len " << C_test_len
                                     << ", level " << level << ", step " << step << ", num chunks " << num_chunks << ", first chunk "
                                     << common::present_chunk(ixs.front(), C_chunk_header) << ", last chunk "
                                     << common::present_chunk(ixs.back(), C_chunk_header) << " labels " << common::present(*p_labels) << ", features "
                                     << common::present(*p_features) << ", last-knowns " << common::present(*p_last_knowns) << ", max lambda " << C_tune_range_max_lambda
-                                    << ", gamma variance " << C_gamma_variance << ", particles " << opt_particles << ", iterations " << opt_iters);
+                                    << ", gamma variance " << solvers::C_gamma_variance << ", particles " << opt_particles << ", iterations " << opt_iters);
 
     const arma::uvec test_ixs = arma::regspace<arma::uvec>(p_labels->n_rows - C_test_len, p_labels->n_rows - 1);
     std::array<arma::mat, C_max_j> test_labels;
     std::array<arma::mat, C_max_j> test_last_knowns;
     UNROLL(C_max_j)
-    for (size_t j = 0; j < C_max_j; ++j) {
-        const size_t test_tail = test_ixs.n_rows - j * C_slide_skip;
+    for (unsigned j = 0; j < C_max_j; ++j) {
+        const unsigned test_tail = test_ixs.n_rows - j * C_slide_skip;
         test_labels[j] = p_labels->tail_rows(test_tail);
         test_last_knowns[j] = p_last_knowns->tail_rows(test_tail);
     }
 
-#pragma omp parallel for simd schedule(static, 1) TUNE_THREADS(num_chunks) default(shared) firstprivate(num_chunks, opt_particles, opt_iters, D)
-    for (size_t chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
-        auto p_template_chunk_params = get_params_ptr(chunk_ix);
-        if (!p_template_chunk_params) {
+#pragma omp parallel for schedule(static, 1) TUNE_THREADS(num_chunks) default(shared) firstprivate(num_chunks, opt_particles, opt_iters)
+    for (unsigned chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
+        auto p_chunk_params = get_params_ptr(chunk_ix);
+        if (!p_chunk_params) {
             for (const auto &p: param_set)
                 if (!p->is_manifold()) {
                     LOG4_WARN("Parameters for chunk " << chunk_ix << " not found, using template from " << *p);
-                    p_template_chunk_params = otr(*p);
-                    p_template_chunk_params->set_chunk_index(chunk_ix);
-                    p_template_chunk_params->set_grad_level(gradient);
-                    p_template_chunk_params->set_decon_level(level);
+                    p_chunk_params = otr(*p);
+                    p_chunk_params->set_chunk_index(chunk_ix);
+                    p_chunk_params->set_grad_level(gradient);
+                    p_chunk_params->set_decon_level(level);
                     break;
                 }
-            if (!p_template_chunk_params) LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
+            if (!p_chunk_params) LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
         }
         arma::uvec chunk_ixs_tune = arma::join_cols(ixs[chunk_ix] - C_test_len, test_ixs);
-#ifdef BACON_OUTLIER // TODO Test BACON outlier detection
+#ifdef REMOVE_OUTLIERS
         bool samples_selected = false;
         __prepare_tune_data:
 #endif
         arma::mat tune_features_t = feature_chunk_t(chunk_ixs_tune);
+        train_feature_chunks_t[chunk_ix] = feature_chunk_t(ixs[chunk_ix]);
 
+#ifndef NDEBUG
         for (unsigned j = 0; j < ixs[chunk_ix].size(); ++j) {
             const arma::vec diff_col = tune_features_t.col(j + C_test_len) - train_feature_chunks_t[chunk_ix].col(j);
             if (arma::accu(diff_col) > 0) LOG4_WARN("Col " << j << " differs " << common::present(diff_col));
         }
+#endif
 
+        train_label_chunks[chunk_ix] = p_labels->rows(ixs[chunk_ix]);
         arma::mat tune_labels = p_labels->rows(chunk_ixs_tune);
         auto p_labels_sf = business::DQScalingFactorService::find(scaling_factors, model_id, chunk_ix, gradient, step, level, false, true);
         auto features_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
         bool calculated_sf = false;
-        const auto lag = p_template_chunk_params->get_lag_count();
+        const auto lag = p_chunk_params->get_lag_count();
         if (!p_labels_sf || features_sf.size() != train_feature_chunks_t[chunk_ix].n_rows / lag) {
             features_sf = business::DQScalingFactorService::calculate(chunk_ix, *this, tune_features_t, tune_labels);
             p_labels_sf = business::DQScalingFactorService::find(features_sf, model_id, chunk_ix, gradient, step, level, false, true);
             calculated_sf = true;
         }
+#ifndef NDEBUG
+        LOG4_TRACE("Before scaling chunk " << chunk_ix << ", tune labels " << common::present(tune_labels) << ", tune features " << common::present(tune_features_t) <<
+            ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features " << common::present(train_feature_chunks_t[chunk_ix]) <<
+            ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
+#endif
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, lag, features_sf, train_feature_chunks_t[chunk_ix]);
         business::DQScalingFactorService::scale_labels(*p_labels_sf, train_label_chunks[chunk_ix]);
-        const mmm_t train_L_m{common::mean(train_label_chunks[chunk_ix] * C_diff_coef),
+        const solvers::mmm_t train_L_m{common::mean(train_label_chunks[chunk_ix] * C_diff_coef),
                               train_label_chunks[chunk_ix].max() * C_diff_coef,
                               train_label_chunks[chunk_ix].min() * C_diff_coef};
-#ifdef BACON_OUTLIER // TODO Test BACON outlier detection
+#ifdef REMOVE_OUTLIERS
         if (!samples_selected) {
+            p_chunk_params->set_svr_kernel_param2(2);
+            p_chunk_params->set_kernel_param3(2);
+            auto Kz = prepare_Z(*p_chunk_params, tune_features_t);
+            // const arma::vec sum_Kz = arma::sum(*Kz, 1);
+            solvers::kernel_from_distances_I(*Kz, calc_gamma(*Kz, tune_labels));
+            if (Kz->has_nonfinite()) LOG4_THROW("Kernel matrix has non-finites!");
+            constexpr double C_weights_slope = 1;
+            const arma::mat bias_labels = tune_labels % arma::linspace(1., C_weights_slope, tune_labels.n_rows);
+            const auto epsco = calc_epsco(*Kz, bias_labels);
+            const auto w = calc_weights(*Kz, bias_labels, epsco, PROPS.get_stabilize_iterations_count(), C_solve_opt_iters, *p_weights);
+            const arma::uvec sorted_ixs = C_shift_lim + arma::stable_sort_index(arma::abs(self_predict(*Kz, w, bias_labels)));
+            ixs[chunk_ix] = arma::sort(sorted_ixs.tail(max_chunk_size));
+            train_label_chunks[chunk_ix] = p_labels->rows(ixs[chunk_ix]);
+            train_feature_chunks_t[chunk_ix] = p_features->rows(ixs[chunk_ix]).t();
+            chunk_ixs_tune = arma::join_cols(arma::sort(sorted_ixs(arma::find(sorted_ixs < (p_labels->n_rows - C_test_len))).eval().tail_rows(max_chunk_size)), test_ixs);
+            LOG4_TRACE("Train chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk tune ixs " << common::present(chunk_ixs_tune) <<
+                ", sorted ixs " << common::present(sorted_ixs) << ", labels rows " << p_labels->n_rows);
+#if 0 // TODO Test BACON outlier detection
             const arma::mat joint_dataset = common::normalize_cols<double>(arma::join_rows(train_label_chunks[chunk_ix], train_feature_chunks_t[chunk_ix].t()));
             LOG4_DEBUG("joint_dataset " << common::present(joint_dataset));
             const MKL_INT DIM = joint_dataset.n_cols; /* dimension of the task */
@@ -168,79 +199,92 @@ void OnlineMIMOSVR::tune_fast()
             ixs[chunk_ix].shed_rows(to_shed);
             train_label_chunks[chunk_ix] = p_labels->rows(ixs[chunk_ix]);
             train_feature_chunks_t[chunk_ix] = p_features->rows(ixs[chunk_ix]).t();
-            chunk_ixs_tune = arma::join_cols(ixs[chunk_ix] - C_test_len, arma::regspace<arma::uvec>(p_labels->n_rows - C_test_len, p_labels->n_rows - 1));
+            chunk_ixs_tune = arma::join_cols(ixs[chunk_ix] - C_test_len, test_ixs);
+#endif
             samples_selected = true;
             goto __prepare_tune_data;
         }
 #endif
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, lag, features_sf, tune_features_t);
         business::DQScalingFactorService::scale_labels(*p_labels_sf, tune_labels);
+        LOG4_TRACE("After scaling chunk " << chunk_ix << ", tune labels " << common::present(tune_labels) << ", tune features " << common::present(tune_features_t) <<
+            ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features " << common::present(train_feature_chunks_t[chunk_ix]) <<
+            ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
 
-        auto &train_cuml = ccache().get_cached_cumulatives(*p_template_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
-        auto &tune_cuml = ccache().get_cached_cumulatives(*p_template_chunk_params, tune_features_t, last_trained_time);
+        const auto &train_cuml = ccache().get_cached_cumulatives(*p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
+        const auto &tune_cuml = ccache().get_cached_cumulatives(*p_chunk_params, tune_features_t, last_trained_time);
         assert(tune_labels.n_rows - C_test_len - ixs[chunk_ix].n_elem == 0);
         tune_labels *= C_diff_coef;
         t_omp_lock chunk_preds_l;
-        std::atomic<size_t> call_ct = 0;
+        std::atomic<unsigned> call_ct = 0;
         const auto labels_f = p_labels_sf->get_labels_factor();
         auto &tune_results = ccache().checkin_tuner(*this, chunk_ix);
-        const auto prima_cb = [&, lag, chunk_ix](const double x[], double *const f) {
+        arma::mat W_tune, W_train;
+        if (p_weights && p_weights->n_elem) {
+            W_tune = p_weights->rows(chunk_ixs_tune) * p_weights->rows(chunk_ixs_tune).t();
+            W_train = p_weights->rows(chunk_ixs_tune) * p_weights->rows(ixs[chunk_ix]).t();
+        }
+        auto costF = [&, lag](const double x[], double *const f) {
             ++call_ct;
             const auto xx = optimizer::pprune::ensure_bounds(x, bounds);
-            const auto lambda = C_tune_range_max_lambda * xx[1];
-            const common::gpu_context ctx;
-            cu_errchk(cudaSetDevice(ctx.phy_id()));
-            magma_queue_t ma_queue;
-            magma_queue_create(ctx.phy_id(), &ma_queue);
-            auto [score, gamma, epsco, p_predictions] =
-                    cuvalidate(lambda, xx[0], lag, tune_cuml, train_cuml, tune_labels, train_L_m, labels_f, ma_queue);
-            if ((*f = score) == common::C_bad_validation)
-                LOG4_THROW("Bad validation for chunk " << chunk_ix << ", tune indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", gamma " << gamma <<
-                                   ", epsco " << epsco << ", lambda " << lambda << ", tune features " << common::present(tune_features_t) << ", tune labels " << tune_labels);
+            const auto lambda = (C_tune_range_max_lambda - C_tune_range_min_lambda) * xx[1] + C_tune_range_min_lambda;
+            constexpr auto C_tune_range_max_tau = 10.;
+            const auto tau = xx[2] * C_tune_range_max_tau;
+            const auto [score, gamma, epsco, p_predictions] = cuvalidate(
+                    lambda, xx[0], tau, lag, tune_cuml, train_cuml, tune_features_t, train_feature_chunks_t[chunk_ix], tune_labels, train_label_chunks[chunk_ix], W_tune, W_train,
+                    train_L_m, labels_f);
+            *f = score;
             chunk_preds_l.set();
             const auto prev_score = tune_results.param_pred.front().score;
             if (score < prev_score) {
-                p_template_chunk_params->set_svr_kernel_param(gamma);
-                p_template_chunk_params->set_svr_kernel_param2(lambda);
-                p_template_chunk_params->set_svr_C(1 / epsco);
+                p_chunk_params->set_svr_kernel_param(gamma);
+                p_chunk_params->set_svr_kernel_param2(lambda);
+                p_chunk_params->set_kernel_param3(tau);
+                p_chunk_params->set_svr_C(1. / epsco);
                 if (PROPS.get_recombine_parameters()) {
                     std::rotate(tune_results.param_pred.begin(), tune_results.param_pred.begin() + 1, tune_results.param_pred.end());
                     tune_results.param_pred.front().free();
                     tune_results.param_pred.front().p_predictions = p_predictions;
-                    tune_results.param_pred.front().params = *p_template_chunk_params;
+                    tune_results.param_pred.front().params = *p_chunk_params;
                 }
                 tune_results.param_pred.front().score = score;
                 LOG4_TRACE("New best score " << score << ", previous best " << prev_score << ", improvement " << common::imprv(score, prev_score) << "pc, parameters " <<
-                                             *p_template_chunk_params << ", prima callback count " << call_ct << ", parameters " << arma::conv_to<arma::rowvec>::from(xx));
+                                             *p_chunk_params << ", prima callback count " << call_ct << ", opt arg " << arma::conv_to<arma::rowvec>::from(xx));
                 chunk_preds_l.unset();
-                goto __bail;
+                return;
             }
             chunk_preds_l.unset();
             if (PROPS.get_recombine_parameters()) {
                 t_param_preds::free_predictions(p_predictions);
                 delete p_predictions;
             }
-            __bail:
-            cu_errchk(cudaStreamSynchronize(magma_queue_get_cuda_stream(ma_queue)));
-            magma_queue_destroy(ma_queue);
         };
-        const optimizer::t_pprune_res res = optimizer::pprune(0 /* prima_algorithm_t::PRIMA_LINCOA */, opt_particles, bounds, prima_cb, opt_iters, .25, 1e-11);
+        const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, opt_particles, bounds, costF, opt_iters, 0, 0, x0);
         release_cont(chunk_ixs_tune);
+        release_cont(tune_labels);
+        release_cont(tune_features_t);
+        // p_chunk_params->set_svr_kernel_param2(res.best_parameters[1] * (C_tune_range_max_lambda - C_tune_range_min_lambda) + C_tune_range_min_lambda);
+        // const auto &Z = ccache().get_cached_Z(*p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
+        // p_chunk_params->set_svr_kernel_param(calc_gamma(Z, train_label_chunks[chunk_ix], res.best_parameters[0]));
+        if (PROPS.get_recombine_parameters()) {
+            tune_results.param_pred.front().params = *p_chunk_params;
+            tune_results.param_pred.front().score = res.best_score;
+        }
         chunks_score[chunk_ix].first = tune_results.param_pred.front().score;
         tune_results.labels = test_labels;
         tune_results.last_knowns = test_last_knowns;
-        release_cont(tune_labels);
-        release_cont(tune_features_t);
+        if (calculated_sf) set_scaling_factors(features_sf);
 
         ccache().checkout_tuner(*this, chunk_ix);
-        if (PROPS.get_recombine_parameters())
+        if (PROPS.get_recombine_parameters()) {
             recombine_params(chunk_ix, step);
-        else
-            set_params(p_template_chunk_params, chunk_ix);
-        if (calculated_sf) set_scaling_factors(features_sf);
-        p_kernel_matrices->at(chunk_ix) = *prepare_K(get_params(chunk_ix), train_feature_chunks_t[chunk_ix]);
-        calc_weights(chunk_ix, PROPS.get_stabilize_iterations_count());
-        LOG4_INFO("Tune best score " << chunks_score[chunk_ix] << ", final parameters " << *p_template_chunk_params);
+            p_chunk_params = get_params_ptr(chunk_ix);
+        } else
+            set_params(p_chunk_params, chunk_ix);
+        p_kernel_matrices->at(chunk_ix) = *prepare_K(ccache(), *p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
+        // p_chunk_params->set_svr_C(1. / calc_epsco(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix]));
+        calc_weights(chunk_ix, PROPS.get_stabilize_iterations_count(), C_solve_opt_iters);
+        LOG4_INFO("Tune best score " << chunks_score[chunk_ix] << ", final parameters " << *p_chunk_params);
     }
     clean_chunks();
 }
@@ -313,7 +357,7 @@ void OnlineMIMOSVR::clean_chunks()
                 ++iter;
                 break;
             }
-        if (!chunk_ix_set) iter = scaling_factors.unsafe_erase(iter);
+        if (!chunk_ix_set) iter = scaling_factors.erase(iter);
     }
 
     common::keep_indices(ixs, used_chunks);

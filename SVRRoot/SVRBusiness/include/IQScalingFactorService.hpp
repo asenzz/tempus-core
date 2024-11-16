@@ -1,6 +1,8 @@
 #pragma once
 
 #include "model/IQScalingFactor.hpp"
+#include "util/math_utils.hpp"
+#include "ScalingFactorService.hpp"
 
 namespace svr {
 namespace dao { class IQScalingFactorDAO; }
@@ -18,13 +20,11 @@ using Dataset_ptr = std::shared_ptr<Dataset>;
 namespace svr {
 namespace business {
 
-class IQScalingFactorService
-{
+class IQScalingFactorService : public ScalingFactorService {
     dao::IQScalingFactorDAO &iq_scaling_factor_dao_;
 
 public:
-    IQScalingFactorService(dao::IQScalingFactorDAO &iq_scaling_factor_dao) : iq_scaling_factor_dao_(iq_scaling_factor_dao)
-    {}
+    IQScalingFactorService(dao::IQScalingFactorDAO &iq_scaling_factor_dao) noexcept;
 
     bool exists(const datamodel::IQScalingFactor_ptr &iq_scaling_factor);
 
@@ -55,6 +55,11 @@ public:
     bool check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns);
 
     static const std::function<double(double)> C_default_scaler;
+
+    template<typename T> static inline void unscale(const datamodel::IQScalingFactor &sf, T &labels)
+    {
+        common::unscale_I<T>(labels, sf.get_scaling_factor(), sf.get_dc_offset());
+    }
 };
 
 }

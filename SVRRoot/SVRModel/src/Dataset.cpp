@@ -55,7 +55,7 @@ Dataset::Dataset(
         const std::string &description,
         const unsigned gradients,
         const unsigned chunk_size,
-        const unsigned multiout,
+        const unsigned multistep,
         const unsigned spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
@@ -71,7 +71,7 @@ Dataset::Dataset(
           description_(description),
           gradients_(gradients),
           max_chunk_size_(chunk_size),
-          multistep_(multiout),
+          multistep_(multistep),
           spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
@@ -103,7 +103,7 @@ Dataset::Dataset(
         const std::string &description,
         const unsigned gradients,
         const unsigned chunk_size,
-        const unsigned multiout,
+        const unsigned multistep,
         const unsigned spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
@@ -118,7 +118,7 @@ Dataset::Dataset(
           description_(description),
           gradients_(gradients),
           max_chunk_size_(chunk_size),
-          multistep_(multiout),
+          multistep_(multistep),
           spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
@@ -338,7 +338,7 @@ unsigned Dataset::get_spectrum_levels_cvmd() const
 #endif
 }
 
-unsigned int Dataset::get_spectrum_levels_oemd() const noexcept
+unsigned Dataset::get_spectrum_levels_oemd() const noexcept
 {
 #ifdef VMD_ONLY
     return 0;
@@ -349,7 +349,7 @@ unsigned int Dataset::get_spectrum_levels_oemd() const noexcept
 #endif
 }
 
-void Dataset::set_spectrum_levels(const unsigned int spectrum_levels)
+void Dataset::set_spectrum_levels(const unsigned spectrum_levels)
 {
     assert(spectrum_levels >= 1);
     spectrum_levels_ = spectrum_levels;
@@ -467,12 +467,12 @@ datamodel::DeconQueue_ptr Dataset::get_decon_queue(const std::string &table_name
     return nullptr;
 }
 
-datamodel::Ensemble_ptr Dataset::get_ensemble(const unsigned int idx)
+datamodel::Ensemble_ptr Dataset::get_ensemble(const unsigned idx)
 {
     return ensembles_[idx];
 }
 
-unsigned int Dataset::get_ensemble_count() const
+unsigned Dataset::get_ensemble_count() const
 {
     return input_queue_.get_obj()->get_value_columns().size();
 }
@@ -601,7 +601,7 @@ unsigned Dataset::get_max_decrement() const
     return res;
 }
 
-unsigned int Dataset::get_max_residuals_length() const
+unsigned Dataset::get_max_residuals_length() const
 {
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
@@ -628,12 +628,12 @@ unsigned int Dataset::get_max_residuals_length() const
     return result;
 }
 
-unsigned int Dataset::get_max_possible_residuals_length() const
+unsigned Dataset::get_max_possible_residuals_length() const
 {
     return get_residuals_length(common::gen_random(8));
 }
 
-unsigned int Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
+unsigned Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
 {
     return std::max<unsigned>(
             p_cvmd_transformer ? p_cvmd_transformer->get_residuals_length(decon_queue_table_name) : 0,

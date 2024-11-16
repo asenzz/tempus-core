@@ -260,6 +260,7 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
     LOG4_DEBUG("Processing " << user << " requests for dataset " << dataset);
 
     const auto requests = context::AppContext::get_instance().request_service.get_active_multival_requests(user, dataset);
+    const auto timenow = bpt::second_clock::local_time();
     OMP_FOR_(requests.size(),)
     for (const auto &p_request: requests) {
         std::atomic<bool> request_answered = true;
@@ -269,12 +270,12 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
         REQCHK(!p_request->sanity_check(), "Request " << *p_request << " incorrect!")
 
         LOG4_DEBUG("Processing request " << *p_request);
-        std::deque<bpt::ptime> predict_times;
+        data_row_container predict_times;
         if (p_request->value_time_start == p_request->value_time_end)
-            predict_times.emplace_back(p_request->value_time_start);
+            predict_times.emplace_back(otr<datamodel::DataRow>(p_request->value_time_start, timenow, 0, 0));
         else
             for (auto t = p_request->value_time_start; t < p_request->value_time_end; t += dataset.get_input_queue()->get_resolution())
-                predict_times.emplace_back(t);
+                predict_times.emplace_back(otr<datamodel::DataRow>(t, timenow, 0, 0));
 
         REQCHK(predict_times.empty(), "Times grid empty.")
 

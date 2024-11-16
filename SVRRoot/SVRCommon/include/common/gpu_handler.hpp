@@ -29,7 +29,6 @@
 #define KERNEL_DIRECTORY_PATH   "../SVRRoot/opencl-libsvm/libsvm/kernels/"
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
-#define CTX_PER_GPU 4
 
 #ifdef GPU_QUEUE
 
@@ -48,38 +47,13 @@
 namespace svr {
 namespace common {
 
-class gpu_context;
+template<const uint16_t ctx_per_gpu> class gpu_context_;
+using gpu_context = gpu_context_<CTX_PER_GPU>;
+using gpu_context_4 = gpu_context_<4>;
 
-class fat_gpu_context;
-
-template<const unsigned context_per_gpu>
+template<const uint16_t ctx_per_gpu>
 class gpu_handler : boost::noncopyable
 {
-    friend gpu_context;
-    friend fat_gpu_context;
-
-    unsigned get_free_gpu();
-
-    unsigned get_free_gpus(const unsigned gpu_ct);
-
-#ifdef GPU_QUEUE
-
-    void return_gpu(const unsigned id);
-
-#else
-    void return_gpu();
-#endif
-
-    void return_gpus(const unsigned gpu_ct);
-
-    void sort_free_gpus();
-
-    gpu_handler(const gpu_handler &) = delete;
-
-    gpu_handler &operator=(const gpu_handler &) = delete;
-
-    void init_devices(const int device_type);
-
 #ifndef GPU_QUEUE
 #ifdef IPC_SEMAPHORE
     std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_;
@@ -87,32 +61,58 @@ class gpu_handler : boost::noncopyable
     std::unique_ptr<svr::fast_semaphore> p_gpu_sem_;
 #endif
 #endif
-    unsigned max_running_gpu_threads_number_;
-    unsigned m_max_gpu_kernels_;
-    unsigned max_gpu_data_chunk_size_;
+    uint16_t max_running_gpu_threads_number_;
+    uint32_t m_max_gpu_kernels_;
+    uint32_t max_gpu_data_chunk_size_;
 #ifdef VIENNACL_WITH_OPENCL
     std::deque<viennacl::ocl::device> devices_;
 #endif //VIENNACL_WITH_OPENCL
 
 #ifdef GPU_QUEUE
-    tbb::concurrent_bounded_queue<unsigned> available_devices_; // TODO Compare to next_device atomic counter for even distribution of workload and resource usage
+    tbb::concurrent_bounded_queue<uint16_t> available_devices_; // TODO Compare to next_device atomic counter for even distribution of workload and resource usage
 #else
-    std::atomic<unsigned> next_device_;
+    std::atomic<uint16_t> next_device_;
 #endif
     mutable boost::shared_mutex devices_mutex_;
 
+    void init_devices(const int device_type);
+
 public:
-    unsigned get_max_gpu_threads() const;
+    static constexpr auto C_no_gpu_id = std::numeric_limits<uint16_t>::max();
 
-    unsigned get_gpu_devices_count() const;
+    uint16_t get_free_gpu();
 
-    unsigned get_max_gpu_kernels() const;
+    uint16_t try_free_gpu();
+
+    uint16_t get_free_gpus(const uint16_t gpu_ct);
+
+#ifdef GPU_QUEUE
+
+    void return_gpu(const uint16_t id);
+
+#else
+    void return_gpu();
+#endif
+
+    void return_gpus(const uint16_t gpu_ct);
+
+    void sort_free_gpus();
+
+    gpu_handler(const gpu_handler &) = delete;
+
+    gpu_handler &operator=(const gpu_handler &) = delete;
+
+    uint16_t get_max_gpu_threads() const;
+
+    uint16_t get_gpu_devices_count() const;
+
+    uint32_t get_max_gpu_kernels() const;
 
     size_t get_max_gpu_data_chunk_size() const;
 
 #ifdef VIENNACL_WITH_OPENCL
 
-    const viennacl::ocl::device &device(const unsigned idx) const;
+    const viennacl::ocl::device &device(const uint16_t idx) const;
 
 #endif //VIENNACL_WITH_OPENCL
 
@@ -123,27 +123,32 @@ public:
     ~gpu_handler();
 };
 
-using gpu_handler_hid = gpu_handler<CTX_PER_GPU>;
+using gpu_handler_1 = gpu_handler<CTX_PER_GPU>;
+using gpu_handler_4 = gpu_handler<4>;
 
 // TODO  Make CUDA stream context
 #ifdef VIENNACL_WITH_OPENCL
 
-class gpu_context
+template<const uint16_t ctx_per_gpu> class gpu_context_
 {
 protected:
-    const unsigned context_id_, dev_ct;
+    const uint16_t context_id_, dev_ct;
 public:
-    __attribute_noinline__ gpu_context();
+    __attribute_noinline__ gpu_context_();
 
-    __attribute_noinline__ gpu_context(const gpu_context &context);
+    __attribute_noinline__ gpu_context_(const bool try_init);
 
-    virtual ~gpu_context();
+    __attribute_noinline__ gpu_context_(const gpu_context &context);
 
-    unsigned id() const;
+    virtual ~gpu_context_();
 
-    unsigned phy_id() const;
+    uint16_t id() const;
+
+    uint16_t phy_id() const;
 
     viennacl::ocl::context &ctx() const;
+
+    operator bool() const;
 };
 
 class gpu_kernel : public gpu_context
@@ -153,45 +158,8 @@ public:
 
     virtual ~gpu_kernel();
 
-    static void
-    ensure_compiled_kernel(
-            viennacl::ocl::context &ctx, const std::string &kernel_name)
-    {
-        LOG4_BEGIN();
-
-        if (ctx.has_program(kernel_name)) return;
-
-        const std::string kernel_path(KERNEL_DIRECTORY_PATH + kernel_name + ".cl");
-        LOG4_DEBUG("Looking for the source of " << kernel_name << " in " << KERNEL_DIRECTORY_PATH);
-        std::ifstream file_kernel(kernel_path);
-        std::stringstream ss_kernel;
-        ss_kernel << file_kernel.rdbuf();
-//        ctx.build_options(OCL_BUILD_OPTIONS);
-        ctx.add_program(ss_kernel.str(), kernel_name);
-
-        LOG4_END();
-    }
-
-
-    static void
-    ensure_compiled_kernel(
-            viennacl::ocl::context &ctx, const std::string &kernel_name, const std::string &kernel_file_name)
-    {
-        LOG4_BEGIN();
-
-        if (ctx.has_program(kernel_name)) return;
-
-        const std::string kernel_file_path(KERNEL_DIRECTORY_PATH + kernel_file_name + ".cl");
-
-        LOG4_DEBUG("Looking for the source of " << kernel_name << " at " << kernel_file_path);
-        std::ifstream file_kernel(kernel_file_path);
-        std::stringstream ss_kernel;
-        ss_kernel << file_kernel.rdbuf();
-//        ctx.build_options(OCL_BUILD_OPTIONS);
-        ctx.add_program(ss_kernel.str(), kernel_file_name);
-
-        LOG4_END();
-    }
+    static void ensure_compiled_kernel(viennacl::ocl::context &ctx, const std::string &kernel_name);
+    static void ensure_compiled_kernel(viennacl::ocl::context &ctx, const std::string &kernel_name, const std::string &kernel_file_name);
 
 private:
     std::string kernel_name_;

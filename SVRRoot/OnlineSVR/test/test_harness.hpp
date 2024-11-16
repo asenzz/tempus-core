@@ -60,16 +60,16 @@ pretty_print(std::basic_ostream<char> &ostr, Cont const &cont, char const *delim
     auto beg = std::begin(cont);
     auto const end = std::end(cont);
 
-    ostr << delimiters<dtype(*beg)>::opener;
+    ostr << delimiters<DTYPE(*beg)>::opener;
 
     if (beg != end) {
-        pretty_print(ostr, *beg, delimiters<dtype(*beg)>::delim);
+        pretty_print(ostr, *beg, delimiters<DTYPE(*beg)>::delim);
         while (++beg != end) {
             ostr << delim;
-            pretty_print(ostr, *beg, delimiters<dtype(*beg)>::delim);
+            pretty_print(ostr, *beg, delimiters<DTYPE(*beg)>::delim);
         }
     }
-    ostr << delimiters<dtype(*beg)>::closer;
+    ostr << delimiters<DTYPE(*beg)>::closer;
 }
 
 #define ASSERT_FP_EQ(op1, op2) ASSERT_TRUE(svr::common::equals(op1, op2)) << " op1: " << (op1) << " op2: " << (op2)

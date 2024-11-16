@@ -40,6 +40,17 @@ public:
     virtual ~kernel_base()
     {}
 
+    virtual viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &features)
+    {
+        LOG4_THROW("Not implemented");
+        return viennacl::matrix<scalar_type>();
+    }
+
+    virtual viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &features, const viennacl::matrix<scalar_type> &features2)
+    {
+        LOG4_THROW("Not implemented");
+        return viennacl::matrix<scalar_type>();
+    }
 
     // virtual void operator()(const vmatrix<scalar_type> &features, vmatrix<scalar_type> &p_kernel_matrices) = 0; - not needed at this point, maybe we will put it back
     virtual void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) = 0;  // CPU based - to be avoided

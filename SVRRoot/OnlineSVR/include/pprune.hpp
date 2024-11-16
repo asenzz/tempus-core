@@ -20,19 +20,29 @@ struct t_pprune_res {
     unsigned total_iterations = 0;
 };
 
-typedef std::function<void(CPTR(double) x, double *const f)> t_pprune_cost_fun, *t_pprune_cost_fun_ptr;
+typedef std::function<void(CPTRd x, double *const f)> t_pprune_cost_fun, *t_pprune_cost_fun_ptr;
 
 struct t_calfun_data;
 using t_calfun_data_ptr = t_calfun_data *;
 
 class pprune {
+
     const unsigned n, D;
     const arma::mat bounds;
     const arma::vec pows, ranges;
     t_pprune_res result;
 
 public:
-    pprune(const unsigned algo_type, const unsigned n_particles, const arma::mat &bounds,
+
+    enum e_algo_type : uint8_t {
+        e_biteopt = 0,
+        e_knitro = 1,
+        e_prima = 2,
+        e_petsc = 3
+    };
+    static constexpr e_algo_type C_default_algo = e_algo_type::e_biteopt;
+
+    pprune(const e_algo_type algo_type, const unsigned n_particles, const arma::mat &bounds,
            const t_pprune_cost_fun &cost_f,
            const unsigned maxfun = 50,
            double rhobeg = 0,
@@ -40,11 +50,20 @@ public:
            arma::mat x0 = {}, const arma::vec &pows = {},
            const unsigned depth = C_biteopt_depth);
 
-    static void calfun(CPTR(double) x, double *const f, t_calfun_data_ptr const calfun_data);
+    void pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0, const unsigned depth);
 
-    static arma::vec ensure_bounds(CPTR(double) x, const arma::mat &bounds);
+    void pprune_knitro(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0);
 
-    operator t_pprune_res();
+    void pprune_prima(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+
+    void pprune_petsc(
+            const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+
+    static void calfun(CPTRd x, double *const f, t_calfun_data_ptr const calfun_data);
+
+    static arma::vec ensure_bounds(CPTRd x, const arma::mat &bounds);
+
+    operator t_pprune_res() const noexcept;
 };
 
 }

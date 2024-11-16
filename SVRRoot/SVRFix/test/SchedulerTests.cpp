@@ -29,7 +29,7 @@ void run_scheduler(std::vector<call_history> & calls, bpt::time_duration averagi
 
     svr::fix::twap_spread_calculator reader( averaging_period );
 
-    test_writer<dtype(func)> writer(func);
+    test_writer<DTYPE(func)> writer(func);
 
     bpt::ptime const start = bpt::microsec_clock::local_time();
 

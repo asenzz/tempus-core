@@ -183,7 +183,7 @@ UNROLL()
         }
     }
 
-    const uint32_t rows_gpu = common::gpu_handler_hid::get().get_max_gpu_data_chunk_size() / 2 / colct / (2 * common::C_cu_block_size) * (2 * common::C_cu_block_size);
+    const uint32_t rows_gpu = common::gpu_handler_1::get().get_max_gpu_data_chunk_size() / 2 / colct / (2 * common::C_cu_block_size) * (2 * common::C_cu_block_size);
     auto best_score = std::numeric_limits<double>::infinity();
     std::vector<uint8_t> best_params_ixs(colct, uint8_t(0));
         LOG4_DEBUG("Predictions filtered out " << filter_combos << ", total prediction rows " << num_combos << ", rows per GPU " << rows_gpu << ", column count " << colct
@@ -191,7 +191,7 @@ UNROLL()
 
     // const auto start_time = std::chrono::steady_clock::now();
     t_omp_lock best_score_l;
-#pragma omp parallel for schedule(static, 1) num_threads(common::gpu_handler_hid::get().get_max_gpu_threads())
+#pragma omp parallel for schedule(static, 1) num_threads(common::gpu_handler_1::get().get_max_gpu_threads())
     for (uint64_t start_row_ix = 0; start_row_ix < num_combos; start_row_ix += rows_gpu) {
         // if (best_score != std::numeric_limits<double>::max()) continue;
         // if (std::chrono::steady_clock::now() - start_time > std::chrono::minutes(45)) continue;

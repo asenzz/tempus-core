@@ -210,7 +210,7 @@ bfgs_scaling     dynamic
 # Number of threads to use in parallel BLAS.
 #   choose any positive integer, or
 #   0 = determine automatically based on numthreads
-blas_numthreads  0
+blas_numthreads  40
 
 # Which BLAS/LAPACK library to use.  Intel MKL library is only available
 # on some platforms; see the User Manual for details.
@@ -246,7 +246,7 @@ concurrent_evals  yes
 # Number of threads to do conic operations in parallel.
 #   choose any positive integer, or
 #   0 = determine automatically based on numthreads
-conic_numthreads  0
+conic_numthreads  40
 
 # Declare the problem as convex.
 #   auto       = -1
@@ -324,7 +324,14 @@ findiff_estnoise  no
 # Number of threads to use in finite-differencing.
 #   choose any positive integer, or
 #   0 = determine automatically based on numthreads
-findiff_numthreads 1
+findiff_numthreads 40
+
+# Specifies the initial point strategy used for the continuous algorithms. Using a more advanced initial point strategy may produce a better initial point at the cost of more computation.
+#  -1 (auto) Automatically determine the initial point strategy.
+#  1 (basic) Try a basic initial point strategy.
+#  2 (advanced) Try a more advanced initial point strategy.
+#  Default value: -1
+initpt_strategy 2
 
 # Relative stepsize for finite-difference gradients.
 findiff_relstepsize 0
@@ -372,7 +379,7 @@ hessopt      auto
 #   no      =  0 = allow iterations to violate the bounds
 #   always  =  1 = enforce bounds satisfaction of all iterates
 #   initpt  =  2 = enforce bounds satisfaction of initial point
-honorbnds    auto
+honorbnds    1
 
 # Specifies relative stopping tolerance used to declare infeasibility.
 infeastol    1e-08
@@ -392,7 +399,7 @@ linesearch   auto
 
 # Maximum allowable number of trial values during the linesearch of the
 # Interior Direct or SQP algorithm.
-linesearch_maxtrials  3
+linesearch_maxtrials  6
 
 # Which linear system solver to use.
 #   auto       = 0 = let Knitro choose the solver
@@ -408,7 +415,7 @@ linesearch_maxtrials  3
 linsolver    mklpardiso # auto
 
 # Maximum number of iterative refinement steps for the linear solver.
-linsolver_maxitref 2
+linsolver_maxitref 4
 
 # Controls node amalgamation for MA57, MA86 and MA97 linear solvers.
 linsolver_nodeamalg 0
@@ -416,7 +423,7 @@ linsolver_nodeamalg 0
 # Number of threads to use in parallel linear solver.
 #   choose any positive integer, or
 #   0 = determine automatically based on numthreads
-linsolver_numthreads 0
+linsolver_numthreads 40
 
 # Whether to use out-of-core version of linsolver=mklpardiso.
 #   no     = 0 = always use in-core version
@@ -452,12 +459,12 @@ lmsize       10
 # Maximum allowable CPU time in seconds for the complete multi algorithm
 # solution when 'alg=multi'.  Use maxtime_cpu to additionally limit time
 # spent per each algorithm.
-ma_maxtime_cpu  7200 # 1e+08
+ma_maxtime_cpu  14400 # 1e+08
 
 # Maximum allowable real time in seconds for the complete multi algorithm
 # solution when 'alg=multi'.  Use maxtime_real to additionally limit time
 # spent per each algorithm.
-ma_maxtime_real 7200 # 1e+08
+ma_maxtime_real 14400 # 1e+08
 
 # Specifies multi algorithm subproblem solve output control.
 #   0 = no output from subproblem solves
@@ -675,7 +682,7 @@ mip_nodealg auto
 # Number of threads to use for MIP solvers.
 #   choose any positive integer, or
 #   0 = determine automatically
-mip_numthreads 0
+mip_numthreads 40
 
 # Specifies absolute stop tolerance for sufficiently small optimality gap.
 mip_opt_gap_abs      1e-06
@@ -809,7 +816,7 @@ ms_num_to_save 0
 # Number of threads to use in parallel multistart.
 #   choose any positive integer, or
 #   0 = determine automatically based on numthreads
-ms_numthreads 0
+ms_numthreads 40
 
 # Specifies parallel multistart subproblem solve output control.
 #   0 = no output from subproblem solves

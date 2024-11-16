@@ -3,7 +3,6 @@
 //
 
 #include <gtest/gtest.h>
-#include </opt/intel/oneapi/mkl/latest/include/mkl_lapacke.h>
 #include <sstream>
 #include <vector>
 #include <cstdlib>

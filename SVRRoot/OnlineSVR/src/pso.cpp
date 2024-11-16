@@ -26,7 +26,6 @@
 #include "common/logging.hpp"
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
-#include "optimizer.hpp"
 #include "sobol.hpp"
 
 namespace svr {
@@ -252,12 +251,9 @@ std::string pso_state::save_to_string()
 
 std::vector<std::vector<double>> pso_state::convert2vector2d(size_t dim1, size_t dim2, const void *input)
 {
-    const double **arr = (const double **) input; // const double (*arr)[dim2] = static_cast<const double (*)[dim2]>(input);
+    auto arr = (CRPTRd *) input; // const double (*arr)[dim2] = static_cast<const double (*)[dim2]>(input);
     std::vector<std::vector<double>> result(dim1);
-#pragma omp parallel for num_threads(adj_threads(dim1)) schedule(static, 1)
-    for (size_t i = 0; i < dim1; ++i)
-        result[i] = common::wrap_vector<double>(const_cast<double *>(arr[i]), dim2);
-
+    OMP_FOR_i(dim1) result[i].insert(result[i].end(), arr[i], arr[i] + dim2);
     return result;
 }
 
@@ -452,10 +448,7 @@ update_particle(
 //==============================================================
 //                     PSO ALGORITHM
 //==============================================================
-svr::optimizer::pso_returns_t
-pso_solve(
-        const std::function<double(std::vector<double> &)> &f, pso_settings_t *settings,
-        const size_t decon_level, const std::string &column_name)
+svr::optimizer::pso_returns_t pso_solve(const loss_callback_t &f, pso_settings_t *settings, const size_t decon_level, const std::string &column_name)
 {
     bool is_caller_thread = false;
     std::pair<std::string, std::string> current_level_column(std::to_string(decon_level), column_name);
@@ -546,13 +539,13 @@ pso_solve(
     if (!loaded_state) {
         step = 0;
         //TODO - Emanouil - when using MPI, it should be
-        //static thread_local unsigned long Sobol_counter = (unsigned long) mpi_rank * 78786876896ULL ;
+        //static thread_local uint64_t Sobol_counter = (uint64_t) mpi_rank * 78786876896ULL ;
         //Using different counters for different threads is desirable, but not required.
-        unsigned long sobol_ctr = 78786876896ULL + (long) floor(svr::common::get_uniform_random_value() * (double) 4503599627370496ULL);
-        for (dtype(settings->size) i = 0; i < settings->size; ++i) {
+        uint64_t sobol_ctr = 78786876896ULL + (long) floor(svr::common::get_uniform_random_value() * (double) 4503599627370496ULL);
+        for (DTYPE(settings->size) i = 0; i < settings->size; ++i) {
             // for each dimension
             std::vector<double> sobol_numbers(2 * settings->dim, 0.);
-            for (dtype(settings->dim) d = 0; d < settings->dim; ++d) {
+            for (DTYPE(settings->dim) d = 0; d < settings->dim; ++d) {
                 // generate two numbers within the specified range
                 // Use Sobol numbers
                 sobol_numbers[d] = sobolnum(d, sobol_ctr + i);
@@ -572,9 +565,7 @@ pso_solve(
     if (step == 0) {
         omp_pfor_i__(0, settings->size,
                      if (!particles_ready[i]) {
-                         auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
-                         fit[i] = f(vpos);
-                         memcpy(&pos[i], vpos.data(), settings->dim * sizeof(pos[i]));
+                         fit[i] = f(pos[i], settings->dim);
                          fit_b[i] = fit[i]; // this is also the personal best
                          LOG4_DEBUG("Initial particle fitness " << fit[i]);
                          particles_ready[i] = true;
@@ -595,7 +586,7 @@ pso_solve(
                      }
         )
 
-        for (dtype(settings->size) i = 0; i < settings->size; ++i) {
+        for (DTYPE(settings->size) i = 0; i < settings->size; ++i) {
             // update gbest?
             if (fit[i] < solution.error) {
                 // update best fitness
@@ -649,10 +640,7 @@ pso_solve(
                              LOG4_DEBUG("PSO iteration " << step << ", particle " << i << ", dim " << dd << " finished. Model " << decon_level << "_" << column_name);
                          }
                          // Update particle fitness
-                         auto vpos = std::vector<double>{pos[i], pos[i] + settings->dim};
-                         fit[i] = f(vpos);
-                         memcpy(&pos[i], vpos.data(), settings->dim * sizeof(pos[i]));
-
+                         fit[i] = f(pos[i], settings->dim);
                          LOG4_DEBUG("Step " << step << " particle fitness " << fit[i] << " best fitness " << fit_b[i]);
                          // update personal best position?
                          if (fit[i] < fit_b[i]) {

@@ -56,7 +56,7 @@ std::string decompress(const char * input, int size)
     return decompressedString;
 }
 
-std::string base64_encode(unsigned char const *bytes_to_encode, unsigned int in_len)
+std::string base64_encode(unsigned char const *bytes_to_encode, unsigned in_len)
 {
   std::string ret;
   int i = 0;

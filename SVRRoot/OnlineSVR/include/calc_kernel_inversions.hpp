@@ -22,7 +22,7 @@ class calc_kernel_inversions
 public:
     operator double() { return _weight; }
 
-    calc_kernel_inversions(CPTR(double) Z, const arma::mat &Y);
+    calc_kernel_inversions(CPTRd Z, const arma::mat &Y);
 };
 
 double score_distance_kernel(const size_t sizeX, double *Z_distances, double *Y);

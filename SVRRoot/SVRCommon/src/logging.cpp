@@ -55,7 +55,7 @@ void logging::flush() const
     boost::log::core::get()->flush();
 }
 
-const auto l__ = []{ return logging(); } ();
+const logging l__ = []{ return logging(); } ();
 
 std::string cufft_get_error_string(const cufftResult s)
 {

@@ -52,24 +52,24 @@ public:
 
     void inverse_transform(const std::vector<double> &decon, std::vector<double> &recon, const size_t padding /* = 0 */) const override;
 
-    static unsigned get_residuals_length(const double _stretch_coef = oemd_coefficients::C_oemd_stretch_coef, const unsigned siftings = oemd_coefficients::default_siftings);
+    static unsigned get_residuals_length(const double _stretch_coef = oemd_coefficients::C_oemd_stretch_coef, const unsigned siftings = oemd_coefficients::C_default_siftings);
 
     static unsigned get_residuals_length(const oemd_coefficients &coefs, const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef);
 
-    unsigned get_residuals_length(const std::string &queue_name);
+    unsigned get_residuals_length(const std::string &queue_name) const noexcept;
 
-    static void expand_the_mask(const unsigned mask_size, const unsigned input_size, CPTR(double) dev_mask, double *const dev_expanded_mask, const cudaStream_t custream);
+    static void expand_the_mask(const unsigned mask_size, const unsigned input_size, CPTRd dev_mask, double *const dev_expanded_mask, const cudaStream_t custream);
 };
 
-__global__ void G_subtract_inplace(RPTR(double) x, const double y, const unsigned n);
+__global__ void G_subtract_I(RPTR(double) x, const double y, const unsigned n);
 
-__global__ void G_subtract_inplace(RPTR(double) x, CRPTR(double) y, const unsigned n);
+__global__ void G_subtract_I(RPTR(double) x, CRPTRd y, const unsigned n);
 
 __global__ void G_apply_fir(
         const double stretch_coef,
-        CRPTR(double) in,
+        CRPTRd in,
         const unsigned len,
-        CRPTR(double) mask,
+        CRPTRd mask,
         const unsigned mask_len,
         const unsigned stretched_mask_len,
         RPTR(double) out,

@@ -54,7 +54,7 @@ DataRow::DataRow(
         const bpt::ptime &value_time,
         const bpt::ptime &update_time,
         const double tick_volume,
-        CPTR(double) values_ptr,
+        CPTRd values_ptr,
         const unsigned values_size) :
         value_time_(value_time),
         update_time_(update_time),
@@ -173,7 +173,7 @@ DataRow::DataRow(const std::string &csv)
 }
 
 DataRow::container
-DataRow::construct(const std::deque<datamodel::MultivalResponse_ptr> &responses)
+DataRow::construct(const std::deque<MultivalResponse_ptr> &responses)
 {
     container result;
     for (auto iter_res = responses.begin(); iter_res != responses.end(); ++iter_res) {
@@ -407,7 +407,7 @@ find_nearest(
                                                                      << data.back()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
     auto dist = std::distance(data.begin(), iter);
-    if (dist < dtype(dist)(lag_count))
+    if (dist < DTYPE(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
                                                ", data available is from " << data.front()->get_value_time() << " until "
@@ -432,7 +432,7 @@ find_nearest(
                                           << data.back()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
     auto dist = std::distance(data.cbegin(), iter);
-    if (dist < dtype(dist)(lag_count))
+    if (dist < DTYPE(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
                                                ", data available is from " << data.front()->get_value_time() << " until "
@@ -457,7 +457,7 @@ find_nearest_after(
                                           << " until " << data.back()->get_value_time());
     if (lag_count == std::numeric_limits<size_t>::max()) return iter;
     auto dist = std::distance(data.cbegin(), iter);
-    if (dist < dtype(dist)(lag_count))
+    if (dist < DTYPE(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
                                                ", data available is from " << data.front()->get_value_time() << " until "
@@ -490,7 +490,7 @@ find_nearest_before(
     if (!lag_count) return iter;
 
     const auto dist = std::distance(data.begin(), iter);
-    if (dist < dtype(dist)(lag_count))
+    if (dist < DTYPE(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count <<
                                                ", data available is from " << data.front()->get_value_time() << " until "
@@ -516,7 +516,7 @@ find_nearest_before(
     if (!lag_count) return iter;
 
     const auto dist = std::distance(data.begin(), iter);
-    if (dist < dtype(dist)(lag_count))
+    if (dist < DTYPE(dist)(lag_count))
         THROW_EX_FS(common::insufficient_data,
                     "Distance from beginning " << dist << " is less than needed lag count " << lag_count << ", data available is from "
                                                << data.front()->get_value_time() << " until " << data.back()->get_value_time());
@@ -600,7 +600,7 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
     }
     auto row_iter = lower_bound_back(data, hint_end, time_key);
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
-    if ((**row_iter).get_value_time() > time_key) LOG4_ERROR(
+    if ((**row_iter).get_value_time() >= time_key) LOG4_ERROR(
             "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
 }
@@ -713,10 +713,7 @@ generate_twav( // Time-weighted average volume
 UNROLL()
     for (auto time_iter = start_time; time_iter < end_time; time_iter += hf_resolution) {
 UNROLL()
-        while (volit != it_end && (**volit).get_value_time() <= time_iter) {
-            last_volume = (**volit).get_tick_volume();
-            ++volit;
-        }
+        for (;volit != it_end && (**volit).get_value_time() <= time_iter; ++volit) last_volume = (**volit).get_tick_volume();
         out[inctr * inout_ratio] += last_volume;
         ++inctr;
     }
@@ -783,16 +780,42 @@ datamodel::DataRow::insert_rows(
     const auto time_now = bpt::second_clock::local_time();
     const auto prev_size = rows_container.size();
     rows_container.resize(prev_size + data.n_rows);
-OMP_FOR(data.n_rows)
-    for (unsigned row_ix = 0; row_ix < data.n_rows; ++row_ix) {
-        const auto row_time = times[row_ix];
-        auto row_iter = rows_container.begin() + prev_size + row_ix;
-        if (!*row_iter) *row_iter = ptr<datamodel::DataRow>(row_time, time_now, common::C_default_value_tick_volume, level_ct, 0.);
-        (**row_iter)[level] += arma::mean(data.row(row_ix));
+    OMP_FOR_i(data.n_rows) {
+        auto row_iter = rows_container.begin() + prev_size + i;
+        if (!*row_iter) *row_iter = ptr<datamodel::DataRow>(times[i], time_now, common::C_default_value_tick_volume, level_ct, 0.);
+        (**row_iter)[level] += arma::mean(data.row(i));
     }
     LOG4_END();
 }
 
+
+void datamodel::DataRow::insert_rows(
+        datamodel::DataRow::container &rows_container,
+        const arma::mat &data,
+        const datamodel::DataRow::container &times,
+        const unsigned level,
+        const unsigned level_ct,
+        const bool merge)
+{
+    if (times.size() != data.n_rows) LOG4_THROW("Times " << times.size() << " and data rows " << data.n_rows << " do not match.");
+
+    if (rows_container.size() && (data.n_cols != (**rows_container.cbegin()).size() || (**rows_container.cbegin()).size() != level_ct))
+        LOG4_WARN("Data columns " << data.n_cols << " does not equal existing data columns " << (**rows_container.cbegin()).size() << " or level count " << level_ct);
+
+    if (!merge) rows_container.erase(lower_bound_back(rows_container, times.front()->get_value_time()), rows_container.end());
+
+    LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << *times.cbegin());
+
+    const auto time_now = bpt::second_clock::local_time();
+    const auto prev_size = rows_container.size();
+    rows_container.resize(prev_size + data.n_rows);
+    OMP_FOR_i(data.n_rows) {
+        auto row_iter = rows_container.begin() + prev_size + i;
+        if (!*row_iter) *row_iter = ptr<datamodel::DataRow>(times[i]->get_value_time(), time_now, common::C_default_value_tick_volume, level_ct, 0.);
+        (**row_iter)[level] += arma::mean(data.row(i));
+    }
+    LOG4_END();
+}
 
 arma::mat to_arma_mat(const data_row_container &c)
 {
