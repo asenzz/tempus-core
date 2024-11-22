@@ -37,7 +37,7 @@ public:
         // dotMatrix = viennacl::linalg::element_pow(dotMatrix, 1);
     }
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     using kernel_base<scalar_type>::operator();
 
     void operator()(
@@ -51,7 +51,7 @@ public:
         kernel_matrix += I * this->parameters.get_svr_kernel_param2();
         // dotMatrix = viennacl::linalg::element_pow(dotMatrix, 1);
     }
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 
 };
 

@@ -43,7 +43,7 @@ public:
         kernel_matrix = viennacl::linalg::element_exp(distances(features) * -this->parameters.get_svr_kernel_param());
     }
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     using kernel_base<scalar_type>::operator();
 
     void operator() (
@@ -59,7 +59,7 @@ public:
         kernel_matrix = (temp + viennacl::trans(temp) - 2. * kernel_matrix) * -this->parameters.get_svr_kernel_param();
         kernel_matrix = viennacl::linalg::element_exp(kernel_matrix);
     }
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 
 };
 

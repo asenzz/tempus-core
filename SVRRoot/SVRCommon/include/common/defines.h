@@ -13,7 +13,7 @@
 #define NO_MAIN_DECON // Don't decompose main input queue
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
-#define REMOVE_OUTLIERS // Disables feature shifting as much
+#define REMOVE_OUTLIERS
 
 // #define VMD_ONLY
 #define EMD_ONLY

@@ -63,7 +63,7 @@ public:
     }
 
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
     //virtual vmatrix<scalar_type> operator()(
         //viennacl::ocl::context &ctx, const vmatrix<scalar_type> &features, vmatrix<scalar_type> &p_kernel_matrices) = 0; // not needed at this point?

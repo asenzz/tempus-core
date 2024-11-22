@@ -151,7 +151,7 @@ void short_term_fourier_transform_cpu::inverse_transform(
 /******************************************************************************/
 /******************************************************************************/
 /******************************************************************************/
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 short_term_fourier_transform_opencl::short_term_fourier_transform_opencl(const size_t levels)
         : spectral_transform(std::string("stft_ocl"), levels),
@@ -305,7 +305,7 @@ short_term_fourier_transform_opencl::inverse_transform(
 
 short_term_fourier_transform::short_term_fourier_transform(const size_t levels)
         : spectral_transform("stft", levels), levels(levels), cpu_transformer(levels)
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 , gpu_transformer(levels)
 #endif
 
@@ -316,7 +316,7 @@ short_term_fourier_transform::transform(
         const std::vector<double> &input, std::vector<std::vector<double>> &decon,
         const size_t padding)
 {
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     if (input.size() < gpu_faster_threshold || levels != short_term_fourier_transform_opencl::can_handle_levels)
         cpu_transformer.transform(input, decon, padding);
     else
@@ -329,7 +329,7 @@ short_term_fourier_transform::transform(
 void short_term_fourier_transform::inverse_transform(const std::vector<double> &decon, std::vector<double> &recon,
                                                      const size_t padding) const
 {
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     if (decon.size() / levels < gpu_faster_threshold ||
         levels != short_term_fourier_transform_opencl::can_handle_levels)
         cpu_transformer.inverse_transform(decon, recon, padding);

@@ -1495,10 +1495,10 @@ UNROLL()
 #endif
 
 double
-solve_hybrid(CPTRd j_K_epsco, const unsigned n, const unsigned train_len, double *const j_solved, const unsigned magma_iters, const double magma_threshold,
-             const magma_queue_t ma_queue, const unsigned irwls_iters, CPTRd j_train_labels, const size_t train_n_size, double *const j_work,
+solve_hybrid(CPTRd j_K_epsco, const unsigned n, const unsigned train_len, RPTR(double) j_solved, const unsigned magma_iters, const double magma_threshold,
+             const magma_queue_t ma_queue, const unsigned irwls_iters, CPTRd j_train_labels, const size_t train_n_size, RPTR(double) j_work,
              const cudaStream_t custream, const cublasHandle_t cublas_H, CPTRd j_K_tune, const double labels_factor, const unsigned train_len_n,
-             unsigned &best_iter, double *const d_best_weights, const unsigned K_train_len, double *const j_K_work, magma_int_t &info,
+             unsigned &best_iter, RPTR(double) d_best_weights, const unsigned K_train_len, RPTR(double) j_K_epsco_reweighted, magma_int_t &info,
              const double iters_mul, const unsigned m)
 {
     constexpr double one = 1, oneneg = -1, zero = 0;
@@ -1539,8 +1539,8 @@ solve_hybrid(CPTRd j_K_epsco, const unsigned n, const unsigned train_len, double
 #else
         // Emo's IRWLS tweaked by Zed faster harder Scooter
         G_irwls_op2<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(
-                j_work, j_K_epsco, m, j_train_labels, j_K_work, j_solved, delta_iter_mul / i, train_len, train_len_n, K_train_len);
-        ma_errchk(magma_dgesv_rbt_async(MagmaTrue, train_len, n, j_K_work, train_len, j_solved, train_len, &info, magma_iters, magma_threshold, ma_queue));
+                j_work, j_K_epsco, m, j_train_labels, j_K_epsco_reweighted, j_solved, delta_iter_mul / i, train_len, train_len_n, K_train_len);
+        ma_errchk(magma_dgesv_rbt_async(MagmaTrue, train_len, n, j_K_epsco_reweighted, train_len, j_solved, train_len, &info, magma_iters, magma_threshold, ma_queue));
 #endif
     }
     return best_score;

@@ -64,7 +64,8 @@ TEST(mimo_train_predict, batch_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows), bpt::not_a_date_time), "Batch Train");
+    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows),
+                                              {}, bpt::not_a_date_time), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(2,3), mimo_model->get_weights(0)(2,3), TOLERANCE);
@@ -99,9 +100,8 @@ TEST(mimo_train_predict, chunk_train)
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
     PROFILE_EXEC_TIME(
-            online_svr_.batch_train(std::make_shared<arma::mat>(x_train),
-                    std::make_shared<arma::mat>(y_train),
-                            std::make_shared<arma::vec>(y_train.n_rows), bpt::not_a_date_time), "Batch Train");
+            online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows),
+                    {}, bpt::not_a_date_time), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(2,3), mimo_model->get_weights(0)(2,3), TOLERANCE);

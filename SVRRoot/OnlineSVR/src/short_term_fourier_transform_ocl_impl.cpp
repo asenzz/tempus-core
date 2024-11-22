@@ -1,4 +1,4 @@
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 #include "short_term_fourier_transform_ocl_impl.hpp"
 
 

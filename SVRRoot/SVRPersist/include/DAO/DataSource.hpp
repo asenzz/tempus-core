@@ -193,10 +193,8 @@ int DataSource::update(const std::string &sql, Args &&... args)
     std::string query;
     try {
         scoped_transaction_guard_ptr trx = open_transaction();
-
         query = statementPreparerTemplate->prepareStatement(sql, args...);
         pqxx::result result;
-
         result = trx->exec(query);
         return result.affected_rows();
 

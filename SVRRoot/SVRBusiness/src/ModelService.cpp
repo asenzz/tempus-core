@@ -112,9 +112,8 @@ unsigned ModelService::to_model_ix(const unsigned level_ix, const unsigned level
 
 // Utility function used in tests, does predict, unscale and then validate
 std::tuple<double, double, arma::vec, arma::vec, double, arma::vec>
-ModelService::validate(
-        const unsigned start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
-        const arma::mat &labels, const arma::vec &last_knowns, const data_row_container &times, const bool online, const bool verbose)
+ModelService::validate(const unsigned start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
+                       const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times, const bool online, const bool verbose)
 {
     LOG4_BEGIN();
     if (labels.n_rows <= start_ix) {
@@ -179,7 +178,8 @@ ModelService::validate(
                     "Online predict " << ix << " of 1 row, " << features.n_cols << " feature columns, " << labels.n_cols << " labels per row, level " << level <<
                                       ", step " << model.get_step() << " at " << times[ix_future]);
             PROFILE_EXEC_TIME(
-                    ModelService::train_online(model, features.row(ix_future), labels.row(ix_future), last_knowns.row(ix_future), times[ix_future]->get_value_time()),
+                    ModelService::train_online(model, features.row(ix_future), labels.row(ix_future), last_knowns.row(ix_future), weights.row(ix_future),
+                                               times[ix_future]->get_value_time()),
                     "Online learn " << ix << " of 1 row, " << features.n_cols << " feature columns, " << labels.n_cols << " labels per row, level " << level <<
                                     ", step " << model.get_step() << " at " << times[ix_future]);
             predicted_online[ix] = stepping * cont_predicted_online.front()->at(level);
@@ -411,8 +411,32 @@ arma::rowvec ModelService::prepare_special_features(const data_row_container::co
     return row;
 }
 
+void ModelService::prepare_weights(
+        arma::mat &weights, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t steps,
+        const bpt::time_duration &resolution_main)
+{
+    LOG4_BEGIN();
+
+    const auto num_rows = times.size();
+    if (num_rows < 1) LOG4_THROW("No times to prepare weights for.");
+    if (weights.n_rows != num_rows || weights.n_cols != steps) weights.set_size(num_rows, steps);
+    weights.ones();
+    const auto s_duration = resolution_main / steps;
+    OMP_FOR_i(num_rows) {
+        const auto &t = times[i];
+        for (const auto &q: aux_inputs)
+            for (uint16_t s = 0; s < steps; ++s) {
+                const auto s_start = t->get_value_time() + s * s_duration;
+                for (auto it = lower_bound(std::as_const(q->get_data()), s_start); it != q->cend() && (*it)->get_value_time() < s_start + s_duration; ++it)
+                    weights(i, s) += (**it).get_tick_volume();
+            }
+    }
+
+    LOG4_END();
+}
+
 // Takes a decon queue and prepares feature vectors, using lag_count number of autoregressive features (and other misc features).
-std::tuple<mat_ptr, mat_ptr, vec_ptr, data_row_container_ptr>
+std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, data_row_container_ptr>
 ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, unsigned dataset_rows)
 {
     LOG4_BEGIN();
@@ -440,9 +464,12 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
             prepare_features(*p_features, *p_label_times, ensemble.get_aux_decon_queues(), *p_params, dataset.get_max_lookback_time_gap(), aux_resolution, main_resolution),
             "Prepare features " << *p_params);
 
-    assert (p_labels->n_rows == p_features->n_rows);
+    const auto p_weights = dataset.get_calc_cache().get_cached_weights(
+            dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
+    assert(p_labels->n_rows == p_features->n_rows);
+    assert(p_labels->n_rows == p_weights->n_rows);
 
-    return {p_features, p_labels, p_last_knowns, p_label_times};
+    return {p_features, p_labels, p_last_knowns, p_weights, p_label_times};
 }
 
 
@@ -885,16 +912,16 @@ ModelService::prepare_features(arma::mat &out_features, const data_row_container
 void
 ModelService::train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model)
 {
-    const auto [p_features, p_labels, p_last_knowns, p_times] = get_training_data(dataset, ensemble, model);
+    const auto [p_features, p_labels, p_last_knowns, p_weights, p_times] = get_training_data(dataset, ensemble, model);
     const auto last_value_time = p_times->back()->get_value_time();
     if (last_value_time < model.get_last_modeled_value_time()) {
         LOG4_ERROR("Data is older " << last_value_time << " than last modeled time " << model.get_last_modeled_value_time());
         return;
     }
     if (model.get_last_modeled_value_time() == bpt::min_date_time)
-        train_batch(model, p_features, p_labels, p_last_knowns, last_value_time);
+        train_batch(model, p_features, p_labels, p_last_knowns, p_weights, last_value_time);
     else
-        train_online(model, *p_features, *p_labels, *p_last_knowns, last_value_time);
+        train_online(model, *p_features, *p_labels, *p_last_knowns, *p_weights, last_value_time);
     model.set_last_modeled_value_time(last_value_time);
     model.set_last_modified(bpt::second_clock::local_time());
     LOG4_INFO("Finished training model " << model);
@@ -902,7 +929,8 @@ ModelService::train(datamodel::Dataset &dataset, const datamodel::Ensemble &ense
 
 
 void
-ModelService::train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const bpt::ptime &last_value_time)
+ModelService::train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights,
+                           const bpt::ptime &last_value_time)
 {
     arma::mat residuals, learn_labels = labels;
     UNROLL()
@@ -922,7 +950,7 @@ ModelService::train_online(datamodel::Model &model, const arma::mat &features, c
                    last_knowns.row(learn_labels.n_rows - 1), new_last_modeled_value_time, true),
                               "Online SVM train last-known gradient " << i);
 #else
-        PROFILE_EXEC_TIME(m->learn(features, learn_labels, last_knowns, last_value_time), "Online SVM train gradient " << g);
+        PROFILE_EXEC_TIME(m->learn(features, learn_labels, last_knowns, weights, last_value_time), "Online SVM train gradient " << g);
 #endif
         if (is_gradient) learn_labels = residuals;
     }
@@ -935,6 +963,7 @@ ModelService::train_batch(
         const mat_ptr &p_features,
         const mat_ptr &p_labels,
         const vec_ptr &p_last_knowns,
+        const mat_ptr &p_weights,
         const bpt::ptime &last_value_time)
 {
     LOG4_BEGIN();
@@ -944,7 +973,7 @@ ModelService::train_batch(
     for (unsigned gix = 0; gix < model.get_gradient_count(); ++gix) {
         const auto p_gradient = model.get_gradient(gix);
         if (!p_gradient) LOG4_THROW("SVR model for gradient " << gix << " not initialized " << model);
-        p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, gradient_data.p_last_knowns, last_value_time);
+        p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, gradient_data.p_last_knowns, p_weights, last_value_time);
 
         if (model.get_gradient_count() < 2 || gix == model.get_gradient_count() - 1) continue;
         gradient_data = model.get_gradient(gix)->produce_residuals();

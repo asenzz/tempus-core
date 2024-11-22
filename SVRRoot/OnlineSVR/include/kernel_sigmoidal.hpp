@@ -44,7 +44,7 @@ public:
     }
 
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     using kernel_base<scalar_type>::operator();
 
     void operator()(
@@ -55,7 +55,7 @@ public:
     	THROW_EX_FS(std::invalid_argument,  "This kernel was not implemented in this file properly!");
     }
 
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 
 };
 

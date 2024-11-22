@@ -45,7 +45,7 @@ private:
     const size_t frame_size;
 };
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 class short_term_fourier_transform_opencl : public spectral_transform
 {
 
@@ -105,7 +105,7 @@ private:
 
     const size_t levels;
     short_term_fourier_transform_cpu cpu_transformer;
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     short_term_fourier_transform_opencl gpu_transformer;
 #endif
 };

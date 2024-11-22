@@ -68,7 +68,7 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
     arma::mat features, labels;
     arma::vec last_knowns;
     std::deque<bpt::ptime> label_times;
-#if 0
+#if 0 // TODO Fix for new implementation
     aci.model_service.get_training_data(
             features, labels, last_knowns, label_times,
             datamodel::datarow_range{decon_queues[column_index]->get_data()},

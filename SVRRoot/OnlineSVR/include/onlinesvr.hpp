@@ -30,13 +30,13 @@ constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0.
 constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
 constexpr double C_chunk_tail = .1;
 constexpr double C_chunk_header = 1. - C_chunk_tail;
-constexpr unsigned C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
-constexpr unsigned C_end_chunks = 1; // [1..1/offlap]
+constexpr uint16_t C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
+constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 constexpr magma_int_t C_rbt_iter = 40; // default 30
 constexpr double C_rbt_threshold = 0; // [0..1] default 1
 constexpr unsigned C_features_superset_coef = 100; // [1..+inf)
-constexpr unsigned C_solve_opt_iters = 1000;
-constexpr unsigned C_solve_opt_particles = 100;
+constexpr uint16_t C_solve_opt_div = 4;
+constexpr uint16_t C_solve_opt_particles = 100;
 #ifdef EMO_DIFF
 constexpr double C_diff_coef = 1;
 #else
@@ -84,8 +84,8 @@ class OnlineMIMOSVR final : public Entity
     std::string column_name;
     std::set<size_t> tmp_ixs;
     size_t samples_trained = 0;
-    mat_ptr p_features, p_labels;
-    vec_ptr p_last_knowns, p_weights;
+    mat_ptr p_features, p_labels, p_input_weights;
+    vec_ptr p_last_knowns;
     t_param_set param_set;
     OnlineMIMOSVR_ptr p_manifold;
     matrices_ptr p_kernel_matrices;
@@ -248,12 +248,11 @@ public:
 
     t_gradient_data produce_residuals();
 
-    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const bpt::ptime &last_value_time,
+    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const arma::mat &new_w, const bpt::ptime &last_value_time,
                const bool temp_learn = false, const std::deque<uint32_t> &forget_ixs = {});
 
-    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time,
-                     const vec_ptr &p_instance_weights = otr<arma::vec>(),
-                     const matrices_ptr &precalc_kernel_matrices = nullptr);
+    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
+                     const matrices_ptr &precalc_kernel_matrices = {});
 
     arma::mat &get_features();
 
@@ -293,10 +292,14 @@ public:
 
     static std::array<double, C_epscos_len> get_epscos(const double K_mean);
 
-    static arma::mat calc_weights(const arma::mat &K, const arma::mat &labels, const double epsco, const unsigned iters_irwls, const unsigned iters_opt,
-                                  const arma::mat &instance_weights);
+    static arma::mat calc_weights(arma::mat K, const arma::mat &labels, const arma::mat &instance_weights_matrix, const double epsco, const uint16_t iters_irwls,
+                                  const uint16_t iters_opt);
 
-    void calc_weights(const unsigned chunk_ix, const unsigned iters_irwls, const unsigned iters_opt);
+    static arma::mat calc_weights(const arma::mat &K, const arma::mat &labels, const double epsco, const uint16_t iters_irwls, const uint16_t iters_opt);
+
+    static arma::mat weight_matrix(const arma::uvec &ixs, const arma::mat &weights);
+
+    void calc_weights(const uint16_t chunk_ix, const uint16_t iters_irwls, const uint16_t iters_opt);
 
     void update_all_weights();
 

@@ -29,7 +29,7 @@ spectral_transform::create(const std::string &transformation_name, const size_t 
         return std::unique_ptr<spectral_transform>(new short_term_fourier_transform(levels));
     if (transformation_name == "stft_cpu")
         return std::unique_ptr<spectral_transform>(new short_term_fourier_transform_cpu(levels));
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     if (transformation_name == "stft_ocl")
         return std::unique_ptr<spectral_transform>(new short_term_fourier_transform_opencl(levels));
 #endif

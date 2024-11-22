@@ -27,8 +27,8 @@ namespace kernel::path {
 
 
 __device__ __forceinline__ double
-do_product_sum(const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t lag_TILE_WIDTH, const double lambda, const double tau, const double *const X,
-               const double *const Y, double power_mult[32], double ta[32][32], double tam1[32][32], double tb[32][32], double tbm1[32][32], const uint32_t kk,
+do_product_sum(const uint32_t rows, const uint32_t lag, const uint32_t dim, const uint32_t lag_TILE_WIDTH, const double lambda, const double tau, CRPTRd X,
+               CRPTRd Y, double power_mult[32], double ta[32][32], double tam1[32][32], double tb[32][32], double tbm1[32][32], const uint32_t kk,
                const uint32_t mm, const bool kk_X, const bool mm_Y, const bool do_matrix_product_sum)
 {
     double matrix_prod_sum = 0;
@@ -61,11 +61,11 @@ UNROLL(common::C_cu_tile_width)
                     if (kk_internal >= lag) continue;
 #ifdef HIFI_PATH
                     matrix_prod_sum += (DIST(ta[tx][kk_internal_small] - tb[ty][kk_internal_small]) +
-                            (kk_internal ? (tau * DIST(tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small])) : 0.)) *
+                            (kk_internal ? (C_kernel_path_tau * DIST(tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small])) : 0.)) *
                                     power_mult[kk_internal_small] / double(dim);
 #else
                     matrix_prod_sum += (DIST(ta[tx][kk_internal_small] - tb[ty][kk_internal_small]) +
-                            (kk_internal ? (tau * DIST(tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small])) : 0.)) *
+                            (kk_internal ? (C_kernel_path_tau * DIST(tam1[tx][kk_internal_small] - tbm1[ty][kk_internal_small])) : 0.)) *
                                     power_mult[kk_internal_small];
 #endif
                 }

@@ -29,6 +29,11 @@ public:
         return common::scale_I(v, sf, dc);
     }
 
+    template<typename T> inline static T scale(const T &v, const double sf, const double dc)
+    {
+        return common::scale<T>(v, sf, dc);
+    }
+
     template<typename T> inline static T &scale_I(T &v, const double sf, const double dc)
     {
         return common::scale_I(v, sf, dc);

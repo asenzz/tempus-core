@@ -8,7 +8,7 @@
 #include "common/compatibility.hpp"
 #include "cuqrsolve.cuh"
 
-#if 0
+#if 1
 #define DIST(x) pow(abs(x), tau)
 #else
 constexpr int8_t C_dist_pow = 4;

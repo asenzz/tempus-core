@@ -97,11 +97,11 @@ double score_weights(CPTRd K, CPTRd weights, CPTRd labels, const unsigned m, con
 
 // Solvers
 
-double solve_hybrid(CPTRd j_K_epsco, const unsigned n, const unsigned train_len, double *const j_solved, const unsigned magma_iters, const double magma_threshold,
-             const magma_queue_t ma_queue, const unsigned irwls_iters, CPTRd j_train_labels, const size_t train_n_size, double *const j_work,
-             const cudaStream_t custream, const cublasHandle_t cublas_H, CPTRd j_K_tune, const double labels_factor, const unsigned train_len_n,
-             unsigned &best_iter, double *const d_best_weights, const unsigned K_train_len, double *const j_K_work, magma_int_t &info,
-             const double iters_mul, const unsigned m);
+double solve_hybrid(CPTRd j_K_epsco, const unsigned n, const unsigned train_len, RPTR(double) j_solved, const unsigned magma_iters, const double magma_threshold,
+                    const magma_queue_t ma_queue, const unsigned irwls_iters, CPTRd j_train_labels, const size_t train_n_size, RPTR(double) j_work,
+                    const cudaStream_t custream, const cublasHandle_t cublas_H, CPTRd j_K_tune, const double labels_factor, const unsigned train_len_n,
+                    unsigned &best_iter, RPTR(double) d_best_weights, const unsigned K_train_len, RPTR(double) j_K_epsco_reweighted, magma_int_t &info,
+                    const double iters_mul, const unsigned m);
 
 /* CuSolver */
 
@@ -155,9 +155,9 @@ double solve_validate_host(
         const unsigned m, const unsigned n, const unsigned test_m, const unsigned iters, const magma_queue_t magma_queue, const cublasHandle_t cublas_h);
 
 double solve_hybrid(CPTRd j_K_epsco, const unsigned n, const unsigned train_len, double *const j_solved, const unsigned magma_iters, const double magma_threshold,
-             const magma_queue_t ma_queue, const unsigned irwls_iters, CPTRd j_train_labels, const size_t train_n_size, double *const j_work,
-             const cudaStream_t custream, const cublasHandle_t cublas_H, CPTRd j_K_tune, const double labels_factor, const unsigned train_len_n,
-             unsigned &best_iter, double *const d_best_weights, const unsigned K_train_len, double *const j_K_work, magma_int_t &info,
-             const double iters_mul, const unsigned m);
+                    const magma_queue_t ma_queue, const unsigned irwls_iters, CPTRd j_train_labels, const size_t train_n_size, double *const j_work,
+                    const cudaStream_t custream, const cublasHandle_t cublas_H, CPTRd j_K_tune, const double labels_factor, const unsigned train_len_n,
+                    unsigned &best_iter, double *const d_best_weights, const unsigned K_train_len, double *const j_K_epsco_reweighted, magma_int_t &info,
+                    const double iters_mul, const unsigned m);
 
 }

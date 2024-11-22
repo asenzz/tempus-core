@@ -46,7 +46,7 @@ public:
 
     void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) { LOG4_THROW("Not implemented!"); }
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     using kernel_base<scalar_type>::operator();
 
 #ifdef CACHED_GA_KERNEL
@@ -92,7 +92,7 @@ public:
             const viennacl::matrix<scalar_type> &features,
             const viennacl::matrix<scalar_type> &learning,
             viennacl::matrix<scalar_type> &kernel_matrix);
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 };
 
 
@@ -476,7 +476,7 @@ kernel_global_alignment<scalar_type>::operator()(
 
 #endif
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 #if 0 // TODO port to Armadillo
 
@@ -1054,6 +1054,6 @@ kernel_global_alignment<scalar_type>::operator()(
     LOG4_END();
 }
 
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 
 }

@@ -679,7 +679,7 @@ oemd_coefficients_search::evaluate_mask(
     }
 
     const uint32_t mask_len = mask.size();
-    CTX4_CUSTREAM;
+    CTX4_CUSTREAM
     const auto d_mask = cumallocopy(mask, custream);
     const auto d_workspace = cumallocopy(workspace, custream);
     double *d_tmp;
@@ -708,7 +708,11 @@ oemd_coefficients_search::evaluate_mask(
 
     double *d_features, *d_scores;
     auto feat_params_it = feat_params.cbegin();
-    while (feat_params_it != feat_params.cend() && feat_params_it->ix_end < max_row_len && feat_params_it->ix_end - max_row_len < mask_offset) ++feat_params_it;
+    while (feat_params_it != feat_params.cend()
+           && feat_params_it->ix_end < max_row_len
+           && feat_params_it->ix_end - max_row_len < mask_offset
+           && feat_params.cend() - feat_params_it > C_align_window_oemd)
+        ++feat_params_it;
     const std::span feat_params_trimmed(feat_params_it, feat_params.cend());
     const uint32_t validate_rows = feat_params_trimmed.size();
     auto d_labels = cucalloc<double>(custream, validate_rows);
@@ -746,9 +750,8 @@ oemd_coefficients_search::evaluate_mask(
                 d_features, d_imf, d_times, d_feat_params_q, validate_rows, feat_cols_ileave, qt, interleave_qt, interleave_qt * .5);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
         cu_errchk(cudaStreamSynchronize(custream));
-        G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave,
-                validate_rows); /* no integration test offset here, already in call to run() */
+        G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>( /* no integration test offset here, already in call to run() */
+                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, validate_rows);
         cu_errchk(cudaStreamSynchronize(custream));
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
@@ -1005,10 +1008,10 @@ oemd_coefficients_search::run(
 #endif
                         evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, meanabs_input, times_i, label_ixs, feat_params);
             };
-            arma::vec x0(3, arma::fill::none);
+            /* arma::vec x0(3, arma::fill::none);
             x0[0] = .5;
             x0[1] = .5 * C_freq_ceil; // common::constrain(dominant_frequency(workspace_window, .95, custream), 1. / workspace_len, 1.);
-            x0[2] = .01;
+            x0[2] = .01; */
             arma::mat bounds(3, 2, arma::fill::none);
             bounds(0, 0) = 1e-1; // Min gain
             bounds(0, 1) = 1; // Max gain
@@ -1023,7 +1026,7 @@ oemd_coefficients_search::run(
                     arma::vec(h_mask.size(), arma::fill::ones), loss_function).operator std::pair<double, std::vector<double>>();
             return score;
 #else
-            const optimizer::pprune opt(optimizer::pprune::C_default_algo, 10, bounds, loss_function, 40, 0, 0, x0);
+            const optimizer::pprune opt(optimizer::pprune::C_default_algo, 20, bounds, loss_function, 25, 0, 0/*, x0*/);
             const optimizer::t_pprune_res res = opt;
             masks[m] = lbp_fir(res.best_parameters[0], res.best_parameters[1], res.best_parameters[2], sample_rate);
             if (masks[m].empty()) LOG4_THROW("Bad mask for parameters " << res.best_parameters);

@@ -23,12 +23,12 @@ static const auto cmp_whole_value = [](datamodel::IQScalingFactor_ptr const &lhs
 struct AsyncIQScalingFactorDAO::AsyncImpl
         : AsyncImplBase<datamodel::IQScalingFactor_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgIQScalingFactorDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+    AsyncImpl(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
-AsyncIQScalingFactorDAO::AsyncIQScalingFactorDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+AsyncIQScalingFactorDAO::AsyncIQScalingFactorDAO(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source)
         : IQScalingFactorDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 

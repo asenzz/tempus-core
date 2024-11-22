@@ -718,18 +718,27 @@ extrude_rows(const arma::Mat<T> &m, const size_t ct)
 template<typename T> std::stringstream present_s(const arma::Mat<T> &m)
 {
     std::stringstream res;
+    res << "elements " << m.n_elem << ", size " << arma::size(m);
     if (m.empty()) {
-        res << "empty";
+        res << ", empty";
         return res;
     }
-    const arma::Col<T> vm((T *)m.memptr(), m.n_elem, false, true);
-    res << "elements " << m.n_elem << ", size " << arma::size(m);
-    if (m.has_nonfinite())
-        res << (m.has_inf() ? ", has infinite" : m.has_nan() ? ", has nan" : "");
-    else
-        res << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", index max " << vm.index_max() << ", min " << arma::min(vm) << ", index min " << vm.index_min() <<
+    arma::Col<T> vm((T *)m.memptr(), m.n_elem, true, true);
+    bool m_has_nan = false, m_has_inf = false;
+    vm.for_each([&m_has_nan, &m_has_inf](T &val) {
+        if (std::isnan(val)) {
+            val = 0;
+            m_has_nan = true;
+        } else if (std::isinf(val)) {
+            val = 0;
+            m_has_inf = true;
+        }
+    });
+    if (m_has_inf) res << ", has infinite";
+    if (m_has_nan) res << ", has nan";
+    res << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", index max " << vm.index_max() << ", min " << arma::min(vm) << ", index min " << vm.index_min() <<
             ", stddev " << arma::stddev(vm) << ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " <<
-            arma::range(vm) << ", meanabs " << meanabs(m) << ", values " << common::to_string(m.mem,  std::min<size_t>(m.n_elem, 4));
+            arma::range(vm) << ", meanabs " << meanabs(vm) << ", values " << common::to_string(m.mem,  std::min<size_t>(m.n_elem, 5));
     return res;
 }
 

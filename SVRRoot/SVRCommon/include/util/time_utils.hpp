@@ -37,6 +37,11 @@ boost::posix_time::time_duration operator *(const T lhs, const boost::posix_time
     return boost::posix_time::microseconds(size_t(rhs.total_microseconds() * lhs));
 }
 
+template<typename T, std::enable_if_t<std::is_same<T, uint16_t>::value, bool> = false>
+boost::posix_time::time_duration operator *(const T lhs, const boost::posix_time::time_duration &rhs)
+{
+    return boost::posix_time::microseconds(size_t(rhs.total_microseconds() * lhs));
+}
 
 namespace common {
 

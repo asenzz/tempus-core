@@ -9,6 +9,8 @@
 #include <random>
 #include <random>
 #include <vector>
+#include <xoshiro.h>
+
 #ifdef EXPERIMENTAL_FEATURES
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -170,25 +172,28 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
     p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
     p_manifold->projection = projection + 1;
 
-    auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, p_features->n_cols * 2);
-    auto p_manifold_labels = ptr<arma::mat>(p_manifold_features->n_rows, p_labels->n_cols);
-    auto p_manifold_lastknowns = ptr<arma::vec>(p_manifold_features->n_rows);
+    auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, p_features->n_cols * 2, arma::fill::none);
+    auto p_manifold_labels = ptr<arma::mat>(p_manifold_features->n_rows, p_labels->n_cols, arma::fill::none);
+    auto p_manifold_lastknowns = ptr<arma::vec>(p_manifold_features->n_rows, arma::fill::none);
+    auto p_manifold_weights = ptr<arma::mat>(arma::size(*p_manifold_labels), arma::fill::none);
 
-    arma::cube L_diff(n_rows, n_rows, p_labels->n_cols);
+    arma::cube L_diff(n_rows, n_rows, p_labels->n_cols), L_weights(n_rows, n_rows, p_labels->n_cols);
     {
         const arma::mat L_t = p_labels->t();
-#pragma omp parallel for num_threads(adj_threads(n_rows * p_labels->n_cols)) collapse(2)
-        for (size_t r = 0; r < n_rows; ++r)
-            for (size_t c = 0; c < p_labels->n_cols; ++c)
+        const arma::mat weights_t = p_input_weights->t();
+        OMP_FOR_(n_rows * p_labels->n_cols,  collapse(2))
+        for (uint32_t r = 0; r < n_rows; ++r)
+            for (uint32_t c = 0; c < p_labels->n_cols; ++c) {
                 L_diff.slice(c).row(r) = p_labels->at(r, c) - L_t.row(c); // Asymmetric distances cube
+                L_weights.slice(c).row(r) = p_input_weights->at(r, c) - weights_t.row(c); // Weights cube TODO Verify
+            }
     }
-    std::random_device rd;  // a seed source for the random number engine
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> rand_int(0, C_interlace_manifold_factor);
-#pragma omp parallel for num_threads(adj_threads(n_rows * n_rows * p_labels->n_cols)) collapse(3)
-    for (size_t i = 0; i < n_rows; ++i)
-        for (size_t j = 0; j < n_rows; ++j)
-            for (size_t k = 0; k < p_labels->n_cols; ++k) {
+    std::uniform_int_distribution<uint32_t> rand_int(0, C_interlace_manifold_factor);
+    auto gen = common::reproducibly_seeded_64<xso::rng64>();
+    OMP_FOR_(n_rows * n_rows * p_labels->n_cols, collapse(3))
+    for (uint32_t i = 0; i < n_rows; ++i)
+        for (uint32_t j = 0; j < n_rows; ++j)
+            for (uint32_t k = 0; k < p_labels->n_cols; ++k) {
                 const auto r = i + j * n_rows;
                 const auto r_interlaced = r / C_interlace_manifold_factor;
                 if (r % C_interlace_manifold_factor == 0 && r_interlaced < n_manifold_samples) {
@@ -202,7 +207,7 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
     L_diff.clear();
     LOG4_DEBUG("Generated " << arma::size(*p_manifold_labels) << " manifold label matrix and " << arma::size(*p_manifold_features) <<
                 " manifold feature matrix from " << arma::size(*p_features) << " feature matrix and " << arma::size(*p_labels) << " label matrix.");
-    p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_lastknowns, last_value_time);
+    p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_lastknowns, p_manifold_weights, last_value_time);
 }
 
 datamodel::SVRParameters_ptr OnlineMIMOSVR::is_manifold() const

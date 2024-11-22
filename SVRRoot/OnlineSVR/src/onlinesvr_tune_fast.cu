@@ -76,7 +76,7 @@ __global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const unsi
     if (j >= m) return;
 
     const auto ij = i * m + j;
-    K[ij] = i == j ? d : w[ij];
+    K[ij] = i == j ? d : K[ij] * w[ij];
 }
 
 __global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const unsigned m, const unsigned n, const uint32_t ld)
@@ -194,6 +194,11 @@ OnlineMIMOSVR::cuvalidate(
     const auto K_train_off = d_K_train + calc_start * train_len + calc_start;
     const auto gamma_train = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
     solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma_train);
+    if (train_W.n_elem) {
+        RPTR(double) d_train_W = cumallocopy(train_W, custream);
+        thrust::transform(thrust::cuda::par.on(custream), d_K_train, d_K_train + K_train_len, d_train_W, d_K_train, thrust::multiplies<double>());
+        cu_errchk(cudaFreeAsync(d_train_W, custream));
+    }
     const auto train_epsco = cu_calc_epsco(K_train_off, train_label_off, calc_len, n, train_len, custream);
 #endif
     cu_errchk(cudaFreeAsync(d_train_label_chunk, custream));
@@ -207,7 +212,7 @@ OnlineMIMOSVR::cuvalidate(
     cu_errchk(cudaMallocAsync((void **) &j_solved, train_n_size, custream));
     cu_errchk(cudaMallocAsync((void **) &j_work, train_n_size, custream));
 
-    double *const d_tune_W = tune_W.empty() ? nullptr : cumallocopy(tune_W, custream);
+    RPTR(double) d_tune_W = tune_W.empty() ? nullptr : cumallocopy(tune_W, custream);
 
     t_param_preds::t_predictions_ptr p_predictions;
     if (PROPS.get_recombine_parameters()) {

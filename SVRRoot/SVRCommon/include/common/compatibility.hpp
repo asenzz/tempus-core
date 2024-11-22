@@ -26,7 +26,6 @@
 
 namespace bpt = boost::posix_time;
 
-
 #define DTYPE(T) std::decay_t<decltype(T)>
 #define release_cont(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
@@ -96,6 +95,8 @@ namespace std {
 
 
 namespace svr {
+
+constexpr double C_double_nan = std::numeric_limits<double>::quiet_NaN();
 
 template <typename... T>
 constexpr auto make_array(T&&... values) ->

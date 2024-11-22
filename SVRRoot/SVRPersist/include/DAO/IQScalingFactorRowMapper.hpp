@@ -8,9 +8,6 @@ namespace dao {
 
 class IQScalingFactorRowMapper : public IRowMapper<svr::datamodel::IQScalingFactor>
 {
-private:
-    //empty
-
 public:
     datamodel::IQScalingFactor_ptr mapRow(const pqxx_tuple &row_set) const override
     {
@@ -23,7 +20,6 @@ public:
                 row_set["dc_offset"].as<double>(0)
         );
     }
-
 };
 
 }

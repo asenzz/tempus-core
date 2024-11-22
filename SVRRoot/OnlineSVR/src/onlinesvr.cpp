@@ -121,7 +121,7 @@ OnlineMIMOSVR::OnlineMIMOSVR(
     init_id();
 #endif
     PROFILE_EXEC_TIME(
-            batch_train(p_xtrain, p_ytrain, p_ylastknown, last_value_time, nullptr, kernel_matrices),
+            batch_train(p_xtrain, p_ytrain, p_ylastknown, nullptr, last_value_time, kernel_matrices),
             "Batch SVM train on " << arma::size(*p_ytrain) << " labels and " << arma::size(*p_xtrain) << " features, parameters " << *front(param_set));
 }
 

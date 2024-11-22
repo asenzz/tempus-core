@@ -19,7 +19,7 @@
 #include <unordered_map>
 #include "model/SVRParameters.hpp"
 #include "onlinesvr.hpp"
-#include "model/DeconQueue.hpp"
+#include "model/InputQueue.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -97,6 +97,10 @@ public:
     get_cached_labels(const unsigned step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
                       const unsigned level, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
                       const bpt::time_duration &main_queue_resolution, const unsigned multistep, const unsigned lag);
+
+    mat_ptr get_cached_weights(
+            const bigint dataset_id, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
+            const bpt::time_duration &resolution_main);
 
     void clear_tune_cache(const std::string &column_name);
 

@@ -1,12 +1,12 @@
 #pragma once
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 #include "viennacl/ocl/device.hpp"
 #include "viennacl/ocl/platform.hpp"
 #include "viennacl/ocl/backend.hpp"
 
-#endif // VIENNACL_WITH_OPENCL
+#endif // ENABLE_OPENCL
 
 #include <stack>
 #include <mutex>
@@ -23,20 +23,13 @@
 
 #pragma GCC diagnostic pop
 
-// #define IPC_SEMAPHORE // GPU counter semaphore is IPC
-#define GPU_QUEUE
+// #define IPC_GPU
 // OpenCL kernel options
 #define KERNEL_DIRECTORY_PATH   "../SVRRoot/opencl-libsvm/libsvm/kernels/"
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
 
-#ifdef GPU_QUEUE
-
-#include <oneapi/tbb/concurrent_queue.h>
-
-#endif
-
-#ifdef IPC_SEMAPHORE
+#ifdef IPC_GPU
 #include <boost/interprocess/sync/named_semaphore.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
 #include <boost/interprocess/sync/scoped_lock.hpp>
@@ -51,31 +44,31 @@ template<const uint16_t ctx_per_gpu> class gpu_context_;
 using gpu_context = gpu_context_<CTX_PER_GPU>;
 using gpu_context_4 = gpu_context_<4>;
 
+struct device_info
+{
+    uint16_t id;
+    std::shared_ptr<tbb::mutex> p_mx;
+    uint16_t running_threads = 0;
+#ifdef ENABLE_OPENCL
+    std::shared_ptr<viennacl::ocl::device> p_ocl_info;
+#endif
+};
+
 template<const uint16_t ctx_per_gpu>
 class gpu_handler : boost::noncopyable
 {
-#ifndef GPU_QUEUE
-#ifdef IPC_SEMAPHORE
+#ifdef IPC_GPU
     std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_;
-#else
-    std::unique_ptr<svr::fast_semaphore> p_gpu_sem_;
 #endif
-#endif
-    uint16_t max_running_gpu_threads_number_;
-    uint32_t m_max_gpu_kernels_;
-    uint32_t max_gpu_data_chunk_size_;
-#ifdef VIENNACL_WITH_OPENCL
-    std::deque<viennacl::ocl::device> devices_;
-#endif //VIENNACL_WITH_OPENCL
+    uint16_t max_running_gpu_threads_number_ = 0;
+    uint32_t m_max_gpu_kernels_ = 0;
+    size_t max_gpu_data_chunk_size_ = 0;
 
-#ifdef GPU_QUEUE
-    tbb::concurrent_bounded_queue<uint16_t> available_devices_; // TODO Compare to next_device atomic counter for even distribution of workload and resource usage
-#else
-    std::atomic<uint16_t> next_device_;
-#endif
-    mutable boost::shared_mutex devices_mutex_;
+    std::mutex cv_mx_;
+    std::condition_variable cv_;
+    std::deque<device_info> available_devices_;
 
-    void init_devices(const int device_type);
+    void init_devices(const cl_device_type device_type);
 
 public:
     static constexpr auto C_no_gpu_id = std::numeric_limits<uint16_t>::max();
@@ -84,17 +77,11 @@ public:
 
     uint16_t try_free_gpu();
 
-    uint16_t get_free_gpus(const uint16_t gpu_ct);
-
-#ifdef GPU_QUEUE
+    std::deque<uint16_t> get_free_gpus(const uint16_t gpu_ct);
 
     void return_gpu(const uint16_t id);
 
-#else
-    void return_gpu();
-#endif
-
-    void return_gpus(const uint16_t gpu_ct);
+    void return_gpus(uint16_t gpu_ct);
 
     void sort_free_gpus();
 
@@ -110,11 +97,11 @@ public:
 
     size_t get_max_gpu_data_chunk_size() const;
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
     const viennacl::ocl::device &device(const uint16_t idx) const;
 
-#endif //VIENNACL_WITH_OPENCL
+#endif //ENABLE_OPENCL
 
     static gpu_handler &get();
 
@@ -127,7 +114,7 @@ using gpu_handler_1 = gpu_handler<CTX_PER_GPU>;
 using gpu_handler_4 = gpu_handler<4>;
 
 // TODO  Make CUDA stream context
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 template<const uint16_t ctx_per_gpu> class gpu_context_
 {
@@ -224,7 +211,7 @@ cl::NDRange ndrange(const range_args2_t &range_args);
 #define CL_CHECK(cl_call) { cl_int code = (cl_call); if (code != CL_SUCCESS /* == clblasSuccess */ )                     \
             LOG4_THROW("OpenCL call failed with error " << svr::common::gpu_helper::get_error_string(code)); }
 
-#endif //VIENNACL_WITH_OPENCL
+#endif //ENABLE_OPENCL
 }  //namespace cl12
 }
 

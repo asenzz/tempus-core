@@ -3,6 +3,7 @@
 #include <string>
 #include "common.hpp"
 #include "business.hpp"
+#include "WScalingFactorService.hpp"
 
 #define APP svr::context::AppContext::get_instance()
 #define PROPS APP.app_properties
@@ -43,6 +44,7 @@ public:
     svr::business::AutotuneTaskService &autotune_task_service;
     svr::business::DecrementTaskService &decrement_task_service;
     svr::business::IQScalingFactorService &iq_scaling_factor_service;
+    svr::business::WScalingFactorService &w_scaling_factor_service;
     svr::business::DQScalingFactorService &dq_scaling_factor_service;
 
     void flush_dao_buffers();

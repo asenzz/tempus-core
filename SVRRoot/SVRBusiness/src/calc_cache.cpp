@@ -8,6 +8,7 @@
 #include "common/compatibility.hpp"
 #include "onlinesvr.hpp"
 #include "appcontext.hpp"
+#include "WScalingFactorService.hpp"
 
 namespace svr {
 namespace business {
@@ -31,7 +32,6 @@ double calc_cache::get_cached_gamma(const datamodel::SVRParameters &params, cons
             common::hash_lambda(params.get_kernel_param3()),
             params.get_adjacent_levels(),
             arma::size(Z)};
-
     const auto prepare_f = [&Z, &L] { return datamodel::OnlineMIMOSVR::calc_gamma(Z, L); };
     return cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
@@ -61,7 +61,8 @@ arma::mat &calc_cache::get_cached_Z(const datamodel::SVRParameters &params, cons
             arma::size(features_t),
             time};
     const auto prepare_f = [&params, &features_t, &time, this]{
-        return datamodel::OnlineMIMOSVR::prepare_Z(*this, params, features_t, time); };
+        return datamodel::OnlineMIMOSVR::prepare_Z(*this, params, features_t, time);
+    };
     return *cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
@@ -110,7 +111,7 @@ calc_cache::get_cached_labels(const unsigned step, const datamodel::datarow_cran
 {
     const auto k = std::tuple{(**main_data.begin()).get_value_time(), main_data.distance(), level, multistep, main_queue_resolution, aux_queue_res};
 
-    const auto prepare_f = [&] () {
+    const auto prepare_f = [&] {
         auto p_labels = ptr<arma::mat>();
         auto p_last_knowns = ptr<arma::vec>();
         auto p_label_times = ptr<data_row_container>();
@@ -122,6 +123,21 @@ calc_cache::get_cached_labels(const unsigned step, const datamodel::datarow_cran
     return {ptr<arma::mat>(p_labels->col(step)), p_last_knowns, p_label_times};
 }
 
+mat_ptr calc_cache::get_cached_weights(
+        const bigint dataset_id, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
+        const bpt::time_duration &resolution_main)
+{
+    const auto k = std::tuple{dataset_id, (**times.cbegin()).get_value_time(), times.size(), steps, resolution_main};
+    const auto prepare_f = [&] {
+        auto p_weights = ptr<arma::mat>();
+        ModelService::prepare_weights(*p_weights, times, aux_inputs, steps, resolution_main);
+        APP.w_scaling_factor_service.scale(dataset_id, *p_weights);
+        p_weights->ones();
+        return p_weights;
+    };
+    const auto p_weights = cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
+    return ptr<arma::mat>(p_weights->col(step));
+}
 
 datamodel::t_parameter_predictions_set &calc_cache::checkin_tuner(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix)
 {

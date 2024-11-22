@@ -32,7 +32,7 @@ constexpr double C_slides_len = [] {
 }();
 
 #ifdef REMOVE_OUTLIERS
-constexpr uint32_t C_shift_lim = 1;
+constexpr uint32_t C_shift_lim = 100;
 constexpr uint32_t C_outlier_slack = 100;
 #endif
 
@@ -103,7 +103,7 @@ constexpr char C_default_multistep_len_str[] = "1";
 constexpr char C_default_multiout_str[] = "1";
 
 constexpr unsigned C_max_csv_token_size = 0xFF;
-constexpr unsigned C_default_kernel_max_chunk_len = 4500; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernels modified for 2D indexing
+constexpr unsigned C_default_kernel_max_chunk_len = 9000; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernels modified for 2D indexing
 const unsigned C_default_multistep_len = std::stoul(C_default_multistep_len_str);
 const unsigned C_default_multiout = std::stoul(C_default_multiout_str);
 constexpr unsigned C_default_gradient_count = 1;

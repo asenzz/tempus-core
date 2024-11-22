@@ -77,12 +77,13 @@ const auto C_placement_delay = bpt::seconds(3);
 const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_validation_window;
 const std::string C_test_input_table_name = "q_svrwave_test_xauusd_avg_" STR_MAIN_QUEUE_RES;
 const std::string C_test_aux_input_table_name = "q_svrwave_test_xauusd_avg_1";
-constexpr uint16_t C_test_levels = 2 * MIN_LEVEL_COUNT;
+constexpr uint16_t C_test_levels = 10;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
 constexpr auto C_overload_factor = 1.5; // Load surplus data from database just in case
 const auto C_decon_tail = svr::datamodel::Dataset::get_residuals_length(C_test_levels);
-const unsigned C_max_features_len = C_test_lag * datamodel::C_features_superset_coef * business::ModelService::C_max_quantisation;
-const unsigned C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
+const uint32_t C_max_features_len = C_test_lag * datamodel::C_features_superset_coef * business::ModelService::C_max_quantisation;
+const uint32_t C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
+const uint32_t C_dataset_id = 0xDeadBeef;
 
 }
 
@@ -104,12 +105,16 @@ TEST(manifold_tune_train_predict, basic_integration)
     try {
         pqxx::connection c(PROPS.get_db_connection_string());
         pqxx::work w(c);
-        const std::string q = common::formatter() << "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_1; CREATE VIEW " << C_test_aux_input_table_name
-                                                  << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_1 "
+        const std::string q = common::formatter() <<
+                "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_1; "
+                "CREATE VIEW " << C_test_aux_input_table_name << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_1 "
                                                      "ORDER BY value_time DESC LIMIT (" << C_test_features_len_h << " * " << TOSTR(MAIN_QUEUE_RES) << "); "
-                                                  "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_" STR_MAIN_QUEUE_RES "; CREATE VIEW " << C_test_input_table_name
-                                                  << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_" STR_MAIN_QUEUE_RES
-                                                     " ORDER BY value_time DESC LIMIT " << C_test_features_len_h;
+                "DROP VIEW IF EXISTS q_svrwave_test_xauusd_avg_" STR_MAIN_QUEUE_RES ";"
+                "CREATE VIEW " << C_test_input_table_name << " AS SELECT value_time, update_time, tick_volume, xauusd_avg_bid FROM q_svrwave_xauusd_avg_" STR_MAIN_QUEUE_RES
+                                                     " ORDER BY value_time DESC LIMIT " << C_test_features_len_h << ";"
+                "DELETE FROM w_scaling_factors WHERE dataset_id = " << C_dataset_id << ";"
+                "DELETE FROM iq_scaling_factors WHERE dataset_id = " << C_dataset_id << ";"
+                "DELETE FROM svr_parameters WHERE dataset_id = " << C_dataset_id << ";";
         w.exec(q).no_rows();
         w.commit();
     } catch (const std::exception &ex) {
@@ -118,7 +123,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     }
 
     auto p_dataset = ptr<datamodel::Dataset>(
-            0xDeadBeef, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
+            C_dataset_id, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
             C_test_gradient_count, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
@@ -159,7 +164,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     }
 
                 LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params);
-                const auto [p_model_features, p_model_labels, p_model_last_knowns, p_model_times] =
+                const auto [p_model_features, p_model_labels, p_model_last_knowns, p_weights, p_model_times] =
                         business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_labels_len_h);
                 assert(p_model_labels->n_rows == C_test_labels_len_h);
                 assert(p_model_times->size() == C_test_labels_len_h);
@@ -176,14 +181,16 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto last_value_time = p_model_times->back()->get_value_time();
                 business::ModelService::train_batch(*p_model, otr<arma::mat>(p_model_features->rows(train_start, train_end)),
                                                     otr<arma::mat>(p_model_labels->rows(train_start, train_end)),
-                                                    otr<arma::vec>(p_model_last_knowns->rows(train_start, train_end)), last_value_time);
+                                                    otr<arma::vec>(p_model_last_knowns->rows(train_start, train_end)),
+                                                    otr<arma::mat>(p_weights->rows(train_start, train_end)), last_value_time);
                 p_model->set_last_modeled_value_time(last_value_time);
                 p_model->set_last_modified(bpt::second_clock::local_time());
 
                 const auto [predict_mae_level, predict_mape_level, predicted, actual, mape_lk, last_knowns] =
                         business::ModelService::validate(
                                 p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
-                                *p_model_features, *p_model_labels, *p_model_last_knowns, *p_model_times, C_online_validate, p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
+                                *p_model_features, *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
+                                p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
                 recon_l.set();
                 if (!p_times) p_times = p_model_times;
                 recon_predicted.col(s) += predicted;
@@ -198,9 +205,9 @@ TEST(manifold_tune_train_predict, basic_integration)
     business::IQScalingFactorService::unscale(*p_iqsf, recon_predicted);
     business::IQScalingFactorService::unscale(*p_iqsf, recon_last_knowns);
     business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);
-    const auto n_buggy_preds = common::C_integration_test_validation_window - 5;
-    LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual.head_rows(n_buggy_preds) - recon_predicted.head_rows(n_buggy_preds))
-            << ", last known to actual difference " << common::present<double>(recon_actual.head_rows(n_buggy_preds) - recon_last_knowns.head_rows(n_buggy_preds)));
+    const auto n_good_preds = common::C_integration_test_validation_window - common::C_cu_tile_width;
+    LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual.head_rows(n_good_preds) - recon_predicted.head_rows(n_good_preds))
+            << ", last known to actual difference " << common::present<double>(recon_actual.head_rows(n_good_preds) - recon_last_knowns.head_rows(n_good_preds)));
 
     double mae = 0, mae_lk = 0, recon_mae = 0, recon_lk_mae = 0, pips_won = 0, pips_lost = 0, drawdown = 0, max_drawdown = 0;
     unsigned positive_mae_ct = 0, pos_direct = 0, price_hits = 0;
@@ -241,7 +248,7 @@ TEST(manifold_tune_train_predict, basic_integration)
         const auto placement_price = ***placement_it;
         const auto last_aux_price = ***std::prev(last_aux_it);
         constexpr auto time_comp = [](const auto &lhs, const auto &rhs) { return lhs->get_value_time() < rhs->get_value_time(); };
-	double this_drawdown;
+	    double this_drawdown;
         if (sign_predicted_move) { // Sell signal
             const auto min_price_it = std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
             const auto max_price = ***std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
@@ -284,7 +291,7 @@ TEST(manifold_tune_train_predict, basic_integration)
         const auto net_pips = pips_won - pips_lost;
         const auto pips_pos = net_pips / i_div;
         const auto drawdown_pos = drawdown / i_div;
-        const auto leverage = std::max(0., net_pips / drawdown_pos);
+        const auto leverage = std::max(0., pips_pos / drawdown_pos);
         const auto abs_leverage = std::max(0., net_pips / max_drawdown);
         const auto positive_preds_pc = 100. * positive_mae_ct / i_div;
         LOG4_DEBUG("Position " << i <<
@@ -302,21 +309,21 @@ TEST(manifold_tune_train_predict, basic_integration)
                    ", current MAE last known " << cur_mae_lk <<
                    ", predicted movement " << predicted_move <<
                    ", actual movement " << actual - last_known <<
-                   ", current alpha " << cur_alpha_pct << "pc" <<
+                   ", current alpha " << cur_alpha_pct << "pc"
                    ", cumulative alpha " << cml_alpha_pct << "pc"
                    ", recon error " << cur_recon_error <<
-                   ", average recon error " << 100. * recon_mae / i_div << "pc" <<
-                   ", average recon error last-known " << 100. * recon_lk_mae / i_div << "pc" <<
-                   ", price hits " << 100. * double(price_hits) / i_div << "pc" <<
+                   ", average recon error " << 100. * recon_mae / i_div << "pc"
+                   ", average recon error last-known " << 100. * recon_lk_mae / i_div << "pc"
+                   ", price hits " << 100. * double(price_hits) / i_div << "pc"
                    ", won " << pips_won <<
                    ", lost " << pips_lost <<
-                   ", nett " << net_pips <<
+                   ", neto " << net_pips <<
                    ", value per position " << pips_pos <<
                    ", drawdown per position " << drawdown_pos <<
                    ", sum drawdown " << drawdown <<
                    ", max drawdown " << max_drawdown <<
-                   ", mean leverage " << leverage << // nett won to average drawdown ratio
-                   ", absolute leverage " << abs_leverage << // nett won to maximum drawdown ratio
+                   ", mean leverage " << leverage << // net won to average drawdown ratio
+                   ", absolute leverage " << abs_leverage << // net won to maximum drawdown ratio
                    ", trade rating " << abs_leverage * positive_preds_pc * cml_alpha_pct);
         if (i < common::C_forecast_focus && std::isnormal(recon_predicted[i]))
             APP.request_service.save(ptr<datamodel::MultivalResponse>(0, 0, cur_time, p_decon->get_input_queue_column_name(), recon_predicted[i]));

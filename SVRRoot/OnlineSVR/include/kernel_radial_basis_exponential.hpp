@@ -48,7 +48,7 @@ public:
 #endif
 
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
     virtual viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &d_features) override
     {
         viennacl::matrix<scalar_type> d_kernel_matrix = viennacl::linalg::prod(d_features, viennacl::trans(d_features));
@@ -105,7 +105,7 @@ public:
     }
 
 
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 
 };
 

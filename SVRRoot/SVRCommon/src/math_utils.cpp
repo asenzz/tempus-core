@@ -251,7 +251,7 @@ arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &
     return ret;
 }
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 double dot_product(double const *a, double const *b, const size_t length)
 {

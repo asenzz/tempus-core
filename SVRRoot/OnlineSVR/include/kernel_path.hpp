@@ -8,7 +8,7 @@
 #include <cmath>
 #include <ctime>
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 #include "common/gpu_handler.hpp"
 
@@ -87,7 +87,7 @@ public:
 
     void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix)
     {
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
         common::gpu_context ctx;
         gpu_compute(features, kernel_matrix, ctx.ctx());
 #else
@@ -95,7 +95,7 @@ public:
 #endif
     }
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 
     int gpu_compute(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix, viennacl::ocl::context &ctx)
@@ -456,7 +456,7 @@ public:
     }
 #endif
 
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 };
 
 }

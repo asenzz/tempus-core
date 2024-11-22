@@ -10,7 +10,7 @@ namespace svr {
 
 class short_term_fourier_transform_ocl_impl
 {
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 public:
     short_term_fourier_transform_ocl_impl(size_t levels);
 

@@ -19,7 +19,7 @@ namespace oemd {
 
 class oemd_coefficients_search {
 
-    constexpr static uint8_t C_column_interleave = 10;
+    constexpr static uint8_t C_column_interleave = 8;
     constexpr static uint8_t C_quantisation_skipdiv = 3;
     constexpr static uint16_t particles = 10;
     constexpr static uint16_t iterations = 40;
@@ -67,7 +67,7 @@ class oemd_coefficients_search {
 public:
     constexpr static double C_smooth_factor = 1000;
     constexpr static uint32_t C_fir_max_len = 10'000;
-    constexpr static uint32_t C_sifted_fir_len = C_fir_max_len * oemd_coefficients::C_default_siftings;
+    constexpr static uint32_t C_sifted_fir_max_len = C_fir_max_len * oemd_coefficients::C_default_siftings;
     const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef;
     const uint32_t max_row_len;
     const uint32_t label_len;

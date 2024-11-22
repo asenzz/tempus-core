@@ -383,7 +383,7 @@ kernel_global_alignment<scalar_type>::operator()(
     result.copy_to(p_kernel_matrices);
 }
 
-#ifdef VIENNACL_WITH_OPENCL
+#ifdef ENABLE_OPENCL
 
 
 template<typename scalar_type>
@@ -734,7 +734,7 @@ kernel_global_alignment<scalar_type>::operator()(
 }
 
 
-#endif /* #ifdef VIENNACL_WITH_OPENCL */
+#endif /* #ifdef ENABLE_OPENCL */
 
 }
 #endif
