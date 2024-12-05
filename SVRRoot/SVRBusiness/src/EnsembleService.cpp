@@ -253,10 +253,10 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
 #pragma omp parallel num_threads(adj_threads(main_decon_queues.size() + aux_decon_queues.size()))
 #pragma omp single
         {
-#pragma omp taskloop untied grainsize(1)
+#pragma omp taskloop mergeable untied grainsize(1)
             for (auto &dq: main_decon_queues)
                 APP.decon_queue_service.load(*dq);
-#pragma omp taskloop untied grainsize(1)
+#pragma omp taskloop mergeable untied grainsize(1)
             for (auto &dq: aux_decon_queues)
                 APP.decon_queue_service.load(*dq);
         }
@@ -274,8 +274,17 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
                                          return p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_main_decon->get_input_queue_table_name() &&
                                                 p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
                                      });
+#if 0
+        const auto &ensemble_aux_queues = aux_decon_queues;
+#else
+        DTYPE(aux_decon_queues) ensemble_aux_queues;
+        std::copy_if(C_default_exec_policy, aux_decon_queues.cbegin(), aux_decon_queues.cend(), std::back_inserter(ensemble_aux_queues),
+                     [&p_main_decon](const auto &dq) {
+                         return dq->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
+                     });
+#endif
         auto p_ensemble = ens_iter == ensembles.cend() ?
-                          ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, aux_decon_queues)) :
+                          ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, ensemble_aux_queues)) :
                           *ens_iter;
         ens_emplace_l.unset();
         APP.model_service.init_models(p_dataset, *p_ensemble);
@@ -287,12 +296,12 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
 void EnsembleService::get_decon_queues_from_input_queue(
         const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
 {
-    const auto prev_size = decon_queues.size();
+    const uint16_t prev_size = decon_queues.size();
     OMP_FOR_(input_queue.get_value_columns().size(),)
     for (const auto &column_name: input_queue.get_value_columns()) {
         bool skip = false;
 UNROLL()
-        for (size_t j = 0; j < prev_size; ++j) {
+        for (uint16_t j = 0; j < prev_size; ++j) {
             if (decon_queues[j]->get_input_queue_table_name() != input_queue.get_table_name() || decon_queues[j]->get_input_queue_column_name() != column_name) continue;
             skip = true;
             break;

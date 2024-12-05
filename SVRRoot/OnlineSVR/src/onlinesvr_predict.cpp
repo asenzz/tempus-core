@@ -104,18 +104,25 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
     const auto x_predict_t = predict_chunk_t(x_predict);
     arma::mat prediction;
     t_omp_lock predict_l;
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(ixs.size()))
+#pragma omp parallel ADJ_THREADS(C_n_cpu)
+#pragma omp single
+    {
+    OMP_TASKLOOP_1()
     for (size_t chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
         const auto p_params = get_params_ptr(chunk_ix);
         arma::mat scaled_x_predict_t = x_predict_t;
         const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
+#ifdef SINGLE_CHUNK_LEVEL
+        const auto chunk_predict_K = prepare_Ky(*p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, common::gpu_handler<1>::get().get_gpu_devices_count());
+#else
         const auto chunk_predict_K = prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time);
+#endif
         LOG4_TRACE(
                 "Predicting " << arma::size(x_predict) << ", indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", size " << arma::size(ixs[chunk_ix])
                               << ", parameters " << *p_params << ", K " << common::present(*chunk_predict_K) << ", w " << common::present(weight_chunks[chunk_ix]));
         arma::mat multiplicated(chunk_predict_K->n_rows, weight_chunks[chunk_ix].n_cols);
-#pragma omp parallel for collapse(2) num_threads(adj_threads(chunk_predict_K->n_rows * weight_chunks[chunk_ix].n_cols))
+        OMP_TASKLOOP_1(collapse(2))
         for (size_t r = 0; r < chunk_predict_K->n_rows; ++r)
             for (size_t c = 0; c < weight_chunks[chunk_ix].n_cols; ++c)
                 multiplicated(r, c) = arma::as_scalar(chunk_predict_K->row(r) * weight_chunks[chunk_ix].col(c));// - p_params->get_svr_epsilon();
@@ -126,6 +133,7 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
         else
             prediction += multiplicated;
         predict_l.unset();
+    }
     }
     return prediction / ixs.size();
 }

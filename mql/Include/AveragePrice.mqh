@@ -11,205 +11,330 @@
 //|                                                                  |
 //+------------------------------------------------------------------+
 #include "MqlLog.mqh"
-#include <WinUser32.mqh> 
+#include "CompatibilityMQL4.mqh"
+#include <WinUser32.mqh>
 #include <stdlib.mqh>
 
-#define TIME_DATE_SECONDS (TIME_DATE | TIME_SECONDS)
+
+enum e_rate_type {
+    price_open = 0,
+    price_high,
+    price_low,
+    price_close,
+    price_hlc
+};
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-struct AveragePrice
+void add_rate_spread(double &rate, const double spread_digits)
 {
-    double closePrice;
-    AveragePrice(MqlRates &rates[], long size);
-    AveragePrice(MqlRates &rates[], long size, datetime timeToSet);
-    AveragePrice (const MqlTick &ticks[], const datetime barTime, const ulong durationSecs, const double startPrice);
+    rate += spread_digits / pow(10, _Digits);
+}
+
+
+class aprice {
+public:
+    double bid, ask;
+
+    string to_string() const
+    {
+        return "bid " + DoubleToString(bid, 15) + ", ask " + DoubleToString(ask, 15);
+    }
+    
+    double spread() const
+    {
+        return ask - bid;
+    }
+
+    bool valid() const
+    {
+        return ask > 0 || bid > 0 || MathIsValidNumber(bid) || MathIsValidNumber(ask);
+    }
+
+    void set(const MqlRates &rate, const e_rate_type type)
+    {
+        switch (type) {
+        case e_rate_type::price_open:
+            ask = bid = rate.open;
+            break;
+
+        case e_rate_type::price_high:
+            ask = bid = rate.high;
+            break;
+
+        case e_rate_type::price_low:
+            ask = bid = rate.low;
+            break;
+
+        case e_rate_type::price_close:
+            ask = bid = rate.close;
+            break;
+
+        case e_rate_type::price_hlc:
+            ask = bid = (rate.high + rate.low + 2. * rate.close) / 4.;
+            break;
+
+        default:
+            LOG_ERROR("", "Unknown value type " + string(type));
+            DebugBreak();
+        }
+
+        add_rate_spread(ask, rate.spread);
+    }
+
+    void set(const MqlTick &tick)
+    {
+        bid = tick.bid;
+        ask = tick.ask;
+    }
+    
+    void set(const double bid_, const double ask_)
+    {
+        bid = bid_;
+        ask = ask_;
+    }
+    
+    void reset()
+    {
+        set(0, 0);
+    }
+
+    aprice *operator += (const aprice &o)
+    {
+        bid += o.bid;
+        ask += o.ask;
+        return &this;
+    }
+
+    aprice *operator += (const MqlTick &o)
+    {
+        ask += o.ask;
+        bid += o.bid;
+        return &this;
+    }
+        
+    aprice *operator /= (const int o)
+    {
+        bid /= o;
+        ask /= o;
+        return &this;
+    }
+
+    aprice operator * (const int o)
+    {
+        return aprice(bid * o, ask * o);
+    }
+
+    aprice(const MqlRates &rate, const e_rate_type type) 
+    { 
+        set(rate, type);
+    }
+
+    aprice(const aprice &o) 
+    {
+        bid = o.bid;
+        ask = o.ask;
+    }
+
+    aprice() : ask(0), bid(0) {}
+
+    aprice (const double bid_, const double ask_) : bid(bid_), ask(ask_) {}
+};
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+aprice get_rate(const string &symbol, const int shift, const e_rate_type type)
+{
+    MqlRates rate[];
+    ArraySetAsSeries(rate, true);
+    const int copied = CopyRates(symbol, _Period, shift, 1, rate);
+    if (copied < 1) {
+        LOG_ERROR("", "Failed copying rates for " + string(shift));
+        return aprice();
+    }
+    aprice result(rate[0], type);
+    return result;
+}
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+aprice get_rate(const int shift, const e_rate_type type)
+{
+    return get_rate(_Symbol, shift, type);
+}
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+struct AveragePrice {
+    aprice close_price;
+    datetime tm;
+    aprice value;
+    uint volume;
+    
+    AveragePrice(const MqlRates &rates[], const int size);
+    AveragePrice(const MqlRates &rates[], const int size, const datetime time_set);
+    AveragePrice(const MqlTick &ticks[], const datetime bar_time, const int duration_sec, const aprice &start_price);
     AveragePrice();
     ~AveragePrice();
-    datetime tm;
-    double value;
-    long volume;
 };
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void calc_msec_twap(const MqlTick &ticks[], ulong &tickIdx, const ulong ticksLen, const datetime timeIter, double &lastPrice)
+aprice calc_msec_twap(const MqlTick &ticks[], int &tick_ix, const int ticks_len, const datetime time_iter, aprice &twap_price, uint &volume, const aprice &cur_price_)
 {
-    // Millisecond is the highest resolution MQL5 provides
-    double msecPrices[1000];
-    // Iterate through ticks for the current second
-    ulong lastTickMsec = 0;
-    if (ticks[tickIdx].time != timeIter) LOG_ERROR("", "Starting tick does not equal time iter!");
-    const ulong startTickIdx = tickIdx;
-    while (tickIdx < ticksLen && ticks[tickIdx].time == timeIter) {
-        const ulong curTickMsec = ticks[tickIdx].time_msc % 1000;
-//        if (ticks[tickIdx].time_msc / 1000 != ticks[tickIdx].time) 
-//            LOG_ERROR("generateSecondPrices", "Tick " + string(tickIdx) + " time " + TimeToString(ticks[tickIdx].time, TIME_DATE_SECONDS) + " to msec time " + TimeToString(ticks[tickIdx].time_msc / 1000, TIME_DATE_SECONDS));
-        ArrayFill(msecPrices, lastTickMsec, curTickMsec - lastTickMsec, lastPrice);
-        lastPrice = ticks[tickIdx].bid;
-        lastTickMsec = curTickMsec;
-        ++tickIdx;
+    aprice cur_price = cur_price_;
+    if (ticks[tick_ix].time != time_iter) LOG_ERROR("", "Starting tick does not equal time iter!");
+    int last_ms = 0;
+    const int start_tick_ix = tick_ix;
+    for (; tick_ix < ticks_len && ticks[tick_ix].time == time_iter; ++tick_ix) {
+        const int cur_ms = int(ticks[tick_ix].time_msc % MILLISECONDS_IN_SECOND);
+        twap_price += cur_price * (cur_ms - last_ms);
+        last_ms = cur_ms;
+        cur_price.set(ticks[tick_ix]);
     }
-    ArrayFill(msecPrices, lastTickMsec, ArraySize(msecPrices) - lastTickMsec, lastPrice);
-    
-    // Calculate the time-weighted average price
-    lastPrice = 0;
-    for (ulong t = 0; t < ArraySize(msecPrices); ++t) lastPrice += msecPrices[t];
-    lastPrice /= double(ArraySize(msecPrices));
-    //LOG_INFO("", "Used " + string(tickIdx - startTickIdx) + " ticks for TWAP at " + TimeToString(timeIter, TIME_DATE_SECONDS) + " price " + DoubleToString(lastPrice, 16));
+    twap_price += cur_price * (MILLISECONDS_IN_SECOND - last_ms);
+    twap_price /= MILLISECONDS_IN_SECOND;
+    volume = tick_ix - start_tick_ix;
+    return cur_price;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void
-generateSecondPrices(
-    const double startPrice,
+aprice persec_prices( // returns last processed tick price
+    const aprice &start_price,
     const MqlTick &ticks[],
-    const datetime barTime,
-    const ulong durationSecs,
-    double &prices[],
+    const datetime bar_time,
+    const int duration_sec,
+    aprice &prices[],
     datetime &times[],
-    ulong &volumes[])
+    uint &volumes[],
+    const int start_out)
 {
-    ArrayResize(prices, durationSecs);
-    ArrayResize(times, durationSecs);
-    ArrayResize(volumes, durationSecs);
-    datetime timeIter = barTime;    
-    const long ticksLen = ArraySize(ticks);
-    if (ticksLen < 1) {
-        ArrayFill(prices, 0, ArraySize(prices), startPrice);
-        ArrayFill(volumes, 0, ArraySize(volumes), 0);
-        for (ulong t = 0; t < durationSecs && timeIter < barTime + durationSecs; ++timeIter, ++t) times[t] = timeIter;
-        LOG_ERROR("generateSecondPrices", "Ticks array is empty, copying start price!");
-        return;
+    if (duration_sec < 1) {
+        LOG_ERROR("", "Duration seconds is illegal " + string(duration_sec));
+        return aprice();
     }
-    ulong tickIdx = 0, priceIx = 0;
-    double lastPrice = startPrice == -1 ? (ArraySize(ticks) > 0 ? ticks[0].bid : 0) : startPrice; // Bar open price
-    while (timeIter < barTime + durationSecs) {
-        // Fast-forward tick to current time
-        while (tickIdx < ticksLen && ticks[tickIdx].time < timeIter) lastPrice = ticks[tickIdx++].bid;
-        if (tickIdx >= ticksLen || ticks[tickIdx].time > timeIter) {
-            prices[priceIx] = lastPrice;
-            volumes[priceIx] = 0;
-            LOG_DEBUG("", "Ignoring tick for price " + string(priceIx) + " " + string(prices[priceIx]) + " because its later than iterator at " + TimeToString(timeIter, TIME_DATE_SECONDS) + " or tick index " + string(tickIdx) + " is past " + string(ticksLen));
-        } else if (ticks[tickIdx].time == timeIter) {
-            const ulong lastTick = tickIdx;
-            double curPrice = lastPrice;
-            calc_msec_twap(ticks, tickIdx, ticksLen, timeIter, curPrice);
-            const ulong ticksTwap = tickIdx - lastTick;
-            LOG_DEBUG("", "Calculated TWAP from " + string(ticksTwap) + " ticks, " + DoubleToString(lastPrice, TIME_DATE_SECONDS) + " for " + TimeToString(timeIter, TIME_DATE_SECONDS) + " tick index " + string(tickIdx) + " price index " + string(priceIx));
-            prices[priceIx] = curPrice;
-            if (tickIdx > 0) lastPrice = ticks[tickIdx - 1].bid;
-            else LOG_ERROR("", "Tick index is zero, price is not initialized properly!");
-            volumes[priceIx] = ticksTwap;
+    datetime time_iter = bar_time;
+    const int ticks_len = ArraySize(ticks);
+    aprice last_tick_price;
+    if (ticks_len > 0 && (ticks[0].time <= bar_time || !start_price.valid()))
+        last_tick_price.set(ticks[0]);
+    else
+        last_tick_price = start_price;
+
+    const int end_out = start_out + duration_sec;
+    if (ticks_len < 1) {
+        LOG_ERROR("", "Ticks array is empty, copying open price " + last_tick_price.to_string());
+        for (int i = start_out; i < end_out; ++i, ++time_iter) {
+            prices[i] = last_tick_price;
+            times[i] = time_iter;
+            volumes[i] = 0;
         }
-        times[priceIx] = timeIter;
-        ++priceIx;
-        ++timeIter;
+        return last_tick_price;
     }
-    while (priceIx < ArraySize(prices)) prices[priceIx++] = lastPrice;
 
-    const long barIx = iBarShift(_Symbol, _Period, barTime, false);
-    const double barClose = iClose(_Symbol, _Period, barIx);
-    if (lastPrice != barClose)
-        LOG_ERROR("generateSecondPrices", "Last tick price " + DoubleToString(lastPrice, 16) + " doesn't equal bar " + IntegerToString(barIx)  + " at time " + TimeToString(barTime, TIME_DATE_SECONDS) + " close price " + DoubleToString(barClose, 16) + " last tick at " + TimeToString(ticks[ArraySize(ticks) - 1].time, TIME_DATE_SECONDS) + " price " + DoubleToString(ticks[ArraySize(ticks) - 1].bid));
-    if (priceIx < ArraySize(times)) ArrayRemove(times, priceIx);
+    for (int tick_ix = 0, price_ix = start_out; price_ix < end_out; ++price_ix, ++time_iter) {
+        times[price_ix] = time_iter;
+        
+        for (; tick_ix < ticks_len && ticks[tick_ix].time < time_iter; ++tick_ix) last_tick_price.set(ticks[tick_ix]);
+        
+        if (tick_ix >= ticks_len || ticks[tick_ix].time > time_iter) {
+            volumes[price_ix] = 0;
+            prices[price_ix] = last_tick_price;
+        } else if (ticks[tick_ix].time == time_iter)
+            last_tick_price = calc_msec_twap(ticks, tick_ix, ticks_len, time_iter, prices[price_ix], volumes[price_ix], last_tick_price);
+    }
+
+    return last_tick_price;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-AveragePrice::AveragePrice(MqlRates &rates[], long size)
-{
-    this.value = size > 0 ? rates[0].open : 0.;
-    this.volume = 0;
-
-    // Time is set to the last one
-    this.tm = rates[0].time;
-    for (long i = 0; i < size; ++i) {
-        this.value += rates[i].close + rates[i].low + rates[i].high;
-        this.volume += rates[i].tick_volume;
-    }
-    this.closePrice = rates[size - 1].close;
-    this.value = this.value / ((size > 0 ? 1. : 0) + size * 3.);
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-AveragePrice::AveragePrice(MqlRates &rates[], long size, datetime timeToSet)
+AveragePrice::AveragePrice(const MqlRates &rates[], const int size)
 {
     if (ArraySize(rates) < 1) {
-        LOG_ERROR("", "Rates for " + TimeToString(timeToSet, TIME_DATE_SECONDS) + " are empty");
+        LOG_ERROR("", "Rates are empty, user provided length " + IntegerToString(size));
         return;
     }
-    this.value = 0.;
-    this.volume = 0;
+    AveragePrice(rates, size, rates[0].time);
+}
 
-    // Time is set to user defined
-    this.tm = timeToSet;
-    long rate_ct = 0;
-    for(long i = 0; i < size; i++) {
-        if (rates[i].time < timeToSet) continue;
-        this.value += rates[i].close + rates[i].low + rates[i].high;
-        this.volume += rates[i].tick_volume;
-        ++rate_ct;
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+AveragePrice::AveragePrice(const MqlRates &rates[], const int size, const datetime time_set)
+{
+    if (ArraySize(rates) < 1) {
+        LOG_ERROR("", "Rates for " + TimeToString(time_set, TIME_DATE_SECONDS) + " are empty");
+        return;
     }
-    this.closePrice = rates[ArraySize(rates) - 1].close;
-    this.value = this.value / (double(size) * 3.);
+    value.set(rates[0], e_rate_type::price_open);
+    volume = 0;
+    // Time is set to user defined
+    tm = time_set;
+    for (int i = 0; i < size; ++i) {
+        if (rates[i].time < time_set) continue;
+        value += aprice(rates[i], e_rate_type::price_hlc);
+        volume += (uint) rates[i].tick_volume;
+    }
+    close_price.set(rates[0], e_rate_type::price_close);
+    value /= 1 + size;
 }
 
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-AveragePrice::AveragePrice(const MqlTick &ticks[], const datetime barTime, const ulong durationSecs, const double startPrice)
+AveragePrice::AveragePrice(const MqlTick &ticks[], const datetime bar_time, const int duration_sec, const aprice &start_price)
 {
-    const ulong ticksLen = ArraySize(ticks);
-    if (ticksLen < 1) {
-        this.value = startPrice;
-        this.closePrice = startPrice;
-        this.tm = barTime;
+    volume = 0;
+    tm = bar_time;
+    const int ticks_len = ArraySize(ticks);
+    if (ticks_len < 1) {
+        if (start_price.valid()) {
+            value = start_price;
+            close_price = start_price;
+        } else {
+            value.reset();
+            close_price.reset();
+        }
         LOG_ERROR("", "Ticks array is empty!");
         return;
     }
-    double prices[];
-    datetime times[];
-    ulong volumes[];
-    generateSecondPrices(startPrice, ticks, barTime, durationSecs, prices, times, volumes);
-    this.tm = barTime;
-    this.value = 0;
-    this.volume = 0;
-    for (long t = 0; t < ArraySize(prices); ++t) {
-        this.value += prices[t];
-        this.volume += volumes[t];
-    }
-    this.value /= double(ArraySize(prices));
-    this.closePrice = ticks[ArraySize(ticks) - 1].bid;
-/*
-    static int file_handle;
-    if (barTime == StringToTime("2021-09-27 00:00:00")) {
-        file_handle = FileOpen("prices1s.log", FILE_WRITE | FILE_CSV);
-        if (file_handle != INVALID_HANDLE) {
-            FileSeek(file_handle, 0, SEEK_END);
+   
+    int tick_ix = 0;
+    aprice last_tick_price;
+    if (ticks[tick_ix].time <= bar_time || !start_price.valid())
+        last_tick_price.set(ticks[tick_ix]);
+    else
+        last_tick_price = start_price;        
+        
+    for (datetime time_iter = bar_time; time_iter < bar_time + duration_sec; ++time_iter) {
+        for (; tick_ix < ticks_len && ticks[tick_ix].time < time_iter; ++tick_ix) last_tick_price.set(ticks[tick_ix]);
+              
+        if (tick_ix >= ticks_len || ticks[tick_ix].time > time_iter) value += last_tick_price;
+        else if (ticks[tick_ix].time == time_iter) {
+            aprice cur_price;
+            uint cur_vol;
+            last_tick_price = calc_msec_twap(ticks, tick_ix, ticks_len, time_iter, cur_price, cur_vol, last_tick_price);
+            value += cur_price;
+            volume += cur_vol;
         }
     }
-    for (long t = 0; t < ArraySize(prices); ++t) {
-        if (barTime == StringToTime("2021-09-27 00:00:00")) {
-            string msg = "Price 1s " + string(t) + ", start time " + TimeToString(barTime, TIME_DATE_SECONDS) + "\t" + TimeToString(times[t], TIME_DATE_SECONDS) + "\t" + DoubleToString(prices[t], 16);
-            FileWrite(file_handle, msg);
-        }
-    }
-    if (barTime == StringToTime("2021-09-27 00:00:00")) {
-        string msg = "barTime\t" + TimeToString(this.tm, TIME_DATE_SECONDS) + "\t" + DoubleToString(this.value, 16);
-        FileWrite(file_handle, msg);
-        FileFlush(file_handle);
-        FileClose(file_handle);
-    }
-*/
+
+    value /= duration_sec;
+    close_price = last_tick_price;
 }
 
 //+------------------------------------------------------------------+

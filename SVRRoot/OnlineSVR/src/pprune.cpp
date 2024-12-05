@@ -423,7 +423,7 @@ void pprune::pprune_prima(const unsigned n_particles, const t_pprune_cost_fun &c
     auto p_particles = ptr<std::deque<t_calfun_data_ptr>>(n_particles);
     t_omp_lock res_l;
 
-#pragma omp parallel num_threads(n_particles) // Start as many threads as particles
+#pragma omp parallel ADJ_THREADS(n_particles)
 #pragma omp single
     {
 #pragma omp taskloop simd mergeable default(shared) grainsize(1) untied firstprivate(n_particles, maxfun, no_elect, C_rand_disperse)

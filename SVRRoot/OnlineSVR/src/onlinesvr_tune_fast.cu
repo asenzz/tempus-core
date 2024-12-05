@@ -34,95 +34,7 @@
 namespace svr {
 namespace datamodel {
 
-__global__ void G_div_I(RPTR(double) x, const double a, const unsigned n)
-{
-    CU_STRIDED_FOR_i(n) x[i] /= a;
-}
-
-__global__ void G_mul_I(RPTR(double) x, const double a, const unsigned n)
-{
-    CU_STRIDED_FOR_i(n) x[i] *= a;
-}
-
-// error = abs(labels_train - K_train * solved)
-__global__ void G_absdif(CRPTRd labels_train, RPTR(double) error_mat, const unsigned mn)
-{
-    CU_STRIDED_FOR_i(mn) {
-        error_mat[i] = abs(labels_train[i] - error_mat[i]);
-    }
-}
-
-// work = abs(j_test_labels - (j_K_test * best_solution - svr_epsilon))
-__global__ void G_pred_absdif_I(CRPTRd j_test_labels, RPTR(double) work, const double svr_epsilon, const unsigned test_len_n)
-{
-    CU_STRIDED_FOR_i(test_len_n) work[i] = abs(j_test_labels[i] - work[i] + svr_epsilon);
-}
-
-__global__ void G_set_diag(RPTR(double) K, CRPTRd d, const unsigned m)
-{
-    CU_STRIDED_FOR_i(m) K[i * m + i] = d[i];
-}
-
-__global__ void G_set_diag(RPTR(double) K, const double d, const unsigned m)
-{
-    CU_STRIDED_FOR_i(m) K[i * m + i] = d;
-}
-
-__global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const unsigned m)
-{
-    const auto i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= m) return;
-    const auto j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (j >= m) return;
-
-    const auto ij = i * m + j;
-    K[ij] = i == j ? d : K[ij] * w[ij];
-}
-
-__global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const unsigned m, const unsigned n, const uint32_t ld)
-{
-    CU_STRIDED_FOR_i(m) {
-        double sum = K[i];
-        for (unsigned j = 1; j < m; ++j) sum += K[j * ld + i];
-        double diff = L[i];
-        for (unsigned j = 1; j < n; ++j) diff += L[j * ld + i] - sum;
-        diff /= n;
-        epsco[i] = diff;
-    }
-}
-
-__global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const uint32_t m, const uint32_t ld)
-{
-    CU_STRIDED_FOR_i(m) {
-        double sum = K[i];
-        for (unsigned j = 1; j < m; ++j) sum += K[j * ld + i];
-        epsco[i] = L[i] - sum;
-    }
-}
-
-double *cu_calc_epscos(CPTRd K, CPTRd L, const unsigned m, const unsigned n, const cudaStream_t custream)
-{
-    double *d_epsco;
-    cu_errchk(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
-    if (n == 1) G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, m);
-    else G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, n, m);
-    return d_epsco;
-}
-
-double cu_calc_epsco(CPTRd K, CPTRd L, const unsigned m, const unsigned n, const uint32_t ld, const cudaStream_t custream)
-{
-    double *d_epsco;
-    cu_errchk(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
-    if (n == 1) G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, ld);
-    else G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, n, ld);
-    const auto mean_epsco = solvers::mean(d_epsco, m, custream);
-    cu_errchk(cudaFreeAsync(d_epsco, custream));
-    LOG4_TRACE("Mean epsco " << mean_epsco << " m " << m << " n " << n);
-    return mean_epsco;
-}
-
-
-// TODO Bug, in debug mode build getting zero valued kernel matrices inside this function
+// TODO Fix Bug in debug build getting zero valued kernel matrices inside this function
 std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
 OnlineMIMOSVR::cuvalidate(
         const double lambda, const double gamma_bias, const double tau, const unsigned lag,
@@ -131,7 +43,7 @@ OnlineMIMOSVR::cuvalidate(
         const arma::mat &tune_label_chunk, const arma::mat &train_label_chunk,
         const arma::mat &tune_W, const arma::mat &train_W, const solvers::mmm_t &train_L_m, const double labels_sf)
 {
-    constexpr unsigned irwls_iters = 3, magma_iters = 3;
+    constexpr uint8_t irwls_iters = 4, magma_iters = 4;
     constexpr double one = 1, oneneg = -1, zero = 0;
 
     const uint32_t m = tune_cuml.n_cols;
@@ -160,7 +72,7 @@ OnlineMIMOSVR::cuvalidate(
     constexpr uint8_t streams_per_gpu = 4;
 #else
     constexpr uint8_t streams_per_gpu = common::C_default_kernel_max_chunk_len > 6500 ? 2 : 4;
-    const unsigned dim = tune_cuml.n_rows / lag;
+    const uint16_t dim = tune_cuml.n_rows / lag;
 #endif
     const uint32_t lag_tile_width = CDIV(lag, common::C_cu_tile_width);
 
@@ -180,17 +92,13 @@ OnlineMIMOSVR::cuvalidate(
     const auto K_train_off = d_K_train + calc_start * train_len + calc_start;
     const auto gamma_train = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
     solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma_train);
-    const auto train_epsco = cu_calc_epsco(K_train_off, train_label_off, calc_len, n, train_len, custream);
+    const auto epsco = cu_calc_epsco(K_train_off, train_label_off, calc_len, n, train_len, custream);
 #else
     double *d_K_train;
     const auto d_train_cuml = cumallocopy(train_cuml, custream);
     cu_errchk(cudaMallocAsync((void **) &d_K_train, K_train_size, custream));
-    kernel::path::G_kernel_xy<<<CU_BLOCKS_THREADS_2D(train_len), 0, custream>>>(
-            train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, d_train_cuml, d_train_cuml, d_K_train);
+    kernel::path::cu_kernel_xy(train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, d_train_cuml, d_train_cuml, d_K_train, custream);
     cu_errchk(cudaFreeAsync(d_train_cuml, custream));
-    kernel::path::cu_threshold(d_K_train, K_train_len, custream);
-    // const auto [mingamma, maxgamma] = cu_calc_minmax_gamma(d_K_train, train_L_m, train_len, K_train_len, custream);
-    // const auto gamma = gamma_bias * (maxgamma - mingamma) + mingamma;
     const auto K_train_off = d_K_train + calc_start * train_len + calc_start;
     const auto gamma_train = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
     solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma_train);
@@ -199,20 +107,21 @@ OnlineMIMOSVR::cuvalidate(
         thrust::transform(thrust::cuda::par.on(custream), d_K_train, d_K_train + K_train_len, d_train_W, d_K_train, thrust::multiplies<double>());
         cu_errchk(cudaFreeAsync(d_train_W, custream));
     }
-    const auto train_epsco = cu_calc_epsco(K_train_off, train_label_off, calc_len, n, train_len, custream);
+    const auto epsco = solvers::cu_calc_epsco(K_train_off, train_label_off, calc_len, n, train_len, custream);
 #endif
     cu_errchk(cudaFreeAsync(d_train_label_chunk, custream));
     cu_errchk(cudaFreeAsync(d_K_train, custream));
 
-    double *d_K_epsco, *j_solved, *j_work, *j_K_work, *d_best_weights, *d_K_tune, *d_Z_tune;
-    cu_errchk(cudaMallocAsync((void **) &d_K_tune, mm_size, custream));
+    double *d_K_epsco, *j_solved, *j_work, *j_K_work, *d_best_weights, *d_Kz_tune;
     cu_errchk(cudaMallocAsync((void **) &d_K_epsco, mm_size, custream));
     cu_errchk(cudaMallocAsync((void **) &d_best_weights, train_n_size, custream));
     cu_errchk(cudaMallocAsync((void **) &j_K_work, K_train_size, custream));
     cu_errchk(cudaMallocAsync((void **) &j_solved, train_n_size, custream));
     cu_errchk(cudaMallocAsync((void **) &j_work, train_n_size, custream));
-
-    RPTR(double) d_tune_W = tune_W.empty() ? nullptr : cumallocopy(tune_W, custream);
+#ifdef INSTANCE_WEIGHTS
+    RPTR(double) d_tune_W = cumallocopy(tune_W, custream);
+    constexpr double *d_tune_W = nullptr;
+#endif
 
     t_param_preds::t_predictions_ptr p_predictions;
     if (PROPS.get_recombine_parameters()) {
@@ -222,23 +131,30 @@ OnlineMIMOSVR::cuvalidate(
 
 #ifdef NEW_PATH
     const auto d_tune_features_t = cumallocopy(tune_features_t, custream);
-    d_Z_tune = kernel::cu_compute_path_distances(
+    d_Kz_tune = kernel::cu_compute_path_distances(
             d_tune_features_t, d_tune_features_t, tune_features_t.n_rows, tune_features_t.n_rows, tune_features_t.n_cols, tune_features_t.n_cols, lag, lambda, 0, custream);
     cu_errchk(cudaFreeAsync(d_tune_features_t, custream));
 #else
     auto const d_tune_cuml = cumallocopy(tune_cuml, custream);
-    cu_errchk(cudaMallocAsync((void **) &d_Z_tune, mm_size, custream));
-    kernel::path::G_kernel_xy<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, d_tune_cuml, d_tune_cuml, d_Z_tune);
+    cu_errchk(cudaMallocAsync((void **) &d_Kz_tune, mm_size, custream));
+    kernel::path::cu_kernel_xy(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, gamma_train, d_tune_cuml, d_tune_cuml, d_Kz_tune, custream);
     cu_errchk(cudaFreeAsync(d_tune_cuml, custream));
-    kernel::path::cu_threshold(d_Z_tune, mm, custream);
 #endif
     const auto d_tune_label_chunk = cumallocopy(tune_label_chunk, custream);
     magma_int_t info;
     const double iters_mul = common::C_itersolve_range / irwls_iters;
     const auto cublas_H = magma_queue_get_cublas_handle(ma_queue);
     double total_score = 0;
+    cu_errchk(cudaMemcpyAsync(d_K_epsco, d_Kz_tune, mm_size, cudaMemcpyDeviceToDevice, custream));
+#ifdef INSTANCE_WEIGHTS
+    if (d_tune_W)
+        solvers::G_augment_K<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(d_K_epsco, d_tune_W, epsco, m);
+    else
+#endif
+        solvers::G_set_diag<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_K_epsco, epsco, m);
+
     UNROLL(C_max_j)
-    for (unsigned j = 0; j < C_max_j; ++j) {
+    for (DTYPE(C_max_j) j = 0; j < C_max_j; ++j) {
         const auto train_start = train_clamp + j * C_slide_skip;
         const auto train_end = train_start + tune_len;
         const auto test_start = train_end;
@@ -250,18 +166,9 @@ OnlineMIMOSVR::cuvalidate(
         LOG4_TRACE("Try " << j << ", train start " << train_start << ", train final " << train_end << ", test start " <<
                           test_start << ", test len " << test_len << ", train len " << train_len << ", current score " << total_score);
 #endif
-        uint32_t best_iter = 0;
-        solvers::G_kernel_from_distances<<<CU_BLOCKS_THREADS(mm), 0, custream>>>(d_K_tune, d_Z_tune, mm, gamma_train); // solvers::cu_calc_gamma(d_Z_tune + train_start + train_start * m, m, d_tune_label_chunk + train_start, train_len, n, gamma_bias, custream)
-        cu_errchk(cudaMemcpyAsync(d_K_epsco, d_K_tune, mm_size, cudaMemcpyDeviceToDevice, custream));
-        const auto tune_epsco = train_epsco; // cu_calc_epsco(d_K_tune + train_start + train_start * m, d_tune_label_chunk + train_start, train_len, n, m, custream);
-        if (d_tune_W)
-            G_augment_K<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(d_K_epsco, d_tune_W, tune_epsco, m);
-        else
-            G_set_diag<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_K_epsco, tune_epsco, m);
-
         const auto best_solve_score = solvers::solve_hybrid(
                 d_K_epsco + train_start + train_start * m, n, tune_len, j_solved, magma_iters, C_rbt_threshold, ma_queue, irwls_iters, d_tune_label_chunk + train_start,
-                tune_n_size, j_work, custream, cublas_H, d_K_tune + train_start + train_start * m, labels_sf, tune_len_n, best_iter, d_best_weights, K_tune_len, j_K_work, info,
+                tune_n_size, j_work, custream, cublas_H, d_Kz_tune + train_start + train_start * m, labels_sf, tune_len_n, d_best_weights, K_tune_len, j_K_work, info,
                 iters_mul, m);
         if (best_solve_score == common::C_bad_validation) {
             LOG4_ERROR("Bad validation at slide " << j);
@@ -271,7 +178,7 @@ OnlineMIMOSVR::cuvalidate(
         double predict_score;
         if (PROPS.get_recombine_parameters()) {
             cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len, n, train_len, &one, d_K_tune + test_start + train_start * m, m, d_best_weights, train_len, &zero, j_work, train_len));
+                                  test_len, n, train_len, &one, d_Kz_tune + test_start + train_start * m, m, d_best_weights, train_len, &zero, j_work, train_len));
             predict_score = solvers::unscaled_distance(d_tune_label_chunk + test_start, j_work, labels_sf, test_len, n, m, custream);
             if (!p_predictions->at(j)) p_predictions->at(j) = new arma::mat(test_len, n);
             cu_errchk(cudaMemcpyAsync(p_predictions->at(j)->memptr(), j_work, test_n_size, cudaMemcpyDeviceToHost, custream));
@@ -280,7 +187,7 @@ OnlineMIMOSVR::cuvalidate(
         } else {
             copy_submat(d_tune_label_chunk, j_work, m, test_start, 0, m, n, tune_len, cudaMemcpyDeviceToDevice, custream);
             cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len, n, tune_len, &one, d_K_tune + test_start + train_start * m, m, d_best_weights, tune_len, &oneneg, j_work, tune_len));
+                                  test_len, n, tune_len, &one, d_Kz_tune + test_start + train_start * m, m, d_best_weights, tune_len, &oneneg, j_work, tune_len));
 #if 0 // Started crashing for no reason
             cu_errchk(cudaStreamSynchronize(custream));
             cb_errchk(cublasDasum(cublas_H, test_len_n, j_work, 1, &predict_score));
@@ -289,23 +196,22 @@ OnlineMIMOSVR::cuvalidate(
             predict_score = labels_sf * solvers::meanabs(j_work, test_len_n, custream);
 #endif
         }
-        LOG4_TRACE("Try " << j << ", IRWLS best iteration " << best_iter << ", kernel dimensions " << train_len << "x" << train_len << ", delta " <<
-                          common::C_itersolve_delta << ", range " << common::C_itersolve_range << ", solution " << train_len << "x" << n << ", test " << test_len << "x"
-                          << n << ", score " << best_solve_score << ", former total score " << total_score);
+        LOG4_TRACE("Try " << j << " kernel dimensions " << train_len << "x" << train_len << ", delta " << common::C_itersolve_delta << ", range " << common::C_itersolve_range <<
+            ", solution " << train_len << "x" << n << ", test " << test_len << "x" << n << ", score " << best_solve_score << ", former total score " << total_score);
         total_score += predict_score;
     }
+#ifdef INSTANCE_WEIGHTS
     if (d_tune_W) cu_errchk(cudaFreeAsync(d_tune_W, custream));
+#endif
     cu_errchk(cudaFreeAsync(d_K_epsco, custream));
-    cu_errchk(cudaFreeAsync(d_K_tune, custream));
-    cu_errchk(cudaFreeAsync(d_Z_tune, custream));
+    cu_errchk(cudaFreeAsync(d_Kz_tune, custream));
     cu_errchk(cudaFreeAsync(j_K_work, custream));
     cu_errchk(cudaFreeAsync(j_solved, custream));
     cu_errchk(cudaFreeAsync(j_work, custream));
     cu_errchk(cudaFreeAsync(d_best_weights, custream));
     cu_errchk(cudaFreeAsync(d_tune_label_chunk, custream));
-    // cu_errchk(cudaStreamSynchronize(custream));
     magma_queue_destroy(ma_queue);
-    return {total_score / C_max_j, gamma_train, train_epsco, p_predictions};
+    return {total_score / C_max_j, gamma_train, epsco, p_predictions};
 }
 
 #if 0
@@ -339,8 +245,7 @@ cuvalidate_batched(const double lambda, const double gamma_param, const unsigned
     cu_errchk(cudaMallocAsync((void **) &d_train_cuml, train_cuml.n_elem * sizeof(double), custream));
     cu_errchk(cudaMemcpyAsync(d_train_cuml, train_cuml.mem, train_cuml.n_elem * sizeof(double), cudaMemcpyHostToDevice, custream));
     cu_errchk(cudaMallocAsync((void **) &d_K_train, K_train_size, custream));
-    kernel::path::G_kernel_xy<<<CU_BLOCKS_THREADS_2D(
-            train_len), 0, custream>>>(train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, d_train_cuml, d_train_cuml, d_K_train);
+    kernel::path::cu_kernel_xy(train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, d_train_cuml, d_train_cuml, d_K_train, custream);
     cu_errchk(cudaFreeAsync(d_train_cuml, custream));
     const auto [mingamma, maxgamma] = solvers::cu_calc_minmax_gamma(d_K_train, train_L_m, train_len, K_train_len, custream);
     const auto gamma = gamma_param * (maxgamma - mingamma) + mingamma;
@@ -351,7 +256,7 @@ cuvalidate_batched(const double lambda, const double gamma_param, const unsigned
     cu_errchk(cudaMallocAsync((void **) &d_tune_cuml, tune_cuml.n_elem * sizeof(double), custream));
     cu_errchk(cudaMemcpyAsync(d_tune_cuml, tune_cuml.mem, tune_cuml.n_elem * sizeof(double), cudaMemcpyHostToDevice, custream));
     cu_errchk(cudaMallocAsync((void **) &d_K_tune, mm_size, custream));
-    kernel::path::G_kernel_xy<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, gamma, d_tune_cuml, d_tune_cuml, d_K_tune);
+    kernel::path::cu_kernel_xy(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, gamma, d_tune_cuml, d_tune_cuml, d_K_tune, custream);
     cu_errchk(cudaFreeAsync(d_tune_cuml, custream));
 
     double total_score = 0;
@@ -359,7 +264,7 @@ cuvalidate_batched(const double lambda, const double gamma_param, const unsigned
     double *d_K_epsco, *d_tune_label_chunk;
     cu_errchk(cudaMallocAsync((void **) &d_K_epsco, mm_size, custream));
     cu_errchk(cudaMemcpyAsync(d_K_epsco, d_K_tune, mm_size, cudaMemcpyDeviceToDevice, custream));
-    G_set_diag<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_K_epsco, &epsco, m); // TODO Fix
+    solvers::G_set_diag<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_K_epsco, &epsco, m); // TODO Fix
     cu_errchk(cudaMallocAsync((void **) &d_tune_label_chunk, m * n * sizeof(double), custream));
     cu_errchk(cudaMemcpyAsync(d_tune_label_chunk, tune_label_chunk.mem, m * n * sizeof(double), cudaMemcpyHostToDevice, custream));
 

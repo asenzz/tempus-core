@@ -161,10 +161,8 @@ DeconQueueService::deconstruct(
     const auto levct = dataset.get_spectral_levels();
     const auto resolution = input_queue.get_resolution();
     const auto main_resolution = dataset.get_input_queue()->get_resolution();
-#ifdef NO_MAIN_DECON // Hack to avoid proper deconstruction of unused data
-    if (resolution == main_resolution || dataset.get_spectral_levels() < MIN_LEVEL_COUNT)
+    if (resolution == main_resolution || dataset.get_spectral_levels() < MIN_LEVEL_COUNT) // A hack to avoid proper deconstruction of unused data
         return dummy_decon(input_queue, decon_queue, input_column_index, levct, scaler);
-#endif
 
     const double res_ratio = main_resolution / resolution;
 #ifdef INTEGRATION_TEST
@@ -211,6 +209,7 @@ void DeconQueueService::dummy_decon(
         const size_t levix, const size_t levct, const datamodel::t_iqscaler &iq_scaler)
 {
     LOG4_DEBUG("Dummy decon of main input queue " << input_queue.get_table_name());
+
     const auto &input_data = input_queue.get_data();
     const double modct = ModelService::to_model_ct(levct);
     auto initer = decon_queue.empty() ? input_data.cbegin() : upper_bound_back(input_data, decon_queue.back()->get_value_time());

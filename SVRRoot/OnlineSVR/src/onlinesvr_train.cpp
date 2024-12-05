@@ -16,15 +16,20 @@ void
 OnlineMIMOSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
                            const matrices_ptr &precalc_kernel_matrices)
 {
+
+#ifdef INSTANCE_WEIGHTS
     if (p_xtrain->n_rows != p_ytrain->n_rows || p_ytrain->n_rows != p_ylastknown->n_rows || p_input_weights_->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty())
         LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", last knowns " << arma::size(*p_ylastknown) <<
                                                         ", instance weights " << arma::size(*p_input_weights_) << ", level " << level);
+#else
+    if (p_xtrain->n_rows != p_ytrain->n_rows || p_ytrain->n_rows != p_ylastknown->n_rows || p_xtrain->empty() || p_ytrain->empty())
+        LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", last knowns " << arma::size(*p_ylastknown) <<
+                                                        ", level " << level);
+#endif
 
-    LOG4_DEBUG(
-            "Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown)
-                                    << ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters "
-                                    << **param_set.cbegin() <<
-                                    ", last value time " << last_value_time);
+    LOG4_DEBUG("Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown) << \
+            ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin() << \
+            ", last value time " << last_value_time);
     reset();
 
     p_features = p_xtrain;
@@ -87,7 +92,7 @@ OnlineMIMOSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, con
             else
                 LOG4_DEBUG("Using pre-calculated kernel matrix for " << i);
 
-            calc_weights(i, PROPS.get_stabilize_iterations_count(), ixs[i].n_rows / C_solve_opt_div);
+            calc_weights(i, PROPS.get_stabilize_iterations_count(), ixs[i].n_rows * C_solve_opt_coef);
         }
     }
     update_all_weights();
@@ -108,7 +113,9 @@ void OnlineMIMOSVR::learn(
         p_features = ptr(*p_features);
         p_labels = ptr(*p_labels);
         p_last_knowns = ptr(*p_last_knowns);
+#ifdef INSTANCE_WEIGHTS
         p_input_weights = ptr(*p_input_weights);
+#endif
     }
     const auto new_rows_ct = new_x.n_rows;
 
@@ -234,39 +241,40 @@ void OnlineMIMOSVR::learn(
     // Append new distances
     LOG4_DEBUG("Affected chunks " << affected_chunks.size());
     std::atomic<uint32_t> add_new_row_ix = 0;
-    OMP_FOR_i(affected_chunks.size()) {
-        const auto chunk_ix = affected_chunks % i;
-        const auto &af = affected_chunks ^ i;
-        const auto chunk_shed_rows = af.first;
-        auto &K_chunk = p_kernel_matrices->at(chunk_ix);
-        arma::uvec new_ixs(chunk_shed_rows);
-        for (uint32_t r = 0; r < new_ixs.n_rows; ++r)
-            new_ixs[r] = add_new_row_ix++ % new_x.n_rows;
-        arma::mat new_chunk_features_t = new_x.rows(new_ixs).t();
-        arma::mat new_chunk_labels = new_y.rows(new_ixs);
-        business::DQScalingFactorService::scale_labels(chunk_ix, *this, new_chunk_labels);
-        business::DQScalingFactorService::scale_features(chunk_ix, *this, new_chunk_features_t);
-        K_chunk.resize(K_chunk.n_rows + chunk_shed_rows, K_chunk.n_cols + chunk_shed_rows);
-        const auto &params = get_params(i);
-#pragma omp parallel ADJ_THREADS(2)
+#pragma omp parallel ADJ_THREADS(C_n_cpu)
 #pragma omp single
-        {
+    {
+#pragma omp taskloop mergeable grainsize(1) default(shared)
+        for (uint16_t i = 0; i < affected_chunks.size(); ++i) {
+            const auto chunk_ix = affected_chunks % i;
+            const auto &af = affected_chunks ^ i;
+            const auto chunk_shed_rows = af.first;
+            auto &K_chunk = p_kernel_matrices->at(chunk_ix);
+            arma::uvec new_ixs(chunk_shed_rows);
+            for (uint32_t r = 0; r < new_ixs.n_rows; ++r)
+                new_ixs[r] = add_new_row_ix++ % new_x.n_rows;
+            arma::mat new_chunk_features_t = new_x.rows(new_ixs).t();
+            arma::mat new_chunk_labels = new_y.rows(new_ixs);
+            business::DQScalingFactorService::scale_labels(chunk_ix, *this, new_chunk_labels);
+            business::DQScalingFactorService::scale_features(chunk_ix, *this, new_chunk_features_t);
+            K_chunk.resize(K_chunk.n_rows + chunk_shed_rows, K_chunk.n_cols + chunk_shed_rows);
+            const auto &params = get_params(i);
 #pragma omp task mergeable
-            K_chunk.submat(K_chunk.n_rows - chunk_shed_rows, K_chunk.n_cols - chunk_shed_rows, K_chunk.n_rows - 1, K_chunk.n_cols - 1) = *prepare_K(params, new_chunk_features_t);
+            K_chunk.submat(K_chunk.n_rows - chunk_shed_rows, K_chunk.n_cols - chunk_shed_rows, K_chunk.n_rows - 1, K_chunk.n_cols - 1) = *prepare_Ky(params, new_chunk_features_t, new_chunk_features_t);
 #pragma omp task mergeable
             {
                 arma::mat newold_K;
                 PROFILE_EXEC_TIME(newold_K = *prepare_Ky(params, train_feature_chunks_t[chunk_ix], new_chunk_features_t), "Init predict kernel matrix for chunk " << chunk_ix);
-                K_chunk.submat(0, K_chunk.n_cols - chunk_shed_rows, K_chunk.n_rows - chunk_shed_rows - 1, K_chunk.n_cols - 1) = newold_K.t();
-                K_chunk.submat(K_chunk.n_rows - chunk_shed_rows, 0, K_chunk.n_rows - 1, K_chunk.n_cols - chunk_shed_rows - 1) = newold_K;
+                K_chunk.submat(0, K_chunk.n_cols - chunk_shed_rows, K_chunk.n_rows - chunk_shed_rows - 1, K_chunk.n_cols - 1) = newold_K;
+                K_chunk.submat(K_chunk.n_rows - chunk_shed_rows, 0, K_chunk.n_rows - 1, K_chunk.n_cols - chunk_shed_rows - 1) = newold_K.t();
             }
+            ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, ixs[chunk_ix].n_rows + new_ixs);
+            train_feature_chunks_t[chunk_ix].insert_cols(train_feature_chunks_t[chunk_ix].n_cols, new_chunk_features_t);
+            train_label_chunks[chunk_ix].insert_rows(train_label_chunks[chunk_ix].n_rows, new_chunk_labels);
+            const auto epsco = calc_epsco(K_chunk, train_label_chunks[chunk_ix]);
+            K_chunk.diag().fill(epsco);
+            weight_chunks[chunk_ix].insert_rows(weight_chunks[chunk_ix].n_rows, af.second.rows(new_ixs));
         }
-        ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, ixs[chunk_ix].n_rows + new_ixs);
-        train_feature_chunks_t[chunk_ix].insert_cols(train_feature_chunks_t[chunk_ix].n_cols, new_chunk_features_t);
-        train_label_chunks[chunk_ix].insert_rows(train_label_chunks[chunk_ix].n_rows, new_chunk_labels);
-        const auto epsco = calc_epsco(K_chunk, train_label_chunks[chunk_ix]);
-        K_chunk.diag().fill(epsco);
-        weight_chunks[chunk_ix].insert_rows(weight_chunks[chunk_ix].n_rows, af.second.rows(new_ixs));
     }
     if (temp_learn)
         for (unsigned row_i = p_labels->n_rows; row_i < p_labels->n_rows + new_rows_ct; ++row_i)
@@ -275,14 +283,15 @@ void OnlineMIMOSVR::learn(
     p_labels->insert_rows(p_labels->n_rows, new_y);
     p_last_knowns->insert_rows(p_last_knowns->n_rows, new_ylk);
 
-    OMP_FOR_i(affected_chunks.size()) calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit(), ixs[i].n_rows / (C_solve_opt_div * C_solve_opt_div));
+    OMP_FOR_i(affected_chunks.size()) calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit(), ixs[i].n_rows * (C_solve_opt_coef * C_solve_opt_coef));
     update_all_weights();
     samples_trained += new_rows_ct;
     last_trained_time = last_value_time;
 }
 
 
-arma::mat OnlineMIMOSVR::weight_matrix(const arma::uvec &ixs, const arma::mat &weights) {
+arma::mat OnlineMIMOSVR::weight_matrix(const arma::uvec &ixs, const arma::mat &weights)
+{
     arma::mat w(ixs.n_rows, ixs.n_rows, arma::fill::none);
     const arma::vec Wv = arma::mean(weights.rows(ixs), 1);
     OMP_FOR_i(ixs.n_rows) w.col(i) = Wv * Wv[i];
@@ -318,9 +327,16 @@ arma::mat OnlineMIMOSVR::calc_weights(const arma::mat &K, const arma::mat &label
 void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint16_t iters_irwls, const uint16_t iters_opt) // TODO Remove
 {
     const auto &params = get_params(chunk_ix);
+#ifdef INSTANCE_WEIGHTS
     PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_matrix(ixs[chunk_ix], *p_input_weights),
-                                                             1. / params.get_svr_C(), iters_irwls, ixs[chunk_ix].n_rows / C_solve_opt_div),
+                                                             1. / params.get_svr_C(), iters_irwls, ixs[chunk_ix].n_rows * C_solve_opt_coef),
+          "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
+                ", w " << common::present(weight_chunks[chunk_ix]));
+#else
+    PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(
+            p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], 1. / params.get_svr_C(), iters_irwls, ixs[chunk_ix].n_rows * C_solve_opt_coef),
                       "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", w " << common::present(weight_chunks[chunk_ix]));
+#endif
 }
 
 

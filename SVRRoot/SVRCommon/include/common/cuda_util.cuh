@@ -136,8 +136,8 @@ void cusyndestroy(cudaStream_t strm);
 
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream);
 
-void copy_submat(CPTRd in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
-                 const unsigned in_end_n, const unsigned ldout, cudaMemcpyKind kind, const cudaStream_t stm);
+void copy_submat(CRPTRd in, RPTR(double) out, const uint32_t ldin, const uint32_t in_start_m, const uint32_t in_start_n, const uint32_t in_end_m,
+                 const uint32_t in_end_n, const uint32_t ldout, cudaMemcpyKind kind, const cudaStream_t stm);
 
 __host__ __device__ inline constexpr unsigned clamp_n(const unsigned n)
 { return _MIN(n, svr::common::C_cu_clamp_n); }

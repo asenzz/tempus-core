@@ -40,7 +40,7 @@ template<typename kT, typename fT> __rT &cached<kT, fT>::operator()(const kT &ca
 
 template<typename kT, typename fT> void cached<kT, fT>::clear()
 {
-    release_cont(cache_cont);
+    RELEASE_CONT(cache_cont);
 }
 
 template<typename kT, typename fT> cached<kT, fT>::cached()

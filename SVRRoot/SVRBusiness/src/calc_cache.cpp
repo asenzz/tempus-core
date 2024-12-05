@@ -50,7 +50,7 @@ arma::mat &calc_cache::get_cached_cumulatives(const datamodel::SVRParameters &pa
 }
 
 
-arma::mat &calc_cache::get_cached_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time)
+arma::mat &calc_cache::get_cached_Z(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time)
 {
     const auto k = std::tuple{
             params.get_grad_level(),
@@ -87,7 +87,7 @@ arma::mat &calc_cache::get_cached_Zy(const datamodel::SVRParameters &params, con
     return *cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);
 }
 
-arma::mat &calc_cache::get_cached_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time)
+arma::mat &calc_cache::get_cached_K(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time)
 {
     const auto k = std::tuple{
             params.get_grad_level(),
@@ -123,6 +123,7 @@ calc_cache::get_cached_labels(const unsigned step, const datamodel::datarow_cran
     return {ptr<arma::mat>(p_labels->col(step)), p_last_knowns, p_label_times};
 }
 
+
 mat_ptr calc_cache::get_cached_weights(
         const bigint dataset_id, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
         const bpt::time_duration &resolution_main)
@@ -132,7 +133,6 @@ mat_ptr calc_cache::get_cached_weights(
         auto p_weights = ptr<arma::mat>();
         ModelService::prepare_weights(*p_weights, times, aux_inputs, steps, resolution_main);
         APP.w_scaling_factor_service.scale(dataset_id, *p_weights);
-        p_weights->ones();
         return p_weights;
     };
     const auto p_weights = cached<DTYPE(k), DTYPE(prepare_f)>::get()(k, prepare_f);

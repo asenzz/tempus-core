@@ -26,7 +26,6 @@
 #include "common/logging.hpp"
 #include "cuqrsolve.cuh"
 #include "align_features.cuh"
-#include "onlinesvr.hpp"
 #include "ModelService.hpp"
 #include "appcontext.hpp"
 
@@ -44,7 +43,7 @@ bool cu_fix_mask(double *const d_mask, const unsigned mask_len, const cudaStream
         LOG4_WARN("Zero mask sum.");
         return false;
     }
-    datamodel::G_div_I<<<CU_BLOCKS_THREADS(mask_len), 0, custream>>>(d_mask, mask_sum, mask_len);
+    solvers::G_div_I<<<CU_BLOCKS_THREADS(mask_len), 0, custream>>>(d_mask, mask_sum, mask_len);
     return true;
 }
 
@@ -555,7 +554,7 @@ void cu_normalize(double *const d_in, const unsigned n, const cudaStream_t custr
     const auto mean = solvers::mean(d_in, n, custream);
     if (mean != 0) oemd::G_subtract_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, mean, n);
     const auto meanabs = solvers::meanabs(d_in, n, custream);
-    if (meanabs != 1) datamodel::G_div_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, meanabs, n);
+    if (meanabs != 1) solvers::G_div_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, meanabs, n);
 }
 
 template<typename T> __device__ inline T sinc(const T x)
@@ -720,7 +719,7 @@ oemd_coefficients_search::evaluate_mask(
     std::vector<uint32_t> ix_end_F(validate_rows);
     OMP_FOR_i(validate_rows) ix_end_F[i] = feat_params_trimmed[i].ix_end;
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
-    release_cont(ix_end_F);
+    RELEASE_CONT(ix_end_F);
     G_quantise_labels_quick<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
             d_imf, d_labels, validate_rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
     cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
@@ -972,7 +971,7 @@ oemd_coefficients_search::run(
         F_ins->end_time = bpt::to_time_t(F_end_time) - first_time_t;
     }
     assert(label_ixs.size() == feat_params.size());
-    release_cont(times);
+    RELEASE_CONT(times);
 
     LOG4_DEBUG(
             "Optimizing " << masks.size() << " masks for queue " << queue_name << ", tail len " << tail.size() << ", window len " << window_len << ", window start " << window_start

@@ -209,7 +209,7 @@ UNROLL()
                           "Recombine chunk " << chunk_rows_ct << "x" << colct << ", added set of size " << unsigned(common::C_tune_keep_preds)
                                              << ", filter out " << filter_combos - 1 << " combinations, start row " << start_row_ix << ", end row " << end_row_ix
                                              << ", score " << chunk_best_score);
-        release_cont(combos);
+        RELEASE_CONT(combos);
         best_score_l.set();
         if (chunk_best_score < best_score) {
             best_score = chunk_best_score;
@@ -219,7 +219,7 @@ UNROLL()
         }
         best_score_l.unset();
     }
-    release_cont(params_preds);
+    RELEASE_CONT(params_preds);
 
     auto p_ensemble = p_dataset->get_ensemble(column_name);
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(colct))

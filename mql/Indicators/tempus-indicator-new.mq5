@@ -73,7 +73,7 @@ static datetime G_soonest_response_time = 0;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    GlobalVariableSet(chart_predictions_identifier, 0.);
+    GlobalVariableSet(C_chart_predictions_identifier, 0.);
     ChartSetInteger(0, CHART_SHOW_GRID, 0);
     ChartSetInteger(0, CHART_SHOW_PERIOD_SEP, 1);
     ChartSetInteger(0, CHART_AUTOSCROLL, 1);
@@ -162,8 +162,8 @@ int doCalculate(const int rates_total)
     const datetime current_bar_time = PeriodSeconds() + iTime(Symbol(), Period(), DemoMode ? BarNumber : 0);
 
     if (current_bar_time > G_last_request_time
-        && datetime(GlobalVariableGet(one_minute_chart_identifier)) > current_bar_time - ForecastOffset
-        && datetime(GlobalVariableGet(chart_identifier)) >= current_bar_time - 2 * PeriodSeconds()) {
+        && datetime(GlobalVariableGet(C_one_minute_chart_identifier)) > current_bar_time - ForecastOffset
+        && datetime(GlobalVariableGet(C_chart_identifier)) >= current_bar_time - 2 * PeriodSeconds()) {
         int request_ix = 0;
         while (request_ix < MaxPendingRequests && pending_requests[request_ix]) ++request_ix;
 

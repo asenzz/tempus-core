@@ -236,7 +236,7 @@ void transform_fir(
         } else {
             OMP_FOR_i(out.distance()) out[i]->at(actual_l_2) = h_imf[i + tail.size()];
         }
-        release_cont(h_imf);
+        RELEASE_CONT(h_imf);
 
         DEV_FOR_d_begin
                         cu_errchk(cudaFreeAsync(d_mask_ptr[d], custreams[d]));

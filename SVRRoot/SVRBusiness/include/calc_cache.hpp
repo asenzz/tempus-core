@@ -86,12 +86,12 @@ public:
 
     arma::mat &get_cached_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
-    arma::mat &get_cached_Z(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    arma::mat &get_cached_Z(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
     arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &predict_time,
                              const bpt::ptime &trained_time);
 
-    arma::mat &get_cached_K(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    arma::mat &get_cached_K(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
     std::tuple<mat_ptr, vec_ptr, data_row_container_ptr>
     get_cached_labels(const unsigned step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,

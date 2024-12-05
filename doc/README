@@ -1,0 +1,35 @@
+Tempus
+
+This party libraries are located in the folder "lib". Meta Quotes Language files used by Meta Trader for trading and
+ gathering of historical data from a broker are located in the "mql" folder. The folder "www" contains Web page interface
+ files and UI files used by SVRWeb. SVRRoot is the root folder of the C++ project. The folder "config" contains configuration
+ files for the SVRWeb and SVRDaemon services. "scripts" contains various utility scripts for the project.
+The "doc" folder contains the documentation for the project.
+
+Dependencies on a Ubuntu or Debian system:
+
+libpq	
+libpqxx		
+postgresql
+libboost	
+cppcms
+quickfix
+jemalloc
+nvidia cuda toolkit
+armadillo
+mkl
+tbb
+openmp
+opencl
+googletest
+viennacl
+prima
+gcc
+icpx
+cmake
+liblz4
+libfftw
+magma
+openssl
+prima (not critical)
+biteopt

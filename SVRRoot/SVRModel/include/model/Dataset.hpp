@@ -208,6 +208,8 @@ public:
 
     datamodel::InputQueue_ptr get_aux_input_queue(const unsigned idx = 0) const;
 
+    datamodel::InputQueue_ptr get_aux_input_queue(const std::string &table_name) const;
+
     std::deque<std::string> get_aux_input_table_names() const;
 
     std::string to_string() const override;

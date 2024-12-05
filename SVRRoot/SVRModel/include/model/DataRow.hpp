@@ -401,19 +401,6 @@ find_nearest_after(
         const boost::posix_time::time_duration &max_gap,
         const size_t lag_count);
 
-
-// [start_it, it_end)
-// [start_time, end_time)
-template<typename C> inline void
-generate_twap(
-        const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
-        const datamodel::DataRow::container::const_iterator &it_end, // At end time or after
-        const bpt::ptime &start_time, // Exact start time
-        const boost::posix_time::ptime &end_time, // Exact end time
-        const bpt::time_duration &hf_resolution, // Aux input queue resolution
-        const unsigned colix, // Input column index
-        C &out); // Output vector needs to be zeroed out before submitting to this function
-
 inline std::vector<unsigned>
 generate_twap_indexes(
         const std::deque<bpt::ptime>::const_iterator &cbegin, // Begin of container

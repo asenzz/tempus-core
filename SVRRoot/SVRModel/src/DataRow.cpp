@@ -642,7 +642,7 @@ data_row_container::const_iterator
 lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key)
 {
     auto found = lower_bound(cbegin, cend, time_key);
-    if ((**found).get_value_time() == time_key) return found;
+    if (found == cend || (**found).get_value_time() == time_key) return found;
     if (found == cbegin) {
         LOG4_ERROR("Couldn't find equal or before " << time_key << ", found " << (**found).get_value_time());
         return found;
@@ -804,7 +804,7 @@ void datamodel::DataRow::insert_rows(
 
     if (!merge) rows_container.erase(lower_bound_back(rows_container, times.front()->get_value_time()), rows_container.end());
 
-    LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << *times.cbegin());
+    LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << (**times.cbegin()).get_value_time());
 
     const auto time_now = bpt::second_clock::local_time();
     const auto prev_size = rows_container.size();

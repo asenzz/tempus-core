@@ -310,23 +310,23 @@ public:
 
     // Get child members but allow calling application to check success.
     bool getString(string key, string &out) {
-        return getString(getValue(key), out);
+        return JSONValue::getString(getValue(key), out);
     }
 
     bool getBool(string key, bool &out) {
-        return getBool(getValue(key), out);
+        return JSONValue::getBool(getValue(key), out);
     }
 
     bool getDouble(string key, double &out) {
-        return getDouble(getValue(key), out);
+        return JSONValue::getDouble(getValue(key), out);
     }
 
     bool getLong(string key, long &out) {
-        return getLong(getValue(key), out);
+        return JSONValue::getLong(getValue(key), out);
     }
 
     bool getInt(string key, int &out) {
-        return getInt(getValue(key), out);
+        return JSONValue::getInt(getValue(key), out);
     }
 
     // methods that return objects might be chained so return the value in function result.
@@ -416,23 +416,23 @@ public:
 
     // Get child members but allow calling application to check success.
     bool getString(int index, string &out) {
-        return getString(getValue(index), out);
+        return JSONValue::getString(getValue(index), out);
     }
 
     bool getBool(int index, bool &out) {
-        return getBool(getValue(index), out);
+        return JSONValue::getBool(getValue(index), out);
     }
 
     bool getDouble(int index, double &out) {
-        return getDouble(getValue(index), out);
+        return JSONValue::getDouble(getValue(index), out);
     }
 
     bool getLong(int index, long &out) {
-        return getLong(getValue(index), out);
+        return JSONValue::getLong(getValue(index), out);
     }
 
     bool getInt(int index, int &out) {
-        return getInt(getValue(index), out);
+        return JSONValue::getInt(getValue(index), out);
     }
 
 
@@ -539,7 +539,7 @@ public:
             _len--;
             ret = parseValue();
             if (_errCode != 0) {
-                _errMsg = " at " + _pos + " [" + StringSubstr(_instr, _pos, 10) + "...]";
+                _errMsg = " at " + string(_pos) + " [" + StringSubstr(_instr, _pos, 10) + "...]";
             }
         }
         return ret;
@@ -604,7 +604,7 @@ public:
             _pos++;
             ret = true;
         } else {
-            string substr = "expected " + ShortToString(c) + "(" + c + ")" + " got " + ShortToString(_in[_pos]) + "(" + _in[_pos] + ")";
+            string substr = "expected " + ShortToString(c) + "(" + string(c) + ")" + " got " + ShortToString(_in[_pos]) + "(" + ShortToString(_in[_pos]) + ")";
             setError(1, substr);
         }
         return ret;

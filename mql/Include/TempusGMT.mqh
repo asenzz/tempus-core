@@ -8,11 +8,11 @@
 #property link      "https://tempus.work"
 #property strict
 
-ENUM_TIMEFRAMES     _TargetPeriod = 0;
-int                _TimeOffset = 0;
-int                _OffsetHours = 0;
-int                _PeriodHours = 0;
-bool                _DisableDST = false;
+ENUM_TIMEFRAMES _TargetPeriod = 0;
+int _TimeOffset = 0;
+int _OffsetHours = 0;
+int _PeriodHours = 0;
+bool _DisableDST = false;
 
 
 #include <DSTPeriods.mqh>
@@ -72,6 +72,7 @@ string FormatDateTime(int year, int iMonth, int iDay, int iHour, int iMinute, in
 //+------------------------------------------------------------------+
 void TempusGMTInit(const ENUM_TIMEFRAMES targetPeriod, const int timeOffset, const bool DisableDST_)
 {
+    LOG_INFO(,"Server time to local time difference " + TimeToString(TimeTradeServer() - TimeLocal(), TIME_DATE_SECONDS));
     _TargetPeriod = targetPeriod;
     _TimeOffset = timeOffset;
     _OffsetHours = _TimeOffset / MINUTES_IN_HOUR;
@@ -123,7 +124,7 @@ datetime GetUTCServerTime(const int index)
         return cur_time - SECONDS_IN_HOUR * getOffsetWithDST(cur_time);
     }
 
-    const datetime diff = (iTime(_Symbol, PERIOD_H1, 0) - iTime(Symbol(), PERIOD_H4, 0)) / SECONDS_IN_HOUR;
+    const int diff = (int) (iTime(_Symbol, PERIOD_H1, 0) - iTime(Symbol(), PERIOD_H4, 0)) / SECONDS_IN_HOUR;
     if(isLastHourOfPeriod(diff)) {
         const datetime result = iTime(_Symbol, PERIOD_H1, index * _PeriodHours + diff - getOffsetWithDST(index));
         return result != 0 ? result : iTime(Symbol(), PERIOD_H4, index - 1) - (_PeriodHours - getOffsetWithDST(index)) * SECONDS_IN_HOUR;
@@ -171,7 +172,7 @@ double GetTargetOpen(const int index)
 {
     if (_TargetPeriod != PERIOD_H4) return iOpen(_Symbol, _TargetPeriod, index);
 
-    const int shift = (iTime(_Symbol, PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
+    const int shift = (int) (iTime(_Symbol, PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
     return iOpen(_Symbol, PERIOD_H1, index * _PeriodHours + shift);
 }
 //+------------------------------------------------------------------+
@@ -184,7 +185,7 @@ double GetTargetClose(const int index)
     if (index == 0)
         return iClose(Symbol(), PERIOD_H1, 0);
     else {
-        const int shift = (iTime(Symbol(), PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
+        const int shift = (int) (iTime(Symbol(), PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
         const int total = index * _PeriodHours + shift - (_PeriodHours - 1);
         return iClose(Symbol(), PERIOD_H1, index * _PeriodHours + shift - getOffsetWithDST(index));
     }
@@ -196,7 +197,7 @@ double GetTargetHigh(const int index)
 {
     if (_TargetPeriod != PERIOD_H4) return iHigh(Symbol(), _TargetPeriod, index);
 
-    const int shift = (iTime(Symbol(), PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
+    const int shift = (int) (iTime(Symbol(), PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
     double max_value = iHigh(Symbol(), PERIOD_H1, index * _PeriodHours + shift);
     for(int i = 1; i < _PeriodHours; ++i) {
         const int total = index * _PeriodHours + shift - i;
@@ -214,7 +215,7 @@ double GetTargetLow(const int index)
 {
     if (_TargetPeriod != PERIOD_H4) return iLow(Symbol(), _TargetPeriod, index);
 
-    const int shift = (iTime(Symbol(), PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
+    const int shift = (int) (iTime(Symbol(), PERIOD_H1, 0) - GetUTCServerTime(0)) / SECONDS_IN_HOUR;
 
     double min_value = iHigh(Symbol(), PERIOD_H1, index * _PeriodHours + shift);
     for(int i = 1; i < _PeriodHours; ++i) {

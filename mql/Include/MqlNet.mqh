@@ -182,7 +182,7 @@ class PerfTimer
 {
     uint             number;
     ulong            totalTime;
-    ulong            startTime;
+    ulong            start_time;
     string           tmrName;
     ulong            prnEvery;
 
@@ -239,6 +239,7 @@ public:
     string           ReadResponse(const int hRequest);
 
     bool             RpcCall(const string &Object, const string &Method, const Hash &Params, string &Response);
+    bool             RpcCall(const string &Object, const string &Method, const Hash &Params[], string &Response);
 
     bool             OpenURL(const string &URL, string &Out, const bool toFile); // open page
     void             ReadPage(const int hRequest, string &Out, const bool toFile); // read page
@@ -291,14 +292,14 @@ bool MqlNet::Open(const string &aHost, const int aPort, const bool secure)
     string UserAgent = "Mozilla";
     string nill = "";
 
-    Session = InternetOpenW(UserAgent, OPEN_TYPE_PRECONFIG, nill, nill, 0); // open session
+    Session = (int) InternetOpenW(UserAgent, OPEN_TYPE_PRECONFIG, nill, nill, 0); // open session
 
     if (Session <= 0) {
         LOG_SYS_ERR("MqlNet::Open", "InternetOpenW failed");
         Close();
         return (false);
     }
-    Connect = InternetConnectW(Session, aHost, aPort, nill, nill, INTERNET_SERVICE_HTTP, 0, 0);
+    Connect = (int) InternetConnectW(Session, aHost, aPort, nill, nill, INTERNET_SERVICE_HTTP, 0, 0);
     if (Connect <= 0) {
         LOG_SYS_ERR("MqlNet::Open", "InternetConnectW failed");
         Close();
@@ -455,16 +456,17 @@ string MqlNet::ToJSON(const Hash &params)
 //+------------------------------------------------------------------+
 bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Params, string &Response)
 {
-    string call_name = "RpcCall.1";
+#ifdef DEBUG_CONNECTOR
+    static const string call_name = "RpcCall.1";
     static PerfTimer t1(call_name, 100);
     t1.on();
+#endif
 
-    int hRequest = 0, hSend = 0;
-    string Headers = "Content-Type: application/json\r\n";
-    string Verb = "POST";
-    string Vers = "HTTP/1.1";
-    string nill = "";
-    string Path = "web/" + Object + "/ajax";
+    static const string Headers = "Content-Type: application/json\r\n";
+    static const string Verb = "POST";
+    static string Vers = "HTTP/1.1";
+    static string nill = "";
+    const string Path = "web/" + Object + "/ajax";
 
     if (Session <= 0 || Connect <= 0) {
         Close();
@@ -479,57 +481,163 @@ bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Par
 
     int flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION | ( INTERNET_FLAG_SECURE * isSecure ) ;
     string acceptTypes = "Accept: text/*\r\n";
-
+#ifdef DEBUG_CONNECTOR
     t1.off();
-    string call_name2 = "RpcCall.2";
-    static  PerfTimer t2(call_name, 100);
+    static const string call_name2 = "RpcCall.2";
+    static PerfTimer t2(call_name, 100);
     t2.on();
-    ResetLastError();
-//hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, "", flags, NULL);
-//hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0,  RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
-    hRequest = HttpOpenRequestW(Connect, Verb, Path, Vers, nill, 0, flags, 0);
+#endif
+
+// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, "", flags, NULL);
+// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0,  RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
+    const int hRequest = HttpOpenRequestW(Connect, Verb, Path, Vers, nill, 0, flags, 0);
 
     if (hRequest <= 0) {
-        LOG_SYS_ERR("MqlNet::RpcCall", "HttpOpenRequestW failed");
+        LOG_SYS_ERR("", "HttpOpenRequestW failed");
         Close();
-        return (false);
+        return false;
     }
 
     const string json = "{\"id\":1,\"method\":\"" + Method + "\",\"params\":[" + ToJSON(Params) + "]}";
-
     uchar jsonArray[];
-    LOG_DEBUG("MqlNet::RpcCall", "Sending " + json);
+    LOG_DEBUG("", "Sending " + json);
     StringToCharArray(json, jsonArray);
-
+    
+#ifdef DEBUG_CONNECTOR
     t2.off();
-    const string call_name3 = "RpcCall.3";
+    static const string call_name3 = "RpcCall.3";
     static PerfTimer t3(call_name3, 100);
     t3.on();
+#endif
 
-    hSend = HttpSendRequestW(hRequest, Headers, StringLen(Headers), jsonArray, ArraySize(jsonArray) - 1);
+    const int hSend = HttpSendRequestW(hRequest, Headers, StringLen(Headers), jsonArray, ArraySize(jsonArray) - 1);
     if (hSend <= 0) {
         LOG_SYS_ERR("MqlNet::RpcCall", "HttpSendRequestW failed " + string(hSend));
         Close();
-        return (false);
+        return false;
     }
+    
+#ifdef DEBUG_CONNECTOR
     t3.off();
-
     const string call_name4 = "RpcCall.4";
     static PerfTimer t4(call_name4, 100);
     t4.on();
+#endif
+
     Response = ReadResponse(hRequest);
     LOG_DEBUG("", "Received response:" + Response);
+    
+#ifdef DEBUG_CONNECTOR
     t4.off();
-
-    string call_name5 = "RpcCall.5";
+    static const call_name5 = "RpcCall.5";
     static PerfTimer t5(call_name5, 100);
     t5.on();
+#endif
+    
     InternetCloseHandle(hSend);
     InternetCloseHandle(hRequest);
+
+#ifdef DEBUG_CONNECTOR
     t5.off();
+#endif
 
-    return (true);
+    return true;
+}
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Params[], string &Response)
+{
+#ifdef DEBUG_CONNECTOR
+    static const string call_name = "RpcCall.1";
+    static PerfTimer t1(call_name, 100);
+    t1.on();
+#endif
+
+    static const string Headers = "Content-Type: application/json\r\n";
+    static const string Verb = "POST";
+    static string Vers = "HTTP/1.1";
+    static string nill = "";
+    const string Path = "web/" + Object + "/ajax";
+
+    if (Session <= 0 || Connect <= 0) {
+        Close();
+        if (!Open(Host, Port, isSecure)) {
+            Close();
+            return (false);
+        }
+    }
+
+    uint recv_timeout = RECEIVE_TIMEOUT;
+    InternetSetOptionW(Connect, INTERNET_OPTION_RECEIVE_TIMEOUT, recv_timeout, sizeof(recv_timeout));
+
+    int flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION | ( INTERNET_FLAG_SECURE * isSecure ) ;
+    string acceptTypes = "Accept: text/*\r\n";
+#ifdef DEBUG_CONNECTOR
+    t1.off();
+    static const string call_name2 = "RpcCall.2";
+    static PerfTimer t2(call_name, 100);
+    t2.on();
+#endif
+
+// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, "", flags, NULL);
+// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0,  RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
+    const int hRequest = HttpOpenRequestW(Connect, Verb, Path, Vers, nill, 0, flags, 0);
+
+    if (hRequest <= 0) {
+        LOG_SYS_ERR("", "HttpOpenRequestW failed");
+        Close();
+        return false;
+    }
+
+    string json;
+    const int param_ct = ArraySize(Params);
+    for (int i = 0; i < param_ct; ++i)
+        json += "{\"id\":" + IntegerToString(i + 1) + ",\"method\":\"" + Method + "\",\"params\":[" + ToJSON(Params[i]) + "]} ";
+    uchar jsonArray[];
+    LOG_DEBUG("", "Sending " + json);
+    StringToCharArray(json, jsonArray);
+    
+#ifdef DEBUG_CONNECTOR
+    t2.off();
+    static const string call_name3 = "RpcCall.3";
+    static PerfTimer t3(call_name3, 100);
+    t3.on();
+#endif
+
+    const int hSend = HttpSendRequestW(hRequest, Headers, StringLen(Headers), jsonArray, ArraySize(jsonArray) - 1);
+    if (hSend <= 0) {
+        LOG_SYS_ERR("MqlNet::RpcCall", "HttpSendRequestW failed " + string(hSend));
+        Close();
+        return false;
+    }
+    
+#ifdef DEBUG_CONNECTOR
+    t3.off();
+    const string call_name4 = "RpcCall.4";
+    static PerfTimer t4(call_name4, 100);
+    t4.on();
+#endif
+
+    Response = ReadResponse(hRequest);
+    LOG_DEBUG("", "Received response:" + Response);
+    
+#ifdef DEBUG_CONNECTOR
+    t4.off();
+    static const call_name5 = "RpcCall.5";
+    static PerfTimer t5(call_name5, 100);
+    t5.on();
+#endif
+    
+    InternetCloseHandle(hSend);
+    InternetCloseHandle(hRequest);
+
+#ifdef DEBUG_CONNECTOR
+    t5.off();
+#endif
+
+    return true;
 }
 
 //+------------------------------------------------------------------+
@@ -570,8 +678,8 @@ bool MqlNet::Request(const string &Verb, const string &Object, string &Out, cons
     }
     uchar data[];
     int hRequest, hSend;
-    string Vers = "HTTP/1.1";
-    string nill = "";
+    static string Vers = "HTTP/1.1";
+    static string nill = "";
     if (fromFile) {
         if (FileToArray(addData, data) < 0) {
             LOG_SYS_ERR("MqlNet::Request", "FileToArray failed");
@@ -591,17 +699,17 @@ bool MqlNet::Request(const string &Verb, const string &Object, string &Out, cons
     string acceptTypes = "";
     hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0, RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
     if (hRequest <= 0) {
-        LOG_SYS_ERR("MqlNet::Request", "HttpOpenRequestW failed");
+        LOG_SYS_ERR("", "HttpOpenRequestW failed");
         InternetCloseHandle(Connect);
         return (false);
     }
 // send request
 // request headed
-    string head = "Content-Type: application/x-www-form-urlencoded";
+    static const string head = "Content-Type: application/x-www-form-urlencoded";
 // send request
     hSend = HttpSendRequestW(hRequest, head, StringLen(head), data, ArraySize(data) - 1);
     if (hSend <= 0) {
-        LOG_SYS_ERR("MqlNet::Request", "HttpSendRequestW failed");
+        LOG_SYS_ERR("", "HttpSendRequestW failed");
         InternetCloseHandle(hRequest);
         Close();
     }
@@ -616,7 +724,7 @@ bool MqlNet::Request(const string &Verb, const string &Object, string &Out, cons
 //------------------------------------------------------------------ OpenURL
 bool MqlNet::OpenURL(const string &URL, string &Out, const bool toFile)
 {
-    string nill = "";
+    static const string nill = "";
     if (Session <= 0 || Connect <= 0) {
         Close();
         if (!Open(Host, Port, isSecure)) {
@@ -624,8 +732,8 @@ bool MqlNet::OpenURL(const string &URL, string &Out, const bool toFile)
             return (false);
         }
     }
-    int hURL = InternetOpenUrlW(Session, URL, nill, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_PRAGMA_NOCACHE, 0);
-    if (hURL <= 0) {
+    uint hURL = InternetOpenUrlW(Session, URL, nill, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_PRAGMA_NOCACHE, 0);
+    if (hURL < 1) {
         LOG_SYS_ERR("MqlNet::OpenURL", "InternetOpenUrlW failed");
         return (false);
     }
@@ -715,14 +823,14 @@ int MqlNet::FileToArray(const string &FileName, uchar &data[])
 /**/
 
 #ifdef WITH_PERF_TIMERS
-PerfTimer::PerfTimer(): number(0), totalTime(0), startTime(0), prnEvery(0)
+PerfTimer::PerfTimer(): number(0), totalTime(0), start_time(0), prnEvery(0)
 {
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-PerfTimer::PerfTimer(const string &timerName, const ulong printEvery): number(0), totalTime(0), startTime(0), tmrName(timerName), prnEvery(printEvery)
+PerfTimer::PerfTimer(const string &timerName, const ulong printEvery): number(0), totalTime(0), start_time(0), tmrName(timerName), prnEvery(printEvery)
 {
 }
 
@@ -739,7 +847,7 @@ PerfTimer::~PerfTimer()
 //+------------------------------------------------------------------+
 void PerfTimer::on()
 {
-    startTime = GetMicrosecondCount();
+    start_time = GetMicrosecondCount();
 }
 
 //+------------------------------------------------------------------+
@@ -747,7 +855,7 @@ void PerfTimer::on()
 //+------------------------------------------------------------------+
 void PerfTimer::off()
 {
-    totalTime += GetMicrosecondCount() - startTime;
+    totalTime += GetMicrosecondCount() - start_time;
     ++number;
 
     if(prnEvery && number % prnEvery == 0)

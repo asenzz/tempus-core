@@ -20,33 +20,35 @@ constexpr unsigned C_slide_skip = 1;
 constexpr unsigned C_max_j = 1;
 constexpr unsigned C_test_len = 1;
 #else
-constexpr unsigned C_slide_skip = 10;
-constexpr unsigned C_max_j = 10;
-constexpr unsigned C_test_len = 500;
+constexpr uint16_t C_slide_skip = 10;
+constexpr uint16_t C_max_j = 10;
+constexpr uint16_t C_test_len = 500;
 #endif
-constexpr unsigned C_tune_min_validation_window = C_test_len - C_slide_skip * (C_max_j - 1);
+constexpr uint16_t C_tune_min_validation_window = C_test_len - C_slide_skip * (C_max_j - 1);
 constexpr double C_slides_len = [] {
     double r = 0;
-    for (unsigned j = 0; j < C_max_j; ++j) r += C_test_len - C_slide_skip * (C_max_j - j - 1);
+    for (uint16_t j = 0; j < C_max_j; ++j) r += C_test_len - C_slide_skip * (C_max_j - j - 1);
     return r;
 }();
 
 #ifdef REMOVE_OUTLIERS
-constexpr uint32_t C_shift_lim = 100;
-constexpr uint32_t C_outlier_slack = 100;
+
+constexpr uint16_t C_shift_lim = 100;
+constexpr uint16_t C_outlier_slack = 100;
+
 #endif
 
 namespace common {
 
 // For Postgres queries
-constexpr unsigned C_min_cursor_rows = 1e4;
-constexpr unsigned C_cursors_per_query = 8;
+constexpr uint32_t C_min_cursor_rows = 1e4;
+constexpr uint16_t C_cursors_per_query = 8;
 
 const double C_input_obseg_labels = 1;
 constexpr double C_input_obseg_features = 1;
 
 // Save first N forecasts to database for later analysis
-constexpr unsigned C_forecast_focus = 115;
+constexpr uint16_t C_forecast_focus = 115;
 
 constexpr uint8_t C_tune_keep_preds = 2;
 const uint64_t C_num_combos = std::pow<uint64_t>(3, 22); // should be even power of TUNE_KEEP_PREDS eg. 3^22, 4^18
@@ -61,13 +63,13 @@ constexpr char C_mt4_date_time_format[] = "%Y.%m.%d %H:%M:%S";
 #ifdef INTEGRATION_TEST
 
 const auto C_integration_test_validation_window = [] {
-    constexpr unsigned test_offset_default = 345;
+    constexpr uint16_t test_offset_default = 345;
     const auto p = getenv("SVRWAVE_TEST_WINDOW");
     if (!p) {
         std::cout << "Environment variable SVRWAVE_TEST_WINDOW not set, using default " << test_offset_default << std::endl;
         return test_offset_default;
     } else {
-        const auto r = (unsigned) strtoul(p, nullptr, 10);
+        const auto r = (uint16_t) strtoul(p, nullptr, 10);
         return r;
     }
 }();
@@ -78,12 +80,12 @@ constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
 
 constexpr double C_bad_validation = 1e9;
-constexpr unsigned C_cu_tile_width = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
-constexpr unsigned C_cu_block_size = C_cu_tile_width * C_cu_tile_width;
-constexpr unsigned C_cu_clamp_n = C_cu_block_size * C_cu_block_size;
+constexpr uint16_t C_cu_tile_width = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
+constexpr uint32_t C_cu_block_size = C_cu_tile_width * C_cu_tile_width;
+constexpr uint32_t C_cu_clamp_n = C_cu_block_size * C_cu_block_size;
 
-constexpr unsigned C_default_online_iter_limit = DEFAULT_ONLINE_ITER_LIMIT;
-constexpr unsigned C_default_stabilize_iterations_count = DEFAULT_STABILIZE_ITERATIONS_COUNT;
+constexpr uint16_t C_default_online_iter_limit = DEFAULT_ONLINE_ITER_LIMIT;
+constexpr uint16_t C_default_stabilize_iterations_count = DEFAULT_STABILIZE_ITERATIONS_COUNT;
 
 constexpr char C_default_sql_properties_dir[] = "../SVRRoot/SVRPersist/postgres";
 constexpr char C_default_log_level[] = "info";
@@ -102,14 +104,14 @@ constexpr char C_default_connection_str[] = "dbname=svrwave user=svrwave passwor
 constexpr char C_default_multistep_len_str[] = "1";
 constexpr char C_default_multiout_str[] = "1";
 
-constexpr unsigned C_max_csv_token_size = 0xFF;
-constexpr unsigned C_default_kernel_max_chunk_len = 9000; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernels modified for 2D indexing
-const unsigned C_default_multistep_len = std::stoul(C_default_multistep_len_str);
-const unsigned C_default_multiout = std::stoul(C_default_multiout_str);
-constexpr unsigned C_default_gradient_count = 1;
-constexpr unsigned C_default_level_count = 1;
+constexpr uint16_t C_max_csv_token_size = 0xFF;
+constexpr uint16_t C_default_kernel_max_chunk_len = 6000; // Matrices larger than 65535x65535 will require ILP64 indexing and CUDA kernels modified for 2D indexing
+const uint16_t C_default_multistep_len = std::stoi(C_default_multistep_len_str);
+const uint16_t C_default_multiout = std::stoi(C_default_multiout_str);
+constexpr uint16_t C_default_gradient_count = 1;
+constexpr uint16_t C_default_level_count = 1;
 
-constexpr unsigned C_default_hardware_concurrency = 16;
+constexpr uint16_t C_default_hardware_concurrency = 16;
 const boost::posix_time::time_duration C_default_features_max_time_gap = boost::posix_time::hours(60);
 
 constexpr char C_test_primary_column[] = "xauusd_avg_bid"; // Ignore tuning or validating other input queue columns in case of aux columns

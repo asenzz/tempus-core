@@ -12,8 +12,8 @@ G_copy_submat(CRPTRd in, double *const out, const unsigned in_m, const unsigned 
     CU_STRIDED_FOR_i(out_mn) out[i] = in[LDi(i, out_m, in_m)];
 }
 
-void copy_submat(CPTRd in, double *const out, const unsigned ldin, const unsigned in_start_m, const unsigned in_start_n, const unsigned in_end_m,
-                 const unsigned in_end_n, const unsigned ldout, cudaMemcpyKind kind, const cudaStream_t stm)
+void copy_submat(CRPTRd in, RPTR(double) out, const uint32_t ldin, const uint32_t in_start_m, const uint32_t in_start_n, const uint32_t in_end_m,
+                 const uint32_t in_end_n, const uint32_t ldout, cudaMemcpyKind kind, const cudaStream_t stm)
 {
 #if 1
     cu_errchk(cudaMemcpy2DAsync(out, ldout * sizeof(double), in + in_start_m + in_start_n * ldin, ldin * sizeof(double), (in_end_m - in_start_m) * sizeof(double),

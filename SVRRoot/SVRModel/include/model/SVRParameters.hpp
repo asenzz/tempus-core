@@ -221,6 +221,10 @@ public:
 
     PROPERTY(unsigned, svr_decremental_distance, C_default_svrparam_decrement_distance) // TODO Refactor all class properties to use the PROPERTY macro
 
+    PROPERTY(double, min_Z, 0);
+
+    PROPERTY(double, max_Z, 1);
+
     // Only head param (chunk 0, grad 0, manifold 0) takes effect
     double get_svr_adjacent_levels_ratio() const noexcept;
 

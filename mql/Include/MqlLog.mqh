@@ -7,6 +7,7 @@
 #property link      "https://www.papakaya.com"
 #property strict
 
+#include "tempus-constants.mqh"
 
 //#define LOG_TO_FILE
 
@@ -15,7 +16,7 @@
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void SetPerfLogging(bool value)
+void SetPerfLogging(const bool value)
 {
     LogPerfEnabled = value;
 }
@@ -23,7 +24,7 @@ void SetPerfLogging(bool value)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void SetDebugLogging(bool value)
+void SetDebugLogging(const bool value)
 {
     LogDebugEnabled = value;
 }
@@ -42,7 +43,7 @@ bool LogLineEnabled = true;
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void LOG_MESSAGE(const string type, const string method, const string file, const string line, const string message)
+void LOG_MESSAGE(const string type, const string &method, const string &file, const string line, const string message)
 {
     const string strMsg = TimeToString(TimeLocal(), TIME_SECONDS|TIME_DATE) + ": " + type + method + (LogLineEnabled ? "(" + file + "." + string(line) + ")" : "") + (StringLen(method) > 0 ? ":" : "") + " " + message;
 #ifdef LOG_TO_FILE
@@ -57,15 +58,11 @@ void LOG_MESSAGE(const string type, const string method, const string file, cons
     Print(strMsg);
 }
 
-#define LOG_ERROR(method, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message )
-#define LOG_SYS_ERR(method, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message + " Sys: " + ErrorDescription(GetLastError()))
-
-#define LOG_INFO(method, message) if (LogInfoEnabled || LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("INFO: ", __FUNCTION__, __FILE__, string(__LINE__), message )
-
-#define LOG_DEBUG(method, message) if (LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("DEBUG: ", __FUNCTION__, __FILE__, string(__LINE__), message)
-
-#define LOG_VERBOSE(method, message) if (LogVerboseEnabled) LOG_MESSAGE("VERBS: ", __FUNCTION__, __FILE__, string(__LINE__), message)
-
-#define LOG_PERF(method, message) if (LogPerfEnabled) LOG_MESSAGE("PERF: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+#define LOG_ERROR(stub, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message )
+#define LOG_SYS_ERR(stub, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message + " Sys: " + ErrorDescription(GetLastError()))
+#define LOG_INFO(stub, message) if (LogInfoEnabled || LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("INFO: ", __FUNCTION__, __FILE__, string(__LINE__), message )
+#define LOG_DEBUG(stub, message) if (LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("DEBUG: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+#define LOG_VERBOSE(stub, message) if (LogVerboseEnabled) LOG_MESSAGE("VERBS: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+#define LOG_PERF(stub, message) if (LogPerfEnabled) LOG_MESSAGE("PERF: ", __FUNCTION__, __FILE__, string(__LINE__), message)
 
 //+------------------------------------------------------------------+

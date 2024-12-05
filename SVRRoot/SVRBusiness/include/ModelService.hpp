@@ -59,7 +59,7 @@ class ModelService {
 public:
     static const uint32_t C_max_quantisation;
 
-    static constexpr uint16_t C_num_quantisations = 60;
+    static constexpr uint16_t C_num_quantisations = 100;
 
     static const std::deque<unsigned> C_quantisations;
 

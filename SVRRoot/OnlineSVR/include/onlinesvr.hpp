@@ -23,19 +23,19 @@ class calc_cache;
 
 namespace datamodel {
 
-constexpr unsigned C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
-constexpr double C_tune_range_min_lambda = 0;
-constexpr double C_tune_range_max_lambda = 10;
-constexpr double C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
-constexpr double C_chunk_offlap = 1. - C_chunk_overlap;
-constexpr double C_chunk_tail = .1;
-constexpr double C_chunk_header = 1. - C_chunk_tail;
+constexpr uint32_t C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
+constexpr float C_tune_range_min_lambda = 0;
+constexpr float C_tune_range_max_lambda = 10;
+constexpr float C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
+constexpr float C_chunk_offlap = 1. - C_chunk_overlap;
+constexpr float C_chunk_tail = .1;
+constexpr float C_chunk_header = 1. - C_chunk_tail;
 constexpr uint16_t C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
 constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 constexpr magma_int_t C_rbt_iter = 40; // default 30
-constexpr double C_rbt_threshold = 0; // [0..1] default 1
-constexpr unsigned C_features_superset_coef = 100; // [1..+inf)
-constexpr uint16_t C_solve_opt_div = 4;
+constexpr float C_rbt_threshold = 0; // [0..1] default 1
+constexpr uint32_t C_features_superset_coef = 100; // [1..+inf)
+constexpr float C_solve_opt_coef = 1; // Rows count divisor to calculate iterations for iterative solver
 constexpr uint16_t C_solve_opt_particles = 100;
 #ifdef EMO_DIFF
 constexpr double C_diff_coef = 1;
@@ -43,6 +43,7 @@ constexpr double C_diff_coef = 1;
 constexpr double C_diff_coef = 1;
 #endif
 
+#define SINGLE_CHUNK_LEVEL
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
 
@@ -265,13 +266,15 @@ public:
 
     static mat_ptr prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
 
-    static mat_ptr prepare_K(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
+    static mat_ptr prepare_Ky(const datamodel::SVRParameters &params, const arma::mat &x_train_t, const arma::mat &x_predict_t, const uint8_t devices);
 
-    static mat_ptr prepare_K(const SVRParameters &params, const arma::mat &x_t);
+    static mat_ptr prepare_K(business::calc_cache &ccache, SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
 
-    static mat_ptr prepare_Z(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    static mat_ptr prepare_K(SVRParameters &params, const arma::mat &x_t);
 
-    static mat_ptr prepare_Z(const SVRParameters &params, const arma::mat &features_t);
+    static mat_ptr prepare_Z(business::calc_cache &ccache, SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+
+    static mat_ptr prepare_Z(SVRParameters &params, const arma::mat &features_t);
 
     static mat_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t,
                               const bpt::ptime &predict_time, const bpt::ptime &trained_time);
@@ -310,9 +313,6 @@ public:
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
-
-__global__ void G_div_I(RPTR(double) x, const double a, const unsigned n);
-
 
 } // datamodel
 } // svr

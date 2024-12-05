@@ -73,7 +73,7 @@ TempusGraph    view;
 datetime pending_requests[];
 
 
-const datetime c_zero_time = datetime(0);
+const datetime C_zero_time = datetime(0);
 
 int file_handle;
 int real_handle;
@@ -88,7 +88,7 @@ int OnInit()
 {
    disableDST = DisableDST;
    //IndicatorShortName("tempus_indicator");
-   GlobalVariableSet(chart_predictions_identifier, 0.);
+   GlobalVariableSet(C_chart_predictions_identifier, 0.);
    
    ChartSetInteger(0,CHART_SHOW_GRID,0);
    ChartSetInteger(0,CHART_SHOW_PERIOD_SEP,1);
@@ -119,7 +119,7 @@ int OnInit()
    EventSetTimer(30);
    
    ArrayResize(pending_requests, MaxPendingRequests, MaxPendingRequests);
-   ArrayFill(pending_requests, 0, MaxPendingRequests, c_zero_time);
+   ArrayFill(pending_requests, 0, MaxPendingRequests, C_zero_time);
       
    #ifdef LOG_PREDICTIONS
       file_handle=FileOpen(file_name,FILE_CSV|FILE_READ|FILE_WRITE,',');
@@ -159,7 +159,7 @@ AveragePrice *prepareAverage(const int time_index)
    if (copied_ct > 0) {
       AveragePrice *p_current = new AveragePrice(rates, copied_ct);
       return p_current;
-      //svrClient.SendBar(InputQueueFinal, StrPeriod, true, current);
+      //svr_client.send_bar(InputQueueFinal, StrPeriod, true, current);
       //LOG_INFO("", "Sent Tick for Time: " + string(current.tm) + " Value: " + string(current.value));
    } else {
       LOG_ERROR("", "Failed to get history data for the symbol " + Symbol() + " at position " + string(time_index));
@@ -171,15 +171,15 @@ AveragePrice *prepareAverage(const int time_index)
 
 int doCalculate(const int rates_total)
 {
-   static datetime lastRequestTime = c_zero_time;
-   static datetime nearestResponseTime = c_zero_time;
+   static datetime lastRequestTime = C_zero_time;
+   static datetime nearestResponseTime = C_zero_time;
    const datetime current_bar_time = DemoMode == false ? GetTargetTime(0) : GetTargetTime(BarNumber);
    const datetime nextFigure = current_bar_time;
 
-   if (lastRequestTime != nextFigure && GlobalVariableGet(chart_identifier) >= double(lastRequestTime))
+   if (lastRequestTime != nextFigure && GlobalVariableGet(C_chart_identifier) >= double(lastRequestTime))
    {
       int request_ix = 0;
-      while ( request_ix < MaxPendingRequests && pending_requests[request_ix] != c_zero_time )
+      while ( request_ix < MaxPendingRequests && pending_requests[request_ix] != C_zero_time )
          ++request_ix;
          
       if(request_ix == MaxPendingRequests)
@@ -208,19 +208,19 @@ int doCalculate(const int rates_total)
    
    for (int request_ix = 0; request_ix < MaxPendingRequests; ++request_ix) 
    {
-      if ( TimeCurrent() >= nearestResponseTime && pending_requests[request_ix] != c_zero_time) 
+      if ( TimeCurrent() >= nearestResponseTime && pending_requests[request_ix] != C_zero_time) 
       { 
          LOG_DEBUG("", "Retrieving response " + string(pending_requests[request_ix]) + 
                   " request #" + string(request_ix));
          TempusFigure figs[];
          if(controller.getResults(net, pending_requests[request_ix], BarNumber, DataSet, figs))
          {
-            static datetime lastBarTime = c_zero_time;
+            static datetime lastBarTime = C_zero_time;
             const uint ai = ArraySize(figs) - 1;
 		
             LOG_DEBUG("", "Received bars from " + string(figs[0].tm) + " to " + string(figs[ai].tm));
 	         if (floor(figs[0].tm / PeriodSeconds()) == floor(current_bar_time/( PeriodSeconds() ))) {
-	            GlobalVariableSet(chart_predictions_identifier, figs[0].cl);
+	            GlobalVariableSet(C_chart_predictions_identifier, figs[0].cl);
                view.redraw(figs, pending_requests[request_ix], Average);
                redrawn = true;
             } else {               
@@ -233,7 +233,7 @@ int doCalculate(const int rates_total)
                LOG_INFO("", "Received a bar dated " + string(lastBarTime) + " high: " + StringFormat("%.5f", figs[ai].hi) + 
                         " low: " + StringFormat("%.5f", figs[ai].lo) + " of request #"+string(request_ix) + " at " +TimeToStr(pending_requests[request_ix]));
             }
-            pending_requests[request_ix] = c_zero_time;
+            pending_requests[request_ix] = C_zero_time;
             
 #ifdef LOG_PREDICTIONS
             if (Average == true) {

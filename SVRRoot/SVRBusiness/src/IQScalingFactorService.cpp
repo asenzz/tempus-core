@@ -91,6 +91,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     dataset.set_iq_scaling_factors(iq_scaling_factor_dao_.find_all_by_dataset_id(dataset.get_id()), false);
     if (check(dataset.get_iq_scaling_factors(input_queue), input_queue.get_value_columns())) return;
+
     const auto resolution_ratio = dataset.get_input_queue()->get_resolution() / input_queue.get_resolution();
 #ifdef INTEGRATION_TEST
     auto p_test_input_queue = input_queue.clone(0, input_queue.size() - common::C_integration_test_validation_window * resolution_ratio);

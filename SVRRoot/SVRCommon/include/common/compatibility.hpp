@@ -23,11 +23,10 @@
 #include "constants.hpp"
 #include "util/string_utils.hpp"
 
-
 namespace bpt = boost::posix_time;
 
 #define DTYPE(T) std::decay_t<decltype(T)>
-#define release_cont(x) DTYPE((x)){}.swap((x));
+#define RELEASE_CONT(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
 #define CPTR(T) const T *const
 #define RPTR(T) T *__restrict__ const
@@ -566,6 +565,19 @@ toarma(const viennacl::matrix <T> &in)
     return r;
 };
 
+#if 0
+
+template<typename T> arma::Mat<T> toarma(const Eigen::MatrixX<T> &eigen_A)
+{
+    return arma::mat((T *)eigen_A.data(), eigen_A.rows(), eigen_A.cols(), false, true);
+}
+
+template<typename T> Eigen::MatrixX<T> toeigen(const arma::Mat<T> &arma_A)
+{
+    return Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>((T *)arma_A.memptr(), arma_A.n_rows, arma_A.n_cols);
+}
+
+#endif
 
 template<typename Container, typename ConstIterator>
 typename Container::iterator remove_constness(Container &c, ConstIterator it)

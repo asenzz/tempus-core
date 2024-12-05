@@ -14,8 +14,6 @@
 #include <AveragePrice.mqh>
 #include <SVRApi.mqh>
 
-static const double C_predict_offset = 0.1;
-
 //+-------------------------------------------------------------------+
 //|                                                                   |
 //|                        V I E W                                    |
@@ -47,34 +45,25 @@ struct TempusFigure
 //+------------------------------------------------------------------+
 class TempusGraph
 {
-    double            hi[], lo[];
+    double hi[], lo[];
     color clr_up, clr_down, clr_line;
-    TempusFigure      figures[];
-    long             figNum;
-    datetime          curTime;
-    long              figRes;
-    bool              keepHistBars;
+    TempusFigure figures[];
+    int fig_ct, fig_res;
+    datetime cur_time;
+    bool keep_history;
+    float predict_offset;
 
-    void              placeFigure(const TempusFigure &fig);
+    void place_figure(const TempusFigure &fig);
+    
 public:
-    void              init(const ulong figureNumber, const ulong figureResolution, const bool keepHistoryBars = false, const bool demo_mode = false, const bool averageMode = false);
-    void              close();
-    bool              redraw(const TempusFigure &new_figs[], const datetime req_time, const bool average);
-    bool              fadeFigure();
+    void init(const int fig_num_, const int fig_res_, const bool keep_history_ = false, const bool demo_mode = false, const bool averageMode = false);
+    void close();
+    bool redraw(const TempusFigure &new_figs[], const datetime req_time, const bool average);
+    bool fadeFigure();
 
-    bool              getFigure(const long index, TempusFigure &result) const
-    {
-        if (index >= ArraySize(figures)) return false;
-        result = figures[index];
-        return true;
-    }
+    bool getFigure(const int index, TempusFigure &result) const;    
     
-    TempusGraph() : clr_line(clrDodgerBlue)
-    {
-        clr_up   = ChartGetInteger(0, CHART_COLOR_CHART_UP);
-        clr_down = ChartGetInteger(0, CHART_COLOR_CHART_DOWN);
-    }
-    
+    TempusGraph(const float predict_offset_);
 };
 
 //+-------------------------------------------------------------------+
@@ -88,16 +77,16 @@ public:
 //+------------------------------------------------------------------+
 class TempusController
 {
-    long             figRes;
+    int               fig_res;
     string            valueColumns;
     bool              average;
 
     // Not used anymore. Will be deleted on code cleanup
     void doRequest    (MqlNet &mqlNet, const datetime timeCoord, const string &dataset);
     bool              getResults(MqlNet &mqlNet, const datetime timeCoord, const string dataset, TempusFigure &fig);
-    double            queryForecast(MqlNet &mqlNet, const datetime timeCoord, const ulong OHLC, const string dataset, const bool request);
+    double            queryForecast(MqlNet &mqlNet, const datetime timeCoord, const ushort OHLC, const string dataset, const bool request);
 public:
-    void              init(const string &symbol, const ulong _figRes = PERIOD_CURRENT, const bool requestHigh = false, const bool requestLow = false, const bool requestOpen = false, const bool requestClose = false, const bool _average = true);
+    void              init(const string &symbol, const int _figRes = PERIOD_CURRENT, const bool requestHigh = false, const bool requestLow = false, const bool requestOpen = false, const bool requestClose = false, const bool _average = true);
 
     ulong doRequest   (MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string &dataset);
     bool              getResults(MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string dataset, TempusFigure &fig[]);
@@ -112,7 +101,7 @@ public:
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void TempusController::init(const string &symbol, const ulong _figRes, const bool requestHigh, const bool requestLow, const bool requestOpen, const bool requestClose, const bool _average)
+void TempusController::init(const string &symbol, const int _figRes, const bool requestHigh, const bool requestLow, const bool requestOpen, const bool requestClose, const bool _average)
 {
     if(_average) {
         valueColumns = symbol + "_avg_bid";
@@ -126,7 +115,7 @@ void TempusController::init(const string &symbol, const ulong _figRes, const boo
         if(requestHigh && requestLow && requestLow && requestOpen) valueColumns = "";
     }
     average = _average;
-    figRes = _figRes;
+    fig_res = _figRes;
 }
 
 //+------------------------------------------------------------------+
@@ -137,7 +126,7 @@ ulong TempusController::doRequest(MqlNet &mqlNet, const datetime timeStart, cons
     Hash params;
     params.hPutString("dataset", dataset);
     params.hPutString("value_time_start", TimeToString(timeStart, TIME_DATE_SECONDS));
-    params.hPutString("value_time_end", TimeToString(timeStart + figRes * bars, TIME_DATE_SECONDS));
+    params.hPutString("value_time_end", TimeToString(timeStart + fig_res * bars, TIME_DATE_SECONDS));
     params.hPutString("value_columns", valueColumns);
     string response;
     ulong finalResult = -1;
@@ -180,12 +169,12 @@ ulong TempusController::doRequest(MqlNet &mqlNet, const datetime timeStart, cons
 bool TempusController::getResults(MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string dataset, TempusFigure &figs[])
 {
     Hash params;
-    params.hPutString("resolution", string(figRes));
+    params.hPutString("resolution", string(fig_res));
     LOG_VERBOSE("", "Getting results for " + string(timeStart));
 
     params.hPutString("dataset", dataset);
     params.hPutString("value_time_start", TimeToString(timeStart, TIME_DATE_SECONDS));
-    params.hPutString("value_time_end", TimeToString(timeStart + figRes * bars, TIME_DATE_SECONDS));
+    params.hPutString("value_time_end", TimeToString(timeStart + fig_res * bars, TIME_DATE_SECONDS));
 
     string response;
     bool result = false;
@@ -204,7 +193,7 @@ bool TempusController::getResults(MqlNet &mqlNet, const datetime timeStart, cons
 
     JSONValue *jv = parser.parse(response);
     if (!jv || !jv.isObject()) {
-        LOG_ERROR("", "Failed parsing response " + response + " for time " + timeStart);
+        LOG_ERROR("", "Failed parsing response " + response + " for time " + TimeToString(timeStart, TIME_DATE_SECONDS));
         return result;
     }
 
@@ -217,7 +206,7 @@ bool TempusController::getResults(MqlNet &mqlNet, const datetime timeStart, cons
     } 
     if (jo.getArray("result").isNull()) {
         delete jv;
-        LOG_ERROR("", "Result array in response for " + string(timeStart) + " is null.");
+        LOG_ERROR("", "Result array in response for " + TimeToString(timeStart, TIME_DATE_SECONDS) + " is null.");
         return result;
     }
     
@@ -262,18 +251,30 @@ static const string TempusGraphAvgLineName = "avgLastRequest-price";
 static const string TempusGraphTimeLineName = "avgLastRequest-time";
 static const string TempusPredictSign = "lastResponseSign";
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void TempusGraph::init(const ulong figureNumber, const ulong figureResolution, const bool keepHistoryBars, const bool demo_mode, const bool averageMode)
-{
-    figNum = figureNumber;
-    figRes = figureResolution;
-    keepHistBars = keepHistoryBars;
 
-    for (long i = 0; i < ArraySize(hi); ++i) hi[i] = 0;
-    for (long i = 0; i < ArraySize(lo); ++i) lo[i] = 0;
-        
+bool TempusGraph::getFigure(const int index, TempusFigure &result) const
+{
+    if (index >= ArraySize(figures)) return false;
+    result = figures[index];
+    return true;
+}
+
+
+TempusGraph::TempusGraph(const float predict_offset_) : clr_line(clrDodgerBlue), predict_offset(predict_offset_)
+{
+    clr_up   = (color) ChartGetInteger(0, CHART_COLOR_CHART_UP);
+    clr_down = (color) ChartGetInteger(0, CHART_COLOR_CHART_DOWN);
+}
+
+
+void TempusGraph::init(const int fig_num_, const int fig_res_, const bool keep_history_, const bool demo_mode, const bool averageMode)
+{
+    fig_ct = fig_num_;
+    fig_res = fig_res_;
+    keep_history = keep_history_;
+
+    // ArrayFill(hi, 0, 0, 0);
+    // ArrayFill(lo, 0, 0, 0);        
     ArrayInitialize(hi, 0);
     ArrayInitialize(lo, 0);
     ArraySetAsSeries(hi, true);
@@ -290,9 +291,9 @@ void TempusGraph::init(const ulong figureNumber, const ulong figureResolution, c
     PlotIndexSetInteger(1, PLOT_ARROW, 234);
 
     SetIndexStyle(0, DRAW_ARROW, STYLE_SOLID, 2, clrBlue);
-    PlotIndexSetString(0, PLOT_LABEL, Symbol() + " Buy");
+    PlotIndexSetString(0, PLOT_LABEL, _Symbol + " Buy");
     SetIndexStyle(1, DRAW_ARROW, STYLE_SOLID, 2, clrRed);
-    PlotIndexSetString(1, PLOT_LABEL, Symbol() + " Sell");
+    PlotIndexSetString(1, PLOT_LABEL, _Symbol + " Sell");
 
     LOG_DEBUG("", "View inited.");
 }
@@ -316,13 +317,13 @@ void TempusGraph::close()
 //+------------------------------------------------------------------+
 bool TempusGraph::redraw(const TempusFigure &new_figs[], const datetime req_time, const bool average)
 {
-    const long new_figs_size = ArraySize(new_figs);
+    const int new_figs_size = ArraySize(new_figs);
     if (new_figs_size < 1) {
         LOG_DEBUG("", "New figures are empty!");
         return false;
     }
     // Append new figures
-    const long prev_figs_size = ArraySize(figures);
+    const int prev_figs_size = ArraySize(figures);
     ArrayResize(figures, prev_figs_size + new_figs_size);
     ArrayCopy(figures, new_figs, prev_figs_size);
 
@@ -339,22 +340,24 @@ bool TempusGraph::fadeFigure()
     datetime last_anchor_time = 0;
     double last_anchor_price = 0;
     double last_price = 0;
-    for(ulong i = 0; i < ArraySize(figures); ++i) {
+    const int period_seconds = PeriodSeconds();
+    const int period_seconds_m1 = PeriodSeconds(PERIOD_M1);
+    const datetime offset_start = datetime(predict_offset * period_seconds - period_seconds_m1);
+    for(int i = 0; i < ArraySize(figures); ++i) {
         if (figures[i].empty()) {
             LOG_ERROR("", "Skipping unitialized figure " + string(i) + " " + figures[i].to_string());
             continue;
         }
-        const datetime anchor_time = figures[i].tm - C_predict_offset * PeriodSeconds() - PeriodSeconds(PERIOD_M1);
-        const double anchor_price = iClose(Symbol(), PERIOD_M1, iBarShift(Symbol(), PERIOD_M1, anchor_time, false));
+        const datetime anchor_time = figures[i].tm - offset_start;
+        const double anchor_price = iClose(_Symbol, PERIOD_M1, iBarShift(_Symbol, PERIOD_M1, anchor_time, false));
         //LOG_DEBUG("", "Anchor time " + TimeToString(anchor_time, TIME_DATE_SECONDS) + ", anchor close price " + DoubleToString(anchor_price));
-
         if (figures[i].tm > lasttm) {
             last_anchor_time = anchor_time;
             last_anchor_price = anchor_price;
             last_price = figures[i].op;
             lasttm = figures[i].tm;
         }
-        const long ind_ix = iBarShift(Symbol(), PERIOD_CURRENT, figures[i].tm); // (iTime(Symbol(), Period(), 0) - figures[i].tm) / figRes;
+        const int ind_ix = iBarShift(_Symbol, PERIOD_CURRENT, figures[i].tm); // (iTime(_Symbol, Period(), 0) - figures[i].tm) / fig_res;
         if(ind_ix < 0 || ind_ix >= ArraySize(hi) || ind_ix >= ArraySize(lo)) {
             LOG_DEBUG("", "Figure " + figures[i].to_string() + " index " + string(ind_ix) + " out of bounds " + string(ArraySize(hi) - 1));
             continue;
@@ -379,8 +382,8 @@ bool TempusGraph::fadeFigure()
         LOG_VERBOSE("", "No new price " + string(last_price) + ", previous " + string(prev_drawn_price));
         return redrawn;
     }
-    GlobalVariableSet(chart_predictions_identifier, last_price);
-    GlobalVariableSet(chart_prediction_anchor_identifier, last_anchor_price);
+    GlobalVariableSet(C_chart_predictions_identifier, last_price);
+    GlobalVariableSet(C_chart_prediction_anchor_identifier, last_anchor_price);
 
 /*
     if (ObjectFind(0, TempusGraphAvgLineName) <= 0 && !ObjectCreate(0, TempusGraphAvgLineName, OBJ_HLINE, 0, 0, last_price)) {
@@ -415,14 +418,14 @@ bool TempusGraph::fadeFigure()
     for (long i = 0; i < ArraySize(figures); ++i) {
         const datetime prev_time = lasttm - PeriodSeconds();
         if (figures[i].tm == prev_time) {
-            const double prev_anchor_price = iClose(Symbol(), PERIOD_M1, iBarShift(Symbol(), PERIOD_M1, prev_time - C_predict_offset * PeriodSeconds() - PeriodSeconds(PERIOD_M1)));
+            const double prev_anchor_price = iClose(_Symbol, PERIOD_M1, iBarShift(_Symbol, PERIOD_M1, prev_time - C_predict_offset * PeriodSeconds() - PeriodSeconds(PERIOD_M1)));
             MqlTick prev_ticks[];
-            const long copied_ct = SVRApi::CopyTicksSafe(Symbol(), prev_ticks, COPY_TICKS_ALL, prev_time, prev_time + PeriodSeconds());
+            const long copied_ct = SVRApi::copy_ticks_safe(_Symbol, prev_ticks, COPY_TICKS_ALL, prev_time, prev_time + PeriodSeconds());
             if (copied_ct < 1) {
                LOG_ERROR("", "No ticks copied for prev time " + TimeToString(prev_time, TIME_DATE_SECONDS));
                continue;
             }
-            const AveragePrice prev_average_price(prev_ticks, prev_time, PeriodSeconds(), iOpen(Symbol(), PERIOD_CURRENT, iBarShift(Symbol(), PERIOD_H1, prev_time)));
+            const AveragePrice prev_average_price(prev_ticks, prev_time, PeriodSeconds(), iOpen(_Symbol, PERIOD_CURRENT, iBarShift(_Symbol, PERIOD_H1, prev_time)));
             const double prev_actual_price = prev_average_price.value;
             if (figures[i].op > prev_anchor_price != prev_actual_price > prev_anchor_price) {
                 prev_incorrect = true;
@@ -504,13 +507,13 @@ bool TempusController::getResults(MqlNet &mqlNet, const datetime timeCoord, cons
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-double TempusController::queryForecast(MqlNet &mqlNet, const datetime timeCoord, const ulong OHLC, const string dataset, const bool request)
+double TempusController::queryForecast(MqlNet &mqlNet, const datetime timeCoord, const ushort OHLC, const string dataset, const bool request)
 {
     if (OHLC > 4) return(0);
 
 //filling Hash
     Hash param;
-    param.hPutString("resolution", string(figRes));
+    param.hPutString("resolution", string(fig_res));
     param.hPutString("dataset", dataset);
     string value_column;
     switch (OHLC) {

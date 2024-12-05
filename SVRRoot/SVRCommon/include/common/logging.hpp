@@ -52,6 +52,23 @@ extern const logging l__;
 
 #define BOOST_CODE_LOCATION LOG_FORMAT % FILE_NAME % __LINE__ % __FUNCTION__
 
+#define FUN_START_TIME__ TOKENPASTE2(__start_time_, __FUNCTION__)
+
+#ifdef PROFILE_CALLS
+
+#define LOG4_BEGIN() \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+                BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "Begin."; )                                       \
+    const bpt::ptime FUN_START_TIME__ = bpt::microsec_clock::local_time();
+
+#define LOG4_END() \
+    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+        BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "End."; ) \
+    LOG4_INFO("Execution time of " << __FUNCTION__ << " is " << (bpt::microsec_clock::local_time() - FUN_START_TIME__) << ", process memory RSS " << \
+        svr::common::memory_manager::get_process_resident_set() << " MB");
+
+#else
+
 #define LOG4_BEGIN() \
     CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
                 BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "Begin."; )
@@ -59,6 +76,8 @@ extern const logging l__;
 #define LOG4_END() \
     CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
         BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "End."; )
+
+#endif
 
 #define LOG4_TRACE(msg) \
     CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
@@ -107,12 +126,14 @@ extern const logging l__;
 #endif
 
 #define START_TIME__ TOKENPASTE2(__start_time_, __LINE__)
+
 #define PROFILE_EXEC_TIME(X, M_NAME)    \
 {                                       \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
     LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
-    svr::common::memory_manager::get_process_resident_set() << " MB"); \
+        svr::common::memory_manager::get_process_resident_set() << " MB"); \
 }
+
 #define PROFILE_(X)    \
 {                                       \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \

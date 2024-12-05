@@ -283,6 +283,15 @@ datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const unsigned idx) const
     return aux_input_queues_[idx].get_obj();
 }
 
+datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const std::string &table_name) const
+{
+    const auto res = std::find_if(aux_input_queues_.cbegin(), aux_input_queues_.cend(), [&](const iq_relation &inque_rel) {
+        return inque_rel.get_obj()->get_table_name() == table_name;
+    });
+    if (res != aux_input_queues_.cend()) return res->get_obj();
+    LOG4_THROW("Aux input queue for table " << table_name << " not found!");
+    return res->get_obj();
+}
 
 std::deque<std::string> Dataset::get_aux_input_table_names() const
 {

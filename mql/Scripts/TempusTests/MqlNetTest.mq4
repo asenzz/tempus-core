@@ -37,10 +37,10 @@ int OnStart() {
     }
 
     
-    //svrApi.SendBar();    
+    //svrApi.send_bar();    
     //datetime from, to;
     //svrApi.GetNextTimeRangeToBeSent(from, to);    
-    svrApi.SendHistory();
+    svrApi.send_history();
 
     //Print(__FUNCTION__ + " From: " + TimeToString(from));
     //Print(__FUNCTION__ + " To: " + TimeToString(to));

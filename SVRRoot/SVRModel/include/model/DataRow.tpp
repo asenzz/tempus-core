@@ -255,6 +255,16 @@ inline const bpt::ptime &get_time(const std::deque<bpt::ptime>::const_iterator &
     return *it;
 }
 
+inline bool is_valid(const datamodel::DataRow::container::const_iterator &it)
+{
+    return it->operator bool();
+}
+
+inline bool is_valid(const std::deque<bpt::ptime>::const_iterator &it)
+{
+    return !it->is_special();
+}
+
 template<typename I> inline void generate_twap_indexes(
         const I &cbegin, // Begin of container
         const I &start_it, // At start time or before
@@ -263,54 +273,39 @@ template<typename I> inline void generate_twap_indexes(
         const bpt::ptime &end_time, // Exact end time
         const bpt::time_duration &resolution, // Aux input queue resolution
         const uint32_t n_out, // Count of positions to output
-        unsigned *const out) // Input column index
+        uint32_t *const out)
 {
     assert(it_end >= start_it);
     assert(end_time >= start_time);
     auto it = start_it;
-    const unsigned inlen = (end_time - start_time) / resolution;
-    unsigned inctr = 0;
+    const uint32_t inlen = (end_time - start_time) / resolution;
+    uint32_t inctr = 0;
     const auto inout_ratio = double(n_out) / double(inlen);
     UNROLL()
     for (auto time_iter = start_time; time_iter < end_time; time_iter += resolution, ++inctr) {
-        while (it != it_end && get_time(it) < time_iter) ++it;
-        out[unsigned(inctr * inout_ratio)] = it - cbegin;
+        while (it != it_end && is_valid(it) && get_time(it) < time_iter) ++it;
+        out[uint32_t(inctr * inout_ratio)] = it - cbegin - (!is_valid(it) || it == it_end || (get_time(it) != time_iter && it != start_it && it != cbegin));
     }
 #ifndef NDEBUG
     const auto dist_it = it - start_it;
-    if (inctr != inlen || dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution);
-    if (dist_it != inlen - 1) LOG4_TRACE("Prices " << dist_it << " different than expected " << inlen);
+    if (inctr != inlen || dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
 #endif
 }
 
-inline std::vector<unsigned> generate_twap_indexes(
+inline std::vector<uint32_t> generate_twap_indexes(
         const datamodel::DataRow::container::const_iterator &cbegin, // Begin of container
         const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
         const datamodel::DataRow::container::const_iterator &it_end, // At end time or after
         const bpt::ptime &start_time, // Exact start time
         const bpt::ptime &end_time, // Exact end time
         const bpt::time_duration &resolution, // Aux input queue resolution
-        const unsigned n_out) // Input column index
+        const uint32_t n_out)
 {
-    assert(it_end >= start_it);
-    assert(end_time >= start_time);
-    std::vector<unsigned> out(n_out);
-    auto it = start_it;
-    const unsigned inlen = (end_time - start_time) / resolution;
-    unsigned inctr = 0;
-    const auto inout_ratio = double(n_out) / double(inlen);
-    UNROLL()
-    for (auto time_iter = start_time; time_iter < end_time; time_iter += resolution, ++inctr) {
-        while (it != it_end && (**it).get_value_time() < time_iter) ++it;
-        out[inctr * inout_ratio] = it - cbegin;
-    }
-#ifndef NDEBUG
-    const auto dist_it = it - start_it;
-    if (inctr != inlen || dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution);
-    if (dist_it != inlen) LOG4_TRACE("Prices " << dist_it << " different than expected " << inlen);
-#endif
+    std::vector<uint32_t> out(n_out);
+    generate_twap_indexes(cbegin, start_it, it_end, start_time, end_time, resolution, n_out, out.data());
     return out;
 }
+
 }
 
 #endif // SVR_DATAROW_TPP

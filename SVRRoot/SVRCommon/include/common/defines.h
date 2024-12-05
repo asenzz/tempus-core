@@ -5,7 +5,6 @@
 // #define NO_PARALLEL // Disable parallel macros
 
 #define INTEGRATION_TEST
-#define DO_SHIFT
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
 
 #define CTX_PER_GPU 2 // Default streams per GPU
@@ -14,6 +13,8 @@
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
 #define REMOVE_OUTLIERS
+// #define INSTANCE_WEIGHTS
+#define KERNEL_PARAM_3
 
 // #define VMD_ONLY
 #define EMD_ONLY
