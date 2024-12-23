@@ -28,7 +28,7 @@ protected:
     int testFrameSize = 256;
 
     // user details
-    std::string userName = "test_user";
+    std::string user_name = "test_user";
     std::string userRealName = "test user";
     std::string userEmail = "svruser@google.com";
     std::string newEmail = "svruser@sf.net";
@@ -40,7 +40,7 @@ protected:
     bpt::time_duration legalTimeDeviation = bpt::seconds(5);
     std::string timezone = "Europe/Zurich";
     std::deque<std::string> valueColumns {"high", "low", "open", "close"};
-    std::string expectedTableName = business::InputQueueService::make_queue_table_name(userName, queueName, resolution);
+    std::string expectedTableName = business::InputQueueService::make_queue_table_name(user_name, queueName, resolution);
 
     // dataset details
     std::string datasetName = "test dataset";
@@ -74,12 +74,12 @@ protected:
 
     void InitUser(){
         // init user
-        testUser = std::make_shared<svr::datamodel::User>(0, userName, userEmail, userPassword, userRealName,
+        testUser = std::make_shared<svr::datamodel::User>(0, user_name, userEmail, userPassword, userRealName,
                                                           svr::datamodel::ROLE::USER);
     }
 
     void InitDataset(){
-        testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, userName, testQueue, std::deque<datamodel::InputQueue_ptr>{},
+        testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, user_name, testQueue, std::deque<datamodel::InputQueue_ptr>{},
                                                                 priority, "description", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
                                                                 max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
@@ -87,7 +87,7 @@ protected:
 
     void InitInputQueueData(){
         // initialize InputQueue object
-        testQueue = std::make_shared<svr::datamodel::InputQueue>("", queueName, userName, "description", resolution,legalTimeDeviation,
+        testQueue = std::make_shared<svr::datamodel::InputQueue>("", queueName, user_name, "description", resolution,legalTimeDeviation,
                 timezone, valueColumns);
 
         // init data generator

@@ -51,8 +51,8 @@ int PgScalingFactorsTaskDAO::remove(const ScalingFactorsTask_ptr &scalingFactors
 
     ScalingFactorsTask_ptr PgScalingFactorsTaskDAO::get_by_id(const bigint id)
 {
-    ScalingFactorsTaskRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), id);
+    ScalingFactorsTaskRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_id"), id);
 }
 
 } /* namespace dao */

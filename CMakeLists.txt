@@ -107,7 +107,7 @@ IF (CMAKE_BUILD_TYPE MATCHES "Rel")
 ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
     # SET(LSAN_BLACKLIST "lsan-blacklist.txt" CACHE STRING "")
     # SET(UBSAN_BLACKLIST "ubsan-blacklist.txt" CACHE STRING "")
-    # SET(SANITIZE address CACHE STRING address)
+    SET(SANITIZE "" CACHE STRING address)
     SET_PROPERTY(CACHE SANITIZE PROPERTY STRINGS address thread undefined "")
     LIST(APPEND COMPILER_EXTENSIONS_ICX -fimf-precision=high) # Too verbose -qnextgen-diag
     LIST(APPEND CXX_OPTIMIZATION_FLAGS -DDEBUG_BUILD -ggdb -fno-omit-frame-pointer -fstack-protector-all -fstack-clash-protection) # -fsanitize-blacklist=${LSAN_BLACKLIST}

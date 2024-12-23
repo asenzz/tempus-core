@@ -79,6 +79,8 @@ public:
     static container
     construct(const std::deque<datamodel::MultivalResponse_ptr> &responses);
 
+    static void sort(container &rows_container);
+
     DataRow() = default;
 
     explicit DataRow(const std::string &csv);

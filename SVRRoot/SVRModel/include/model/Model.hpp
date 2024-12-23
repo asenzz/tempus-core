@@ -21,7 +21,7 @@ class Model : public Entity
     unsigned gradient_ct = common::C_default_gradient_count;
     unsigned max_chunk_size = common::C_default_gradient_count;
     std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
-    bpt::ptime last_modified = bpt::max_date_time; // model modified (system) time
+    bpt::ptime last_modified = bpt::not_a_date_time; // model modified (system) time
     bpt::ptime last_modeled_value_time = bpt::min_date_time; // last input queue modeled value time
 
     virtual void init_id() override;

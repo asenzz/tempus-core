@@ -6,57 +6,47 @@
 #include <boost/date_time/posix_time/time_parsers.hpp>
 #include <boost/date_time/posix_time/time_parsers.hpp>
 
-namespace svr{
-namespace dao{
+namespace svr {
+namespace dao {
 
-class MultivalRequestRowMapper : public IRowMapper<svr::datamodel::MultivalRequest> {
-
-public:
-    datamodel::MultivalRequest_ptr mapRow(const pqxx_tuple& rowSet) const override {
-        datamodel::MultivalRequest_ptr request = ptr<svr::datamodel::MultivalRequest>();
-
-        request->set_id(rowSet["request_id"].as<bigint>());
-        request->dataset_id = rowSet["dataset_id"].as<bigint>();
-        request->user_name = rowSet["user_name"].as<std::string>();
-        request->request_time = bpt::time_from_string(rowSet["request_time"].as<std::string>());
-        request->value_time_start = bpt::time_from_string(rowSet["value_time_start"].as<std::string>());
-        request->value_time_end = bpt::time_from_string(rowSet["value_time_end"].as<std::string>());
-        request->resolution = rowSet["resolution"].as<std::int32_t>();
-        request->value_columns = rowSet["value_columns"].as<std::string>();
-        return request;
-    }
-
-};
-
-class MultivalResponseRowMapper : public IRowMapper<svr::datamodel::MultivalResponse> {
-
-public:
-    datamodel::MultivalResponse_ptr mapRow(const pqxx_tuple& rowSet) const override
+struct MultivalRequestRowMapper : public IRowMapper<svr::datamodel::MultivalRequest> {
+    datamodel::MultivalRequest_ptr map_row(const pqxx_tuple &row_fields) const override
     {
-        datamodel::MultivalResponse_ptr response = ptr<svr::datamodel::MultivalResponse>();
-
-        response->set_id(rowSet["response_id"].as<bigint>());
-        response->request_id = rowSet["request_id"].as<bigint>();
-        response->value_time = bpt::time_from_string(rowSet["value_time"].as<std::string>());
-        response->value_column = rowSet["value_column"].as<std::string>();
-        response->value = rowSet["value"].as<double>(std::numeric_limits<double>::quiet_NaN());
-        return response;
+        datamodel::MultivalRequest_ptr p_request = ptr<svr::datamodel::MultivalRequest>();
+        p_request->set_id(row_fields["request_id"].as<bigint>(0));
+        p_request->dataset_id = row_fields["dataset_id"].as<bigint>(0);
+        p_request->user_name = row_fields["user_name"].as<std::string>("");
+        p_request->request_time = row_fields["request_time"].as<bpt::ptime>(bpt::not_a_date_time);
+        p_request->value_time_start = row_fields["value_time_start"].as<bpt::ptime>(bpt::not_a_date_time);
+        p_request->value_time_end = row_fields["value_time_end"].as<bpt::ptime>(bpt::not_a_date_time);
+        p_request->resolution = row_fields["resolution"].as<bpt::time_duration>(bpt::seconds(1));
+        p_request->value_columns = row_fields["value_columns"].as<std::string>("");
+        return p_request;
     }
-
 };
 
-class ValueRequestRowMapper : public IRowMapper<svr::datamodel::ValueRequest>
-{
+struct MultivalResponseRowMapper : public IRowMapper<svr::datamodel::MultivalResponse> {
+    datamodel::MultivalResponse_ptr map_row(const pqxx_tuple &row_fields) const override
+    {
+        datamodel::MultivalResponse_ptr p_response = ptr<svr::datamodel::MultivalResponse>();
+        p_response->set_id(row_fields["response_id"].as<bigint>(0));
+        p_response->request_id = row_fields["request_id"].as<bigint>(0);
+        p_response->value_time = row_fields["value_time"].as<bpt::ptime>(bpt::not_a_date_time);
+        p_response->value_column = row_fields["value_column"].as<std::string>();
+        p_response->value = row_fields["value"].as<double>(std::numeric_limits<double>::quiet_NaN());
+        return p_response;
+    }
+};
 
-public:
-    datamodel::ValueRequest_ptr mapRow(const pqxx_tuple& rowSet) const override {
-        datamodel::ValueRequest_ptr valReq = ptr<svr::datamodel::ValueRequest>();
-
-        valReq->set_id(rowSet["request_id"].as<bigint>());
-        valReq->request_time = bpt::time_from_string(rowSet["request_time"].as<std::string>());
-        valReq->value_time = bpt::time_from_string(rowSet["value_time"].as<std::string>());
-        valReq->value_column = rowSet["value_column"].as<std::string>();
-        return valReq;
+struct ValueRequestRowMapper : public IRowMapper<svr::datamodel::ValueRequest> {
+    datamodel::ValueRequest_ptr map_row(const pqxx_tuple &row_fields) const override
+    {
+        datamodel::ValueRequest_ptr p_request = ptr<svr::datamodel::ValueRequest>();
+        p_request->set_id(row_fields["request_id"].as<bigint>(0));
+        p_request->request_time = row_fields["request_time"].as<bpt::ptime>(bpt::not_a_date_time);
+        p_request->value_time = row_fields["value_time"].as<bpt::ptime>(bpt::not_a_date_time);
+        p_request->value_column = row_fields["value_column"].as<std::string>();
+        return p_request;
     }
 };
 

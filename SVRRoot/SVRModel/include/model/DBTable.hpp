@@ -27,7 +27,7 @@ public:
 
     std::string get_table_name() const;
 
-    void set_table_name(const std::string &tableName);
+    void set_table_name(const std::string &table_name);
 
     virtual std::string to_string() const override;
 

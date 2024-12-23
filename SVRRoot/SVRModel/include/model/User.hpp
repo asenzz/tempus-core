@@ -50,7 +50,7 @@ public:
 
     void set_password(const std::string &password);
 
-    void set_user_name(const std::string &userName);
+    void set_user_name(const std::string &user_name);
 
     std::string get_name() const;
 

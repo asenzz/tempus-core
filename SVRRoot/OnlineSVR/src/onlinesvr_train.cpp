@@ -329,12 +329,12 @@ void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint16_t iters_i
     const auto &params = get_params(chunk_ix);
 #ifdef INSTANCE_WEIGHTS
     PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_matrix(ixs[chunk_ix], *p_input_weights),
-                                                             1. / params.get_svr_C(), iters_irwls, ixs[chunk_ix].n_rows * C_solve_opt_coef),
+                                                             1. / params.get_svr_C(), iters_irwls, iters_opt),
           "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
                 ", w " << common::present(weight_chunks[chunk_ix]));
 #else
     PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(
-            p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], 1. / params.get_svr_C(), iters_irwls, ixs[chunk_ix].n_rows * C_solve_opt_coef),
+            p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], 1. / params.get_svr_C(), iters_irwls, iters_opt),
                       "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", w " << common::present(weight_chunks[chunk_ix]));
 #endif
 }

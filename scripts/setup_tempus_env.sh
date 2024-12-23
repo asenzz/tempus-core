@@ -62,6 +62,9 @@ export LD_PRELOAD=`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jema
 # export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 
 export OMP_NESTED=true
+export OMP_CANCELLATION=true
+# export OMP_PROC_BIND=spread
+# export OMP_STACKSIZE=16M
 # export KMP_AFFINITY=compact # Kills performance
 # export KMP_HW_SUBSET=2s,10c,2t # Slows down noticeably, find better values
 export OMP_WAIT_POLICY=PASSIVE                             # Sets spincount to zero

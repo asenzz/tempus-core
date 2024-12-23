@@ -43,7 +43,7 @@ public:
 
     }
 
-    void show(std::string userName);
+    void show(std::string user_name);
 
     void create();
 

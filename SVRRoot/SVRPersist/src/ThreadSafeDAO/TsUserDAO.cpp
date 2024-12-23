@@ -30,9 +30,9 @@ bigint TsUserDAO::get_next_id()
 }
 
 
-bool TsUserDAO::exists(std::string const & userName)
+bool TsUserDAO::exists(std::string const & user_name)
 {
-    return ts_call<bool>(&UserDAO::exists, userName);
+    return ts_call<bool>(&UserDAO::exists, user_name);
 }
 
 

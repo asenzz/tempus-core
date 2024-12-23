@@ -36,7 +36,7 @@ namespace oemd {
 
 const auto C_freq_ceil = .5;
 
-bool cu_fix_mask(double *const d_mask, const unsigned mask_len, const cudaStream_t custream)
+bool cu_fix_mask(double *const d_mask, const uint32_t mask_len, const cudaStream_t custream)
 {
     const auto mask_sum = solvers::sum(d_mask, mask_len, custream);
     if (mask_sum == 0.) {
@@ -47,15 +47,15 @@ bool cu_fix_mask(double *const d_mask, const unsigned mask_len, const cudaStream
     return true;
 }
 
-void fix_mask(CPTRd h_in, double *const h_out, const unsigned mask_len, const cudaStream_t custream)
+void fix_mask(CPTRd h_in, double *const h_out, const uint32_t mask_len, const cudaStream_t custream)
 {
     auto d_in = cumallocopy(h_in, custream, mask_len);
     cu_fix_mask(d_in, mask_len, custream);
     cufreecopy(h_out, d_in, custream, mask_len);
 }
 
-template<const unsigned block_size> __global__ void G_autocorrelation_sum(
-        RPTR(double) d_sum, CRPTRd x, CRPTRd y, const unsigned n_min, const unsigned qt, const unsigned n_qt)
+template<const uint32_t block_size> __global__ void G_autocorrelation_sum(
+        RPTR(double) d_sum, CRPTRd x, CRPTRd y, const uint32_t n_min, const uint32_t qt, const uint32_t n_qt)
 {
     __shared__ double sh_dist[block_size];
     sh_dist[tid] = 0;
@@ -63,7 +63,7 @@ template<const unsigned block_size> __global__ void G_autocorrelation_sum(
         double y_qi = 0;
         const auto to_q = (i + 1) * qt;
         UNROLL()
-        for (unsigned qi = i * qt; qi < to_q; ++qi) y_qi += y[qi];
+        for (DTYPE(to_q) qi = i * qt; qi < to_q; ++qi) y_qi += y[qi];
         y_qi /= qt;
         sh_dist[tid] += fabs(x[i] - y_qi) / (fabs(x[i]) + fabs(y_qi));
     }
@@ -72,7 +72,7 @@ template<const unsigned block_size> __global__ void G_autocorrelation_sum(
 
 #define stride_reduce_dist(block_low_)                                                  \
         if (block_size >= block_low_) {                                                 \
-            constexpr unsigned stride2 = block_low_ / 2;                                \
+            constexpr auto stride2 = block_low_ / 2;                                \
             const auto tid_stride2 = tid + stride2;                                     \
             if (tid < stride2 && tid_stride2 < n_min)                                   \
                 sh_dist[tid] += sh_dist[tid_stride2];                                   \
@@ -89,8 +89,8 @@ template<const unsigned block_size> __global__ void G_autocorrelation_sum(
     atomicAdd(d_sum, *sh_dist);
 }
 
-template<const unsigned block_size> __global__ void G_autocorrelation_block(
-        RPTR(double) d_sum, CRPTRd x, CRPTRd y, const unsigned n, const unsigned n_min, const float st)
+template<const uint32_t block_size> __global__ void G_autocorrelation_block(
+        RPTR(double) d_sum, CRPTRd x, CRPTRd y, const uint32_t n, const uint32_t n_min, const float st)
 {
 //    constexpr float sk = 1; // Skip is disabled for now
     static __shared__ double sh_dist[block_size];
@@ -112,7 +112,7 @@ template<const unsigned block_size> __global__ void G_autocorrelation_block(
     d_sum[blockIdx.x] = *sh_dist;
 }
 
-__global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(unsigned) offsets, RPTR(double) res, const unsigned n_offsets)
+__global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(uint32_t) offsets, RPTR(double) res, const uint32_t n_offsets)
 {
     CU_STRIDED_FOR_i(n_offsets) {
         const auto off = offsets[i];
@@ -129,10 +129,10 @@ __global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(unsigned) offset
     }
 }
 
-double autocorrelation_n(CPTRd d_in, const unsigned n, const std::vector<unsigned> &offsets, const cudaStream_t &stm)
+double autocorrelation_n(CPTRd d_in, const uint32_t n, const std::vector<uint32_t> &offsets, const cudaStream_t &stm)
 {
     const auto d_offsets = cumallocopy(offsets, stm);
-    const unsigned n_offsets = offsets.size();
+    const uint32_t n_offsets = offsets.size();
     double *d_res;
     cu_errchk(cudaMallocAsync((void **) &d_res, n_offsets * sizeof(*d_res), stm));
     G_autocorr_driver<<<CU_BLOCKS_THREADS(n_offsets), 0, stm>>>(d_in, d_in + n, d_offsets, d_res, n_offsets);
@@ -147,7 +147,7 @@ double autocorrelation_n(CPTRd d_in, const unsigned n, const std::vector<unsigne
 __global__ void
 G_multiply_complex(
         const double input_len_div,
-        const unsigned fft_len,
+        const uint32_t fft_len,
         CRPTR(cufftDoubleComplex) multiplier,
         cufftDoubleComplex *__restrict__ output)
 {
@@ -162,8 +162,8 @@ G_multiply_complex(
 
 __global__ void G_vec_power_I(
         cufftDoubleComplex *__restrict__ x,
-        const unsigned x_size_2_1,
-        const unsigned siftings)
+        const uint32_t x_size_2_1,
+        const uint16_t siftings)
 {
     const auto ix = blockIdx.x * blockDim.x + tid;
     const auto stride = blockDim.x * gridDim.x;
@@ -173,7 +173,7 @@ __global__ void G_vec_power_I(
         px = 1. - x[j].x;
         py = -x[j].y;
         UNROLL()
-        for (unsigned i = 1; i < siftings; i++) {
+        for (DTYPE(siftings) i = 1; i < siftings; i++) {
             px_out = px * (1. - x[j].x) - py * (-x[j].y);
             py_out = px * (-x[j].y) + py * (1. - x[j].x);
             px = px_out;
@@ -188,14 +188,14 @@ __global__ void
 G_vec_power(
         CRPTR(cufftDoubleComplex) x,
         cufftDoubleComplex *__restrict__ y,
-        const unsigned n,
-        const unsigned siftings)
+        const uint32_t n,
+        const uint16_t siftings)
 {
     double px, py;
     CU_STRIDED_FOR_i(n) {
         px = 1. - x[i].x;
         py = -x[i].y;
-        for (unsigned j = 1; j < siftings; ++j) {
+        for (DTYPE(siftings) j = 1; j < siftings; ++j) {
             px = px * (1. - x[j].x) - py * (-x[j].y);
             py = px * (-x[j].y) + py * (1. - x[j].x);
         }
@@ -205,7 +205,7 @@ G_vec_power(
 }
 
 __global__ void G_gpu_multiply_smooth(
-        const unsigned input_size,
+        const uint32_t input_size,
         const double coeff,
         cufftDoubleComplex *__restrict__ output)
 {
@@ -218,8 +218,8 @@ __global__ void G_gpu_multiply_smooth(
 
 
 __global__ void G_vec_sift(
-        const unsigned fft_size,
-        const unsigned siftings,
+        const uint32_t fft_size,
+        const uint16_t siftings,
         const cufftDoubleComplex *__restrict__ x,
         cufftDoubleComplex *__restrict__ imf,
         cufftDoubleComplex *__restrict__ rem)
@@ -229,7 +229,7 @@ __global__ void G_vec_sift(
         px = 1. - x[i].x;
         py = -x[i].y;
         UNROLL()
-        for (unsigned j = 1; j < siftings; ++j) {
+        for (DTYPE(siftings) j = 1; j < siftings; ++j) {
             px = px * (1. - x[i].x) - py * (-x[i].y);
             py = px * (-x[i].y) + py * (1. - x[i].x);
         }
@@ -242,7 +242,7 @@ __global__ void G_vec_sift(
 
 __global__ void G_sum_expanded(
         RPTR(double) d_sum_imf, RPTR(double) d_sum_rem, RPTR(double) d_sum_corr, CRPTRd d_imf_mask, CRPTRd d_rem_mask,
-        const unsigned expand_size, CRPTRd d_global_sift_matrix)
+        const uint32_t expand_size, CRPTRd d_global_sift_matrix)
 {
     const double expand_size_2 = expand_size * expand_size;
 
@@ -282,8 +282,8 @@ __global__ void G_sum_expanded(
 
 
 void oemd_coefficients_search::transform(
-        double *d_values, CPTRd d_mask, const unsigned input_len, const unsigned mask_len,
-        const unsigned siftings, double *d_temp, const cudaStream_t custream) const
+        double *d_values, CPTRd d_mask, const uint32_t input_len, const uint32_t mask_len,
+        const uint16_t siftings, double *d_temp, const cudaStream_t custream) const
 {
     auto d_imf = cumallocopy(d_values, custream, input_len, cudaMemcpyDeviceToDevice);
     sift(siftings, input_len, mask_len, custream, d_mask, d_imf, d_temp);
@@ -294,21 +294,21 @@ void oemd_coefficients_search::transform(
 
 std::tuple<double, double, double, double>
 oemd_coefficients_search::sift_the_mask(
-        const unsigned mask_size,
-        const unsigned siftings,
+        const uint32_t mask_size,
+        const uint16_t siftings,
         CPTRd d_mask,
         const cufftHandle plan_sift_forward,
         const cufftHandle plan_sift_backward,
         CPTRd d_expanded_mask,
         const cufftDoubleComplex *d_expanded_mask_fft,
         CPTRd d_global_sift_matrix_ptr,
-        const unsigned gpu_id)
+        const uint16_t gpu_id)
 {
     cu_errchk(cudaSetDevice(gpu_id));
     cudaStream_t custream;
     cu_errchk(cudaStreamCreate(&custream));
     double sum_full, sum_imf, sum_rem, sum_corr;
-    const unsigned expand_size = siftings * mask_size;
+    const uint32_t expand_size = siftings * mask_size;
     thrust::device_vector<double> d_zm_mask(expand_size);
     thrust::device_vector<double> d_imf_mask(expand_size);
     thrust::device_vector<double> d_rem_mask(expand_size);
@@ -350,7 +350,7 @@ oemd_coefficients_search::sift_the_mask(
 
 
 __global__ void G_do_quality(
-        CRPTR(cuDoubleComplex) mask_fft, const unsigned siftings, const unsigned n, const double coeff, const unsigned end_i, const double mask_fft_coef, double *result)
+        CRPTR(cuDoubleComplex) mask_fft, const uint16_t siftings, const uint32_t n, const double coeff, const uint32_t end_i, const double mask_fft_coef, double *result)
 {
     __shared__ double shared[common::C_cu_block_size];
     constexpr cuDoubleComplex cplx_one{1, 0};
@@ -359,12 +359,12 @@ __global__ void G_do_quality(
         if (i < end_i) {
             const auto zz = make_cuDoubleComplex(1. - mask_fft[i].x, -mask_fft[i].y);
             UNROLL()
-            for (unsigned k = 0; k < siftings; ++k) p = cuCmul(p, zz);
+            for (DTYPE(siftings) k = 0; k < siftings; ++k) p = cuCmul(p, zz);
             shared[tid] = cunorm(p) + abs(1. - cunorm(cuCsub(cplx_one, p)));
         } else {
             const cuDoubleComplex zz = mask_fft[i];
             UNROLL()
-            for (unsigned k = 0; k < siftings; ++k) p = cuCmul(p, zz);
+            for (DTYPE(siftings) k = 0; k < siftings; ++k) p = cuCmul(p, zz);
             shared[tid] = i < mask_fft_coef ? cunorm(p) : oemd_coefficients_search::C_smooth_factor * cunorm(p);
         }
         const double norm_zz = cunorm(mask_fft[i]);
@@ -375,7 +375,7 @@ __global__ void G_do_quality(
     const auto sh_limit = _MIN(n, common::C_cu_block_size);
 #define stride_reduce_sum(block_low_)                        \
         if (common::C_cu_block_size >= block_low_) {         \
-            constexpr unsigned stride2 = block_low_ / 2;     \
+            constexpr auto stride2 = block_low_ / 2;     \
             const auto tid_stride2 = tid + stride2;          \
             if (tid < stride2 && tid_stride2 < sh_limit)     \
                 shared[tid] += shared[tid_stride2];          \
@@ -394,10 +394,10 @@ __global__ void G_do_quality(
     atomicAdd(result, shared[0]);
 }
 
-double oemd_coefficients_search::cu_quality(const cufftDoubleComplex *mask_fft, const unsigned mask_size, const unsigned siftings, const cudaStream_t custream)
+double oemd_coefficients_search::cu_quality(const cufftDoubleComplex *mask_fft, const uint32_t mask_size, const uint16_t siftings, const cudaStream_t custream)
 {
     const double coeff = mask_size / 250.;
-    const unsigned end_i = mask_size * 2. * lambda1 / coeff;
+    const uint32_t end_i = mask_size * 2. * lambda1 / coeff;
     const auto mask_fft_coef = mask_size * 2. * lambda2 / coeff;
     double result, *d_result = cucalloc<double>(custream);
     G_do_quality<<<CU_BLOCKS_THREADS(mask_size), 0, custream>>>(mask_fft, siftings, mask_size, coeff, end_i, mask_fft_coef, d_result);
@@ -410,12 +410,12 @@ double oemd_coefficients_search::cu_quality(const cufftDoubleComplex *mask_fft, 
 
 void
 oemd_coefficients_search::gauss_smoothen_mask(
-        const unsigned mask_size,
+        const uint32_t mask_size,
         std::vector<double> &mask,
         common::t_drand48_data_ptr buffer,
         cufftHandle plan_mask_forward,
         cufftHandle plan_mask_backward,
-        const unsigned gpu_id)
+        const uint16_t gpu_id)
 {
     const auto full_size = 2 * mask_size;
     cu_errchk(cudaSetDevice(gpu_id));
@@ -448,16 +448,16 @@ oemd_coefficients_search::gauss_smoothen_mask(
 
 void
 oemd_coefficients_search::create_random_mask(
-        const unsigned position, double step, const unsigned mask_size, std::vector<double> &mask, CPTRd start_mask,
-        common::t_drand48_data_ptr buffer, cufftHandle plan_mask_forward, cufftHandle plan_mask_backward, const unsigned gpu_id)
+        const uint32_t position, double step, const uint32_t mask_size, std::vector<double> &mask, CPTRd start_mask,
+        common::t_drand48_data_ptr buffer, cufftHandle plan_mask_forward, cufftHandle plan_mask_backward, const uint16_t gpu_id)
 {
     step *= common::drander(buffer);
     if (!start_mask) {
         UNROLL()
-        for (unsigned i = 0; i < mask_size; ++i) mask[i] = common::drander(buffer);
+        for (DTYPE(mask_size) i = 0; i < mask_size; ++i) mask[i] = common::drander(buffer);
     } else {
 #pragma omp parallel for default(shared) num_threads(adj_threads(mask_size))
-        for (unsigned i = 0; i < mask_size; ++i) {
+        for (DTYPE(mask_size) i = 0; i < mask_size; ++i) {
             if (common::drander(buffer) > .25) {
                 if (common::drander(buffer) > .05) {
                     if (common::drander(buffer) > .5) {
@@ -481,7 +481,7 @@ oemd_coefficients_search::create_random_mask(
 }
 
 
-__global__ void compute_power_spectrum(CRPTR(cufftDoubleComplex) d_freq, double *const d_psd, double *const d_psd_sum, const unsigned N, const unsigned N_2_1)
+__global__ void compute_power_spectrum(CRPTR(cufftDoubleComplex) d_freq, double *const d_psd, double *const d_psd_sum, const uint32_t N, const uint32_t N_2_1)
 {
     CU_STRIDED_FOR_i(N_2_1) {
         d_psd[i] = fabs(d_freq[i].x) + fabs(d_freq[i].y);
@@ -489,17 +489,17 @@ __global__ void compute_power_spectrum(CRPTR(cufftDoubleComplex) d_freq, double 
     }
 }
 
-__global__ void normalize_psd(double *const d_psd, CRPTRd d_psd_sum, const unsigned N_2_1)
+__global__ void normalize_psd(double *const d_psd, CRPTRd d_psd_sum, const uint32_t N_2_1)
 {
     CU_STRIDED_FOR_i(N_2_1) d_psd[i] /= *d_psd_sum;
 }
 
-__global__ void compute_spectral_entropy(CRPTRd d_psd, double *const d_entropy, const unsigned N_2_1)
+__global__ void compute_spectral_entropy(CRPTRd d_psd, double *const d_entropy, const uint32_t N_2_1)
 {
     CU_STRIDED_FOR_i(N_2_1) if (d_psd[i] > 0) atomicAdd(d_entropy, -d_psd[i] * log2f(d_psd[i]));
 }
 
-double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal, unsigned N, const cudaStream_t custream)
+double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal, uint32_t N, const cudaStream_t custream)
 {
     if (N > C_cufft_input_limit) {
         d_signal += N - C_cufft_input_limit;
@@ -549,7 +549,7 @@ double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal
 }
 
 
-void cu_normalize(double *const d_in, const unsigned n, const cudaStream_t custream)
+void cu_normalize(double *const d_in, const uint32_t n, const cudaStream_t custream)
 {
     const auto mean = solvers::mean(d_in, n, custream);
     if (mean != 0) oemd::G_subtract_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in, mean, n);
@@ -562,7 +562,7 @@ template<typename T> __device__ inline T sinc(const T x)
     return x == T(0) ? 1 : sin(M_PI * x) / (M_PI * x);
 }
 
-__global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const unsigned len, const double len_2, const double len_1, const double f_2)
+__global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const uint32_t len, const double len_2, const double len_1, const double f_2)
 {
     constexpr double alpha0 = .42;
     constexpr double alpha1 = .5;
@@ -573,7 +573,7 @@ __global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const u
     CU_STRIDED_FOR_i(len)d_mask[i] = /* low-pass */ f_2 * sinc(f_2 * (i - len_2)) * /* blackman */ (alpha0 - alpha1 * cos(pi_2 * i / len_1) - alpha2 * cos(pi_4 * i / len_1));
 }
 
-double *generate_fir_mask(const unsigned len, const double f, const cudaStream_t custream)
+double *generate_fir_mask(const uint32_t len, const double f, const cudaStream_t custream)
 {
     double *d_mask;
     cu_errchk(cudaMallocAsync(&d_mask, len * sizeof(*d_mask), custream));
@@ -595,7 +595,7 @@ std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_
     // Transition band (rad/sec)
     const double Tb = C_pi_2 * (fs - fp) / Fs;
     std::vector<double> w;
-    unsigned N;
+    uint32_t N;
 
     // Choice of window function based on stopband attenuation
     if (Kaiser) {
@@ -668,7 +668,7 @@ double
 oemd_coefficients_search::evaluate_mask(
         const double att, const double fp, const double fs, const std::span<double> &workspace,
         const uint8_t siftings, const uint32_t prev_masks_len,
-        const double meanabs_input, const std::vector<unsigned> &times,
+        const double meanabs_input, const std::vector<uint32_t> &times,
         const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const
 {
     const auto mask = lbp_fir(att, fp, fs, sample_rate);
@@ -783,11 +783,11 @@ oemd_coefficients_search::evaluate_mask(
 
 
 void oemd_coefficients_search::sift(
-        const unsigned siftings, const unsigned full_input_len, const unsigned mask_len, const cudaStream_t custream, CPTRd d_mask, double *const d_rx,
+        const uint16_t siftings, const uint32_t full_input_len, const uint32_t mask_len, const cudaStream_t custream, CPTRd d_mask, double *const d_rx,
         double *const d_rx2) const noexcept
 {
     UNROLL()
-    for (unsigned s = 0; s < siftings; ++s) {
+    for (DTYPE(siftings) s = 0; s < siftings; ++s) {
         oemd::G_apply_fir<<<CU_BLOCKS_THREADS(full_input_len), 0, custream>>>(
                 stretch_coef, d_rx, full_input_len, d_mask, mask_len, mask_len * stretch_coef, d_rx2, 0);
         oemd::G_subtract_I<<<CU_BLOCKS_THREADS(full_input_len), 0, custream>>>(d_rx, d_rx2, full_input_len);
@@ -795,22 +795,22 @@ void oemd_coefficients_search::sift(
 }
 
 // Function to calculate the magnitude of complex numbers
-__global__ void G_calculate_magnitude(CRPTR(cufftDoubleComplex) freq_domain, RPTR(double) magnitudes, const unsigned N)
+__global__ void G_calculate_magnitude(CRPTR(cufftDoubleComplex) freq_domain, RPTR(double) magnitudes, const uint32_t N)
 {
     CU_STRIDED_FOR_i(N) magnitudes[i] = fabs(freq_domain[i].x) + fabs(freq_domain[i].y);
 }
 
 // Find n-th percentile broadest and tallest peak in the vector
-unsigned find_nth_peak(const std::vector<double> &data, const double n)
+uint32_t find_nth_peak(const std::vector<double> &data, const double n)
 {
     // LOG4_DEBUG("Input magnitudes " << common::present(arma::vec(data)));
     std::map<double, size_t, common::safe_double_less> peaks;
     t_omp_lock peak_l;
     // Find all peaks in the vector
-    OMP_FOR_i((unsigned) data.size()) {
+    OMP_FOR_i((uint32_t) data.size()) {
         double peak_width = 0;
         // Check m neighbors
-        for (unsigned j = 1; j < std::abs<int>(i - data.size()); ++j) {
+        for (DTYPE(i) j = 1; j < std::abs<int>(i - data.size()); ++j) {
             bool peak_left = false;
             bool peak_right = false;
             if (i < j) {
@@ -845,8 +845,8 @@ unsigned find_nth_peak(const std::vector<double> &data, const double n)
 
 double oemd_coefficients_search::dominant_frequency(const std::span<double> &input, const double percentile_greatest_peak, const cudaStream_t custream) const
 {
-    const unsigned n = input.size() - input.size() % 2;
-    const unsigned fft_n = common::fft_len(n);
+    const uint32_t n = input.size() - input.size() % 2;
+    const uint32_t fft_n = common::fft_len(n);
 
     // Allocate device memory
     double *d_signal, *d_magnitudes;
@@ -886,11 +886,11 @@ oemd_coefficients_search::run(
         const datamodel::datarow_crange &input,
         const std::vector<double> &tail,
         std::deque<std::vector<double>> &masks,
-        std::deque<unsigned> &siftings,
-        const unsigned window_start,
-        const unsigned window_end,
+        std::deque<uint16_t> &siftings,
+        const uint32_t window_start,
+        const uint32_t window_end,
         const std::string &queue_name,
-        const unsigned in_colix,
+        const uint16_t in_colix,
         const datamodel::t_iqscaler &scaler) const
 {
     const auto window_len = window_end - window_start;
@@ -905,7 +905,7 @@ oemd_coefficients_search::run(
     const auto first_time = input.front()->get_value_time();
     const auto first_time_t = bpt::to_time_t(first_time);
     OMP_FOR(window_len)
-    for (unsigned i = window_start; i < window_end; ++i) {
+    for (auto i = window_start; i < window_end; ++i) {
         double value;
         bpt::ptime time;
         if (i < tail.size()) {
@@ -937,7 +937,7 @@ oemd_coefficients_search::run(
     label_ixs.reserve(label_times.size());
     std::vector<t_feat_params> feat_params;
     feat_params.reserve(label_times.size());
-    const unsigned horizon_len_1 = label_len * PROPS.get_prediction_horizon() * 2;
+    const uint32_t horizon_len_1 = label_len * PROPS.get_prediction_horizon() * 2;
     const auto max_row_duration = horizon_duration + max_row_len * resolution;
     const auto label_len_1 = label_len + 1;
     // TODO Unify with ModelService::prepare_labels()
@@ -958,7 +958,7 @@ oemd_coefficients_search::run(
         const auto F_end_time = L_start_time - horizon_duration;
         auto F_end_it = lower_bound(L_start_it - times.cbegin() > horizon_len_1 ? L_start_it - horizon_len_1 : times.cbegin(), L_start_it, F_end_time);
         if (F_end_it == times.cend() || F_end_it == times.cbegin()) continue;
-        const unsigned F_end_ix = F_end_it - times.cbegin();
+        const uint32_t F_end_ix = F_end_it - times.cbegin();
         if (F_end_ix < max_row_len) continue;
         t_label_ix *L_ins;
         t_feat_params *F_ins;

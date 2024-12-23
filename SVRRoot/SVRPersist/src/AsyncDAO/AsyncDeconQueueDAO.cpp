@@ -7,7 +7,6 @@
 #include "../PgDAO/PgDeconQueueDAO.hpp"
 
 using svr::datamodel::DeconQueue;
-using svr::common::reject_empty;
 
 namespace svr {    
 namespace dao {
@@ -44,12 +43,12 @@ AsyncDeconQueueDAO::~AsyncDeconQueueDAO()
     delete & pImpl;
 }
 
-datamodel::DeconQueue_ptr AsyncDeconQueueDAO::get_decon_queue_by_table_name(const std::string &tableName)
+datamodel::DeconQueue_ptr AsyncDeconQueueDAO::get_decon_queue_by_table_name(const std::string &table_name)
 {
     datamodel::DeconQueue_ptr dq(new DeconQueue());
-    dq->set_table_name(tableName);
+    dq->set_table_name(table_name);
 
-    pImpl.seekAndCache(dq, &PgDeconQueueDAO::get_decon_queue_by_table_name, tableName);
+    pImpl.seekAndCache(dq, &PgDeconQueueDAO::get_decon_queue_by_table_name, table_name);
     return dq;
 }
 
@@ -72,10 +71,10 @@ bool AsyncDeconQueueDAO::exists(const datamodel::DeconQueue_ptr& deconQueue)
     return exists(deconQueue->get_table_name());
 }
 
-bool AsyncDeconQueueDAO::exists(const std::string &tableName)
+bool AsyncDeconQueueDAO::exists(const std::string &table_name)
 {
     datamodel::DeconQueue_ptr dq(new DeconQueue());
-    dq->set_table_name(tableName);
+    dq->set_table_name(table_name);
 
     if(pImpl.cached(dq))
         return true;

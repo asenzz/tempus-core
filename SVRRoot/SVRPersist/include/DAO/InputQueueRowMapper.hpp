@@ -17,7 +17,7 @@ public:
     virtual ~InputQueueRowMapper()
     {}
 
-    datamodel::InputQueue_ptr mapRow(const pqxx_tuple &row_set) const override
+    datamodel::InputQueue_ptr map_row(const pqxx_tuple &row_set) const override
     {
         if (row_set["table_name"].is_null()) LOG4_THROW("Cannot map a row with empty table_name");
         datamodel::InputQueue_ptr result = ptr<datamodel::InputQueue>(
@@ -45,9 +45,9 @@ public:
     virtual ~InputQueueDbTableColumnsMapper()
     {}
 
-    std::shared_ptr<std::string> mapRow(const pqxx_tuple &rowSet) const override
+    std::shared_ptr<std::string> map_row(const pqxx_tuple &row_set) const override
     {
-        return otr<std::string>(rowSet[0].as<std::string>());
+        return otr<std::string>(row_set[0].as<std::string>());
     }
 };
 

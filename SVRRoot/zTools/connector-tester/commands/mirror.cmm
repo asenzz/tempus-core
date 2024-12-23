@@ -42,13 +42,13 @@ struct Mirror : Command
         if(!request)
             throw std::runtime_error("Mirror: cannot find the user's request. Make sure MT4 is started and requests for values.");
 
-        boost::posix_time::time_duration const resolution {boost::posix_time::seconds(request->resolution)};
+        const auto resolution = request->resolution;
 
         svr::datamodel::InputQueue_ptr queue = aci.input_queue_service.get_queue_metadata(user_name, dataset_name, resolution);
         if(!queue)
             throw std::runtime_error("Mirror: cannot find the input queue.");
 
-        size_t n ((request->value_time_end - request->value_time_start).total_seconds() / request->resolution);
+        size_t n ((request->value_time_end - request->value_time_start).total_seconds() / request->resolution.total_seconds());
 
         svr::datamodel::DataRow_ptr nr = aci.input_queue_service.find_newest_record(queue);
         if(!nr)

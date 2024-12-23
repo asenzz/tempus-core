@@ -46,18 +46,18 @@ int PgUserDAO::remove(const User_ptr& user) {
     return data_source.update(AbstractDAO::get_sql("remove"), user->get_user_name());
 }
 
-bool PgUserDAO::exists(std::string const & userName) {
-    return 1 == data_source.query_for_type<long>(AbstractDAO::get_sql("existsByUsername"), userName);
+bool PgUserDAO::exists(std::string const & user_name) {
+    return 1 == data_source.query_for_type<long>(AbstractDAO::get_sql("existsByUsername"), user_name);
 }
 
 User_ptr PgUserDAO::get_by_user_name(const std::string &user_name) {
-    UserRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_user_name"), user_name);
+    UserRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_user_name"), user_name);
 }
 
 std::vector<User_ptr> PgUserDAO::get_all_users() {
-    UserRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, AbstractDAO::get_sql("get_all_users"));
+    UserRowMapper row_mapper;
+    return data_source.query_for_array(row_mapper, AbstractDAO::get_sql("get_all_users"));
 }
 
 
@@ -67,8 +67,8 @@ bool PgUserDAO::login(const std::string &user_name, const std::string &enc_passw
 
 std::vector<User_ptr> PgUserDAO::get_all_users_by_priority()
 {
-    UserRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, get_sql("get_all_users_by_priority"));
+    UserRowMapper row_mapper;
+    return data_source.query_for_array(row_mapper, get_sql("get_all_users_by_priority"));
 }
 
 }}

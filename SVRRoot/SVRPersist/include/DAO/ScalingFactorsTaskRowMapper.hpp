@@ -8,13 +8,13 @@ namespace dao{
 
 class ScalingFactorsTaskRowMapper : public IRowMapper<svr::datamodel::ScalingFactorsTask>{
 public:
-    ScalingFactorsTask_ptr mapRow(const pqxx_tuple& rowSet) const override {
+    ScalingFactorsTask_ptr map_row(const pqxx_tuple& row_set) const override {
 
         return ptr<svr::datamodel::ScalingFactorsTask>(
-                rowSet["id"].as<bigint>(0),
-                rowSet["dataset_id"].as<bigint>(0),
-                rowSet["status"].as<int>(0),
-                rowSet["mse"].as<double>(0)
+                row_set["id"].as<bigint>(0),
+                row_set["dataset_id"].as<bigint>(0),
+                row_set["status"].as<int>(0),
+                row_set["mse"].as<double>(0)
         );
     }
 };

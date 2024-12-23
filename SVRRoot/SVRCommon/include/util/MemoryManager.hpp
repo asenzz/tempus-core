@@ -1,5 +1,5 @@
 #ifndef MEMORYMANAGER_HPP
-#define	MEMORYMANAGER_HPP
+#define    MEMORYMANAGER_HPP
 
 #include <thread>
 #include <mutex>
@@ -13,51 +13,49 @@ namespace common {
 #define FREE_RAM_THRESHOLD .2
 #define GB_RAM_UNIT_DIVIDER (1024*1024) // As current meminfo report is in KB
 #define THREADS_CORES_MULTIPLIER 1
-#define SLEEP_ITERATIONS 160
-#define SLEEP_INTERVAL std::chrono::milliseconds(10)
+#define SLEEP_INTERVAL std::chrono::milliseconds(200)
 
-enum class memory_manager_state { WORK, SHUTDOWN };
+enum class memory_manager_state {
+    WORK, SHUTDOWN
+};
 
-class memory_manager
-{
-public:
-    struct memory_info_t
-    {
-        long mem_free{0}, buffers{0}, cached{0}, mem_total{0}, swap_free{0}, swap_total{0};
-    };
-
-    void barrier();
-    static memory_manager &get();
-
-    static void read_memory(memory_info_t &mem_info);
-    static size_t read_threads();
-    static bool threads_available();
-    static void process_mem_usage(double &vm_usage, double &resident_set);
-    static double get_process_resident_set()
-    {
-        double resident_set = 0., vmm = 0.;
-        process_mem_usage(vmm, resident_set);
-        return resident_set;
-    }
-private:
+class memory_manager {
     memory_manager();
+
     virtual ~memory_manager();
-    memory_manager(const memory_manager&) = delete;
-    memory_manager& operator=(const memory_manager&) = delete;
+
+    memory_manager(const memory_manager &) = delete;
+
+    memory_manager &operator=(const memory_manager &) = delete;
 
     void check_memory();
-
     bool mem_available_;
     mutable std::mutex mx_;
     mutable std::condition_variable cv_;
-    std::atomic<bool> finished {false};
-    std::atomic<bool> trigger {false};
+    std::atomic<bool> finished{false};
+    std::atomic<bool> trigger{false};
     std::thread worker;
+
+public:
+    struct memory_info_t {
+        long mem_free = 0, buffers = 0, cached = 0, mem_total = 0, swap_free = 0, swap_total = 0;
+    };
+
+    void barrier();
+
+    static memory_manager &get();
+
+    static void read_memory(memory_info_t &mem_info, std::ifstream &mem_info_file);
+
+    static size_t read_threads();
+
+    static bool threads_available();
+
+    static double get_process_resident_set();
 };
 
 
-}
-}
+} // namespace common
+} // namespace svr
 
-#endif	/* MEMORYMANAGER_HPP */
-
+#endif    /* MEMORYMANAGER_HPP */

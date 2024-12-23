@@ -14,7 +14,7 @@ public:
     std::vector<User_ptr> get_all_users_by_priority();
     bigint get_next_id();
 
-    bool exists(std::string const & userName);
+    bool exists(std::string const & user_name);
 
     int save(const User_ptr&);
     int update(const User_ptr&);

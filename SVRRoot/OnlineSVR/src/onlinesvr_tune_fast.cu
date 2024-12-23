@@ -90,18 +90,18 @@ OnlineMIMOSVR::cuvalidate(
                                                              train_features_t.n_cols, lag, lambda, 0, custream);
     cu_errchk(cudaFreeAsync(d_train_features_t, custream));
     const auto K_train_off = d_K_train + calc_start * train_len + calc_start;
-    const auto gamma_train = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
-    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma_train);
+    const auto gamma = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
+    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma);
     const auto epsco = cu_calc_epsco(K_train_off, train_label_off, calc_len, n, train_len, custream);
 #else
     double *d_K_train;
     const auto d_train_cuml = cumallocopy(train_cuml, custream);
     cu_errchk(cudaMallocAsync((void **) &d_K_train, K_train_size, custream));
-    kernel::path::cu_kernel_xy(train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, d_train_cuml, d_train_cuml, d_K_train, custream);
+    kernel::path::cu_distances_xy(train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, d_train_cuml, d_train_cuml, d_K_train, custream);
     cu_errchk(cudaFreeAsync(d_train_cuml, custream));
     const auto K_train_off = d_K_train + calc_start * train_len + calc_start;
-    const auto gamma_train = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
-    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma_train);
+    const auto gamma = solvers::cu_calc_gamma(K_train_off, train_len, train_label_off, calc_len, n, gamma_bias, custream);
+    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma);
     if (train_W.n_elem) {
         RPTR(double) d_train_W = cumallocopy(train_W, custream);
         thrust::transform(thrust::cuda::par.on(custream), d_K_train, d_K_train + K_train_len, d_train_W, d_K_train, thrust::multiplies<double>());
@@ -120,7 +120,6 @@ OnlineMIMOSVR::cuvalidate(
     cu_errchk(cudaMallocAsync((void **) &j_work, train_n_size, custream));
 #ifdef INSTANCE_WEIGHTS
     RPTR(double) d_tune_W = cumallocopy(tune_W, custream);
-    constexpr double *d_tune_W = nullptr;
 #endif
 
     t_param_preds::t_predictions_ptr p_predictions;
@@ -137,7 +136,7 @@ OnlineMIMOSVR::cuvalidate(
 #else
     auto const d_tune_cuml = cumallocopy(tune_cuml, custream);
     cu_errchk(cudaMallocAsync((void **) &d_Kz_tune, mm_size, custream));
-    kernel::path::cu_kernel_xy(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, gamma_train, d_tune_cuml, d_tune_cuml, d_Kz_tune, custream);
+    kernel::path::cu_kernel_xy(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, tau, gamma, d_tune_cuml, d_tune_cuml, d_Kz_tune, custream);
     cu_errchk(cudaFreeAsync(d_tune_cuml, custream));
 #endif
     const auto d_tune_label_chunk = cumallocopy(tune_label_chunk, custream);
@@ -193,7 +192,8 @@ OnlineMIMOSVR::cuvalidate(
             cb_errchk(cublasDasum(cublas_H, test_len_n, j_work, 1, &predict_score));
             predict_score *= labels_sf / double(test_len_n);
 #else
-            predict_score = labels_sf * solvers::meanabs(j_work, test_len_n, custream);
+            // predict_score = labels_sf * solvers::swscore(j_work, train_len, d_tune_label_chunk + test_start, m, test_len, n, custream); 
+            predict_score = labels_sf * solvers::meanabs(j_work, test_len_n, custream); // TODO Implement LD for j_work 
 #endif
         }
         LOG4_TRACE("Try " << j << " kernel dimensions " << train_len << "x" << train_len << ", delta " << common::C_itersolve_delta << ", range " << common::C_itersolve_range <<
@@ -211,7 +211,7 @@ OnlineMIMOSVR::cuvalidate(
     cu_errchk(cudaFreeAsync(d_best_weights, custream));
     cu_errchk(cudaFreeAsync(d_tune_label_chunk, custream));
     magma_queue_destroy(ma_queue);
-    return {total_score / C_max_j, gamma_train, epsco, p_predictions};
+    return {total_score / C_max_j, gamma, epsco, p_predictions};
 }
 
 #if 0

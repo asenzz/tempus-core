@@ -319,7 +319,7 @@ std::string sanitize_db_table_name(std::string toBeIdentifier, char replaceChar 
 
 std::string make_md5_hash(const std::string &in);
 
-std::string to_mt4_date(const bpt::ptime &time);
+std::string to_mql_date(const bpt::ptime &time);
 
 std::map<std::string, std::string> json_to_map(const std::string &json_str);
 
@@ -330,8 +330,7 @@ std::vector<size_t> parse_string_range(const std::string &parameter_string);
 std::vector<std::string>
 parse_string_range(const std::string &parameter_string, const std::vector<std::string> &set_parameters);
 
-template<typename T> T
-from_string(const std::string &s)
+template<typename T> T inline from_string(const std::string &s)
 {
     std::istringstream is(s);
     T t;
@@ -339,17 +338,18 @@ from_string(const std::string &s)
     return t;
 }
 
+template<typename T, std::enable_if_t<std::is_floating_point<T>::value, bool> = true> inline std::string to_string(const T v)
+{
+    std::ostringstream out;
+    out.precision(std::numeric_limits<T>::max_digits10);
+    out << v;
+    return out.str();
+}
 
 } // namespace common
 } // namespace svr
 
 namespace std {
-
-std::string to_string(const long double v);
-
-std::string to_string(const double v);
-
-std::string to_string(const float v);
 
 template<typename T> std::basic_ostream<char> &
 operator<<(std::basic_ostream<char> &s, const std::deque<std::shared_ptr<T>> &v)

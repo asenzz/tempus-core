@@ -8,7 +8,7 @@ namespace dao{
 
 class DatasetRowMapper : public IRowMapper<svr::datamodel::Dataset>{
 public:
-    datamodel::Dataset_ptr mapRow(const pqxx_tuple& row_set) const override{
+    datamodel::Dataset_ptr map_row(const pqxx_tuple& row_set) const override{
 
         using svr::common::ignore_case_equals;
         
@@ -25,7 +25,7 @@ public:
                 row_set["multistep"].as<size_t>(0),
                 row_set["levels"].as<size_t>(0),
                 row_set["deconstruction"].as<std::string>(""),
-                row_set["max_gap"].is_null() ? bpt::time_duration() : bpt::duration_from_string(row_set["max_gap"].as<std::string>()),
+                row_set["max_gap"].as<bpt::time_duration>(onesec),
                 std::deque<datamodel::Ensemble_ptr>(),
                 row_set["is_active"].as<bool>(false)
         );
@@ -35,11 +35,11 @@ public:
 class UserDatasetRowMapper : public IRowMapper<std::pair<std::string, datamodel::Dataset_ptr>>{
     DatasetRowMapper datasetRowMapper;
 public:
-    std::shared_ptr<std::pair<std::string, datamodel::Dataset_ptr>> mapRow(const pqxx_tuple& row_set) const override {
+    std::shared_ptr<std::pair<std::string, datamodel::Dataset_ptr>> map_row(const pqxx_tuple& row_set) const override {
         return ptr<std::pair<std::string, datamodel::Dataset_ptr>>
         (
               row_set["linked_user_name"].as<std::string>("")
-            , datasetRowMapper.mapRow(row_set)
+            , datasetRowMapper.map_row(row_set)
         );
     }
 };

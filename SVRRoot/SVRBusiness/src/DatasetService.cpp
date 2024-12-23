@@ -129,7 +129,7 @@ bool DatasetService::save(const datamodel::Dataset_ptr &p_dataset)
 
 bool DatasetService::exists(datamodel::Dataset_ptr const &dataset)
 {
-    common::reject_nullptr(dataset);
+    REJECT_NULLPTR(dataset);
     return dataset_dao.exists(dataset->get_id());
 }
 
@@ -142,7 +142,7 @@ bool DatasetService::exists(int dataset_id)
 
 int DatasetService::remove(datamodel::Dataset_ptr const &dataset)
 {
-    common::reject_nullptr(dataset);
+    REJECT_NULLPTR(dataset);
     svr_parameters_service.remove_by_dataset(dataset->get_id());
     OMP_FOR(dataset->get_ensembles().size())
     for (auto e: dataset->get_ensembles())
@@ -261,62 +261,66 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
 
     const auto requests = context::AppContext::get_instance().request_service.get_active_multival_requests(user, dataset);
     const auto timenow = bpt::second_clock::local_time();
-    OMP_FOR_(requests.size(),)
-    for (const auto &p_request: requests) {
-        std::atomic<bool> request_answered = true;
+#pragma omp parallel ADJ_THREADS(2 * requests.size())
+#pragma omp single
+    {
+        OMP_TASKLOOP_(requests.size(),)
+        for (const auto &p_request: requests) {
+            std::atomic<bool> request_answered = true;
 
 #define REQCHK(COND, MSG) if (COND) { LOG4_ERROR(MSG); request_answered.store(false, std::memory_order_relaxed); continue; }
 
-        REQCHK(!p_request->sanity_check(), "Request " << *p_request << " incorrect!")
+            REQCHK(!p_request->sanity_check(), "Request " << *p_request << " incorrect!")
 
-        LOG4_DEBUG("Processing request " << *p_request);
-        data_row_container predict_times;
-        if (p_request->value_time_start == p_request->value_time_end)
-            predict_times.emplace_back(otr<datamodel::DataRow>(p_request->value_time_start, timenow, 0, 0));
-        else
-            for (auto t = p_request->value_time_start; t < p_request->value_time_end; t += dataset.get_input_queue()->get_resolution())
-                predict_times.emplace_back(otr<datamodel::DataRow>(t, timenow, 0, 0));
+            LOG4_DEBUG("Processing request " << *p_request);
+            data_row_container predict_times;
+            if (p_request->value_time_start == p_request->value_time_end)
+                predict_times.emplace_back(otr<datamodel::DataRow>(p_request->value_time_start, timenow, 0, 0));
+            else
+                for (auto t = p_request->value_time_start; t < p_request->value_time_end; t += dataset.get_input_queue()->get_resolution())
+                    predict_times.emplace_back(otr<datamodel::DataRow>(t, timenow, 0, 0));
 
-        REQCHK(predict_times.empty(), "Times grid empty.")
+            REQCHK(predict_times.empty(), "Times grid empty.")
 
-        // Do actual predictions
-        const auto columns = p_request->get_value_columns();
-        OMP_FOR(columns.size())
-        for (const auto &request_column: columns)
-            if (request_answered) {
-                const auto p_ensemble = dataset.get_ensemble(request_column);
-                REQCHK(!p_ensemble, "Ensemble for request column " << request_column << " not found.")
+            // Do actual predictions
+            const auto &columns = p_request->get_value_columns();
+            OMP_TASKLOOP_(columns.size(),)
+            for (const auto &request_column: columns)
+                if (request_answered) {
+                    const auto p_ensemble = dataset.get_ensemble(request_column);
+                    REQCHK(!p_ensemble, "Ensemble for request column " << request_column << " not found.")
 
-                const auto predicted_decon = EnsembleService::predict_noexcept(dataset, *p_ensemble, predict_times);
-                REQCHK(!predicted_decon, "Predicted decon empty.")
+                    const auto predicted_decon = EnsembleService::predict_noexcept(dataset, *p_ensemble, predict_times);
+                    REQCHK(!predicted_decon, "Predicted decon empty.")
 
-                const auto unscaler = IQScalingFactorService::get_unscaler(
-                        dataset, p_ensemble->get_label_aux_decon()->get_input_queue_table_name(), p_ensemble->get_label_aux_decon()->get_input_queue_column_name());
-                const auto predicted_recon = APP.decon_queue_service.reconstruct(datamodel::datarow_range(predicted_decon->get_data()), recon_type_e::ADDITIVE, unscaler);
+                    const auto unscaler = IQScalingFactorService::get_unscaler(
+                            dataset, p_ensemble->get_label_aux_decon()->get_input_queue_table_name(), request_column);
+                    const auto predicted_recon = APP.decon_queue_service.reconstruct(
+                            datamodel::datarow_range(predicted_decon->get_data()), recon_type_e::ADDITIVE, unscaler);
 
-                REQCHK(predicted_recon.empty(), "Empty reconstructed data.")
+                    REQCHK(predicted_recon.empty(), "Empty reconstructed data.")
 
-                LOG4_DEBUG("Saving reconstructed predictions from " << (**predicted_recon.cbegin()).get_value_time()
-                                                                    << " until " << (**predicted_recon.crbegin()).get_value_time());
-                std::for_each(C_default_exec_policy, predicted_recon.cbegin(), predicted_recon.cend(),
-                              [&request_column, &p_request](const auto &p_result_row) {
-                                  if (p_result_row->get_value_time() < p_request->value_time_start or p_result_row->get_value_time() > p_request->value_time_end) {
-                                      LOG4_DEBUG("Skipping save response " << *p_result_row);
-                                      return;
-                                  }
-                                  const auto p_response = ptr<datamodel::MultivalResponse>(
-                                          0, p_request->get_id(), p_result_row->get_value_time(), request_column, p_result_row->get_value(0));
-                                  LOG4_TRACE("Saving " << *p_response);
-                                  APP.request_service.save(p_response); // Requests get marked processed here
-                              });
-            }
+                    LOG4_DEBUG("Saving reconstructed predictions from " << (**predicted_recon.cbegin()).get_value_time()
+                                                                        << " until " << (**predicted_recon.crbegin()).get_value_time());
+                    OMP_TASKLOOP_(predicted_recon.size(),)
+                    for (const auto &p_result_row: predicted_recon) {
+                        if (p_result_row->get_value_time() < p_request->value_time_start or p_result_row->get_value_time() > p_request->value_time_end) {
+                            LOG4_DEBUG("Skipping save response " << *p_result_row);
+                            continue;
+                        }
+                        const auto p_response = ptr<datamodel::MultivalResponse>(
+                                0, p_request->get_id(), p_result_row->get_value_time(), request_column, p_result_row->get_value(0));
+                        LOG4_TRACE("Saving " << *p_response);
+                        APP.request_service.save(p_response); // Requests get marked processed here
+                    }
+                }
 
-        if (request_answered)
-            APP.request_service.force_finalize(p_request);
-        else
-            LOG4_WARN("Failed finalizing request " << *p_request);
+            if (request_answered)
+                APP.request_service.force_finalize(p_request);
+            else
+                LOG4_WARN("Failed finalizing request " << *p_request);
+        }
     }
-
     LOG4_END();
 }
 

@@ -23,7 +23,7 @@ public:
     virtual void main(std::string) override;
     void getAllInputQueues();
     void showInputQueue(std::string queueTableName);
-    void getValueColumnsModel(std::string queueTableName);
+    void getValueColumnsModel(std::string queue_table_name);
     void sendTick(cppcms::json::object obj);
     void getNextTimeRangeToBeSent(cppcms::json::object obj);
     void reconcileHistoricalData(cppcms::json::object obj);
@@ -38,7 +38,7 @@ class InputQueueController : public cppcms::application{
 public:
 
     InputQueueController(cppcms::service &svc);
-    void show(std::string queueName);
+    void show(std::string queue_name);
     void showAll();
     void create();
 

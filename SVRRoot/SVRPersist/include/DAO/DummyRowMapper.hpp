@@ -13,7 +13,7 @@ namespace dao {
 
 template<typename T> class DummyRowMapper : public IRowMapper<T> {
 public:
-    T mapRow(const pqxx_tuple &row) const override
+    T map_row(const pqxx_tuple &row) const override
     {
         row.at(0).as<T>();
     }

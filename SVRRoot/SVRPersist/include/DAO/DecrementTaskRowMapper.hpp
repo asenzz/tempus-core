@@ -12,25 +12,25 @@ private:
     // empty
 
 public:
-    DecrementTask_ptr mapRow(const pqxx_tuple& rowSet) const override
+    DecrementTask_ptr map_row(const pqxx_tuple& row_set) const override
     {
         return ptr<svr::datamodel::DecrementTask>(
-                    rowSet["id"].as<bigint>(0),
-                    rowSet["dataset_id"].is_null() ? 0 : rowSet["dataset_id"].as<bigint>(),
-                    rowSet["start_task_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_task_time"].as<std::string>()),
-                    rowSet["end_task_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_task_time"].as<std::string>()),
-                    rowSet["start_train_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_train_time"].as<std::string>()),
-                    rowSet["end_train_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_train_time"].as<std::string>()),
-                    rowSet["start_validation_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_validation_time"].as<std::string>()),
-                    rowSet["end_validation_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_validation_time"].as<std::string>()),
-                    rowSet["parameters"].is_null() ? "" : rowSet["parameters"].as<std::string>(),
-                    rowSet["status"].is_null() ? 0 : rowSet["status"].as<int>(),
-                    rowSet["decrement_step"].is_null() ? "" : rowSet["decrement_step"].as<std::string>(),
-                    rowSet["vp_sliding_direction"].is_null() ? 0 : rowSet["vp_sliding_direction"].as<size_t>(),
-                    rowSet["vp_slide_count"].is_null() ? 0 : rowSet["vp_slide_count"].as<size_t>(),
-                    rowSet["vp_slide_period_sec"].is_null() ? bpt::seconds(0) : bpt::seconds(rowSet["vp_slide_period_sec"].as<long>()),
-                    rowSet["values"].is_null() ? "" : rowSet["values"].as<std::string>(),
-                    rowSet["suggested_value"].is_null() ? "" : rowSet["suggested_value"].as<std::string>()
+                    row_set["id"].as<bigint>(0),
+                    row_set["dataset_id"].is_null() ? 0 : row_set["dataset_id"].as<bigint>(),
+                    row_set["start_task_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                    row_set["end_task_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                    row_set["start_train_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                    row_set["end_train_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                    row_set["start_validation_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                    row_set["end_validation_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                    row_set["parameters"].as<std::string>(""),
+                    row_set["status"].as<int>(0),
+                    row_set["decrement_step"].as<std::string>(""),
+                    row_set["vp_sliding_direction"].as<size_t>(0),
+                    row_set["vp_slide_count"].as<size_t>(0),
+                    bpt::seconds(row_set["vp_slide_period_sec"].as<long>(0)),
+                    row_set["values"].as<std::string>(""),
+                    row_set["suggested_value"].as<std::string>("")
                 );
     }
 };

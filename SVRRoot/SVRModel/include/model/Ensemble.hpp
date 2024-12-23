@@ -50,9 +50,9 @@ public:
 
     std::string get_column_name() const;
 
-    std::deque<datamodel::Model_ptr> &get_models();
-
     datamodel::Model_ptr get_model(const size_t levix, const size_t stepix) const;
+
+    std::deque<datamodel::Model_ptr> &get_models();
 
     const std::deque<datamodel::Model_ptr> &get_models() const;
 
@@ -87,9 +87,9 @@ public:
 
     std::string to_string() const override;
 
-    size_t get_level_ct() const;
+    uint16_t get_level_ct() const;
 
-    size_t get_model_ct() const;
+    uint16_t get_model_ct() const;
 };
 
 using Ensemble_ptr = std::shared_ptr<Ensemble>;

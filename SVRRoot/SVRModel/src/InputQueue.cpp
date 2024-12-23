@@ -83,7 +83,7 @@ const std::string &InputQueue::get_time_zone() const
 void InputQueue::set_time_zone(const std::string &time_zone)
 { time_zone_ = time_zone; }
 
-const std::string InputQueue::get_value_column(const size_t i) const
+const std::string &InputQueue::get_value_column(const size_t i) const
 { return value_columns_[i]; }
 
 const std::deque<std::string> &InputQueue::get_value_columns() const

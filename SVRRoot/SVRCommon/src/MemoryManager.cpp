@@ -16,9 +16,10 @@ namespace svr {
 namespace common {
 
 struct pclose_wrapper {
-	void operator()(FILE *const f) const {
-		pclose(f);
-	}
+    void operator()(FILE *const f) const
+    {
+        pclose(f);
+    }
 };
 
 std::string exec(const char *cmd)
@@ -35,8 +36,7 @@ std::string exec(const char *cmd)
 #include <pthread.h>
 #include <thread>
 
-memory_manager::memory_manager()
-        : mem_available_(false), finished(false), worker(&memory_manager::check_memory, this)
+memory_manager::memory_manager() : mem_available_(false), finished(false), worker(&memory_manager::check_memory, this)
 {
 /*
  * sched_param sch_params;
@@ -67,42 +67,30 @@ bool memory_manager::threads_available()
     // if (level_todo != "ALL") return true;
 
     const auto num_of_threads = read_threads();
-    const auto num_of_cores = C_n_cpu;
-    LOG4_TRACE("Number of cores " << num_of_cores << ", number of threads " << num_of_threads);
-    if (num_of_cores < 1 || num_of_threads < 1)
-        throw std::runtime_error("Number of cores or number of threads cannot be zero!");
-    return num_of_threads <= (svr::common::gpu_handler_1::get().get_max_gpu_threads() +
-                              num_of_cores * THREADS_CORES_MULTIPLIER);
+    LOG4_TRACE("Number of threads " << C_n_cpu);
+    return num_of_threads <= (svr::common::gpu_handler_1::get().get_max_gpu_threads() + C_n_cpu * THREADS_CORES_MULTIPLIER);
 }
 
 
 void memory_manager::check_memory()
 {
     constexpr auto sleep_interval = SLEEP_INTERVAL;
-    constexpr unsigned sleep_iterations = SLEEP_ITERATIONS;
+    std::ifstream mem_info_file("/proc/meminfo");
+    memory_info_t mem_info;
     while (!finished) {
-        memory_info_t mem_info;
-        read_memory(mem_info);
+        read_memory(mem_info, mem_info_file);
         const auto ram_free = mem_info.mem_free + mem_info.buffers + mem_info.cached;
         const double ram_left = double(ram_free) / double(mem_info.mem_total);
         const auto prev_mem_available = mem_available_;
-        mem_available_ = (ram_left >= FREE_RAM_THRESHOLD) && true;//threads_available();
+        mem_available_ = ram_left >= FREE_RAM_THRESHOLD; // && threads_available();
+        constexpr double gb_ram_unit_div = GB_RAM_UNIT_DIVIDER;
         if (mem_available_ != prev_mem_available) {
-            LOG4_DEBUG("Changed mem_available to " << mem_available_ << ", RAM left, " << 100. * ram_left << "pc, free ram " << static_cast<double>(ram_free) / GB_RAM_UNIT_DIVIDER <<
-                        " GB" << ", total ram " << static_cast<double>(mem_info.mem_total) / GB_RAM_UNIT_DIVIDER << " GB");
+            LOG4_TRACE(
+                    "Changed mem_available to " << mem_available_ << ", RAM left, " << 100. * ram_left << "pc, free ram " << ram_free / gb_ram_unit_div <<
+                                                " GB" << ", total ram " << mem_info.mem_total / gb_ram_unit_div << " GB");
             cv_.notify_all();
-            trigger = true;
         }
-
-        UNROLL(sleep_iterations)
-        for (unsigned i = 0; i < sleep_iterations; ++i) {
-            if (finished) return;
-            if (trigger) {
-                trigger = false;
-                break;
-            }
-            std::this_thread::sleep_for(sleep_interval);
-        }
+        std::this_thread::sleep_for(sleep_interval);
     }
     mem_available_ = true;
 }
@@ -112,15 +100,13 @@ void memory_manager::barrier()
 {
     std::unique_lock wl(mx_);
     while (!mem_available_) cv_.wait(wl);
-    mem_available_ = false;
-    trigger = true;
+    // mem_available_ = false;
 }
 
 
 void
-memory_manager::read_memory(memory_info_t &mem_info)
+memory_manager::read_memory(memory_info_t &mem_info, std::ifstream &mem_info_file)
 {
-    std::ifstream mem_info_file("/proc/meminfo");
     std::string key;
     long val = 0;
     std::string metric;
@@ -134,64 +120,33 @@ memory_manager::read_memory(memory_info_t &mem_info)
             mem_info.cached = val;
         else if (key == "Buffers")
             mem_info.buffers = val;
-        else if (key == "SwapTotal")
+/*        else if (key == "SwapTotal")
             mem_info.swap_total = val;
         else if (key == "SwapFree")
-            mem_info.swap_free = val;
+            mem_info.swap_free = val; */
     }
+    mem_info_file.clear();
+    mem_info_file.seekg(0);
 }
 
-
-//////////////////////////////////////////////////////////////////////////////
-//
-// process_mem_usage(double &, double &) - takes two doubles by reference,
-// attempts to read the system-dependent data for a process' virtual memory
-// size and resident set size, and return the results in KB.
-//
-// On failure, returns 0.0, 0.0
-
-void memory_manager::process_mem_usage(double &vm_usage, double &resident_set)
+// In MB
+double memory_manager::get_process_resident_set()
 {
-    using std::ios_base;
-    using std::ifstream;
-    using std::string;
-
-    vm_usage = 0.0;
-    resident_set = 0.0;
-
-    // 'file' stat seems to give the most reliable results
-    //
-    ifstream stat_stream("/proc/self/stat", ios_base::in);
-
-    // dummy vars for leading entries in stat that we don't care about
-    //
-    string pid, comm, state, ppid, pgrp, session, tty_nr;
-    string tpgid, flags, minflt, cminflt, majflt, cmajflt;
-    string utime, stime, cutime, cstime, priority, nice;
-    string O, itrealvalue, starttime;
-
-    // the two fields we want
-    //
-    uint64_t vsize;
-    long rss;
-
-    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
-                >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
-                >> utime >> stime >> cutime >> cstime >> priority >> nice
-                >> O >> itrealvalue >> starttime >> vsize >> rss; // don't care about the rest
-
-    stat_stream.close();
-
-    const double page_size_mb = double(sysconf(_SC_PAGE_SIZE)) / (1024. * 1024.); // in case x86-64 is configured to use 2MB pages
-    vm_usage = vsize / (1024. * 1024.);
-    resident_set = rss * page_size_mb;
+    FILE *self_statm = fopen("/proc/self/statm", "r");
+    long s = -1;
+    if (!self_statm) {
+        LOG4_ERROR("Failed opening /proc/self/statm");
+        return 1;
+    }
+    fscanf(self_statm, "%ld", &s);
+    constexpr double mbd = 1024 * 1024;
+    static const double pagesize_mbd = sysconf(_SC_PAGESIZE) / mbd;
+    return s * pagesize_mbd;
 }
-
 
 static size_t num_of_threads = 0;
 
-static void
-parse_task_stats(const char *status_file_name)
+static void parse_task_stats(const char *status_file_name)
 {
     std::ifstream proc_status_file(status_file_name);
     std::string key;
@@ -202,8 +157,7 @@ parse_task_stats(const char *status_file_name)
 }
 
 
-static int
-read_contents(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
+static int read_contents(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 {
     char status_file_name[64];
     snprintf(status_file_name, sizeof(status_file_name), "%s/status", fpath);
@@ -211,8 +165,6 @@ read_contents(const char *fpath, const struct stat *sb, int tflag, struct FTW *f
     return 0;
 }
 
-
-std::mutex mtx;
 static bool read_threads_running = false;
 
 size_t
@@ -231,7 +183,7 @@ memory_manager::read_threads()
     if (nftw(proc_tasks_path, read_contents, 10000, ftw_flags) == -1) {
         perror("nftw");
         read_threads_running = false;
-        return errno == ENOENT ? std::numeric_limits<DTYPE(num_of_threads)>::max() : num_of_threads;
+        return errno == ENOENT ? std::numeric_limits<DTYPE(num_of_threads) >::max() : num_of_threads;
     }
     read_threads_running = false;
     return num_of_threads;

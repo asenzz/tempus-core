@@ -13,13 +13,13 @@ namespace business{
 
 bool ScalingFactorsTaskService::exists(const ScalingFactorsTask_ptr &scalingFactorsTask)
 {
-    reject_nullptr(scalingFactorsTask);
+    REJECT_NULLPTR(scalingFactorsTask);
     return scalingFactorsTaskDao.exists(scalingFactorsTask->get_id());
 }
 
 int ScalingFactorsTaskService::save(ScalingFactorsTask_ptr &scalingFactorsTask)
 {
-    reject_nullptr(scalingFactorsTask);
+    REJECT_NULLPTR(scalingFactorsTask);
 
     return scalingFactorsTaskDao.save(scalingFactorsTask);
 }

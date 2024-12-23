@@ -48,16 +48,16 @@ datamodel::InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::stri
     return get_queue_metadata(business::InputQueueService::make_queue_table_name(user_name, logical_name, resolution));
 }
 
-datamodel::InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::string &tableName)
+datamodel::InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::string &table_name)
 {
     datamodel::InputQueue_ptr queue(new InputQueue());
-    queue->set_table_name(tableName);
+    queue->set_table_name(table_name);
 
     if (pImpl.cached(queue))
         return datamodel::InputQueue_ptr(new InputQueue(queue->get_copy_metadata()));
 
     const std::scoped_lock lg(pImpl.pgMutex);
-    queue = pImpl.pgDao.get_queue_metadata(tableName);
+    queue = pImpl.pgDao.get_queue_metadata(table_name);
     pImpl.cache_no_store(queue);
     return queue;
 }
@@ -66,7 +66,7 @@ std::deque<datamodel::DataRow_ptr> AsyncInputQueueDAO::get_queue_data_by_table_n
         const std::string &table_name,
         const bpt::ptime &time_from,
         const bpt::ptime &time_to,
-        size_t limit)
+        const size_t limit)
 {
     pImpl.flush();
 
@@ -104,19 +104,19 @@ size_t AsyncInputQueueDAO::get_count_from_start(
     return pImpl.pgDao.get_count_from_start(table_name, target_time);
 }
 
-size_t AsyncInputQueueDAO::save(const datamodel::InputQueue_ptr &inputQueue, const boost::posix_time::ptime &start_time)
+size_t AsyncInputQueueDAO::save(const datamodel::InputQueue_ptr &p_input_queue, const boost::posix_time::ptime &start_time)
 {
     long ret = 0;
 
-    bool exist = exists(inputQueue);
+    bool exist = exists(p_input_queue);
 
-    if (inputQueue->size() > 0) {
-        ret = save_data(inputQueue, start_time);
+    if (p_input_queue->size() > 0) {
+        ret = save_data(p_input_queue, start_time);
     } else {
         if (exist)
-            ret = update_metadata(inputQueue);
+            ret = update_metadata(p_input_queue);
         else
-            ret = save_metadata(inputQueue);
+            ret = save_metadata(p_input_queue);
     }
 
     return ret;
@@ -161,6 +161,13 @@ bool AsyncInputQueueDAO::exists(const datamodel::InputQueue_ptr &p_input_queue)
 {
     p_input_queue->set_table_name(p_input_queue->get_table_name());
     return exists(p_input_queue->get_table_name());
+}
+
+void AsyncInputQueueDAO::upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, const uint16_t n_values)
+{
+    pImpl.flush();
+    const std::scoped_lock lg(pImpl.pgMutex);
+    pImpl.pgDao.upsert_row_str(table_name, value_time, update_time, volume, values, n_values);
 }
 
 size_t AsyncInputQueueDAO::remove(const datamodel::InputQueue_ptr &queue)

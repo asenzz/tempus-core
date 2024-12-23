@@ -8,7 +8,7 @@
 namespace svr {
 namespace common {
 
-unsigned char PropertiesFileReader::S_log_threshold = (unsigned char) boost::log::trivial::severity_level::trace;
+auto PropertiesFileReader::S_log_threshold = (uint8_t) boost::log::trivial::severity_level::trace;
 
 const std::string PropertiesFileReader::FEATURE_QUANTIZATION = "FEATURE_QUANTIZATION";
 const std::string PropertiesFileReader::PREDICTION_HORIZON = "PREDICTION_HORIZON";
@@ -143,8 +143,7 @@ ConcreteDaoType PropertiesFileReader::get_dao_type() const
 
 const MessageProperties::mapped_type &PropertiesFileReader::read_properties(const std::string &property_file)
 {
-    if (property_files.count(property_file) || read_property_file(property_file))
-        return property_files[property_file];
+    if (property_files.count(property_file) || read_property_file(property_file)) return property_files[property_file];
     static MessageProperties::mapped_type empty;
     return empty;
 }
@@ -169,18 +168,10 @@ bool PropertiesFileReader::is_multiline(const std::string &line)
     return !even_slash_count;
 }
 
-std::string PropertiesFileReader::get_property_value(
-        const std::string &property_file, const std::string &key, std::string default_value)
+const std::string &PropertiesFileReader::get_property_value(const std::string &property_file, const std::string &key, const std::string &default_value)
 {
-    LOG4_BEGIN();
-
-    if (property_files.count(property_file) == 0 && read_properties(property_file).size() == 0) return default_value;
-    if (property_files.count(property_file) && property_files[property_file].count(key))
-        default_value = property_files[property_file][key];
-    LOG4_TRACE("Found property " << property_file << " " << key << " is " << default_value);
-
-    LOG4_END();
-
+    if (!property_files.count(property_file) && !read_properties(property_file).size()) return default_value;
+    if (property_files.count(property_file) && property_files[property_file].count(key)) return property_files[property_file][key];
     return default_value;
 }
 

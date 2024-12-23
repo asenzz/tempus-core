@@ -96,12 +96,12 @@ void DeconQueue::update_data(const DataRow::container &new_data, const bool over
     LOG4_END();
 }
 
-std::string DeconQueue::get_input_queue_table_name() const
+const std::string &DeconQueue::get_input_queue_table_name() const
 {
     return input_queue_table_name_;
 }
 
-std::string DeconQueue::get_input_queue_column_name() const
+const std::string &DeconQueue::get_input_queue_column_name() const
 {
     return input_queue_column_name_;
 }

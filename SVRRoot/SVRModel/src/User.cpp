@@ -42,7 +42,7 @@ User::User(const bigint user_id,
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
-    LOG4_TRACE("User " << username << " created.");
+    LOG4_TRACE("User " << username << " constructed.");
 }
 
 
@@ -58,8 +58,8 @@ void User::set_role(ROLE role_)
 void User::set_password(const std::string &password_)
 { this->password = password_; }
 
-void User::set_user_name(const std::string &userName)
-{ user_name = userName; }
+void User::set_user_name(const std::string &user_name)
+{ this->user_name = user_name; }
 
 std::string User::get_name() const
 { return name; }
@@ -85,26 +85,26 @@ void User::set_priority(Priority const &priority_)
 std::string User::to_string() const
 {
     std::stringstream ss;
-    ss << "User " << get_id()
-       << ", name " << get_user_name()
-       << ", email " << get_email()
-       << ", password " << get_password()
-       << ", name " << get_name()
-       << ", role " << (get_role() == ROLE::ADMIN ? "Admin" : "User")
-       << ", priority " << datamodel::to_string(get_priority());
+    ss << "User " << id
+       << ", name " << user_name
+       << ", email " << email
+       << ", password " << password
+       << ", name " << name
+       << ", role " << (role == ROLE::ADMIN ? "Admin" : "User")
+       << ", priority " << datamodel::to_string(priority);
     return ss.str();
 }
 
 std::string User::to_json_string() const
 {
     std::stringstream ss;
-    ss << "User={EntityId:" << get_id()
-       << ",UserName:" << get_user_name()
-       << ",email:" << get_email()
-       << ",password:" << get_password()
-       << ",name:" << get_name()
-       << ",role:" << (get_role() == ROLE::ADMIN ? "Admin" : "User")
-       << ",priority: " << svr::datamodel::to_string(get_priority())
+    ss << "User={EntityId:" << id
+       << ",UserName:" << user_name
+       << ",email:" << email
+       << ",password:" << password
+       << ",name:" << name
+       << ",role:" << (role == ROLE::ADMIN ? "Admin" : "User")
+       << ",priority: " << svr::datamodel::to_string(priority)
        << "}";
     return ss.str();
 }

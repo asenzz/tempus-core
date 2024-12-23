@@ -15,14 +15,14 @@ MultivalRequest::MultivalRequest() : Entity()
 }
 
 MultivalRequest::MultivalRequest(
-        bigint request_id,
-        std::string user_name,
-        bigint dataset_id,
-        bpt::ptime request_time,
-        bpt::ptime value_time_start,
-        bpt::ptime value_time_end,
-        size_t resolution,
-        std::string const &value_columns)
+        const bigint request_id,
+        const std::string &user_name,
+        const bigint dataset_id,
+        const bpt::ptime &request_time,
+        const bpt::ptime &value_time_start,
+        const bpt::ptime &value_time_end,
+        const bpt::time_duration &resolution,
+        const std::string &value_columns)
         : Entity(request_id), dataset_id(dataset_id), user_name(std::move(user_name)), request_time(request_time),
           value_time_start(value_time_start), value_time_end(value_time_end), resolution(resolution), value_columns(value_columns)
 {
@@ -66,11 +66,10 @@ std::string MultivalRequest::to_string() const
 bool MultivalRequest::sanity_check()
 {
     if (dataset_id == 0) return false;
-    if (resolution < 1 || resolution > MAX_INPUTQUEUE_RESOLUTION) return false;
+    if (resolution.is_special()) return false;
     if (value_columns.empty()) return false;
     if (value_time_end == bpt::from_time_t(0) || value_time_start == bpt::from_time_t(0)) return false;
     if (value_time_end.is_special() || value_time_start.is_special()) return false;
-    if (value_time_end - value_time_start > bpt::hours(10)) return false;
     return true;
 }
 
@@ -81,7 +80,7 @@ bool MultivalRequest::operator==(MultivalRequest const &o) const
 }
 
 
-MultivalResponse::MultivalResponse(const bigint response_id, const bigint request_id, bpt::ptime value_time, std::string value_column, double value)
+MultivalResponse::MultivalResponse(const bigint response_id, const bigint request_id, const bpt::ptime &value_time, const std::string &value_column, const double value)
         : Entity(response_id), request_id(request_id), value_time(std::move(value_time)), value_column(std::move(value_column)), value(value)
 {
 #ifdef ENTITY_INIT_ID
@@ -100,7 +99,7 @@ MultivalResponse::MultivalResponse() : Entity()
 std::string MultivalResponse::to_string() const
 {
     std::stringstream ss;
-    ss.precision(11);
+    ss.precision(std::numeric_limits<double>::max_digits10);
     ss << "Response ID " << id
        << ", request ID " << request_id
        << ", value time " << value_time

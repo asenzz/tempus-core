@@ -125,7 +125,7 @@ class StatementPreparerDBTemplate
         return ss.str();
     }
 
-    std::string prepareStatement(const char *format);
+    std::string prepare_statement(const char *format);
 
 public:
 
@@ -136,13 +136,13 @@ public:
 
 
     template<typename T, typename... Targs>
-    std::string prepareStatement(const char *format, T value, Targs... Fargs)
+    std::string prepare_statement(const char *format, T value, Targs... Fargs)
     {
         std::string s;
         for (; *format != '\0'; format++) {
             if (*format == '?') { // ? is the argument placeholder which will be replaced with concrete escaped value
                 s += (std::string) (escape(value));
-                s += (std::string) (prepareStatement(format + 1, Fargs...)); // recursive call
+                s += (std::string) (prepare_statement(format + 1, Fargs...)); // recursive call
                 return s;
             }
             s += *format;
@@ -151,12 +151,12 @@ public:
     }
 
     template<typename T, typename... Targs>
-    std::string prepareStatement(const std::string &format, T value, Targs... Fargs)
+    std::string prepare_statement(const std::string &format, T value, Targs... Fargs)
     {
-        return prepareStatement(format.c_str(), value, Fargs...);
+        return prepare_statement(format.c_str(), value, Fargs...);
     }
 
-    static std::string prepareStatement(const std::string &format)
+    static std::string prepare_statement(const std::string &format)
     {
         return format;
     }

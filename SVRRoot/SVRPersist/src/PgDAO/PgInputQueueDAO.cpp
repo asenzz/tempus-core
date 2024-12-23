@@ -137,25 +137,44 @@ size_t PgInputQueueDAO::save(const datamodel::InputQueue_ptr &p_input_queue, con
     return ret;
 }
 
+
 size_t PgInputQueueDAO::save_data(const datamodel::InputQueue_ptr &p_input_queue, const bpt::ptime &start_time)
 {
     data_source.cleanup_queue_table(p_input_queue->get_table_name(), p_input_queue->get_data(), start_time);
     return data_source.batch_update(p_input_queue->get_table_name(), p_input_queue->get_data(), start_time);
 }
 
-size_t PgInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr &inputQueue)
+
+void PgInputQueueDAO::upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, const uint16_t n_values)
+{
+    LOG4_BEGIN();
+
+    assert(n_values);
+    auto fields = (const char **) malloc((n_values + 3) * sizeof(char *));
+    fields[0] = value_time;
+    fields[1] = update_time;
+    fields[2] = volume;
+    for (uint16_t i = 0; i < n_values; ++i) fields[i + 3] = values[i];
+    data_source.upsert_row(table_name, fields, n_values + 3);
+    free(fields);
+
+    LOG4_END();
+}
+
+
+size_t PgInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr &p_input_queue)
 {
 
-    LOG4_DEBUG("Updating InputQueue table metadata: " << inputQueue->get_table_name());
+    LOG4_DEBUG("Updating InputQueue table metadata: " << p_input_queue->get_table_name());
     std::string sql = AbstractDAO::get_sql("update_metadata");
 
     return data_source.update(sql,
-                              inputQueue->get_logical_name(),
-                              inputQueue->get_description(),
-                              inputQueue->get_legal_time_deviation(),
-                              inputQueue->get_time_zone(),
-                              inputQueue->get_uses_fix_connection(),
-                              inputQueue->get_table_name()
+                              p_input_queue->get_logical_name(),
+                              p_input_queue->get_description(),
+                              p_input_queue->get_legal_time_deviation(),
+                              p_input_queue->get_time_zone(),
+                              p_input_queue->get_uses_fix_connection(),
+                              p_input_queue->get_table_name()
     );
 }
 
@@ -253,16 +272,16 @@ std::deque<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_user_queues(const
 
 std::deque<datamodel::InputQueue_ptr> PgInputQueueDAO::get_all_queues_with_sign(bool uses_fix_connection)
 {
-    InputQueueRowMapper rowMapper;
-    return data_source.query_for_deque(rowMapper, get_sql("get_all_queues_with_sign"), uses_fix_connection);
+    InputQueueRowMapper row_mapper;
+    return data_source.query_for_deque(row_mapper, get_sql("get_all_queues_with_sign"), uses_fix_connection);
 }
 
 
-bool PgInputQueueDAO::row_exists(const std::string &tableName, const bpt::ptime &valueTime)
+bool PgInputQueueDAO::row_exists(const std::string &table_name, const bpt::ptime &valueTime)
 {
     std::string sql_format = get_sql("row_exists");
     boost::format sql(sql_format);
-    sql % tableName;
+    sql % table_name;
 
     return data_source.query_for_type<bool>(sql.str(), valueTime);
 }
@@ -276,29 +295,29 @@ namespace {
 struct MissedHoursrow_mapper : public IRowMapper<bpt::ptime>
 {
 
-    std::shared_ptr<bpt::ptime> mapRow(const pqxx_tuple &rowSet) const override
+    std::shared_ptr<bpt::ptime> map_row(const pqxx_tuple &row_set) const override
     {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        if (rowSet.empty())
+        if (row_set.empty())
 #pragma GCC diagnostic pop
             return ptr<bpt::ptime>();
-        return ptr<bpt::ptime>(rowSet[0].as<bpt::ptime>(bpt::not_a_date_time));
+        return ptr<bpt::ptime>(row_set[0].as<bpt::ptime>(bpt::not_a_date_time));
     }
 };
 
 struct TimeRange_mapper : public IRowMapper<TimeRange>
 {
 
-    std::shared_ptr<TimeRange> mapRow(const pqxx_tuple &rowSet) const override
+    std::shared_ptr<TimeRange> map_row(const pqxx_tuple &row_set) const override
     {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        if (rowSet.empty() || rowSet[0].is_null() || rowSet[1].is_null())
+        if (row_set.empty() || row_set[0].is_null() || row_set[1].is_null())
             return std::shared_ptr<TimeRange>();
 #pragma GCC diagnostic pop
 
-        return ptr<TimeRange>(rowSet[0].as<bpt::ptime>({}), rowSet[1].as<bpt::ptime>(bpt::ptime{}));
+        return ptr<TimeRange>(row_set[0].as<bpt::ptime>({}), row_set[1].as<bpt::ptime>(bpt::ptime{}));
     }
 };
 

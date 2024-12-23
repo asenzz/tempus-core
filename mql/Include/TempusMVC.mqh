@@ -20,21 +20,20 @@
 //|                                                                   |
 //+-------------------------------------------------------------------+
 
-struct TempusFigure
-{
-    double           op, hi, lo, cl;
+struct TempusFigure {
+    aprice           op, hi, lo, cl;
     datetime         tm;
 
-                     TempusFigure(): tm(0), op(0), hi(0), lo(0), cl(0) {}
+                     TempusFigure(): tm(0) {}
 
     bool             empty()
     {
-        return tm == 0 || op == 0 || hi == 0 || lo == 0 || cl == 0;
+        return tm == 0 || op.valid() || hi.valid() || lo.valid() || cl.valid();
     }
-    
-    string  to_string()
+
+    string           to_string()
     {
-        return string(tm) + " " + string(hi) + " " + string(lo) + " " + string(op) + " " + string(cl);
+        return TimeToString(tm, C_time_mode) + ", " + hi.to_string() + ", " + lo.to_string() + ", " + op.to_string() + " " + cl.to_string();
     }
 };
 
@@ -45,25 +44,25 @@ struct TempusFigure
 //+------------------------------------------------------------------+
 class TempusGraph
 {
-    double hi[], lo[];
-    color clr_up, clr_down, clr_line;
-    TempusFigure figures[];
-    int fig_ct, fig_res;
-    datetime cur_time;
-    bool keep_history;
-    float predict_offset;
+    double           hi[], lo[];
+    color            clr_up, clr_down, clr_line;
+    TempusFigure     figures[];
+    uint             fig_ct, resolution;
+    datetime         cur_time;
+    bool             keep_history;
+    float            predict_offset;
 
-    void place_figure(const TempusFigure &fig);
-    
+    void             place_figure(const TempusFigure &fig);
+
 public:
-    void init(const int fig_num_, const int fig_res_, const bool keep_history_ = false, const bool demo_mode = false, const bool averageMode = false);
-    void close();
-    bool redraw(const TempusFigure &new_figs[], const datetime req_time, const bool average);
-    bool fadeFigure();
+    void             init(const uint fig_num_, const uint fig_res_, const bool keep_history_ = false, const bool demo_mode = false, const bool averageMode = false);
+    void             close();
+    bool             redraw(const TempusFigure &new_figs[], const datetime req_time, const bool average);
+    bool             fadeFigure();
 
-    bool getFigure(const int index, TempusFigure &result) const;    
-    
-    TempusGraph(const float predict_offset_);
+    bool             getFigure(const int index, TempusFigure &result) const;
+
+                     TempusGraph(const float predict_offset_);
 };
 
 //+-------------------------------------------------------------------+
@@ -77,19 +76,24 @@ public:
 //+------------------------------------------------------------------+
 class TempusController
 {
-    int               fig_res;
-    string            valueColumns;
-    bool              average;
+    string res_bid_column, res_ask_column, res_open_bid_column, res_open_ask_column, res_high_bid_column, res_high_ask_column, res_low_bid_column,
+           res_low_ask_column, res_close_bid_column, res_close_ask_column;
+
+    uint             resolution;
+    string resolution_str;
+    string           value_columns;
+    bool             average;
 
     // Not used anymore. Will be deleted on code cleanup
-    void doRequest    (MqlNet &mqlNet, const datetime timeCoord, const string &dataset);
-    bool              getResults(MqlNet &mqlNet, const datetime timeCoord, const string dataset, TempusFigure &fig);
-    double            queryForecast(MqlNet &mqlNet, const datetime timeCoord, const ushort OHLC, const string dataset, const bool request);
+    void             doRequest(MqlNet &mql_net, const datetime r_time, const string &dataset);
+    bool             getResults(MqlNet &mql_net, const datetime r_time, const string &dataset, TempusFigure &fig);
+    aprice           queryForecast(MqlNet &mql_net, const datetime r_time, const ushort OHLC, const string &dataset, const bool request);
 public:
-    void              init(const string &symbol, const int _figRes = PERIOD_CURRENT, const bool requestHigh = false, const bool requestLow = false, const bool requestOpen = false, const bool requestClose = false, const bool _average = true);
+    void             init(const string &symbol, const uint fig_res_ = PERIOD_CURRENT, const bool request_high = false, const bool request_low = false,
+                          const bool request_open = false, const bool request_close = false, const bool request_average = true);
 
-    ulong doRequest   (MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string &dataset);
-    bool              getResults(MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string dataset, TempusFigure &fig[]);
+    int              doRequest(MqlNet &mql_net, const datetime time_start, const uint bars, const string &dataset);
+    bool             getResults(MqlNet &mql_net, const datetime time_start, const uint bars, const string &dataset, TempusFigure &fig[]);
 };
 
 //+-------------------------------------------------------------------+
@@ -101,145 +105,175 @@ public:
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void TempusController::init(const string &symbol, const int _figRes, const bool requestHigh, const bool requestLow, const bool requestOpen, const bool requestClose, const bool _average)
+void TempusController::init(
+    const string &symbol,
+    const uint fig_res_,
+    const bool request_high,
+    const bool request_low,
+    const bool request_open,
+    const bool request_close,
+    const bool request_average)
 {
-    if(_average) {
-        valueColumns = symbol + "_avg_bid";
+    res_bid_column = symbol + "_avg_bid";
+    res_ask_column = symbol + "_avg_ask";
+    res_open_bid_column = symbol + "_open_bid";
+    res_open_ask_column = symbol + "_open_ask";
+    res_high_bid_column = symbol + "_high_bid";
+    res_high_ask_column = symbol + "_high_ask";
+    res_low_bid_column = symbol + "_low_bid";
+    res_low_ask_column = symbol + "_low_ask";
+    res_close_bid_column = symbol + "_close_bid";
+    res_close_ask_column = symbol + "_close_ask";
+
+    if(request_average) {
+        value_columns = res_bid_column + "," + res_ask_column;
     } else {
-        if(requestHigh) valueColumns += "high,";
-        if(requestLow) valueColumns += "low,";
-        if(requestOpen) valueColumns += "open,";
-        if(requestClose) valueColumns += "close,";
-        StringSetCharacter(valueColumns, StringLen(valueColumns) - 1, 0);
-        StringSetLength(valueColumns, StringLen(valueColumns) - 1);
-        if(requestHigh && requestLow && requestLow && requestOpen) valueColumns = "";
+        value_columns = "";
+        if(request_open) value_columns += res_open_bid_column + "," + res_open_ask_column;
+        if(request_high) value_columns += res_high_bid_column + "," + res_high_ask_column;
+        if(request_low) value_columns += res_low_bid_column + "," + res_low_ask_column;
+        if(request_close) value_columns += res_close_bid_column + "," + res_close_ask_column;
     }
-    average = _average;
-    fig_res = _figRes;
+
+    average = request_average;
+    resolution = fig_res_;
+    resolution_str = IntegerToString(resolution);
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-ulong TempusController::doRequest(MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string &dataset)
+int TempusController::doRequest(MqlNet &mql_net, const datetime time_start, const uint bars, const string &dataset)
 {
     Hash params;
     params.hPutString("dataset", dataset);
-    params.hPutString("value_time_start", TimeToString(timeStart, TIME_DATE_SECONDS));
-    params.hPutString("value_time_end", TimeToString(timeStart + fig_res * bars, TIME_DATE_SECONDS));
-    params.hPutString("value_columns", valueColumns);
+    params.hPutString("value_time_start", TimeToString(time_start, C_time_mode));
+    params.hPutString("value_time_end", TimeToString(time_start + resolution * bars, C_time_mode));
+    params.hPutString("value_columns", value_columns);
+    params.hPutString("resolution", C_period_time_str);
     string response;
-    ulong finalResult = -1;
-    LOG_DEBUG("", "Sending request " + TimeToString(timeStart, TIME_DATE_SECONDS) + " RPC call.");
-    const string request_call = "request";
-    const string function_name = "makeMultivalRequest";
-    mqlNet.RpcCall(request_call, function_name, params, response);
+    int final_result = -1;
+    LOG_DEBUG("", "Sending request " + TimeToString(time_start, C_time_mode) + " RPC call.");
+    static const string request_call = "request";
+    static const string function_name = "makeMultivalRequest";
+    mql_net.RpcCall(request_call, function_name, params, response);
+    if(StringLen(response) <= 0) return final_result;
 
-    if(StringLen(response) <= 0) return finalResult;
     JSONParser parser;
     JSONValue *jv = parser.parse(response);
     if (!jv) {
-        LOG_ERROR("", "JSON Value for " + string(timeStart) + " is null.");
-        return finalResult;
+        LOG_ERROR("", "JSON Value for " + TimeToString(time_start, C_time_mode) + " is null.");
+        return final_result;
     }
 
     if (!jv.isObject()) {
-        LOG_ERROR("", "Received value for "  + string(timeStart) + " is not object");
+        LOG_ERROR("", "Received value for "  + TimeToString(time_start, C_time_mode) + " is not object");
         delete jv;
-        return finalResult;
+        return final_result;
     }
-    
+
     JSONObject *jo = jv;
-    if (!jo.getValue("error").isNull()) {
-        finalResult = -1;
-        string err_msg = jo.getString("error");
-        LOG_ERROR("", err_msg);
-    } else if (!jo.getObject("result").isNull()) {
+    if (jo.getValue("error").isNull()) {
+        LOG_DEBUG("", "Error is null");
         JSONObject *result = jo.getObject("result");
-        finalResult = result.getInt("request_id");
-        LOG_VERBOSE ("", "Request id " + string(finalResult));
+        final_result = result.getInt("request_id");
+        LOG_VERBOSE("", "Request id " + IntegerToString(final_result));
+    } else {
+        LOG_ERROR("", "Error is not null.");
+        const string err_msg = jo.getString("error");
+        if (StringFind(err_msg, "already exists", 0) != -1) final_result = 0;
+        LOG_ERROR("", err_msg);
     }
     delete jv;
-    return finalResult;
+
+    return final_result;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool TempusController::getResults(MqlNet &mqlNet, const datetime timeStart, const ulong bars, const string dataset, TempusFigure &figs[])
+bool TempusController::getResults(MqlNet &mql_net, const datetime time_start, const uint bars, const string &dataset, TempusFigure &figs[])
 {
     Hash params;
-    params.hPutString("resolution", string(fig_res));
-    LOG_VERBOSE("", "Getting results for " + string(timeStart));
-
+    params.hPutString("resolution", C_period_time_str);
+    LOG_VERBOSE("", "Getting results for " + TimeToString(time_start, C_time_mode));
     params.hPutString("dataset", dataset);
-    params.hPutString("value_time_start", TimeToString(timeStart, TIME_DATE_SECONDS));
-    params.hPutString("value_time_end", TimeToString(timeStart + fig_res * bars, TIME_DATE_SECONDS));
+    params.hPutString("value_time_start", TimeToString(time_start, C_time_mode));
+    params.hPutString("value_time_end", TimeToString(time_start + resolution * bars, C_time_mode));
 
     string response;
     bool result = false;
+    static const string request = "request";
+    static const string get_multival_results = "getMultivalResults";
+    mql_net.RpcCall(request, get_multival_results, params, response);
 
-    const string request = "request";
-    const string get_multival_results = "getMultivalResults";
-    mqlNet.RpcCall(request, get_multival_results, params, response);
-
-    if(StringLen(response) <= 0) {
-        LOG_ERROR("", "Response empty for " + string(timeStart));
+    if (StringLen(response) <= 0) {
+        LOG_ERROR("", "Response empty for " + TimeToString(time_start, C_time_mode));
         return result;
     }
-    
     JSONParser parser;
-    LOG_VERBOSE("", "Parsing " + string(response));
+    LOG_VERBOSE("", "Parsing " + response);
 
     JSONValue *jv = parser.parse(response);
     if (!jv || !jv.isObject()) {
-        LOG_ERROR("", "Failed parsing response " + response + " for time " + TimeToString(timeStart, TIME_DATE_SECONDS));
+        LOG_ERROR("", "Failed parsing response " + response + " for time " + TimeToString(time_start, C_time_mode));
         return result;
     }
 
     JSONObject *jo = jv;
-    if (!jo.getValue("error").isNull()) {
-        string err = jo.getString("error");
-        LOG_ERROR("", "Received error " + err);
+    JSONValue *jv_error = jo.getValue("error");
+    if (jv_error != NULL && !jv_error.isNull()) {
+        const string err = jv_error.getString();
+        LOG_ERROR("", "Received error message, " + err);
         delete jv;
-        return result;
-    } 
+        return true;
+    }
+
     if (jo.getArray("result").isNull()) {
         delete jv;
-        LOG_ERROR("", "Result array in response for " + TimeToString(timeStart, TIME_DATE_SECONDS) + " is null.");
+        LOG_ERROR("", "Result array in response for " + TimeToString(time_start, C_time_mode) + " is null.");
         return result;
     }
-    
+
     JSONArray *res = jo.getArray("result");
     if (res.size() < 1) {
+        LOG_ERROR("", "Parsed no bars from response.");
         delete jv;
         return false;
     }
-    
-    ArrayResize(figs, res.size());
 
-    int i = 0, j = 0;
-    for(; i < res.size() && j < long(bars); ++i, ++j) {
-        figs[j].tm = StringToTime(res.getObject(i).getString("tm"));
-        if(figs[j].tm < timeStart) {
-            --j;
-            LOG_ERROR("", "Skipping invalid result " + string(i) + " with time " + string(figs[j].tm));
+    ArrayResize(figs, res.size());
+    uint j = 0;
+    for (int i = 0; i < res.size() && j < bars; ++i) {
+        JSONObject *jo_row = res.getObject(i);
+        figs[j].tm = StringToTime(jo_row.getString("tm"));
+        if(figs[j].tm < time_start) {
+            LOG_ERROR("", "Skipping invalid result " + IntegerToString(i) + " with time " + TimeToString(figs[j].tm, C_time_mode));
             continue;
         }
-        if (average) figs[j].hi = figs[j].lo = figs[j].op = figs[j].cl = res.getObject(i).getDouble("x");
-        else {
-            figs[j].hi = res.getObject(i).getDouble("h");
-            figs[j].lo = res.getObject(i).getDouble("l");
-            figs[j].op = res.getObject(i).getDouble("o");
-            figs[j].cl = res.getObject(i).getDouble("c");
+        if (average) {
+            string bid, ask;
+            if (jo_row.getString(res_bid_column, bid) == false) {
+                LOG_ERROR("", "Column " + res_bid_column + " is missing, discarding row " + jo_row.getString("tm") + ", " + IntegerToString(i) + ", " + jo_row.toString());
+                continue;
+            }
+            if (jo_row.getString(res_ask_column, ask) == false) {
+                LOG_ERROR("", "Column " + res_ask_column + " is missing, discarding row " + jo_row.getString("tm") + ", " + IntegerToString(i) + ", " + jo_row.toString());
+                continue;
+            }
+            figs[j].cl.set(StringToDouble(bid), StringToDouble(ask));
+        } else {
+            figs[j].op.set(jo_row.getDouble(res_open_bid_column), jo_row.getDouble(res_open_ask_column));
+            figs[j].hi.set(jo_row.getDouble(res_high_bid_column), jo_row.getDouble(res_high_ask_column));
+            figs[j].lo.set(jo_row.getDouble(res_low_bid_column), jo_row.getDouble(res_low_ask_column));
+            figs[j].cl.set(jo_row.getDouble(res_close_bid_column), jo_row.getDouble(res_close_ask_column));
         }
         result = true;
-
-        LOG_VERBOSE("", "Received figure " + string(i) + ", " + figs[i].to_string());
+        LOG_VERBOSE("", "Received figure " + IntegerToString(i) + ", " + figs[j].to_string());
+        ++j;
     }
     if (ArraySize(figs) != j) ArrayResize(figs, j);
-
-    
+    LOG_VERBOSE("", "Parsed " + IntegerToString(j) + " figures from response.");
     return result;
 }
 
@@ -252,6 +286,9 @@ static const string TempusGraphTimeLineName = "avgLastRequest-time";
 static const string TempusPredictSign = "lastResponseSign";
 
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool TempusGraph::getFigure(const int index, TempusFigure &result) const
 {
     if (index >= ArraySize(figures)) return false;
@@ -260,6 +297,9 @@ bool TempusGraph::getFigure(const int index, TempusFigure &result) const
 }
 
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 TempusGraph::TempusGraph(const float predict_offset_) : clr_line(clrDodgerBlue), predict_offset(predict_offset_)
 {
     clr_up   = (color) ChartGetInteger(0, CHART_COLOR_CHART_UP);
@@ -267,14 +307,17 @@ TempusGraph::TempusGraph(const float predict_offset_) : clr_line(clrDodgerBlue),
 }
 
 
-void TempusGraph::init(const int fig_num_, const int fig_res_, const bool keep_history_, const bool demo_mode, const bool averageMode)
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void TempusGraph::init(const uint fig_num_, const uint fig_res_, const bool keep_history_, const bool demo_mode, const bool averageMode)
 {
     fig_ct = fig_num_;
-    fig_res = fig_res_;
+    resolution = fig_res_;
     keep_history = keep_history_;
 
-    // ArrayFill(hi, 0, 0, 0);
-    // ArrayFill(lo, 0, 0, 0);        
+// ArrayFill(hi, 0, 0, 0);
+// ArrayFill(lo, 0, 0, 0);
     ArrayInitialize(hi, 0);
     ArrayInitialize(lo, 0);
     ArraySetAsSeries(hi, true);
@@ -282,8 +325,8 @@ void TempusGraph::init(const int fig_num_, const int fig_res_, const bool keep_h
     SetIndexBuffer(0, hi, INDICATOR_DATA);
     SetIndexBuffer(1, lo, INDICATOR_DATA);
 
-    //PlotIndexSetInteger(0, PLOT_SHIFT, 0);
-    //PlotIndexSetInteger(1, PLOT_SHIFT, 0);
+//PlotIndexSetInteger(0, PLOT_SHIFT, 0);
+//PlotIndexSetInteger(1, PLOT_SHIFT, 0);
     PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, 0);
     PlotIndexSetDouble(1, PLOT_EMPTY_VALUE, 0);
 
@@ -322,10 +365,10 @@ bool TempusGraph::redraw(const TempusFigure &new_figs[], const datetime req_time
         LOG_DEBUG("", "New figures are empty!");
         return false;
     }
-    // Append new figures
+// Append new figures
     const int prev_figs_size = ArraySize(figures);
     ArrayResize(figures, prev_figs_size + new_figs_size);
-    ArrayCopy(figures, new_figs, prev_figs_size);
+    for (int i = prev_figs_size; i < new_figs_size; ++i) figures[i] = new_figs[i - prev_figs_size];
 
     return fadeFigure();
 }
@@ -335,29 +378,29 @@ bool TempusGraph::redraw(const TempusFigure &new_figs[], const datetime req_time
 //+------------------------------------------------------------------+
 bool TempusGraph::fadeFigure()
 {
+#ifdef DRAWING_PORTED
     datetime lasttm = 0;
     static double prev_drawn_price = 0;
     datetime last_anchor_time = 0;
-    double last_anchor_price = 0;
-    double last_price = 0;
-    const int period_seconds = PeriodSeconds();
+    aprice last_anchor_price;
+    aprice last_price;
     const int period_seconds_m1 = PeriodSeconds(PERIOD_M1);
-    const datetime offset_start = datetime(predict_offset * period_seconds - period_seconds_m1);
+    const datetime offset_start = datetime(predict_offset * C_period_seconds - 1);
     for(int i = 0; i < ArraySize(figures); ++i) {
         if (figures[i].empty()) {
             LOG_ERROR("", "Skipping unitialized figure " + string(i) + " " + figures[i].to_string());
             continue;
         }
         const datetime anchor_time = figures[i].tm - offset_start;
-        const double anchor_price = iClose(_Symbol, PERIOD_M1, iBarShift(_Symbol, PERIOD_M1, anchor_time, false));
-        //LOG_DEBUG("", "Anchor time " + TimeToString(anchor_time, TIME_DATE_SECONDS) + ", anchor close price " + DoubleToString(anchor_price));
+        const aprice anchor_price = get_price(anchor_time);
+        //LOG_DEBUG("", "Anchor time " + TimeToString(anchor_time, C_time_mode) + ", anchor close price " + DoubleToString(anchor_price));
         if (figures[i].tm > lasttm) {
             last_anchor_time = anchor_time;
             last_anchor_price = anchor_price;
             last_price = figures[i].op;
             lasttm = figures[i].tm;
         }
-        const int ind_ix = iBarShift(_Symbol, PERIOD_CURRENT, figures[i].tm); // (iTime(_Symbol, Period(), 0) - figures[i].tm) / fig_res;
+        const int ind_ix = iBarShift(_Symbol, PERIOD_CURRENT, figures[i].tm); // (iTime(_Symbol, Period(), 0) - figures[i].tm) / resolution;
         if(ind_ix < 0 || ind_ix >= ArraySize(hi) || ind_ix >= ArraySize(lo)) {
             LOG_DEBUG("", "Figure " + figures[i].to_string() + " index " + string(ind_ix) + " out of bounds " + string(ArraySize(hi) - 1));
             continue;
@@ -385,61 +428,61 @@ bool TempusGraph::fadeFigure()
     GlobalVariableSet(C_chart_predictions_identifier, last_price);
     GlobalVariableSet(C_chart_prediction_anchor_identifier, last_anchor_price);
 
-/*
-    if (ObjectFind(0, TempusGraphAvgLineName) <= 0 && !ObjectCreate(0, TempusGraphAvgLineName, OBJ_HLINE, 0, 0, last_price)) {
-        LOG_ERROR("", "Creating graph line failed.");
-    } else {
-        ObjectSetInteger(0, TempusGraphAvgLineName, OBJPROP_COLOR, clrBlueViolet);
-        ObjectSetInteger(0, TempusGraphAvgLineName, OBJPROP_STYLE, STYLE_SOLID);
-    }
-    
-    if (!ObjectSetDouble(0, TempusGraphAvgLineName, OBJPROP_PRICE, last_price)) {
-        LOG_ERROR("", "Failed setting new price " + string(last_price) + " to hline.");
-        return redrawn;
-    }
+    /*
+        if (ObjectFind(0, TempusGraphAvgLineName) <= 0 && !ObjectCreate(0, TempusGraphAvgLineName, OBJ_HLINE, 0, 0, last_price)) {
+            LOG_ERROR("", "Creating graph line failed.");
+        } else {
+            ObjectSetInteger(0, TempusGraphAvgLineName, OBJPROP_COLOR, clrBlueViolet);
+            ObjectSetInteger(0, TempusGraphAvgLineName, OBJPROP_STYLE, STYLE_SOLID);
+        }
 
-    if (ObjectFind(0, TempusGraphTimeLineName) <= 0 && !ObjectCreate(0, TempusGraphTimeLineName, OBJ_VLINE, 0, lasttm, 0)) {
-        LOG_ERROR("", "Failed drawing vline");
-        return redrawn;
-    } else {
-        ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_COLOR, clrBlueViolet);
-        ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_STYLE, STYLE_SOLID);
-    }
-    
-    if (!ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_TIME, lasttm)) {
-        LOG_ERROR("", "Failed setting time to hline.");
-        return redrawn;
-    }
-*/
+        if (!ObjectSetDouble(0, TempusGraphAvgLineName, OBJPROP_PRICE, last_price)) {
+            LOG_ERROR("", "Failed setting new price " + string(last_price) + " to hline.");
+            return redrawn;
+        }
+
+        if (ObjectFind(0, TempusGraphTimeLineName) <= 0 && !ObjectCreate(0, TempusGraphTimeLineName, OBJ_VLINE, 0, lasttm, 0)) {
+            LOG_ERROR("", "Failed drawing vline");
+            return redrawn;
+        } else {
+            ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_COLOR, clrBlueViolet);
+            ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_STYLE, STYLE_SOLID);
+        }
+
+        if (!ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_TIME, lasttm)) {
+            LOG_ERROR("", "Failed setting time to hline.");
+            return redrawn;
+        }
+    */
     prev_drawn_price = last_price;
     LOG_VERBOSE("", "Drawn price " + DoubleToString(last_price, 15));
-/*
-    bool prev_incorrect = false;
-    for (long i = 0; i < ArraySize(figures); ++i) {
-        const datetime prev_time = lasttm - PeriodSeconds();
-        if (figures[i].tm == prev_time) {
-            const double prev_anchor_price = iClose(_Symbol, PERIOD_M1, iBarShift(_Symbol, PERIOD_M1, prev_time - C_predict_offset * PeriodSeconds() - PeriodSeconds(PERIOD_M1)));
-            MqlTick prev_ticks[];
-            const long copied_ct = SVRApi::copy_ticks_safe(_Symbol, prev_ticks, COPY_TICKS_ALL, prev_time, prev_time + PeriodSeconds());
-            if (copied_ct < 1) {
-               LOG_ERROR("", "No ticks copied for prev time " + TimeToString(prev_time, TIME_DATE_SECONDS));
-               continue;
-            }
-            const AveragePrice prev_average_price(prev_ticks, prev_time, PeriodSeconds(), iOpen(_Symbol, PERIOD_CURRENT, iBarShift(_Symbol, PERIOD_H1, prev_time)));
-            const double prev_actual_price = prev_average_price.value;
-            if (figures[i].op > prev_anchor_price != prev_actual_price > prev_anchor_price) {
-                prev_incorrect = true;
-                break;
+    /*
+        bool prev_incorrect = false;
+        for (long i = 0; i < ArraySize(figures); ++i) {
+            const datetime prev_time = lasttm - PeriodSeconds();
+            if (figures[i].tm == prev_time) {
+                const double prev_anchor_price = iClose(_Symbol, PERIOD_M1, iBarShift(_Symbol, PERIOD_M1, prev_time - C_predict_offset * PeriodSeconds() - PeriodSeconds(PERIOD_M1)));
+                MqlTick prev_ticks[];
+                const long copied_ct = SVRApi::copy_ticks_safe(_Symbol, prev_ticks, COPY_TICKS_ALL, prev_time, prev_time + PeriodSeconds());
+                if (copied_ct < 1) {
+                   LOG_ERROR("", "No ticks copied for prev time " + TimeToString(prev_time, C_time_mode));
+                   continue;
+                }
+                const AveragePrice prev_average_price(prev_ticks, prev_time, PeriodSeconds(), iOpen(_Symbol, PERIOD_CURRENT, iBarShift(_Symbol, PERIOD_H1, prev_time)));
+                const double prev_actual_price = prev_average_price.value;
+                if (figures[i].op > prev_anchor_price != prev_actual_price > prev_anchor_price) {
+                    prev_incorrect = true;
+                    break;
+                }
             }
         }
-    }
-*/
+    */
     const bool sign_buy = last_price > last_anchor_price;
     if (true) {
-        const string comment_text = (sign_buy ? "BUY " : "SELL ") + " at " + DoubleToString(last_anchor_price, 5) + ", starting time " + 
-            TimeToString(last_anchor_time + PeriodSeconds(PERIOD_M1), TIME_DATE_SECONDS) + " expected hit price from " + 
-            TimeToString(lasttm, TIME_DATE_SECONDS) + ", until " + TimeToString(lasttm + PeriodSeconds(), TIME_DATE_SECONDS) + "\nPredicted price " + DoubleToString(last_price, 5) + ", predicted movement " + DoubleToString(last_price - last_anchor_price) + "\nLast update server time: " + 
-            TimeToString(TimeCurrent(), TIME_DATE_SECONDS) + ", last update local time " + TimeToString(TimeLocal(), TIME_DATE_SECONDS);
+        const string comment_text = (sign_buy ? "BUY " : "SELL ") + " at " + DoubleToString(last_anchor_price, 5) + ", starting time " +
+                                    TimeToString(last_anchor_time + PeriodSeconds(PERIOD_M1), C_time_mode) + " expected hit price from " +
+                                    TimeToString(lasttm, C_time_mode) + ", until " + TimeToString(lasttm + PeriodSeconds(), C_time_mode) + "\nPredicted price " + DoubleToString(last_price, 5) + ", predicted movement " + DoubleToString(last_price - last_anchor_price) + "\nLast update server time: " +
+                                    TimeToString(TimeCurrent(), C_time_mode) + ", last update local time " + TimeToString(TimeLocal(), C_time_mode);
         Comment(comment_text);
     } else
         Comment("Please wait . . .");
@@ -448,13 +491,15 @@ bool TempusGraph::fadeFigure()
     const ENUM_OBJECT arrow_type = sign_buy ? OBJ_ARROW_BUY : OBJ_ARROW_SELL;
     if (!ObjectCreate(0, TempusPredictSign, arrow_type, 0, lasttm, last_anchor_price))
         LOG_ERROR("", "Failed creating signal display!");
-        
-    ObjectSetDouble(0, TempusPredictSign, OBJPROP_PRICE, last_anchor_price);    
+
+    ObjectSetDouble(0, TempusPredictSign, OBJPROP_PRICE, last_anchor_price);
     ObjectSetInteger(0, TempusPredictSign, OBJPROP_TIME, lasttm);
     ObjectSetInteger(0, TempusPredictSign, OBJPROP_FONTSIZE, 20);
     ObjectSetInteger(0, TempusPredictSign, OBJPROP_COLOR, sign_buy ? clrBlue : clrRed);
 
     return redrawn;
+#endif
+    return false;
 }
 
 
@@ -464,38 +509,39 @@ bool TempusGraph::fadeFigure()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void TempusController::doRequest(MqlNet &mqlNet, const datetime timeCoord, const string &dataset)
+void TempusController::doRequest(MqlNet &mql_net, const datetime r_time, const string &dataset)
 {
-    if(average)
-        queryForecast(mqlNet, timeCoord, 4, dataset, true);
-    else {
-        queryForecast(mqlNet, timeCoord, 0, dataset, true);
-        queryForecast(mqlNet, timeCoord, 1, dataset, true);
-        queryForecast(mqlNet, timeCoord, 2, dataset, true);
-        queryForecast(mqlNet, timeCoord, 3, dataset, true);
+    if(average) {
+        queryForecast(mql_net, r_time, 4, dataset, true);
+        queryForecast(mql_net, r_time, 5, dataset, true);
+    } else {
+        queryForecast(mql_net, r_time, 0, dataset, true);
+        queryForecast(mql_net, r_time, 1, dataset, true);
+        queryForecast(mql_net, r_time, 2, dataset, true);
+        queryForecast(mql_net, r_time, 3, dataset, true);
     }
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool TempusController::getResults(MqlNet &mqlNet, const datetime timeCoord, const string dataset, TempusFigure &fig)
+bool TempusController::getResults(MqlNet &mql_net, const datetime r_time, const string &dataset, TempusFigure &fig)
 {
     bool result = false;
     LOG_VERBOSE("", "Getting results " + string(average));
 
     TempusFigure temp;
-    if(average)
-        temp.op = temp.hi = temp.lo = temp.cl = queryForecast(mqlNet, timeCoord, 4, dataset, false);
-    else {
-        temp.op = queryForecast(mqlNet, timeCoord, 0, dataset, false );
-        temp.hi = queryForecast(mqlNet, timeCoord, 1, dataset, false );
-        temp.lo = queryForecast(mqlNet, timeCoord, 2, dataset, false );
-        temp.cl = queryForecast(mqlNet, timeCoord, 3, dataset, false );
+    if(average) {
+        temp.cl = queryForecast(mql_net, r_time, 4, dataset, false);
+    } else {
+        temp.op = queryForecast(mql_net, r_time, 0, dataset, false );
+        temp.hi = queryForecast(mql_net, r_time, 1, dataset, false );
+        temp.lo = queryForecast(mql_net, r_time, 2, dataset, false );
+        temp.cl = queryForecast(mql_net, r_time, 3, dataset, false );
     }
-    temp.tm = timeCoord;
+    temp.tm = r_time;
 
-    result = temp.op > 0 && temp.hi > 0 && temp.lo > 0 && temp.cl > 0;
+    result = temp.op.valid() && temp.hi.valid() && temp.lo.valid() && temp.cl.valid();
 
     if( result ) {
         fig = temp;
@@ -507,64 +553,83 @@ bool TempusController::getResults(MqlNet &mqlNet, const datetime timeCoord, cons
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-double TempusController::queryForecast(MqlNet &mqlNet, const datetime timeCoord, const ushort OHLC, const string dataset, const bool request)
+aprice TempusController::queryForecast(MqlNet &mql_net, const datetime r_time, const ushort OHLC, const string &dataset, const bool request)
 {
-    if (OHLC > 4) return(0);
+#ifdef NONEEDNOW
+    if (OHLC > 5) return(0);
 
 //filling Hash
     Hash param;
-    param.hPutString("resolution", string(fig_res));
+    param.hPutString("resolution", resolution_str);
     param.hPutString("dataset", dataset);
     string value_column;
     switch (OHLC) {
-        case 0: value_column = "open"; break;
-        case 1: value_column = "high"; break;
-        case 2: value_column = "low"; break;
-        case 4: value_column = "bid"; break;
-        default: value_column = "close"; break;
-    }    
+    case 1:
+        value_column = "high";
+        break;
+    case 2:
+        value_column = "low";
+        break;
+    case 4:
+        value_column = "bid";
+        break;
+    case 5:
+        value_column = "ask";
+        break;
+    default:
+        value_column = "close";
+        break;
+    }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
     param.hPutString("value_column", value_column);
-    param.hPutString("value_time", TimeToString(timeCoord, TIME_DATE_SECONDS));
+    param.hPutString("value_time", TimeToString(r_time, C_time_mode));
 
     string response;
-    double finalResult = -1;
+    double final_result = -1;
 
     const string request_call = "request";
     const string send_tick_call = "sendTick";
     const string request_post_payload = request ? "makeForecastRequest" : "getForecastResult";
-    mqlNet.RpcCall(request_call, request_post_payload, param, response);
+    mql_net.RpcCall(request_call, request_post_payload, param, response);
     LOG_VERBOSE("", "Got response");
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
     if(StringLen(response) > 0) {
         JSONParser parser;
-
         LOG_VERBOSE("", "Parsing response: " + response);
         JSONValue *jv = parser.parse(response);
-
         if (jv != NULL && jv.isObject()) {
             JSONObject *jo = jv;
-
             if (!jo.getValue("error").isNull()) {
                 LOG_VERBOSE("", "Received error.");
                 string err = jo.getString("error");
                 if (request && StringFind(err, "Cannot make forecast request because it already exists") != -1 )
-                    finalResult = -1;
+                    final_result = -1;
                 else if (StringFind(err, "Response is not ready yet") == -1)
                     LOG_ERROR("TempusController::queryForecast", err);
             } else {
                 if (!jo.getObject("result").isNull()) {
                     LOG_VERBOSE("", "Received result.");
                     JSONObject *result = jo.getObject("result");
-                    finalResult = result.getDouble(request ? "request_id" : "x");
-                    LOG_VERBOSE ("TempusController::queryForecast", (request ? "request_id:" : "forecasted_value:") + string(finalResult));
+                    final_result = result.getDouble(request ? "request_id" : "x");
+                    LOG_VERBOSE ("TempusController::queryForecast", (request ? "request_id:" : "forecasted_value:") + string(final_result));
                 }
             }
         }
         LOG_VERBOSE("", "Done.");
-
         delete jv;
     }
 
-    return(finalResult);
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+    return(final_result);
+#endif
+
+    return aprice();
 }
 //+------------------------------------------------------------------+

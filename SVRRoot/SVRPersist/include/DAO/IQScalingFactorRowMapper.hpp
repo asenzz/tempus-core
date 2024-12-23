@@ -9,7 +9,7 @@ namespace dao {
 class IQScalingFactorRowMapper : public IRowMapper<svr::datamodel::IQScalingFactor>
 {
 public:
-    datamodel::IQScalingFactor_ptr mapRow(const pqxx_tuple &row_set) const override
+    datamodel::IQScalingFactor_ptr map_row(const pqxx_tuple &row_set) const override
     {
         return ptr<svr::datamodel::IQScalingFactor>(
                 row_set["id"].as<bigint>(0),

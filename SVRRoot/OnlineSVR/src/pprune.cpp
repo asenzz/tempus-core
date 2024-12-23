@@ -23,7 +23,7 @@
 namespace svr {
 namespace optimizer {
 
-constexpr unsigned C_max_population = 3333;
+constexpr unsigned C_max_population = 2500;
 
 constexpr std::array<double, 1> C_maxfun_drop_coefs {.5};
 

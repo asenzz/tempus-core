@@ -13,6 +13,8 @@
 namespace svr {
 namespace business {
 
+constexpr double C_weight_invariance = 10; // 1..+inf higher means less variance in weights
+
 WScalingFactorService::WScalingFactorService(dao::WScalingFactorDAO &w_scaling_factor_dao) noexcept : w_scaling_factor_dao_(w_scaling_factor_dao)
 {}
 
@@ -62,8 +64,7 @@ void WScalingFactorService::scale(const bigint dataset_id, arma::mat &weights)
             save(sf);
         }
         weights.col(i) = ScalingFactorService::scale<const arma::mat>(weights.col(i), sf->get_scaling_factor(), sf->get_dc_offset());
-        constexpr double C_weight_variance = 1;
-        weights.col(i) = (C_weight_variance + weights.col(i)) / (C_weight_variance + 1.);
+        weights.col(i) = (C_weight_invariance + weights.col(i)) / (C_weight_invariance + 1.);
     }
 }
 

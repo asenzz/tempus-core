@@ -120,7 +120,7 @@ int OnInit()
         } else {
             view.redraw(results, current_bar_time, Average);
             LOG_INFO("", "Received high: " + StringFormat("%.5f", results[last_bar_ix].hi) +
-                     " low: " + StringFormat("%.5f", results[last_bar_ix].lo) + " of initial request at " + TimeToString(pending_requests[0], TIME_DATE_SECONDS));
+                     " low: " + StringFormat("%.5f", results[last_bar_ix].lo) + " of initial request at " + TimeToString(pending_requests[0], C_time_mode));
             pending_requests[0] = 0;
         }
     } else {
@@ -203,11 +203,11 @@ int doCalculate(const int rates_total)
                         continue;
                     }
     
-                    LOG_DEBUG("", "Received bars from " + TimeToString(results[0].tm, TIME_DATE_SECONDS) + " to " + TimeToString(results[last_bar_ix].tm, TIME_DATE_SECONDS));
+                    LOG_DEBUG("", "Received bars from " + TimeToString(results[0].tm, C_time_mode) + " to " + TimeToString(results[last_bar_ix].tm, C_time_mode));
                     if (results[0].tm >= current_bar_time) {
                         redrawn |= view.redraw(results, pending_requests[request_ix], Average);
                     } else
-                        LOG_ERROR("", "Received old bar with time value " +  TimeToString(results[0].tm, TIME_DATE_SECONDS) + ". Current bar is " + TimeToString(current_bar_time, TIME_DATE_SECONDS) + ". Skipping it");
+                        LOG_ERROR("", "Received old bar with time value " +  TimeToString(results[0].tm, C_time_mode) + ". Current bar is " + TimeToString(current_bar_time, C_time_mode) + ". Skipping it");
     
                     pending_requests[request_ix] = 0;
                 } else {

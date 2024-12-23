@@ -21,46 +21,44 @@ namespace svr {
 namespace solvers {
 
 
-__global__ void G_normalize_distances_I(RPTR(double) x, const double dc, const double a, const unsigned n)
+__global__ void G_normalize_distances_I(RPTR(double) x, const double dc, const double a, const uint32_t n)
 {
     CU_STRIDED_FOR_i(n) x[i] = (x[i] - dc) / a;
 }
 
-__global__ void G_div_I(RPTR(double) x, const double a, const unsigned n)
+__global__ void G_div_I(RPTR(double) x, const double a, const uint32_t n)
 {
     CU_STRIDED_FOR_i(n) x[i] /= a;
 }
 
-__global__ void G_mul_I(RPTR(double) x, const double a, const unsigned n)
+__global__ void G_mul_I(RPTR(double) x, const double a, const uint32_t n)
 {
     CU_STRIDED_FOR_i(n) x[i] *= a;
 }
 
 // error = abs(labels_train - K_train * solved)
-__global__ void G_absdif(CRPTRd labels_train, RPTR(double) error_mat, const unsigned mn)
+__global__ void G_absdif(CRPTRd labels_train, RPTR(double) error_mat, const uint32_t mn)
 {
-    CU_STRIDED_FOR_i(mn) {
-        error_mat[i] = abs(labels_train[i] - error_mat[i]);
-    }
+    CU_STRIDED_FOR_i(mn) error_mat[i] = abs(labels_train[i] - error_mat[i]);
 }
 
 // work = abs(j_test_labels - (j_K_test * best_solution - svr_epsilon))
-__global__ void G_pred_absdif_I(CRPTRd j_test_labels, RPTR(double) work, const double svr_epsilon, const unsigned test_len_n)
+__global__ void G_pred_absdif_I(CRPTRd j_test_labels, RPTR(double) work, const double svr_epsilon, const uint32_t test_len_n)
 {
     CU_STRIDED_FOR_i(test_len_n) work[i] = abs(j_test_labels[i] - work[i] + svr_epsilon);
 }
 
-__global__ void G_set_diag(RPTR(double) K, CRPTRd d, const unsigned m)
+__global__ void G_set_diag(RPTR(double) K, CRPTRd d, const uint32_t m)
 {
     CU_STRIDED_FOR_i(m) K[i * m + i] = d[i];
 }
 
-__global__ void G_set_diag(RPTR(double) K, const double d, const unsigned m)
+__global__ void G_set_diag(RPTR(double) K, const double d, const uint32_t m)
 {
     CU_STRIDED_FOR_i(m) K[i * m + i] = d;
 }
 
-__global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const unsigned m)
+__global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const uint32_t m)
 {
     const auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= m) return;
@@ -71,13 +69,13 @@ __global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const unsi
     K[ij] = i == j ? d : K[ij] * w[ij];
 }
 
-__global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const unsigned m, const unsigned n, const uint32_t ld)
+__global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const uint32_t m, const uint32_t n, const uint32_t ld)
 {
     CU_STRIDED_FOR_i(m) {
         double sum = K[i];
-        for (unsigned j = 1; j < m; ++j) sum += K[j * ld + i];
-        double diff = L[i];
-        for (unsigned j = 1; j < n; ++j) diff += L[j * ld + i] - sum;
+        for (uint32_t j = 1; j < m; ++j) sum += K[j * ld + i];
+        double diff = L[i] - sum;
+        for (uint32_t j = 1; j < n; ++j) diff += L[j * ld + i] - sum;
         diff /= n;
         epsco[i] = diff;
     }
@@ -87,12 +85,12 @@ __global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const uint3
 {
     CU_STRIDED_FOR_i(m) {
         double sum = K[i];
-        for (unsigned j = 1; j < m; ++j) sum += K[j * ld + i];
+        for (uint32_t j = 1; j < m; ++j) sum += K[j * ld + i];
         epsco[i] = L[i] - sum;
     }
 }
 
-double *cu_calc_epscos(CPTRd K, CPTRd L, const unsigned m, const unsigned n, const cudaStream_t custream)
+double *cu_calc_epscos(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const cudaStream_t custream)
 {
     double *d_epsco;
     cu_errchk(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
@@ -101,7 +99,7 @@ double *cu_calc_epscos(CPTRd K, CPTRd L, const unsigned m, const unsigned n, con
     return d_epsco;
 }
 
-double cu_calc_epsco(CPTRd K, CPTRd L, const unsigned m, const unsigned n, const uint32_t ld, const cudaStream_t custream)
+double cu_calc_epsco(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const uint32_t ld, const cudaStream_t custream)
 {
     double *d_epsco;
     cu_errchk(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
@@ -139,6 +137,7 @@ double score_weights(CPTRd K, CPTRd weights, CPTRd labels, const uint32_t m, con
     return res;
 }
 
+
 void __global__
 G_score_kernel(
         RPTR(double) score,
@@ -172,7 +171,7 @@ G_kernel_from_distances_symm(RPTR(double) K, CRPTRd dist, const uint32_t mm, con
     const auto g_thr_ix = threadIdx.x + blockIdx.x * blockDim.x;
     if (g_thr_ix >= mm) return;
     const auto col = g_thr_ix / m;
-    K[g_thr_ix + col] = K[((g_thr_ix + col) % m) * m + col] = (1. - dist[g_thr_ix]) / divisor;
+    K[g_thr_ix + col] = K[((g_thr_ix + col) % m) * m + col] = kernel::path::z2k(dist[g_thr_ix], divisor);
 }
 
 
@@ -200,25 +199,25 @@ void kernel_from_distances_symm(double *const K, CPTRd Z, const uint32_t m, cons
 __global__ void
 G_kernel_from_distances(RPTR(double) K, CRPTRd Z, const uint32_t mn, const double divisor)
 {
-    CU_STRIDED_FOR_i(mn) K[i] = (1. - Z[i]) / divisor;
+    CU_STRIDED_FOR_i(mn) K[i] = kernel::path::z2k(Z[i], divisor);
 }
 
 __global__ void
 G_kernel_from_distances(RPTR(double) K, CRPTRd Z, const uint32_t mn, const uint32_t m, CRPTRd gamma)
 {
-    CU_STRIDED_FOR_i(mn) K[i] = (1. - Z[i]) / gamma[i % m];
+    CU_STRIDED_FOR_i(mn) K[i] = kernel::path::z2k(Z[i], gamma[i % m]);
 }
 
 __global__ void
 G_kernel_from_distances_I(RPTR(double) Kz, const uint32_t mn, const double divisor)
 {
-    CU_STRIDED_FOR_i(mn) Kz[i] = (1. - Kz[i]) / divisor;
+    CU_STRIDED_FOR_i(mn) Kz[i] = kernel::path::z2k(Kz[i], divisor);
 }
 
 __global__ void
 G_kernel_from_distances_I(RPTR(double) Kz, const uint32_t mn, const uint32_t m, CRPTRd gamma)
 {
-    CU_STRIDED_FOR_i(mn) Kz[i] = (1. - Kz[i]) / gamma[i % m];
+    CU_STRIDED_FOR_i(mn) Kz[i] = kernel::path::z2k(Kz[i], gamma[i % m]);
 }
 
 void kernel_from_distances(double *const K, CPTRd Z, const uint32_t m, const uint32_t n, const double gamma)
@@ -850,11 +849,11 @@ __global__ void G_irwls_op2(
         const uint32_t mm)
 {
     CU_STRIDED_FOR_i(mm) {
-        const uint32_t row = i % m;
-        const uint32_t in_i = (i / m) * ldK + row;
+        const auto row = i % m;
+        const auto in_i = (i / m) * ldK + row;
         if (i < mn) solved[i] = (err[i] + additive) * labels[in_i];
-        double sum_err_i = additive;
-        for (uint32_t j = row; j < mn; j += m) sum_err_i += err[j];
+        auto sum_err_i = additive;
+        for (auto j = row; j < mn; j += m) sum_err_i += err[j];
         out_K[i] = K[in_i] * sum_err_i;
     }
 }
@@ -966,48 +965,31 @@ double sumabs(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
 
 #endif
 
-template<const uint32_t block_size> __global__ void
-G_meanabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
-{
-    __shared__ double sumdata[common::C_cu_block_size];
-    auto i = blockIdx.x * block_size + tid;
-    if (i < n) {
-        sumdata[tid] = fabs(d_input[i]) / n;
-        const auto stride1 = blockDim.x * gridDim.x;
-        UNROLL()
-        for (i += stride1; i < n; i += stride1) sumdata[tid] += fabs(d_input[i]) / n;
-    } else sumdata[tid] = 0;
-
-    __syncthreads();
-    const auto sh_limit = _MIN(n, block_size);
-#define stride_reduce_sum(block_low_)                        \
-        if (block_size >= block_low_) {                      \
-            constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid + stride2;          \
-            if (tid < stride2 && tid_stride2 < sh_limit)     \
-                sumdata[tid] += sumdata[tid_stride2];        \
-            __syncthreads();                                 \
-        }
-
-    stride_reduce_sum(1024);
-    stride_reduce_sum(512);
-    stride_reduce_sum(256);
-    stride_reduce_sum(128);
-
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sumdata, tid, sh_limit);
-
-    if (tid) return;
-    atomicAdd(d_result_sum, *sumdata);
-}
-
 double meanabs(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
 {
-    double sum, *d_sum = cucalloc<double>(stm);
-    G_meanabs<common::C_cu_block_size><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_sum, n);
-    cufreecopy(&sum, d_sum, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
-    return sum;
+    return sumabs(d_in, n, stm) / n;
+}
+
+
+__global__ void G_score_diff_dir(RPTR(double) score, CPTRd dif, CPTRd ref, const uint32_t ld_in, const uint32_t ld_ref, const uint32_t m, const uint32_t n)
+{
+    const auto i = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= m || j >= n) return;
+    const auto difv = dif[j * ld_in + i];
+    const auto refv = ref[j * ld_ref + i];
+    atomicAdd(score, fabs(difv) * (signbit(refv) == signbit(refv + difv) ? 1 : 10));
+}
+
+/* Sign-weighted score */
+double swscore(CPTRd d_in, const uint32_t ld_in, CPTRd d_ref, const uint32_t ld_ref, const uint32_t m, const uint32_t n, const cudaStream_t custream)
+{
+    double score, *d_score = cucalloc<double>(custream);
+    G_score_diff_dir<<<CU_BLOCKS_THREADS_2D2(m, n), 0, custream>>>(d_score, d_in, d_ref, ld_in, ld_ref, m, n);
+    cu_errchk(cudaMemcpyAsync(&score, d_score, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_score, custream));
+    cu_errchk(cudaStreamSynchronize(custream));
+    return score;
 }
 
 #if 1
@@ -1016,7 +998,7 @@ template<const uint32_t block_size, typename T> __device__ __forceinline__ void 
 {
     assert(ix < 32);
 
-#define _DO_WARP_REDUCE_SUMMIN(N)                              \
+#define _DO_WARP_REDUCE_SUMMIN(N)                           \
     if (block_size >= (N)) {                                \
         const uint32_t ix_N_2 = ix + (N) / 2;               \
         if (ix_N_2 < n) {                                   \
@@ -1349,53 +1331,10 @@ std::tuple<double, double, double> suminmax(CPTRd d_in, const uint32_t n, const 
 
 #endif
 
-template<const uint32_t block_size> __global__ void
-G_meanminmax(CRPTRd d_input, RPTR(double) d_result_mean, RPTR(double) d_result_min, RPTR(double) d_result_max, const uint32_t n)
-{
-    static __shared__ double sumdata[block_size], mindata[block_size], maxdata[block_size];
-    auto i = blockIdx.x * block_size + tid;
-    if (i < n) {
-        sumdata[tid] = d_input[i] / n;
-        mindata[tid] = maxdata[tid] = d_input[i];
-        const auto stride1 = blockDim.x * gridDim.x;
-        UNROLL()
-        for (i += stride1; i < n; i += stride1) _SMM_OP(sumdata[tid], mindata[tid], maxdata[tid], d_input[i] / n, d_input[i], d_input[i]);
-    } else {
-        sumdata[tid] = 0;
-        mindata[tid] = std::numeric_limits<double>::max();
-        maxdata[tid] = std::numeric_limits<double>::min();
-    }
-    __syncthreads();
-    const auto sh_limit = _MIN(n, block_size);
-
-    stride_reduce_suminmax(1024);
-    stride_reduce_suminmax(512);
-    stride_reduce_suminmax(256);
-    stride_reduce_suminmax(128);
-    if (tid >= 32) return;
-    warp_reduce_suminmax<block_size>(sumdata, mindata, maxdata, tid, sh_limit);
-    if (tid) return;
-    atomicAdd(d_result_mean, *sumdata);
-    atomicMin(d_result_min, *mindata);
-    atomicMax(d_result_max, *maxdata);
-}
-
 std::tuple<double, double, double> meanminmax(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
 {
-    double mean, min = std::numeric_limits<double>::max(), max = std::numeric_limits<double>::min();
-    double *d_min, *d_max, *d_mean = cucalloc<double>(stm);
-    cu_errchk(cudaMallocAsync((void **) &d_min, sizeof(double), stm));
-    cu_errchk(cudaMemcpyAsync(d_min, &min, sizeof(double), cudaMemcpyHostToDevice, stm));
-    cu_errchk(cudaMallocAsync((void **) &d_max, sizeof(double), stm));
-    cu_errchk(cudaMemcpyAsync(d_max, &max, sizeof(double), cudaMemcpyHostToDevice, stm));
-    G_meanminmax < common::C_cu_block_size ><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_mean, d_min, d_max, n);
-    cufreecopy(&mean, d_mean, stm);
-    cufreecopy(&min, d_min, stm);
-    cufreecopy(&max, d_max, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
-
-    LOG4_TRACE("For " << n << " elements, Got sum " << mean << ", min " << min << ", max " << max);
-    return {mean, min, max};
+    const auto [sum, min, max] = suminmax(d_in, n, stm);
+    return {sum / n, min, max};
 }
 
 #if 1
@@ -1406,7 +1345,7 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
 {
     static __shared__ double sh_dist[block_size];
     sh_dist[tid] = 0;
-    CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]) / mn;
+    CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]);
 
     __syncthreads();
     const auto n_min = _MIN(mn, block_size);
@@ -1435,7 +1374,7 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
 {
     static __shared__ double sh_dist[block_size];
     sh_dist[tid] = 0;
-    CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[i] - d_predictions[i]) / mn;
+    CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[i] - d_predictions[i]);
 
     __syncthreads();
     const auto n_min = _MIN(mn, block_size);
@@ -1469,7 +1408,7 @@ double unscaled_distance(CPTRd d_labels, CPTRd d_predictions, const double scale
     G_dist_unscaled < common::C_cu_block_size ><<<CU_BLOCKS_THREADS(mn), 0, stm>>>(d_sum, d_labels, d_predictions, m, mn, ldl);
     cufreecopy(&sum, d_sum, stm);
     cu_errchk(cudaStreamSynchronize(stm));
-    return scale * sum;
+    return scale * sum / mn;
 }
 
 #else
@@ -1694,20 +1633,9 @@ solve_hybrid(const double *const j_K_epsco, const uint32_t n, const uint32_t tra
             cu_errchk(cudaStreamSynchronize(custream));
         }
         if (i == irwls_iters) break;
-#if 0
-        // Proper IRWLS is slower
-        G_irwls_op2<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(
-                j_work, j_K_epsco, m, j_train_labels, j_K_work, j_work, 0, train_len, train_len_n, K_train_len);
-        // cb_errchk(cublasDsyrk(cublas_H, CUBLAS_FILL_MODE_FULL, CUBLAS_OP_N, train_len, train_len, &one, j_K_work, train_len, &zero, j_K_work2, train_len));
-        cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_T, CUBLAS_OP_N, train_len, train_len, train_len, &one, j_K_work, train_len, j_K_work, train_len, &zero, j_K_work2, train_len));
-        cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_T, CUBLAS_OP_N, train_len, n, train_len, &one, j_K_work, train_len, j_work, train_len, &zero, j_solved, train_len));
-        ma_errchk(magma_dgesv_rbt_async(MagmaTrue, train_len, n, j_K_work2, train_len, j_solved, train_len, &info, magma_iters, magma_threshold, ma_queue));
-#else
-        // Emo's IRWLS tweaked by Zed faster harder Scooter
         G_irwls_op2<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(
                 j_work, j_K_epsco, m, j_train_labels, j_K_epsco_reweighted, j_solved, delta_iter_mul / i, train_len, train_len_n, K_train_len);
         ma_errchk(magma_dgesv_rbt_async(MagmaTrue, train_len, n, j_K_epsco_reweighted, train_len, j_solved, train_len, &info, magma_iters, magma_threshold, ma_queue));
-#endif
     }
     return best_score;
 }

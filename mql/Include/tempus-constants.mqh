@@ -7,19 +7,21 @@
 #property link      "https://www.mql5.com"
 
 // #define DEBUG_CONNECTOR
-#define HISTORYTOSQL
+// #define HISTORYTOSQL
 // #define RUN_TEST
 
 // For all bars
-#define BARS_OFFERED INT_MAX
-
+const int C_time_mode = TIME_DATE | TIME_SECONDS;
+const int C_bars_offered = INT_MAX; // Maximum offered bars limit
 const int C_period_seconds = PeriodSeconds();
+const string C_one_str = IntegerToString(1);
 const string C_period_seconds_str = IntegerToString(C_period_seconds);
-const string C_chart_identifier = _Symbol + "_" + string(C_period_seconds) + (Average ? "_avg_" : "_") + ServerUrl;
+const string C_period_time_str = TimeToString(datetime(C_period_seconds), TIME_SECONDS);// Limited to 24 hours period
+const string C_chart_identifier = _Symbol + "_" + IntegerToString(C_period_seconds) + (Average ? "_avg_" : "_") + ServerUrl;
 const string C_chart_predictions_identifier = "Predictions" + "_" + C_chart_identifier;
 const string C_chart_prediction_anchor_identifier = "Anchor" + "_" + C_chart_identifier;
 const string C_one_minute_chart_identifier = _Symbol + "_60_avg_" + ServerUrl;
 const datetime C_zero_time = datetime(0);
-
-#define TIME_DATE_SECONDS (TIME_DATE | TIME_SECONDS)
+const bool C_backtesting = MQLInfoInteger(MQL_TESTER);
+const long C_leverage = AccountInfoInteger(ACCOUNT_LEVERAGE);
 #define DOUBLE_PRINT_DECIMALS 15

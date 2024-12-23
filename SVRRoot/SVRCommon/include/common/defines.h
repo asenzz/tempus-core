@@ -2,9 +2,9 @@
 
 /* Global constants and defines */
 
-// #define NO_PARALLEL // Disable parallel macros
+// #define NO_PARALLEL // Disable parallelisation macros
 
-#define INTEGRATION_TEST
+// #define INTEGRATION_TEST
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
 
 #define CTX_PER_GPU 2 // Default streams per GPU

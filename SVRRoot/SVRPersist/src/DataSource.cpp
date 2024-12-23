@@ -5,21 +5,21 @@
 
 #define CLEANUP_BATCH_SIZE 10000
 
-namespace svr{
-namespace dao{
+namespace svr {
+namespace dao {
 
 
 DataSource::~DataSource()
 {
 }
 
-DataSource::DataSource(const std::string& connection_string, const bool commit_on_scope_exit) :
+DataSource::DataSource(const std::string &connection_string, const bool commit_on_scope_exit) :
         connection_string(connection_string)
 {
     LOG4_DEBUG("Opening connection using connection string " << connection_string);
     try {
-        statementPreparerTemplate = std::make_unique<StatementPreparerDBTemplate>(connection_string);
-    } catch (const std::exception& e) {
+        statement_preparer_template = std::make_unique<StatementPreparerDBTemplate>(connection_string);
+    } catch (const std::exception &e) {
         LOG4_FATAL(e.what());
         throw e;
     }
@@ -54,7 +54,7 @@ scoped_transaction_guard_ptr DataSource::open_transaction()
     return ptr<scoped_transaction_guard>(connection_string, *this);
 }
 
-long DataSource::batch_update(const std::string& table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)
+long DataSource::batch_update(const std::string &table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)
 {
     if (data.empty()) {
         LOG4_ERROR("No data to save!");
@@ -83,35 +83,49 @@ long DataSource::batch_update(const std::string& table_name, const datamodel::Da
 #pragma GCC diagnostic pop
 }
 
+void DataSource::upsert_row(CRPTR(char) table_name, CRPTR(char *) row_fields, const uint16_t n_fields)
+{
+    assert(n > 3);
+    assert(table_name);
+    assert(row_fields);
+    assert(*row_fields);
+    LOG4_TRACE("Upserting row into " << table_name);
+    scoped_transaction_guard_ptr trx = open_transaction();
+    std::ostringstream ostr;
+    ostr << "SELECT upsert_row('" << table_name << "','{";
+    for (uint16_t i = 0; i < n_fields - 1; ++i) ostr << row_fields[i] << ',';
+    ostr << row_fields[n_fields - 1] << "}');";
+    try {
+        trx->exec(ostr.str());
+    } catch (const std::exception &e) {
+        LOG4_THROW(e.what());
+    }
+    LOG4_END();
+}
+
 void DataSource::cleanup_queue_table(const std::string &table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)
 {
     if (data.empty()) return;
-    LOG4_DEBUG("Cleaning queue of size " << data.size() << " rows, starting " << std::max(start_time, data.front()->get_value_time()) << " until " << data.back()->get_value_time());
+    LOG4_DEBUG(
+            "Cleaning queue of size " << data.size() << " rows, starting " << std::max(start_time, data.front()->get_value_time()) << " until " << data.back()->get_value_time());
     scoped_transaction_guard_ptr trx = open_transaction();
     const auto start_iter = lower_bound_back(data, start_time);
-    auto start_ix = std::distance(data.begin(), start_iter);
-    if (start_ix < 0 or start_ix >= (ssize_t) data.size()) start_ix = 0;
-    for (size_t i = start_ix; i < data.size(); i += CLEANUP_BATCH_SIZE)
-    {
+    auto start_ix = start_iter - data.cbegin();
+    if (start_ix < 0 or start_ix >= CAST2(start_ix) data.size()) start_ix = 0;
+    for (DTYPE(data.size()) i = start_ix; i < data.size(); i += CLEANUP_BATCH_SIZE) {
         std::ostringstream ostr;
-        ostr << "select cleanup_queue('" << table_name << "', '{";
-        auto ivt = data.begin() + i;
-        ostr << bpt::to_simple_string(ivt->get()->get_value_time());
+        ostr << "SELECT cleanup_queue('" << table_name << "', '{";
+        auto ivt = data.cbegin() + i;
+        ostr << (**ivt).get_value_time();
         ++ivt;
-
-        size_t j = 0;
-        for (auto end = data.end(); ivt != end && j < CLEANUP_BATCH_SIZE; ++ivt, ++j)
-            ostr << "," << bpt::to_simple_string(ivt->get()->get_value_time());
-        ostr << "}'::timestamp[]);";
-
-        try
-        {
+        uint32_t j = 0;
+        for (; ivt != data.cend() && j < CLEANUP_BATCH_SIZE; ++ivt, ++j)
+            ostr << ',' << (**ivt).get_value_time();
+        ostr << "}'::timestamp[])";
+        try {
             trx->exec(ostr.str());
-        }
-        catch (const std::exception& e)
-        {
-            LOG4_FATAL(e.what());
-            throw;
+        } catch (const std::exception &e) {
+            LOG4_THROW(e.what());
         }
     }
 

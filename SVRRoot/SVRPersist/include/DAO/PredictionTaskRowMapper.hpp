@@ -8,17 +8,17 @@ namespace dao{
 
 class PredictionTaskRowMapper : public IRowMapper<svr::datamodel::PredictionTask>{
 public:
-    PredictionTask_ptr mapRow(const pqxx_tuple& rowSet) const override {
+    PredictionTask_ptr map_row(const pqxx_tuple& row_set) const override {
 
         return ptr<svr::datamodel::PredictionTask>(
-                rowSet["id"].as<bigint>(0),
-                rowSet["dataset_id"].as<bigint>(0),
-                rowSet["start_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_time"].as<std::string>("")),
-                rowSet["end_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_time"].as<std::string>("")),
-                rowSet["start_prediction_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["start_prediction_time"].as<std::string>("")),
-                rowSet["end_prediction_time"].is_null() ? bpt::ptime() : bpt::time_from_string(rowSet["end_prediction_time"].as<std::string>("")),
-                rowSet["status"].as<int>(0),
-                rowSet["mse"].as<double>(0)
+                row_set["id"].as<bigint>(0),
+                row_set["dataset_id"].as<bigint>(0),
+                row_set["start_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                row_set["end_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                row_set["start_prediction_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                row_set["end_prediction_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                row_set["status"].as<int>(0),
+                row_set["mse"].as<double>(0)
         );
     }
 };

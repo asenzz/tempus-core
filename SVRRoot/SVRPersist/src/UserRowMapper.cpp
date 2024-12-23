@@ -5,7 +5,7 @@
 namespace svr {
 namespace dao {
 
-User_ptr UserRowMapper::mapRow(const pqxx_tuple& row_set) const
+User_ptr UserRowMapper::map_row(const pqxx_tuple& row_set) const
 {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

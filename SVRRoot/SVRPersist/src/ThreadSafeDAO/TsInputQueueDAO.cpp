@@ -24,29 +24,26 @@ std::deque<datamodel::InputQueue_ptr> TsInputQueueDAO::get_all_queues_with_sign(
 datamodel::InputQueue_ptr TsInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name,
                                                               const bpt::time_duration &resolution)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
     return dao->get_queue_metadata(user_name, logical_name, resolution);
 }
 
 
 datamodel::InputQueue_ptr TsInputQueueDAO::get_queue_metadata(const std::string &table_name)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
     return dao->get_queue_metadata(table_name);
 }
 
 
-std::deque<datamodel::DataRow_ptr> TsInputQueueDAO::get_queue_data_by_table_name(const std::string &table_name,
-                                                                                 const bpt::ptime &time_from,
-                                                                                 const bpt::ptime &time_to,
-                                                                                 size_t limit)
+std::deque<datamodel::DataRow_ptr> TsInputQueueDAO::get_queue_data_by_table_name(
+        const std::string &table_name, const bpt::ptime &time_from, const bpt::ptime &time_to, const size_t limit)
 {
     return ts_call<std::deque<datamodel::DataRow_ptr>>(&InputQueueDAO::get_queue_data_by_table_name, table_name, time_from, time_to, limit);
 }
 
 
-std::deque<datamodel::DataRow_ptr> TsInputQueueDAO::get_latest_queue_data_by_table_name(const std::string &table_name,
-                                                                                        size_t limit, const bpt::ptime &last_time)
+std::deque<datamodel::DataRow_ptr> TsInputQueueDAO::get_latest_queue_data_by_table_name(const std::string &table_name, const size_t limit, const bpt::ptime &last_time)
 {
     return ts_call<std::deque<datamodel::DataRow_ptr>>(&InputQueueDAO::get_latest_queue_data_by_table_name, table_name, limit, last_time);
 }
@@ -98,25 +95,27 @@ size_t TsInputQueueDAO::clear(const datamodel::InputQueue_ptr &input_queue)
 
 bool TsInputQueueDAO::exists(const std::string &table_name)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
     return dao->exists(table_name);
 }
 
 
 bool TsInputQueueDAO::exists(const datamodel::InputQueue_ptr &input_queue)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
     return dao->exists(input_queue);
 }
 
-
-bool TsInputQueueDAO::exists(
-        const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
+void TsInputQueueDAO::upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, const uint16_t n_values)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
-    return dao->exists(user_name, logical_name, resolution);
+    ts_call<void>(&InputQueueDAO::upsert_row_str, table_name, value_time, update_time, volume, values, n_values);
 }
 
+bool TsInputQueueDAO::exists(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
+{
+    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    return dao->exists(user_name, logical_name, resolution);
+}
 
 datamodel::DataRow_ptr TsInputQueueDAO::find_oldest_record(const datamodel::InputQueue_ptr &queue)
 {

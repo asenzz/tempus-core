@@ -26,6 +26,7 @@
 namespace bpt = boost::posix_time;
 
 #define DTYPE(T) std::decay_t<decltype(T)>
+#define CAST2(x) (DTYPE(x))
 #define RELEASE_CONT(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
 #define CPTR(T) const T *const

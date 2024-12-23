@@ -1,7 +1,8 @@
 #pragma once
 
-#include <DAO/AbstractDAO.hpp>
 #include <boost/optional.hpp>
+#include "DAO/AbstractDAO.hpp"
+#include "common/compatibility.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -36,7 +37,7 @@ public:
 
     virtual datamodel::InputQueue_ptr get_queue_metadata(
             const std::string &user_name,
-            const std::string &logicalName,
+            const std::string &p_input_queue,
             const bpt::time_duration &resolution) = 0;
 
     virtual datamodel::InputQueue_ptr get_queue_metadata(const std::string &table_name) = 0;
@@ -77,8 +78,9 @@ public:
 
     virtual bool exists(const datamodel::InputQueue_ptr &input_queue) = 0;
 
-    virtual bool
-    exists(const std::string &user_name, const std::string &logicalName, const bpt::time_duration &resolution) = 0;
+    virtual bool exists(const std::string &user_name, const std::string &p_input_queue, const bpt::time_duration &resolution) = 0;
+
+    virtual void upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, const uint16_t n_values) = 0;
 
     virtual datamodel::DataRow_ptr find_oldest_record(const datamodel::InputQueue_ptr &queue) = 0;
 

@@ -126,7 +126,7 @@ prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &
             bpt::second_clock::local_time(),
             start_predict_time,
             start_predict_time + iq->get_resolution() * FORECAST_COUNT,
-            iq->get_resolution().total_seconds(),
+            iq->get_resolution(),
             common::formatter() << "{" << common::C_test_primary_column << "}");
     APP.request_service.save(p_request);
 
@@ -144,7 +144,7 @@ get_results(const bpt::ptime &request_time, const datamodel::InputQueue_ptr &iq,
             default_dataset_id,
             request_time,
             request_time + iq->get_resolution() * FORECAST_COUNT,
-            iq->get_resolution().total_seconds());
+            iq->get_resolution());
     return datamodel::DataRow::construct(results);
 }
 

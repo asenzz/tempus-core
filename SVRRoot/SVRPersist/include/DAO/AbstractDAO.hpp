@@ -1,7 +1,7 @@
 #pragma once
 
-#include <common/types.hpp>
-#include <util/PropertiesFileReader.hpp>
+#include "common/types.hpp"
+#include "util/PropertiesFileReader.hpp"
 
 
 namespace svr {
@@ -11,19 +11,19 @@ class DataSource;
 
 class AbstractDAO {
     svr::common::PropertiesFileReader& sql_properties;
-    const std::string propsFileName;
+    const std::string properties_file_name;
 protected:
     DataSource& data_source;
 
     virtual ~AbstractDAO();
-    explicit AbstractDAO(svr::common::PropertiesFileReader& sql_properties, DataSource& data_source, std::string propsFileName);
+    explicit AbstractDAO(svr::common::PropertiesFileReader& sql_properties, DataSource& data_source, std::string properties_file_name);
 
     template<class BasicDao, class PostgresDao, class AsyncDao, class ThreadSafeDao>
     static BasicDao * build (svr::common::PropertiesFileReader& sql_properties, DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
 
 public:
     DataSource& get_data_source(){ return data_source; }
-    virtual std::string get_sql(const std::string& sqlKey);
+    virtual std::string get_sql(const std::string& sql_key);
 };
 
 

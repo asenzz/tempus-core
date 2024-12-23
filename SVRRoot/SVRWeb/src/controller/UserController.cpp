@@ -10,12 +10,12 @@ using namespace svr::context;
 
 namespace svr {
 namespace web {
-void UserController::show(std::string userName) {
+void UserController::show(std::string user_name) {
 
     content::User user;
     user.pageTitle = "User Details";
 
-    User_ptr user_ = AppContext::get_instance().user_service.get_user_by_user_name(userName);
+    User_ptr user_ = AppContext::get_instance().user_service.get_user_by_user_name(user_name);
 
     if(user_.get() == nullptr){
         user.pageError = "No user with such id exists!";

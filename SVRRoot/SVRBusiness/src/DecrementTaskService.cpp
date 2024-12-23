@@ -13,20 +13,20 @@ namespace business {
 
 bool DecrementTaskService::exists(const DecrementTask_ptr& decrementTask)
 {
-    reject_nullptr(decrementTask);
+    REJECT_NULLPTR(decrementTask);
     return decrementTaskDao.exists(decrementTask->get_id());
 }
 
 int DecrementTaskService::save(const DecrementTask_ptr& decrementTask)
 {
-    reject_nullptr(decrementTask);
+    REJECT_NULLPTR(decrementTask);
 
     return decrementTaskDao.save(decrementTask);
 }
 
 int DecrementTaskService::remove(const DecrementTask_ptr& decrementTask)
 {
-    reject_nullptr(decrementTask);
+    REJECT_NULLPTR(decrementTask);
 
     return decrementTaskDao.remove(decrementTask);
 }

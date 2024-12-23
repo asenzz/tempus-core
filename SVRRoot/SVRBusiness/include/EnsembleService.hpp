@@ -12,7 +12,7 @@
 #include "model/Model.hpp"
 #include "model/User.hpp"
 
-constexpr unsigned C_parallel_train_models = 1; // Adjust with RAM
+constexpr uint16_t C_parallel_train_models = 1; // Adjust with RAM
 
 namespace svr {
 namespace dao { class EnsembleDAO; }

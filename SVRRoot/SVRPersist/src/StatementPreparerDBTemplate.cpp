@@ -10,7 +10,7 @@ namespace svr {
 namespace dao {
 
 
-string StatementPreparerDBTemplate::prepareStatement(const char *format)
+string StatementPreparerDBTemplate::prepare_statement(const char *format)
 {
     return string(format);
 }
@@ -34,18 +34,10 @@ string StatementPreparerDBTemplate::escape(datamodel::ROLE role)
 
 string StatementPreparerDBTemplate::escape(const ptime &time)
 {
-    if (time.is_neg_infinity()) {
-        return "-infinity";
-    }
-    if (time.is_pos_infinity()) {
-        return "infinity";
-    }
-    if (time.is_not_a_date_time()) {
-        return "NULL";
-    }
-    if (time.is_special()) {
-        throw std::invalid_argument("Cannot transform special timestamp value to SQL type!");
-    }
+    if (time.is_neg_infinity()) return "-infinity";
+    if (time.is_pos_infinity()) return "infinity";
+    if (time.is_not_a_date_time()) return "NULL";
+    if (time.is_special()) THROW_EX_FS(std::invalid_argument, "Cannot transform special timestamp value to SQL type!");
     return "'" + to_simple_string(time) + "'::timestamp";
 }
 

@@ -19,52 +19,67 @@ bool _DisableDST = false;
 #include <MqlLog.mqh>
 
 #import "Kernel32.dll"
-   void GetSystemTime(int& TimeArray[]); // Working fine!
-   void GetLocalTime(int& TimeArray[]); // Working fine!
+void GetSystemTime(int& TimeArray[]); // Working fine!
+void GetLocalTime(int& TimeArray[]); // Working fine!
 #import
 
-int TimeArray[4];
 
-datetime GetWindowsSystemTime(){
 
-   GetSystemTime(TimeArray);
-   int year = TimeArray[0] & 65535;
-   int month = TimeArray[0] >> 16;
-   int day = TimeArray[1] >> 16;
-   int hour = TimeArray[2] & 65535;
-   int minute = TimeArray[2] >> 16;
-   int second = TimeArray[3] & 65535;
-   
-   return StringToTime( FormatDateTime(year, month, day, hour, minute, second) );
-}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+datetime GetWindowsSystemTime()
+{
+    int TimeArray[4];
+    GetSystemTime(TimeArray);
+    int year = TimeArray[0] & 65535;
+    int month = TimeArray[0] >> 16;
+    int day = TimeArray[1] >> 16;
+    int hour = TimeArray[2] & 65535;
+    int minute = TimeArray[2] >> 16;
+    int second = TimeArray[3] & 65535;
 
-datetime GetWindowsLocalTime(){
-
-   GetLocalTime(TimeArray);
-   int year = TimeArray[0] & 65535;
-   int month = TimeArray[0] >> 16;
-   int day = TimeArray[1] >> 16;
-   int hour = TimeArray[2] & 65535;
-   int minute = TimeArray[2] >> 16;
-   int second = TimeArray[3] & 65535;
-   
-   return StringToTime( FormatDateTime(year, month, day, hour, minute, second) );
+    return StringToTime( FormatDateTime(year, month, day, hour, minute, second) );
 }
 
 
-string FormatDateTime(int year, int iMonth, int iDay, int iHour, int iMinute, int iSecond) {
-   string month = IntegerToString(iMonth + 100);
-   month = StringSubstr(month, 1);
-   string day = IntegerToString(iDay + 100);
-   day = StringSubstr(day, 1);
-   string hour = IntegerToString(iHour + 100);
-   hour = StringSubstr(hour, 1);
-   string minute = IntegerToString(iMinute + 100);
-   minute = StringSubstr(minute, 1);
-   string second = IntegerToString(iSecond + 100);
-   second = StringSubstr(second, 1);
-   return StringFormat("%d.%s.%s %s:%s:%s", year, month, day, hour, minute, second);
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+datetime GetWindowsLocalTime()
+{
+    if (C_backtesting) {
+        int TimeArray[4];
+        GetLocalTime(TimeArray);
+        return StringToTime( FormatDateTime(
+            TimeArray[0] & 65535, 
+            TimeArray[0] >> 16, 
+            TimeArray[1] >> 16, 
+            TimeArray[2] & 65535,
+            TimeArray[2] >> 16,
+            TimeArray[3] & 65535)
+        );
+    } else
+        return TimeLocal();
+}
 
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+string FormatDateTime(const int year, const int iMonth, const int iDay, const int iHour, const int iMinute, const int iSecond)
+{
+    string month = IntegerToString(iMonth + 100);
+    month = StringSubstr(month, 1);
+    string day = IntegerToString(iDay + 100);
+    day = StringSubstr(day, 1);
+    string hour = IntegerToString(iHour + 100);
+    hour = StringSubstr(hour, 1);
+    string minute = IntegerToString(iMinute + 100);
+    minute = StringSubstr(minute, 1);
+    string second = IntegerToString(iSecond + 100);
+    second = StringSubstr(second, 1);
+    return StringFormat("%d.%s.%s %s:%s:%s", year, month, day, hour, minute, second);
 }
 
 
@@ -72,7 +87,7 @@ string FormatDateTime(int year, int iMonth, int iDay, int iHour, int iMinute, in
 //+------------------------------------------------------------------+
 void TempusGMTInit(const ENUM_TIMEFRAMES targetPeriod, const int timeOffset, const bool DisableDST_)
 {
-    LOG_INFO(,"Server time to local time difference " + TimeToString(TimeTradeServer() - TimeLocal(), TIME_DATE_SECONDS));
+    LOG_INFO(, "Server time to local time difference " + TimeToString(TimeTradeServer() - TimeLocal(), C_time_mode));
     _TargetPeriod = targetPeriod;
     _TimeOffset = timeOffset;
     _OffsetHours = _TimeOffset / MINUTES_IN_HOUR;
@@ -232,6 +247,6 @@ double GetTargetLow(const int index)
 long GetTargetVolume(const int index)
 {
     return 1;
-    //return Volume[index]; // TODO Implement properly!
+//return Volume[index]; // TODO Implement properly!
 }
 //+------------------------------------------------------------------+

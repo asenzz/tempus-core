@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if [ -z "${SVRWAVE_TEST_WINDOW}" ]; then
-  export SVRWAVE_TEST_WINDOW=1380
+  export SVRWAVE_TEST_WINDOW=460
 fi
 export BIN=OnlineSVR-test
 

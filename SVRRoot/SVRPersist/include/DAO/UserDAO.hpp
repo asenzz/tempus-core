@@ -19,7 +19,7 @@ public:
     virtual std::vector<User_ptr> get_all_users_by_priority() = 0;
     virtual bigint get_next_id() = 0;
 
-    virtual bool exists(std::string const & userName) = 0;
+    virtual bool exists(std::string const & user_name) = 0;
 
     virtual int save(const User_ptr&) = 0;
     virtual int update(const User_ptr&) = 0;

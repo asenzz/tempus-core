@@ -9,8 +9,8 @@ PgEnsembleDAO::PgEnsembleDAO(svr::common::PropertiesFileReader& tempus_config, s
 {}
 
 datamodel::Ensemble_ptr PgEnsembleDAO::get_by_id(const bigint id) {
-    EnsembleRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, get_sql("get_by_id"), id);
+    EnsembleRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, get_sql("get_by_id"), id);
 }
 
 bigint PgEnsembleDAO::get_next_id() {
@@ -61,14 +61,14 @@ int PgEnsembleDAO::remove(const datamodel::Ensemble_ptr &ensemble) {
 
 datamodel::Ensemble_ptr PgEnsembleDAO::get_by_dataset_and_decon_queue(const datamodel::Dataset_ptr &dataset,
                                                          const datamodel::DeconQueue_ptr &decon_queue) {
-    EnsembleRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, get_sql("get_by_dataset_and_decon_queue"), dataset->get_id(), decon_queue->get_table_name());
+    EnsembleRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, get_sql("get_by_dataset_and_decon_queue"), dataset->get_id(), decon_queue->get_table_name());
 }
 
 std::deque<datamodel::Ensemble_ptr> PgEnsembleDAO::find_all_ensembles_by_dataset_id(const bigint dataset_id)
 {
-    EnsembleRowMapper rowMapper;
-    return data_source.query_for_deque(rowMapper, get_sql("find_all_ensembles_by_dataset"), dataset_id);
+    EnsembleRowMapper row_mapper;
+    return data_source.query_for_deque(row_mapper, get_sql("find_all_ensembles_by_dataset"), dataset_id);
 }
 
 } }

@@ -89,16 +89,21 @@ JSONObject* RequestUtils::getResultObject(const string &response)
 {
 
     JSONObject *result = NULL;
-    if (StringLen(response) < 1) return result;
+    if (StringLen(response) < 1) {
+        LOG_ERROR("", "Empty response string.");
+        return result;
+    }
     JSONParser parser;
     Dispose();
     jv = parser.parse(response);
     if (jv != NULL && jv.isObject()) {
         JSONObject *jo = jv;
-        if (jo.getObject("result").isNull())
+        if (jo.getObject("result").isNull()) {
             LOG_ERROR("", "No result object");
-        else
+        } else {
             result = jo.getObject("result");
+            LOG_VERBOSE("", "Result object is " + result.getString("timeFrom"));
+        }
     } else
         LOG_ERROR("", "Cannot read result object from response " + response);
     return result;

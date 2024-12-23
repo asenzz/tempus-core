@@ -11,30 +11,6 @@
 #include <common/constants.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
-namespace std {
-
-std::string to_string(const long double v)
-{
-    std::ostringstream out;
-    out.precision(std::numeric_limits<double>::max_digits10);
-    return out.str();
-}
-
-std::string to_string(const double v)
-{
-    std::ostringstream out;
-    out.precision(std::numeric_limits<double>::max_digits10);
-    return out.str();
-}
-
-std::string to_string(const float v)
-{
-    std::ostringstream out;
-    out.precision(std::numeric_limits<float>::max_digits10);
-    return out.str();
-}
-}
-
 namespace svr {
 namespace common {
 
@@ -165,14 +141,9 @@ void split(const std::string &s, char delim, std::vector<std::string> &elems)
 
 std::deque<std::string> split(const std::string &str, const std::string &rex)
 {
-    std::list<std::string> list;
+    std::deque<std::string> list;
     boost::split(list, str, boost::is_any_of(rex), boost::token_compress_off);
-
-    std::deque<std::string> res;
-    for_each(list.begin(), list.end(), [&res](const std::string &str)
-    { if (str.size() != 0) res.push_back(str); });
-
-    return res;
+    return {list.begin(), std::remove_if(C_default_exec_policy, list.begin(), list.end(), [](const std::string &str){ return str.empty(); })};
 }
 
 std::string demangle(const char *mangled)
@@ -217,26 +188,18 @@ std::string make_md5_hash(const std::string &in)
     return mds.str();
 }
 
-// const std::string C_mt4_date_time_format {"%Y.%m.%d %H:%M:%S"};
-std::string to_mt4_date(const bpt::ptime &time)
+std::string to_mql_date(const bpt::ptime &time)
 {
-#if 0
-    bpt::time_facet *facet = new bpt::time_facet();
-
-    facet->format(C_mt4_date_time_format.c_str());
-    stringstream dateStream;
-    dateStream.imbue(std::locale(std::locale::classic(), facet));
-#endif
-    std::stringstream date_stream;
-    date_stream << time.date().year() << '.' << time.date().month().as_number() << '.' << time.date().day().as_number() << ' ' <<
-        time.time_of_day().hours() << ':' << time.time_of_day().minutes() << ':' << time.time_of_day().seconds();
-
-    return date_stream.str();
+    static std::locale loc(std::cout.getloc(), new bpt::time_facet(C_mql_date_time_format));
+    std::stringstream s;
+    s.imbue(loc);
+    s << time;
+    LOG4_TRACE("Returning " << s.str());
+    return s.str();
 }
 
 std::map<std::string, std::string> json_to_map(const std::string &json_str)
 {
-
     LOG4_TRACE("Parsing json string: " << json_str);
     std::map<std::string, std::string> result;
 
@@ -244,8 +207,7 @@ std::map<std::string, std::string> json_to_map(const std::string &json_str)
     std::istringstream is(json_str);
     boost::property_tree::json_parser::read_json(is, pt);
 
-    for (auto &node:pt)
-        result.insert(std::make_pair(node.first, node.second.get<std::string>("")));
+    for (const auto &node:pt) result.insert(std::make_pair(node.first, node.second.get<std::string>("")));
 
     return result;
 }

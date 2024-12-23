@@ -6,9 +6,9 @@ namespace dao {
 DEFINE_THREADSAFE_DAO_CONSTRUCTOR (TsDeconQueueDAO, DeconQueueDAO)
 {}
 
-datamodel::DeconQueue_ptr TsDeconQueueDAO::get_decon_queue_by_table_name(const std::string &tableName)
+datamodel::DeconQueue_ptr TsDeconQueueDAO::get_decon_queue_by_table_name(const std::string &table_name)
 {
-    return ts_call<datamodel::DeconQueue_ptr>(&DeconQueueDAO::get_decon_queue_by_table_name, tableName);
+    return ts_call<datamodel::DeconQueue_ptr>(&DeconQueueDAO::get_decon_queue_by_table_name, table_name);
 }
 
 
@@ -30,10 +30,10 @@ std::deque<datamodel::DataRow_ptr> TsDeconQueueDAO::get_data_having_update_time_
 }
 
 
-bool TsDeconQueueDAO::exists(const std::string& tableName)
+bool TsDeconQueueDAO::exists(const std::string& table_name)
 {
     std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
-    return dao->exists(tableName);
+    return dao->exists(table_name);
 }
 
 

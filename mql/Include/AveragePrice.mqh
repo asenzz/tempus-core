@@ -35,12 +35,12 @@ void add_rate_spread(double &rate, const double spread_digits)
 
 
 class aprice {
-public:
+    public:
     double bid, ask;
 
     string to_string() const
     {
-        return "bid " + DoubleToString(bid, 15) + ", ask " + DoubleToString(ask, 15);
+        return "bid " + DoubleToString(bid, DOUBLE_PRINT_DECIMALS) + ", ask " + DoubleToString(ask, DOUBLE_PRINT_DECIMALS);
     }
     
     double spread() const
@@ -50,7 +50,7 @@ public:
 
     bool valid() const
     {
-        return ask > 0 || bid > 0 || MathIsValidNumber(bid) || MathIsValidNumber(ask);
+        return ask > 0 && bid > 0 && MathIsValidNumber(bid) && MathIsValidNumber(ask);
     }
 
     void set(const MqlRates &rate, const e_rate_type type)
@@ -138,11 +138,29 @@ public:
         ask = o.ask;
     }
 
-    aprice() : ask(0), bid(0) {}
+    aprice() { reset(); }
 
     aprice (const double bid_, const double ask_) : bid(bid_), ask(ask_) {}
 };
 
+
+aprice get_price(const datetime at)
+{
+    static const uint max_retries = 10;
+    uint retries = 0;
+    datetime start_time = iTime(_Symbol, _Period, iBarShift(_Symbol, _Period, at) + 1);
+    if (start_time == at) start_time -= C_period_seconds;
+    MqlTick ticks[];
+    do {
+        CopyTicksRange(_Symbol, ticks, COPY_TICKS_ALL, start_time * 1000, at * 1000);
+        start_time -= C_period_seconds;
+        ++retries;
+    } while(ArraySize(ticks) < 1 && retries < max_retries);
+    aprice res;
+    if (ArraySize(ticks) < 1) return res;
+    res.set(ticks[ArraySize(ticks) - 1]);
+    return res;
+}
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -153,7 +171,7 @@ aprice get_rate(const string &symbol, const int shift, const e_rate_type type)
     ArraySetAsSeries(rate, true);
     const int copied = CopyRates(symbol, _Period, shift, 1, rate);
     if (copied < 1) {
-        LOG_ERROR("", "Failed copying rates for " + string(shift));
+        LOG_ERROR("", "Failed copying rates for " + IntegerToString(shift));
         return aprice();
     }
     aprice result(rate[0], type);
@@ -276,7 +294,7 @@ AveragePrice::AveragePrice(const MqlRates &rates[], const int size)
 AveragePrice::AveragePrice(const MqlRates &rates[], const int size, const datetime time_set)
 {
     if (ArraySize(rates) < 1) {
-        LOG_ERROR("", "Rates for " + TimeToString(time_set, TIME_DATE_SECONDS) + " are empty");
+        LOG_ERROR("", "Rates for " + TimeToString(time_set, C_time_mode) + " are empty");
         return;
     }
     value.set(rates[0], e_rate_type::price_open);

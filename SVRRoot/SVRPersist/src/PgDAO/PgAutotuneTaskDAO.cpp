@@ -83,14 +83,14 @@ int PgAutotuneTaskDAO::remove(const AutotuneTask_ptr &autotuneTask)
 
 AutotuneTask_ptr PgAutotuneTaskDAO::get_by_id(const bigint id)
 {
-    AutotuneTaskRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), id);
+    AutotuneTaskRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_id"), id);
 }
 
 std::vector<AutotuneTask_ptr> PgAutotuneTaskDAO::find_all_by_dataset_id(const bigint dataset_id)
 {
-    AutotuneTaskRowMapper rowMapper;
-    return data_source.query_for_array(rowMapper, AbstractDAO::get_sql("get_by_dataset_id"), dataset_id);
+    AutotuneTaskRowMapper row_mapper;
+    return data_source.query_for_array(row_mapper, AbstractDAO::get_sql("get_by_dataset_id"), dataset_id);
 }
 
 }

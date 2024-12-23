@@ -37,7 +37,7 @@ class InputQueueService
 
 public:
     /**
-     * This method uses the inputQueue's resolution and legal_time_deviation values to calculate the value_time
+     * This method uses the p_input_queue's resolution and legal_time_deviation values to calculate the value_time
      * which will lay on the time-grid.
      *
      * Returns the adjusted value_time or not_a_date_time if the value_time cannot be set on the time-grid)
@@ -47,8 +47,6 @@ public:
      * seconds specified by the resolution field, allowing deviation of legal_time_deviation seconds from the exact
      * time. All calculations are performed on the base of seconds so any fractional seconds are ignored.
      */
-    static bpt::ptime adjust_time_on_grid(const datamodel::InputQueue_ptr &p_input_queue, const bpt::ptime &value_time);
-
     explicit InputQueueService(svr::dao::InputQueueDAO &input_queue_dao);
 
     virtual ~InputQueueService();
@@ -84,8 +82,6 @@ public:
 
     int clear(const datamodel::InputQueue_ptr &p_input_queue);
 
-    bool add_row(datamodel::InputQueue_ptr &p_input_queue, datamodel::DataRow_ptr p_row, bool concatenate = false);
-
     datamodel::DataRow_ptr find_oldest_record(const datamodel::InputQueue_ptr &queue);
 
     datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr &queue);
@@ -109,16 +105,21 @@ public:
 
     static void prepare_queues(datamodel::Dataset &dataset);
 
-    static boost::posix_time::ptime
-    compare_to_decon_queue(
-            const datamodel::InputQueue &input_queue,
-            const datamodel::DeconQueue &decon_queue);
+    static boost::posix_time::ptime validate_decon_data(const datamodel::InputQueue &input_queue, const datamodel::DeconQueue &decon_queue);
 
     size_t get_count_from_start(const datamodel::InputQueue_ptr &p_input_queue, const boost::posix_time::ptime &time);
 
     //data_row_container shift_times_forward(const data_row_container &data, const bpt::time_duration &resolution);
 
     static std::string make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
+
+    static bpt::ptime adjust_time_on_grid(const datamodel::InputQueue &queue, const bpt::ptime &value_time);
+
+    static bool add_row(datamodel::InputQueue &queue, const datamodel::DataRow_ptr &p_row);
+
+    static void add_row(data_row_container &data, const datamodel::DataRow_ptr &p_row);
+
+    void upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, const uint16_t n_values);
 };
 
 } /* namespace business */

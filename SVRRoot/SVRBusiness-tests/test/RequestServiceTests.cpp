@@ -31,7 +31,7 @@ TEST_F(DaoTestFixture, RequestWorkflow)
 
     datamodel::MultivalRequest_ptr request = std::make_shared<MultivalRequest>(
         MultivalRequest(bigint(0), user1->get_user_name(), ds->get_id(), nw
-            , nw + iq->get_resolution(), nw + iq->get_resolution()*2, iq->get_resolution().total_seconds()
+            , nw + iq->get_resolution(), nw + iq->get_resolution()*2, iq->get_resolution()
             , "{open,close,high,low}")
     );
 
@@ -39,7 +39,7 @@ TEST_F(DaoTestFixture, RequestWorkflow)
 
     datamodel::MultivalRequest_ptr rq = aci.request_service.get_multival_request
             ( user1->get_user_name(), ds->get_id(), nw + iq->get_resolution(), nw + iq->get_resolution()*2
-            , iq->get_resolution().total_seconds()
+            , iq->get_resolution()
             , "{open,close,high,low}"
             );
 
@@ -88,7 +88,7 @@ TEST_F(DaoTestFixture, CustomColumnsRequest)
 
     datamodel::MultivalRequest_ptr request = std::make_shared<MultivalRequest>(
         MultivalRequest(bigint(0), user1->get_user_name(), ds->get_id(), nw
-            , nw + iq->get_resolution(), nw + iq->get_resolution()*2, iq->get_resolution().total_seconds()
+            , nw + iq->get_resolution(), nw + iq->get_resolution()*2, iq->get_resolution()
             , "{open, some_custom_column}")
     );
 
@@ -106,7 +106,7 @@ TEST_F(DaoTestFixture, CustomColumnsRequest)
 
     datamodel::MultivalRequest_ptr rq = aci.request_service.get_multival_request
             ( user1->get_user_name(), ds->get_id(), nw + iq->get_resolution(), nw + iq->get_resolution()*2
-            , iq->get_resolution().total_seconds()
+            , iq->get_resolution()
             , "{open, some_custom_column}"
             );
 
@@ -140,19 +140,19 @@ TEST_F(DaoTestFixture, GettingActiveRequests)
 
     datamodel::MultivalRequest_ptr request1 = std::make_shared<MultivalRequest>(
         MultivalRequest(bigint(0), user1->get_user_name(), ds->get_id(), nw
-            , nw + iq->get_resolution(), nw + iq->get_resolution()*2, iq->get_resolution().total_seconds()
+            , nw + iq->get_resolution(), nw + iq->get_resolution()*2, iq->get_resolution()
             , "{open}")
     );
 
     datamodel::MultivalRequest_ptr request2 = std::make_shared<MultivalRequest>(
         MultivalRequest(bigint(0), user1->get_user_name(), ds->get_id(), nw
-            , nw + iq->get_resolution()*2, nw + iq->get_resolution()*3, iq->get_resolution().total_seconds()
+            , nw + iq->get_resolution()*2, nw + iq->get_resolution()*3, iq->get_resolution()
             , "{open}")
     );
 
     datamodel::MultivalRequest_ptr request3 = std::make_shared<MultivalRequest>(
         MultivalRequest(bigint(0), user1->get_user_name(), ds->get_id(), nw
-            , nw + iq->get_resolution()*3, nw + iq->get_resolution()*4, iq->get_resolution().total_seconds()
+            , nw + iq->get_resolution()*3, nw + iq->get_resolution()*4, iq->get_resolution()
             , "{open}")
     );
 

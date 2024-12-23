@@ -17,25 +17,25 @@ oemd_coefficients::oemd_coefficients() : siftings({}), masks({})
 {};
 
 oemd_coefficients::oemd_coefficients(
-        const std::deque<unsigned> &siftings_, const std::deque <std::vector<double>> &mask_) : siftings(siftings_), masks(mask_)
+        const std::deque<uint16_t> &siftings_, const std::deque <std::vector<double>> &mask_) : siftings(siftings_), masks(mask_)
 {}
 
 const std::string oemd_coefficients::C_oemd_fir_coefs_dir = getenv("BACKTEST") ? "../lib/oemd_fir_masks_xauusd_1s_backtest/" : "../lib/oemd_fir_masks_xauusd_1s/";
 
-std::string oemd_coefficients::get_mask_file_name(const unsigned ctr, const unsigned level, const unsigned level_count, const std::string &queue_name)
+std::string oemd_coefficients::get_mask_file_name(const uint16_t ctr, const uint16_t level, const uint16_t level_count, const std::string &queue_name)
 {
     std::stringstream s;
     s << C_oemd_fir_coefs_dir << "mask_v" << ctr << "_level_" << level << "_of_" << level_count << "_" << queue_name << ".csv";
     return s.str();
 }
 
-t_oemd_coefficients_ptr oemd_coefficients::load(const unsigned level_count, const std::string &queue_name)
+t_oemd_coefficients_ptr oemd_coefficients::load(const uint16_t level_count, const std::string &queue_name)
 {
-    const std::deque<unsigned> siftings(level_count - 1, C_default_siftings);
+    const std::deque<uint16_t> siftings(level_count - 1, C_default_siftings);
     std::deque <std::vector<double>> masks(level_count - 1);
     std::atomic<bool> except = false;
     OMP_FOR(level_count - 1)
-    for (unsigned l = 0; l < level_count - 1; ++l)
+    for (DTYPE(level_count) l = 0; l < level_count - 1; ++l)
         if (!except) {
             ssize_t ver = C_mask_file_max_ver;
             std::string mask_full_path;

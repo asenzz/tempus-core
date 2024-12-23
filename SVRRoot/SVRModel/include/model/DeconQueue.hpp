@@ -40,11 +40,11 @@ public:
 
     virtual void update_data(const DataRow::container &new_data, const bool overwrite = true) override;
 
-    std::string get_input_queue_table_name() const;
+    const std::string &get_input_queue_table_name() const;
 
     void set_input_queue_table_name(const std::string &input_queue_table_name_);
 
-    std::string get_input_queue_column_name() const;
+    const std::string &get_input_queue_column_name() const;
 
     void set_input_queue_column_name(const std::string &input_queue_column_name_);
 

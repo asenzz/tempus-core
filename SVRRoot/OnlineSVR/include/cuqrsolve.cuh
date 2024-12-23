@@ -177,4 +177,7 @@ double solve_validate_host(
         CPTRd K_epsco, CPTRd K, CPTRd rhs, CPTRd K_test, CPTRd labels, const double meanabs_labels, const double neg_epsilon,
         const uint32_t m, const uint32_t n, const uint32_t test_m, const uint32_t iters, const magma_queue_t magma_queue, const cublasHandle_t cublas_h);
 
+// Sign-weighted score
+double swscore(CPTRd d_in, const uint32_t ld_in, CPTRd d_ref, const uint32_t ld_ref, const uint32_t m, const uint32_t n, const cudaStream_t custream);
+
 }

@@ -6,14 +6,14 @@
 struct Order
 {
     double px, size, stoploss, trailingstop, takeprofit;
-    static Order mapRow(const pqxx::row& rowSet)
+    static Order map_row(const pqxx::row& row_set)
     {
         return Order({
-           rowSet["px"].as<double>(0),
-           rowSet["size"].as<double>(0),
-           rowSet["stoploss"].as<double>(0),
-           rowSet["trailingstop"].as<double>(0),
-           rowSet["takeprofit"].as<double>(0)
+           row_set["px"].as<double>(0),
+           row_set["size"].as<double>(0),
+           row_set["stoploss"].as<double>(0),
+           row_set["trailingstop"].as<double>(0),
+           row_set["takeprofit"].as<double>(0)
         });
     }
 };
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
         pqxx::result result = trx.exec("select px, size, stoploss, trailingstop, takeprofit from order_template order by px");
 
         for(const auto& row : result)
-            order_templates.push_back(Order::mapRow(row));
+            order_templates.push_back(Order::map_row(row));
     }
 
     if(order_templates.empty())

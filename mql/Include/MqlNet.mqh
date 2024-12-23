@@ -15,14 +15,15 @@
 #include <Hash.mqh>
 #include <MqlLog.mqh>
 
-
 #define RECEIVE_TIMEOUT 600000
 
+#define WININET_DLL
 
 #define FALSE 0
 
 #define HINTERNET uint
 #define BOOL int
+#define BOOLEAN uchar
 #define INTERNET_PORT int
 #define LPINTERNET_BUFFERS int
 #define DWORD uint
@@ -36,19 +37,21 @@
 //LPCTSTR *  int
 //LPVOID   uchar& +_[]
 
+
 #import "Kernel32.dll"
 DWORD GetLastError(const int);
 #import
 
+
 #import "wininet.dll"
 DWORD InternetAttemptConnect(DWORD dwReserved);
 HINTERNET InternetOpenW(LPCTSTR lpszAgent, DWORD dwAccessType, LPCTSTR lpszProxyName, LPCTSTR lpszProxyBypass, DWORD dwFlags);
-HINTERNET InternetConnectW(const HINTERNET hInternet, LPCTSTR lpszServerName, INTERNET_PORT nServerPort, LPCTSTR lpszUsername, LPCTSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext);
+HINTERNET InternetConnectW(HINTERNET hInternet, LPCTSTR lpszServerName, INTERNET_PORT nServerPort, LPCTSTR lpszUsername, LPCTSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext);
 //HINTERNET HttpOpenRequestW(HINTERNET hConnect, LPCTSTR lpszVerb, LPCTSTR lpszObjectName, LPCTSTR lpszVersion, LPCTSTR lpszReferer, LPCTSTR lplpszAcceptTypes, uint/*DWORD*/ dwFlags, DWORD_PTR dwContext);
-int HttpOpenRequestW(int hConnect, LPCTSTR lpszVerb, LPCTSTR lpszObjectName, string &lpszVersion, string &lpszReferer, ulong lplpszAcceptTypes, uint dwFlags, ulong dwContext);
+int HttpOpenRequestW(int hConnect, LPCTSTR lpszVerb, LPCTSTR lpszObjectName, string &lpszVersion, ulong lpszReferer, ulong lplpszAcceptTypes, uint dwFlags, ulong dwContext);
 BOOL HttpSendRequestW(HINTERNET hRequest, LPCTSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional[], DWORD dwOptionalLength);
 BOOL HttpQueryInfoW(HINTERNET hRequest, DWORD dwInfoLevel, LPVOID lpvBuffer[], LPDWORD lpdwBufferLength, LPDWORD lpdwIndex);
-HINTERNET InternetOpenUrlW(HINTERNET hInternet, LPCTSTR lpszUrl, LPCTSTR lpszHeaders, DWORD dwHeadersLength, uint/*DWORD*/ dwFlags, DWORD_PTR dwContext);
+HINTERNET InternetOpenUrlW(HINTERNET hInternet, LPCTSTR lpszUrl, LPCTSTR lpszHeaders, DWORD dwHeadersLength, uint dwFlags, DWORD_PTR dwContext);
 BOOL InternetReadFile(HINTERNET hFile, LPVOID lpBuffer[], DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead);
 BOOL InternetCloseHandle(HINTERNET hInternet);
 BOOL InternetSetOptionW(HINTERNET hInternet, DWORD dwOption, LPDWORD lpBuffer, DWORD dwBufferLength);
@@ -104,11 +107,10 @@ const uint RegularConnectionFlags = INTERNET_FLAG_KEEP_CONNECTION | INTERNET_FLA
 
 //+------------------------------------------------------------------+
 
-struct ParsedUrl
-{
-    string           Host;
-    int              Port;
-    bool             isSecure;
+struct ParsedUrl {
+    string           session_host;
+    int              session_port;
+    bool             session_secure;
 };
 
 //+------------------------------------------------------------------+
@@ -163,9 +165,9 @@ bool ParseUrl(string Url, ParsedUrl &purl)
     if( k > hostIndex + 1 )
         port = StringToInteger(result[hostIndex + 1]);
 
-    purl.Host = host;
-    purl.Port = int(port);
-    purl.isSecure = secure;
+    purl.session_host = host;
+    purl.session_port = int(port);
+    purl.session_secure = secure;
 
     return true;
 }
@@ -217,32 +219,48 @@ public:
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+static const string C_headers_json = "Content-Type: application/json\r\n";
+static const int C_len_headers_json = StringLen(C_headers_json);
+static const string C_post_verb = "POST";
+static string C_http_ver = "HTTP/1.1";
+static string C_empty_string = "";
+static const int C_web_request_timeout = 120;
+static string cookieHeader = "cppcms_session=";
+static string head_www_form = "Content-Type: application/x-www-form-urlencoded";
+static const int len_head = StringLen(head_www_form);
+static string acceptTypes[] = { "Accept: text/*\r\n" };
+static string UserAgent = "Mozilla";
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 class MqlNet
 {
-
     int              Session;    // session descriptor
     int              Connect;    // connection descriptor
-    string           Cookie;     // session cookie
-    string           Host;       // host name
-    int              Port;       // port
-    bool             isSecure;   // https
+    string           session_cookie;     // session cookie
+    string           session_host;       // host name
+    int              session_port;       // port
+    bool             session_secure;   // https
+    string           session_url_prefix;
 
 public:
                      MqlNet();   // class constructor
                     ~MqlNet();   // destructor
-    bool             Open(const string &aHost, const int aPort, const bool secure = false); // create session and open connection
+    bool             Open(const string &host, const int port, const bool secure = false); // create session and open connection
     bool             Open(const string &Fqdn); // create session and open connection from FQDN like https://host:port
     void             Close();    // close session and connection
-    bool             Request(const string &Verb, const string &Request, string &Out, const bool toFile = false, const string addData = "", const bool fromFile = false); // send request
-    string           Post(const string &Path, const string &Body, long &StatusCode);
+    bool             Request(const string &this_verb, const string &request_body, string &response, const bool toFile = false, const string addData = "", const bool fromFile = false); // send request
+    string           Post(const string &this_path, const string &this_body, long &http_status_code);
 
     string           ReadResponse(const int hRequest);
 
-    bool             RpcCall(const string &Object, const string &Method, const Hash &Params, string &Response);
-    bool             RpcCall(const string &Object, const string &Method, const Hash &Params[], string &Response);
+    bool             RpcCall_(string this_path, const string &Method, const Hash &Params, string &response);
+    bool             RpcCall(const string &this_path, const string &Method, const Hash &Params, string &response);
+    bool             RpcCall(const string &this_path, const string &Method, const Hash &Params[], string &response);
 
-    bool             OpenURL(const string &URL, string &Out, const bool toFile); // open page
-    void             ReadPage(const int hRequest, string &Out, const bool toFile); // read page
+    bool             OpenURL(const string &URL, string &response, const bool toFile); // open page
+    void             ReadPage(const int hRequest, string &response, const bool toFile); // read page
 
     string           HttpQueryInfo(const int hRequest, const int HTTP_QUERY);
 
@@ -260,8 +278,8 @@ void MqlNet::MqlNet()
 // default values
     Session = -1;
     Connect = -1;
-    Host = "";
-    isSecure = false;
+    session_host = "";
+    session_secure = false;
 }
 
 //------------------------------------------------------------------ ~MqlNet
@@ -272,46 +290,45 @@ void MqlNet::~MqlNet()
 }
 
 //------------------------------------------------------------------ Open
-bool MqlNet::Open(const string &aHost, const int aPort, const bool secure)
+bool MqlNet::Open(const string &host, const int port, const bool secure)
 {
-    if (aHost == "") {
-        LOG_ERROR("MqlNet::Open", "Host is not specified");
-        return (false);
+    if (host == "") {
+        LOG_ERROR("", "session_host is not specified");
+        return false;
     }
-
+    
+#ifdef WININET_DLL
     if (!TerminalInfoInteger(TERMINAL_DLLS_ALLOWED)) {
-        LOG_ERROR("MqlNet::Open", "DLL is not allowed");
-        return (false);
+        LOG_ERROR("", "DLL is not allowed");
+        return false;
     }
     if (Session > 0 || Connect > 0) Close();
 
     if (InternetAttemptConnect(0) != 0) {
-        LOG_SYS_ERR("MqlNet::Open", "InternetAttemptConnect failed");
-        return (false);
+        LOG_SYS_ERR("", "InternetAttemptConnect failed");
+        return false;
     }
-    string UserAgent = "Mozilla";
-    string nill = "";
 
-    Session = (int) InternetOpenW(UserAgent, OPEN_TYPE_PRECONFIG, nill, nill, 0); // open session
+    Session = (int) InternetOpenW(UserAgent, OPEN_TYPE_PRECONFIG, C_empty_string, C_empty_string, 0); // open session
 
     if (Session <= 0) {
-        LOG_SYS_ERR("MqlNet::Open", "InternetOpenW failed");
+        LOG_SYS_ERR("", "InternetOpenW failed");
         Close();
-        return (false);
+        return false;
     }
-    Connect = (int) InternetConnectW(Session, aHost, aPort, nill, nill, INTERNET_SERVICE_HTTP, 0, 0);
+    Connect = (int) InternetConnectW(Session, host, port, C_empty_string, C_empty_string, INTERNET_SERVICE_HTTP, 0, 0);
     if (Connect <= 0) {
-        LOG_SYS_ERR("MqlNet::Open", "InternetConnectW failed");
+        LOG_SYS_ERR("", "InternetConnectW failed");
         Close();
-        return (false);
+        return false;
     }
-    Host = aHost;
-    Port = aPort;
-    isSecure = secure;
-
-    LOG_INFO("MqlNet::Open", (isSecure ? "Securely" : "Unsecurely") + " connected to " + string(Host) + ":" + string(Port));
-
-    return (true);
+#endif
+    session_host = host;
+    session_port = port;
+    session_secure = secure;
+    session_url_prefix = (secure ? "https://" : "http://") + session_host + ":" + IntegerToString(session_port) + "/";
+    LOG_INFO("", (session_secure ? "Securely" : "Unsecurely") + " connected to " + session_host + ", port " + IntegerToString(session_port));
+    return true;
 }
 
 //------------------------------------------------------------------ Open
@@ -320,85 +337,83 @@ bool MqlNet::Open(const string &Url)
 
     ParsedUrl purl;
     if (!ParseUrl(Url, purl)) return false;
-
-    return Open(purl.Host, purl.Port, purl.isSecure);
+    return Open(purl.session_host, purl.session_port, purl.session_secure);
 }
 
 //------------------------------------------------------------------ Close
 void MqlNet::Close()
 {
+#ifdef WININET_DLL
     if (Session > 0) InternetCloseHandle(Session);
     Session = -1;
     if (Connect > 0) InternetCloseHandle(Connect);
     Connect = -1;
-    LOG_INFO ("MqlNet::Close", "Connection closed");
+    LOG_INFO ("", "Connection closed");
+#endif
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-string MqlNet::Post(const string &Path, const string &Body, long &StatusCode)
+string MqlNet::Post(const string &this_path, const string &this_body, long &http_status_code)
 {
-    int res, hRequest, hSend;     // To receive the operation execution result
-    char postData[];  // Data array to send POST requests
+#ifdef WININET_DLL
+    int res, hRequest, hSend;       // To receive the operation execution result
+    char postData[];                // Data array to send POST requests
     char responseData[];
     string responseHeaders;
-    string cookieHeader = "cppcms_session=";
-    string Vers = "HTTP/1.1";
-    string nill = "";
-    string Verb = "POST";
-    string head = "Content-Type: application/x-www-form-urlencoded";
-    string acceptTypes = "";
-    StatusCode = -1;
+
+    http_status_code = -1;
 
     string auth;
 
-    ArrayResize(postData, StringLen(Body) - 1);
-    StringToCharArray(Body, postData, 0, WHOLE_ARRAY, CP_UTF8);
+    ArrayResize(postData, StringLen(this_body) - 1);
+    StringToCharArray(this_body, postData, 0, WHOLE_ARRAY, CP_UTF8);
+    postData[ArraySize(postData) - 1] = ' ';
 
     ResetLastError();
 
     if (Session <= 0 || Connect <= 0) {
         Close();
-        if (!Open(Host, Port, isSecure)) {
+        if (!Open(session_host, session_port, session_secure)) {
             LOG_SYS_ERR("MqlNet::Post", "Open failed");
             Close();
-            return (nill);
+            return C_empty_string;
         }
     }
 
     uint recv_timeout = RECEIVE_TIMEOUT;
     InternetSetOptionW(Connect, INTERNET_OPTION_RECEIVE_TIMEOUT, recv_timeout, sizeof(recv_timeout));
     LOG_DEBUG("", "Opening request...");
-    hRequest = HttpOpenRequestW(Connect, Verb, Path, Vers, nill, 0, RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
+    hRequest = HttpOpenRequestW(Connect, C_post_verb, this_path, C_http_ver, 0, 0, RegularConnectionFlags | ( INTERNET_FLAG_SECURE * session_secure ), 0);
 
     if (hRequest <= 0) {
         LOG_SYS_ERR("MqlNet::Post", "HttpOpenRequestW failed");
         InternetCloseHandle(Connect);
-        return (nill);
+        return C_empty_string;
     }
     LOG_DEBUG("", "Sending request...");
 // send request
-    hSend = HttpSendRequestW(hRequest, head, StringLen(head), postData, ArraySize(postData));
+    hSend = HttpSendRequestW(hRequest, head_www_form, len_head, postData, ArraySize(postData));
     if (!hSend) {
-        LOG_SYS_ERR("MqlNet::Post", "HttpSendRequestW failed " + string(hSend));
+        LOG_SYS_ERR("", "HttpSendRequestW failed " + string(hSend));
         InternetCloseHandle(hRequest);
         Close();
-        return (nill);
+        return C_empty_string;
     }
 
-    StatusCode = GetStatusCode(hRequest);
+    http_status_code = GetStatusCode(hRequest);
 
-    if (StatusCode == 401) {
-        LOG_ERROR("MqlNet::Post", "Authorization failed");
+    if (http_status_code == 401) {
+        LOG_ERROR("", "Authorization failed");
         Close();
-        return (nill);
+        return C_empty_string;
     }
 
-    if (StatusCode != 200) {
-        LOG_ERROR("MqlNet::Post", "Server error: HTTP Code " + (string) StatusCode);
+    if (http_status_code != 200) {
+        LOG_ERROR("", "Server error: HTTP Code " + (string) http_status_code);
         Close();
-        return (nill);
+        return C_empty_string;
     }
     LOG_DEBUG("", "Setting cookie...");
     responseHeaders = GetServerCookieValue(hRequest);
@@ -406,28 +421,37 @@ string MqlNet::Post(const string &Path, const string &Body, long &StatusCode)
 
     if (res >= 0) { // SetCookie header received
         auth = StringSubstr(responseHeaders, res + StringLen(cookieHeader));
-        LOG_DEBUG("MqlNet::Post", "SetCookie auth header received: " + auth);
-        Cookie = cookieHeader + StringSubstr(auth, 0, StringFind(auth, ";"));
-        string cookieURL = "http://" + Host + "/";
-        string cookieName = "svrwave";
-        if (!InternetSetCookieW(cookieURL, cookieName, Cookie)) {
+        LOG_DEBUG("", "SetCookie auth header received: " + auth);
+        session_cookie = cookieHeader + StringSubstr(auth, 0, StringFind(auth, ";"));
+        const string cookieURL = "http://" + session_host + "/";
+        static const string cookieName = "svrwave";
+        if (!InternetSetCookieW(cookieURL, cookieName, session_cookie)) {
             LOG_SYS_ERR("", "Failed to set cookie");
             Close();
-            return (nill);
+            return C_empty_string;
         }
 
-    } else {
-        LOG_DEBUG("MqlNet::Post", "Cookie not received!");
-    }
+    } else
+        LOG_DEBUG("", "session_cookie not received!");
 
     LOG_DEBUG("", "Reading response...");
-    string Response = ReadResponse(hRequest);
+    const string response = ReadResponse(hRequest);
 
     InternetCloseHandle(hSend);
     InternetCloseHandle(hRequest);
 
     LOG_DEBUG("", "Done...");
-    return (Response);
+#else
+    string response_headers, cookie_value;
+    char response_chr[], body_chr[];
+    StringToCharArray(this_body, body_chr);
+    body_chr[ArraySize(body_chr) - 1] = ' ';
+    // http_status_code = WebRequest("POST", session_url_prefix + this_path, cookie_value, C_empty_string, C_web_request_timeout, body_chr, ArraySize(body_chr), response_chr, response_headers);
+    http_status_code = WebRequest("POST", session_url_prefix + this_path, head_www_form, C_web_request_timeout, body_chr, response_chr, response_headers);
+    const string response = CharArrayToString(response_chr);
+    LOG_VERBOSE("", "Received " + response + ", headers " + response_headers + ", code " + IntegerToString(http_status_code) + ", path " + this_path + ", body " + this_body + ", cookie " + cookie_value);
+#endif
+    return response;
 }
 
 //+------------------------------------------------------------------+
@@ -447,133 +471,44 @@ string MqlNet::ToJSON(const Hash &params)
     }
 
     json += "}";
-    LOG_VERBOSE("MqlNet::ToJSON", json);
-    return (json);
+    LOG_VERBOSE("", json);
+    return json;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Params, string &Response)
+bool MqlNet::RpcCall_(string this_path, const string &Method, const Hash &Params, string &response)
 {
-#ifdef DEBUG_CONNECTOR
-    static const string call_name = "RpcCall.1";
-    static PerfTimer t1(call_name, 100);
-    t1.on();
-#endif
-
-    static const string Headers = "Content-Type: application/json\r\n";
-    static const string Verb = "POST";
-    static string Vers = "HTTP/1.1";
-    static string nill = "";
-    const string Path = "web/" + Object + "/ajax";
-
-    if (Session <= 0 || Connect <= 0) {
-        Close();
-        if (!Open(Host, Port, isSecure)) {
-            Close();
-            return (false);
-        }
-    }
-
-    uint recv_timeout = RECEIVE_TIMEOUT;
-    InternetSetOptionW(Connect, INTERNET_OPTION_RECEIVE_TIMEOUT, recv_timeout, sizeof(recv_timeout));
-
-    int flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION | ( INTERNET_FLAG_SECURE * isSecure ) ;
-    string acceptTypes = "Accept: text/*\r\n";
-#ifdef DEBUG_CONNECTOR
-    t1.off();
-    static const string call_name2 = "RpcCall.2";
-    static PerfTimer t2(call_name, 100);
-    t2.on();
-#endif
-
-// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, "", flags, NULL);
-// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0,  RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
-    const int hRequest = HttpOpenRequestW(Connect, Verb, Path, Vers, nill, 0, flags, 0);
-
-    if (hRequest <= 0) {
-        LOG_SYS_ERR("", "HttpOpenRequestW failed");
-        Close();
-        return false;
-    }
-
     const string json = "{\"id\":1,\"method\":\"" + Method + "\",\"params\":[" + ToJSON(Params) + "]}";
-    uchar jsonArray[];
-    LOG_DEBUG("", "Sending " + json);
-    StringToCharArray(json, jsonArray);
+    this_path = "web/" + this_path + "/ajax";
     
-#ifdef DEBUG_CONNECTOR
-    t2.off();
-    static const string call_name3 = "RpcCall.3";
-    static PerfTimer t3(call_name3, 100);
-    t3.on();
-#endif
+#ifdef WININET_DLL
+    static int flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION | ( INTERNET_FLAG_SECURE * session_secure ) ;
 
-    const int hSend = HttpSendRequestW(hRequest, Headers, StringLen(Headers), jsonArray, ArraySize(jsonArray) - 1);
-    if (hSend <= 0) {
-        LOG_SYS_ERR("MqlNet::RpcCall", "HttpSendRequestW failed " + string(hSend));
-        Close();
-        return false;
-    }
-    
-#ifdef DEBUG_CONNECTOR
-    t3.off();
-    const string call_name4 = "RpcCall.4";
-    static PerfTimer t4(call_name4, 100);
-    t4.on();
-#endif
+    uint retries = 0;
+// hRequest = HttpOpenRequestW(Connect, C_post_verb, this_path, C_http_ver, C_empty_string, "", flags, NULL);
+// hRequest = HttpOpenRequestW(Connect, C_post_verb, this_path, C_http_ver, C_empty_string, 0,  RegularConnectionFlags | ( INTERNET_FLAG_SECURE * session_secure ), 0);
+    static const uint C_max_retries = 5;
+    static uint recv_timeout = RECEIVE_TIMEOUT;
+    static const int sizeof_recv_timeout = sizeof(recv_timeout);
 
-    Response = ReadResponse(hRequest);
-    LOG_DEBUG("", "Received response:" + Response);
-    
-#ifdef DEBUG_CONNECTOR
-    t4.off();
-    static const call_name5 = "RpcCall.5";
-    static PerfTimer t5(call_name5, 100);
-    t5.on();
-#endif
-    
-    InternetCloseHandle(hSend);
-    InternetCloseHandle(hRequest);
-
-#ifdef DEBUG_CONNECTOR
-    t5.off();
-#endif
-
-    return true;
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Params[], string &Response)
-{
 #ifdef DEBUG_CONNECTOR
     static const string call_name = "RpcCall.1";
     static PerfTimer t1(call_name, 100);
     t1.on();
 #endif
 
-    static const string Headers = "Content-Type: application/json\r\n";
-    static const string Verb = "POST";
-    static string Vers = "HTTP/1.1";
-    static string nill = "";
-    const string Path = "web/" + Object + "/ajax";
-
     if (Session <= 0 || Connect <= 0) {
         Close();
-        if (!Open(Host, Port, isSecure)) {
+        if (!Open(session_host, session_port, session_secure)) {
             Close();
-            return (false);
+            return false;
         }
     }
 
-    uint recv_timeout = RECEIVE_TIMEOUT;
-    InternetSetOptionW(Connect, INTERNET_OPTION_RECEIVE_TIMEOUT, recv_timeout, sizeof(recv_timeout));
+    InternetSetOptionW(Connect, INTERNET_OPTION_RECEIVE_TIMEOUT, recv_timeout, sizeof_recv_timeout);
 
-    int flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION | ( INTERNET_FLAG_SECURE * isSecure ) ;
-    string acceptTypes = "Accept: text/*\r\n";
 #ifdef DEBUG_CONNECTOR
     t1.off();
     static const string call_name2 = "RpcCall.2";
@@ -581,23 +516,17 @@ bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Par
     t2.on();
 #endif
 
-// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, "", flags, NULL);
-// hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0,  RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
-    const int hRequest = HttpOpenRequestW(Connect, Verb, Path, Vers, nill, 0, flags, 0);
-
-    if (hRequest <= 0) {
+    const uint hRequest = HttpOpenRequestW(Connect, C_post_verb, this_path, C_http_ver, 0, 0, flags, 0);
+    if (!hRequest) {
         LOG_SYS_ERR("", "HttpOpenRequestW failed");
         Close();
         return false;
     }
 
-    string json;
-    const int param_ct = ArraySize(Params);
-    for (int i = 0; i < param_ct; ++i)
-        json += "{\"id\":" + IntegerToString(i + 1) + ",\"method\":\"" + Method + "\",\"params\":[" + ToJSON(Params[i]) + "]} ";
     uchar jsonArray[];
     LOG_DEBUG("", "Sending " + json);
     StringToCharArray(json, jsonArray);
+    jsonArray[ArraySize(jsonArray) - 1] = ' ';
     
 #ifdef DEBUG_CONNECTOR
     t2.off();
@@ -606,13 +535,14 @@ bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Par
     t3.on();
 #endif
 
-    const int hSend = HttpSendRequestW(hRequest, Headers, StringLen(Headers), jsonArray, ArraySize(jsonArray) - 1);
-    if (hSend <= 0) {
-        LOG_SYS_ERR("MqlNet::RpcCall", "HttpSendRequestW failed " + string(hSend));
+    retries = 0;
+    const bool r_send = HttpSendRequestW(hRequest, C_headers_json, C_len_headers_json, jsonArray, ArraySize(jsonArray));
+    if (r_send == false) {
+        LOG_SYS_ERR("", "HttpSendRequestW failed " + string(r_send));
         Close();
         return false;
     }
-    
+
 #ifdef DEBUG_CONNECTOR
     t3.off();
     const string call_name4 = "RpcCall.4";
@@ -620,24 +550,47 @@ bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Par
     t4.on();
 #endif
 
-    Response = ReadResponse(hRequest);
-    LOG_DEBUG("", "Received response:" + Response);
-    
+    response = ReadResponse(hRequest);
+    LOG_DEBUG("", "Received response:" + response);
+
 #ifdef DEBUG_CONNECTOR
     t4.off();
     static const call_name5 = "RpcCall.5";
     static PerfTimer t5(call_name5, 100);
     t5.on();
 #endif
-    
-    InternetCloseHandle(hSend);
-    InternetCloseHandle(hRequest);
 
+    // InternetCloseHandle(hSend);
+    InternetCloseHandle(hRequest);
+    return true;
 #ifdef DEBUG_CONNECTOR
     t5.off();
 #endif
+#else
+    string result_headers;
+    uchar response_chr[], json_chr[];
+    StringToCharArray(json, json_chr);
+    json_chr[ArraySize(json_chr) - 1] = ' ';
+    // const int http_status_code = WebRequest(C_post_verb, session_url_prefix + this_path, C_empty_string, C_empty_string, C_web_request_timeout, 
+    //     json_chr, ArraySize(json_chr), response_chr, result_headers);
+    const int http_status_code = WebRequest(C_post_verb, session_url_prefix + this_path, C_headers_json, C_web_request_timeout, json_chr, response_chr, result_headers);
+    response = CharArrayToString(response_chr);
+    LOG_VERBOSE("", "Path " + this_path + ", received " + response + ", headers " + result_headers + ", code " + IntegerToString(http_status_code));
+    return http_status_code != -1;
+#endif
+}
 
-    return true;
+
+bool MqlNet::RpcCall(const string &this_path, const string &Method, const Hash &Params, string &response)
+{
+    bool res;
+    uint retries = 0;
+    static const uint C_max_retries = 5;
+    do { 
+        res = RpcCall_(this_path, Method, Params, response);
+    } while (res == false && ++retries < C_max_retries);
+    if (res == false) LOG_ERROR("", "RpcCall " + this_path + " " + Method + " failed");
+    return res;
 }
 
 //+------------------------------------------------------------------+
@@ -645,107 +598,102 @@ bool MqlNet::RpcCall(const string &Object, const string &Method, const Hash &Par
 //+------------------------------------------------------------------+
 string MqlNet::ReadResponse(const int hRequest)
 {
-    int BUFSIZ = 1024;
+#define BUFSIZ 1024
     int lReturn;
-    uchar sBuffer[];
-    ArrayResize(sBuffer, BUFSIZ, BUFSIZ);
-
-    int totalData = 0;
-
-    string Response = "";
-
-    while (InternetReadFile(hRequest, sBuffer, BUFSIZ, lReturn) != false) {
-        if (lReturn == 0) {
-            break;
-        }
-
-        string buf = CharArrayToString(sBuffer);
-        StringAdd(Response, buf);
-
-        // update total # of elts in sData
-        totalData += lReturn;
-    }
-
-    return Response;
+    uchar sBuffer[BUFSIZ];
+    string response;
+    while (InternetReadFile(hRequest, sBuffer, BUFSIZ, lReturn) != false && lReturn > 0)
+        StringAdd(response, CharArrayToString(sBuffer, 0, lReturn));
+    return response;
 }
 
 //------------------------------------------------------------------ Request
-bool MqlNet::Request(const string &Verb, const string &Object, string &Out, const bool toFile = false, const string addData = "", const bool fromFile = false)
+bool MqlNet::Request(const string &this_verb, const string &this_path, string &response, const bool toFile = false, const string addData = "", const bool fromFile = false)
 {
-    if (toFile && Out == "") {
-        LOG_ERROR("MqlNet::Request", "File is not specified");
-        return (false);
+    if (toFile && response == "") {
+        LOG_ERROR("", "File is not specified");
+        return false;
     }
+    
     uchar data[];
-    int hRequest, hSend;
-    static string Vers = "HTTP/1.1";
-    static string nill = "";
     if (fromFile) {
         if (FileToArray(addData, data) < 0) {
-            LOG_SYS_ERR("MqlNet::Request", "FileToArray failed");
+            LOG_SYS_ERR("", "FileToArray failed");
             return (false);
         }
     } // file loaded to the array
-    else StringToCharArray(addData, data);
-
+    else {
+        StringToCharArray(addData, data);
+        data[ArraySize(data) - 1] = ' ';
+    }
+    
+#ifdef WININET_DLL
+    int hRequest, hSend;
     if (Session <= 0 || Connect <= 0) {
         Close();
-        if (!Open(Host, Port, isSecure)) {
+        if (!Open(session_host, session_port, session_secure)) {
             Close();
             return (false);
         }
     }
 // create descriptor for the request
-    string acceptTypes = "";
-    hRequest = HttpOpenRequestW(Connect, Verb, Object, Vers, nill, 0, RegularConnectionFlags | ( INTERNET_FLAG_SECURE * isSecure ), 0);
+    hRequest = HttpOpenRequestW(Connect, this_verb, this_path, C_http_ver, 0, 0, RegularConnectionFlags | ( INTERNET_FLAG_SECURE * session_secure ), 0);
     if (hRequest <= 0) {
         LOG_SYS_ERR("", "HttpOpenRequestW failed");
         InternetCloseHandle(Connect);
         return (false);
     }
 // send request
-// request headed
-    static const string head = "Content-Type: application/x-www-form-urlencoded";
-// send request
-    hSend = HttpSendRequestW(hRequest, head, StringLen(head), data, ArraySize(data) - 1);
+    hSend = HttpSendRequestW(hRequest, head_www_form, len_head, data, ArraySize(data) - 1);
     if (hSend <= 0) {
         LOG_SYS_ERR("", "HttpSendRequestW failed");
         InternetCloseHandle(hRequest);
         Close();
     }
 // read page
-    ReadPage(hRequest, Out, toFile);
+    ReadPage(hRequest, response, toFile);
 // close all descriptors
     InternetCloseHandle(hRequest);
     InternetCloseHandle(hSend);
-    return (true);
+    return true;
+    
+#else
+
+    char response_chr[];
+    string response_header;
+    const int http_status_code = WebRequest(this_verb, session_url_prefix + this_path, C_empty_string, C_empty_string, C_web_request_timeout, data, 
+        ArraySize(data), response_chr, response_header);
+    response = CharArrayToString(response_chr);
+    LOG_VERBOSE("", "Received " + response + ", headers " + response_header + ", code " + IntegerToString(http_status_code));    
+    return http_status_code != -1;
+    
+#endif
 }
 
 //------------------------------------------------------------------ OpenURL
-bool MqlNet::OpenURL(const string &URL, string &Out, const bool toFile)
+bool MqlNet::OpenURL(const string &URL, string &response, const bool toFile)
 {
-    static const string nill = "";
     if (Session <= 0 || Connect <= 0) {
         Close();
-        if (!Open(Host, Port, isSecure)) {
+        if (!Open(session_host, session_port, session_secure)) {
             Close();
-            return (false);
+            return false;
         }
     }
-    uint hURL = InternetOpenUrlW(Session, URL, nill, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_PRAGMA_NOCACHE, 0);
+    uint hURL = InternetOpenUrlW(Session, URL, C_empty_string, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_PRAGMA_NOCACHE, 0);
     if (hURL < 1) {
-        LOG_SYS_ERR("MqlNet::OpenURL", "InternetOpenUrlW failed");
-        return (false);
+        LOG_SYS_ERR("", "InternetOpenUrlW failed");
+        return false;
     }
-// read to Out
-    ReadPage(hURL, Out, toFile);
+// read to response
+    ReadPage(hURL, response, toFile);
 // close
     InternetCloseHandle(hURL);
-    return (true);
+    return true;
 }
 
 //------------------------------------------------------------------ ReadPage
-void MqlNet::ReadPage(const int hRequest, string &Out, const bool toFile)
+void MqlNet::ReadPage(const int hRequest, string &response, const bool toFile)
 {
 // read page
     uchar ch[100];
@@ -756,10 +704,10 @@ void MqlNet::ReadPage(const int hRequest, string &Out, const bool toFile)
         toStr = toStr + CharArrayToString(ch, 0, dwBytes);
     }
     if (toFile) {
-        h = FileOpen(Out, FILE_BIN | FILE_WRITE);
+        h = FileOpen(response, FILE_BIN | FILE_WRITE);
         FileWriteString(h, toStr);
         FileClose(h);
-    } else Out = toStr;
+    } else response = toStr;
 }
 
 //+------------------------------------------------------------------+
@@ -769,10 +717,10 @@ string MqlNet::HttpQueryInfo(const int hRequest, const int HTTP_QUERY)
 {
     int len = 2048, ind = 0;
     uchar buf[2048];
-    int Res = HttpQueryInfoW(hRequest, HTTP_QUERY, buf, len, ind);
+    BOOL Res = HttpQueryInfoW(hRequest, HTTP_QUERY, buf, len, ind);
     if (Res == 0) {
-//        LOG_SYS_ERR("MqlNet::HttpQueryInfo", "HttpQueryInfoW failed");
-        return ("");
+        LOG_SYS_ERR("", "Failed");
+        return C_empty_string;
     }
     string s;
     for (int i = 0; i < len; i++) {
@@ -780,26 +728,26 @@ string MqlNet::HttpQueryInfo(const int hRequest, const int HTTP_QUERY)
         if (uc != 0)
             StringAdd(s, CharToString(uc));
     }
-    if (StringLen(s) <= 0) return ("");
+    if (StringLen(s) <= 0) return C_empty_string;
     return (s);
 }
 
 //------------------------------------------------------------------ GetServerCookieValue
 string MqlNet::GetServerCookieValue(const int hRequest)
 {
-    return (HttpQueryInfo(hRequest, HTTP_QUERY_SET_COOKIE));
+    return HttpQueryInfo(hRequest, HTTP_QUERY_SET_COOKIE);
 }
 
 //------------------------------------------------------------------ GetServerCookieValue
 long MqlNet::GetStatusCode(const int hRequest)
 {
-    return (StringToInteger(HttpQueryInfo(hRequest, HTTP_QUERY_STATUS_CODE)));
+    return StringToInteger(HttpQueryInfo(hRequest, HTTP_QUERY_STATUS_CODE));
 }
 
 //------------------------------------------------------------------ GetContentSize
 long MqlNet::GetContentSize(const int hRequest)
 {
-    return (StringToInteger(HttpQueryInfo(hRequest, HTTP_QUERY_CONTENT_LENGTH)));
+    return StringToInteger(HttpQueryInfo(hRequest, HTTP_QUERY_CONTENT_LENGTH));
 }
 
 //----------------------------------------------------- FileToArray
@@ -811,9 +759,8 @@ int MqlNet::FileToArray(const string &FileName, uchar &data[])
     FileSeek(h, 0, SEEK_SET);
     size = (int) FileSize(h);
     ArrayResize(data, (int) size);
-    for (i = 0; i < size; i++) {
+    for (i = 0; i < size; i++)
         data[i] = (uchar) FileReadInteger(h, CHAR_VALUE);
-    }
     FileClose(h);
     return (size);
 }
@@ -881,17 +828,25 @@ void PerfTimer::print()
     if(StringLen(tmrName) > 0)
         LOG_PERF ("Timer: " + tmrName, "Number: " + string(number) + " Avg: " + string(getAvg()));
 }
+
 #else
+
 PerfTimer::PerfTimer() {}
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 PerfTimer::PerfTimer(const string &timerName, const ulong printEvery) {}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 PerfTimer::~PerfTimer() {}
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 void PerfTimer::on() {}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void PerfTimer::off() {}
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -900,6 +855,7 @@ ulong PerfTimer::getAvg(void)
 {
     return 0;
 }
+
 #endif;
 
 

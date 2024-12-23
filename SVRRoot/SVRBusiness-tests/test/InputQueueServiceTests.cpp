@@ -33,8 +33,8 @@ TEST_F(DaoTestFixture, InputQueueWorkflow)
 
     datamodel::DataRow_ptr row1 = std::make_shared<DataRow>(st, bpt::second_clock::local_time(), 1, 1); row1->set_values({0, 0, 0, 0});
     datamodel::DataRow_ptr row2 = std::make_shared<DataRow>(fn, bpt::second_clock::local_time(), 1, 1); row2->set_values({1, 1, 1, 1});
-    aci.input_queue_service.add_row(iq, row1);
-    aci.input_queue_service.add_row(iq, row2);
+    aci.input_queue_service.add_row(*iq, row1);
+    aci.input_queue_service.add_row(*iq, row2);
 
     aci.input_queue_service.save(iq);
 
@@ -109,7 +109,7 @@ TEST_F(DaoTestFixture, GetColumnInFramesTest){
     // generate some random data
     while ( !dataGenerator.isDone() ) {
         datamodel::DataRow_ptr row = dataGenerator();
-        aci.input_queue_service.add_row(queue, row);
+        aci.input_queue_service.add_row(*queue, row);
     };
 
     // should save all the data
@@ -230,8 +230,8 @@ TEST_F(DaoTestFixture, InputQueueReconciliationWorkflow)
         row1->set_values({0.0 + i, 0.0 + i, 0.0 + i, 0.0 + i});
         datamodel::DataRow_ptr row2 = std::make_shared<DataRow>(st2 + resolution * i, bpt::second_clock::local_time(), 1, 1);
         row2->set_values({0.0 + i, 0.0 + i, 0.0 + i, 0.0 + i});
-        aci.input_queue_service.add_row(iq, row1);
-        aci.input_queue_service.add_row(iq, row2);
+        aci.input_queue_service.add_row(*iq, row1);
+        aci.input_queue_service.add_row(*iq, row2);
     }
 
     aci.input_queue_service.save(iq);

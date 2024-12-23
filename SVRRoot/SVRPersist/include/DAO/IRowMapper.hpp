@@ -16,7 +16,7 @@ template <class T>
 class IRowMapper {
 
 public:
-	virtual std::shared_ptr<T> mapRow(const pqxx_tuple& rowSet) const = 0;
+	virtual std::shared_ptr<T> map_row(const pqxx_tuple& row_set) const = 0;
 	virtual ~IRowMapper() = 0; // make this class abstract
 };
 

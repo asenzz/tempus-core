@@ -33,7 +33,7 @@ void SetDebugLogging(const bool value)
 bool LogErrorEnabled = true;
 bool LogInfoEnabled = true;
 bool LogDebugEnabled = true;
-bool LogVerboseEnabled = false;
+bool LogVerboseEnabled = true;
 
 
 bool LogPerfEnabled = true;
@@ -59,7 +59,7 @@ void LOG_MESSAGE(const string type, const string &method, const string &file, co
 }
 
 #define LOG_ERROR(stub, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message )
-#define LOG_SYS_ERR(stub, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message + " Sys: " + ErrorDescription(GetLastError()))
+#define LOG_SYS_ERR(stub, message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) LOG_MESSAGE("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message + " Sys: " + IntegerToString(GetLastError()) + ", " + ErrorDescription(GetLastError()))
 #define LOG_INFO(stub, message) if (LogInfoEnabled || LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("INFO: ", __FUNCTION__, __FILE__, string(__LINE__), message )
 #define LOG_DEBUG(stub, message) if (LogDebugEnabled || LogVerboseEnabled) LOG_MESSAGE("DEBUG: ", __FUNCTION__, __FILE__, string(__LINE__), message)
 #define LOG_VERBOSE(stub, message) if (LogVerboseEnabled) LOG_MESSAGE("VERBS: ", __FUNCTION__, __FILE__, string(__LINE__), message)

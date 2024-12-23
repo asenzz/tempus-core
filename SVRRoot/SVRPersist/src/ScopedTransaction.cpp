@@ -43,7 +43,7 @@ scoped_transaction_guard::~scoped_transaction_guard()
 }
 
 
-pqxx::result scoped_transaction_guard::exec(std::string const &query)
+pqxx::result scoped_transaction_guard::exec(const std::string &query)
 {
     return trx->exec(query);
 }

@@ -13,7 +13,7 @@ THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsUserDAO, UserDAO)
     virtual std::vector<User_ptr> get_all_users_by_priority();
     virtual bigint get_next_id();
 
-    virtual bool exists(std::string const & userName);
+    virtual bool exists(std::string const & user_name);
 
     virtual int save(const User_ptr&);
     virtual int update(const User_ptr&);

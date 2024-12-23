@@ -1,8 +1,8 @@
 #pragma once
 
-#include <common/types.hpp>
 #include <string>
 #include <boost/log/trivial.hpp>
+#include "common/types.hpp"
 
 namespace svr {
 namespace common {
@@ -56,7 +56,7 @@ class PropertiesFileReader
     bool is_comment(const std::string &line);
     bool is_multiline(const std::string &line);
 
-    std::string get_property_value(const std::string &property_file, const std::string &key, std::string default_value);
+    const std::string &get_property_value(const std::string &property_file, const std::string &key, const std::string &default_value);
 
 public:
     virtual ~PropertiesFileReader() {}
@@ -64,8 +64,8 @@ public:
     explicit PropertiesFileReader(const std::string& app_config_file, char delimiter = '=');
     const MessageProperties::mapped_type& read_properties(const std::string &property_file);
 
-    template<typename T>
-    T get_property(const std::string &property_file, const std::string &key, std::string default_value = "") {
+    template<typename T> T get_property(const std::string &property_file, const std::string &key, const std::string &default_value = "")
+    {
         return boost::lexical_cast<T>(get_property_value(property_file, key, default_value));
     }
 

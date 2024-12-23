@@ -48,12 +48,12 @@ namespace business {
 class ModelService {
     dao::ModelDAO &model_dao;
 
-    static arma::rowvec prepare_special_features(const data_row_container::const_iterator &last_known_it, const bpt::time_duration &resolution, const unsigned len);
+    static arma::rowvec prepare_special_features(const data_row_container::const_iterator &last_known_it, const bpt::time_duration &resolution, const uint32_t len);
 
-    static arma::vec get_last_knowns(const datamodel::Ensemble &ensemble, const unsigned level, const data_row_container &times, const bpt::time_duration &resolution);
+    static arma::vec get_last_knowns(const datamodel::Ensemble &ensemble, const uint16_t level, const data_row_container &times, const bpt::time_duration &resolution);
 
     static datamodel::DataRow::container::const_iterator
-    get_start(const datamodel::DataRow::container &cont, const unsigned decremental_offset, const boost::posix_time::ptime &model_last_time,
+    get_start(const datamodel::DataRow::container &cont, const uint32_t decremental_offset, const boost::posix_time::ptime &model_last_time,
               const boost::posix_time::time_duration &resolution);
 
 public:
@@ -61,7 +61,7 @@ public:
 
     static constexpr uint16_t C_num_quantisations = 100;
 
-    static const std::deque<unsigned> C_quantisations;
+    static const std::deque<uint32_t> C_quantisations;
 
     static uint32_t get_max_row_len();
 
@@ -69,7 +69,7 @@ public:
 
     datamodel::Model_ptr get_model_by_id(const bigint model_id);
 
-    datamodel::Model_ptr get_model(const bigint ensemble_id, const unsigned decon_level);
+    datamodel::Model_ptr get_model(const bigint ensemble_id, const uint16_t decon_level);
 
     void configure(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
@@ -99,7 +99,7 @@ public:
                                 const bpt::time_duration &resolution_main);
 
     static std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, data_row_container_ptr>
-    get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, unsigned dataset_rows = 0);
+    get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, uint32_t dataset_rows = 0);
 
     static void predict(
             const datamodel::Ensemble &ensemble,
@@ -130,24 +130,24 @@ public:
     static void train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights,
                              const bpt::ptime &last_value_time);
 
-    static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const uint32_t levix, const uint32_t stepix);
+    static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const uint16_t levix, const uint16_t stepix);
 
     void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble);
 
-    static bool check(const std::deque<datamodel::Model_ptr> &models, const uint32_t model_ct);
+    static bool check(const std::deque<datamodel::Model_ptr> &models, const uint16_t model_ct);
 
-    static bool check(const std::deque<datamodel::OnlineMIMOSVR_ptr> &models, const size_t grad_ct);
+    static bool check(const std::deque<datamodel::OnlineMIMOSVR_ptr> &models, const uint16_t grad_ct);
 
-    static uint32_t to_level_ix(const uint32_t model_ix, const uint32_t level_ct) noexcept;
+    static uint16_t to_level_ix(const uint16_t model_ix, const uint16_t level_ct) noexcept;
 
-    static uint32_t to_model_ix(const uint32_t level_ix, const uint32_t level_ct);
+    static uint16_t to_model_ix(const uint16_t level_ix, const uint16_t level_ct);
 
-    static uint32_t to_level_ct(const uint32_t model_ct) noexcept;
+    static uint16_t to_level_ct(const uint16_t model_ct) noexcept;
 
-    static uint32_t to_model_ct(const uint32_t level_ct) noexcept;
+    static uint16_t to_model_ct(const uint16_t level_ct) noexcept;
 
     static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec>
-    validate(const unsigned start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
+    validate(const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
              const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times, const bool online, const bool verbose);
 
 };

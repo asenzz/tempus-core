@@ -83,20 +83,20 @@ int PgModelDAO::remove_by_ensemble_id(const bigint ensemble_id)
 
 datamodel::Model_ptr PgModelDAO::get_by_id(const bigint model_id)
 {
-    ModelRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, get_sql("get_by_id"), model_id);
+    ModelRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, get_sql("get_by_id"), model_id);
 }
 
 datamodel::Model_ptr PgModelDAO::get_by_ensemble_id_and_decon_level(const bigint ensemble_id, size_t decon_level)
 {
-    ModelRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, get_sql("get_by_ensemble_id_and_decon_level"), ensemble_id, decon_level);
+    ModelRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, get_sql("get_by_ensemble_id_and_decon_level"), ensemble_id, decon_level);
 }
 
 std::deque<datamodel::Model_ptr> PgModelDAO::get_all_ensemble_models(const bigint ensemble_id)
 {
-    ModelRowMapper rowMapper;
-    return data_source.query_for_deque(rowMapper, get_sql(/* "get_all_ensemble_models_empty" */ "get_all_ensemble_models"), ensemble_id);
+    ModelRowMapper row_mapper;
+    return data_source.query_for_deque(row_mapper, get_sql(/* "get_all_ensemble_models_empty" */ "get_all_ensemble_models"), ensemble_id);
 }
 
 std::deque<datamodel::OnlineMIMOSVR_ptr> PgModelDAO::get_svr_by_model_id(const bigint model_id)

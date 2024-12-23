@@ -13,13 +13,13 @@ namespace business{
 
 bool PredictionTaskService::exists(const PredictionTask_ptr &predictionTask)
 {
-    reject_nullptr(predictionTask);
+    REJECT_NULLPTR(predictionTask);
     return predictionTaskDao.exists(predictionTask->get_id());
 }
 
 int PredictionTaskService::save(PredictionTask_ptr &predictionTask)
 {
-    reject_nullptr(predictionTask);
+    REJECT_NULLPTR(predictionTask);
 
     return predictionTaskDao.save(predictionTask);
 }

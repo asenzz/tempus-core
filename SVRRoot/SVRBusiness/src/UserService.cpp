@@ -12,7 +12,7 @@ namespace business {
 
 int UserService::save(const User_ptr &user)
 {
-    reject_nullptr(user);
+    REJECT_NULLPTR(user);
 
     // if the password is longer than 16 characters then it is already hashed
     if (user->get_password().length() > 0 && user->get_password().length() < 16) {
@@ -24,7 +24,7 @@ int UserService::save(const User_ptr &user)
 
 int UserService::remove(const User_ptr &user)
 {
-    reject_nullptr(user);
+    REJECT_NULLPTR(user);
     if (!exists(user->get_user_name())) {
         LOG4_ERROR("Cannot remove user " << user->to_string() << " because doesn't exist!");
         return false;

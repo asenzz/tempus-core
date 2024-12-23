@@ -34,7 +34,7 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
         const auto p_param = p_model->get_head_params();
         ModelService::prepare_features(*p_features, times, aux_decons, *p_param, max_gap, aux_res, main_res);
         res_l.set();
-        res[{p_param->get_decon_level(), p_param->get_step()}] = {times, p_features};
+        res.emplace(std::tuple{p_param->get_decon_level(), p_param->get_step()}, datamodel::t_level_predict_features{times, p_features});
         res_l.unset();
     }
 
@@ -124,9 +124,9 @@ EnsembleService::get(
         const datamodel::Dataset_ptr &p_dataset,
         const datamodel::DeconQueue_ptr &p_decon_queue)
 {
-    common::reject_nullptr(p_dataset);
-    common::reject_nullptr(p_decon_queue);
-    common::reject_empty(p_decon_queue->get_table_name());
+    REJECT_NULLPTR(p_dataset);
+    REJECT_NULLPTR(p_decon_queue);
+    REJECT_EMPTY_1(p_decon_queue->get_table_name());
 
     return ensemble_dao_.get_by_dataset_and_decon_queue(p_dataset, p_decon_queue);
 }
@@ -217,7 +217,7 @@ size_t EnsembleService::remove_by_dataset_id(const bigint dataset_id)
 
 int EnsembleService::remove(const datamodel::Ensemble_ptr &p_ensemble)
 {
-    common::reject_nullptr(p_ensemble);
+    REJECT_NULLPTR(p_ensemble);
     model_service_.remove_by_ensemble_id(p_ensemble->get_id());
     int ret_val = ensemble_dao_.remove(p_ensemble); // First we need to remove ensembles due "REFERENCE" in db
     if (p_ensemble->get_decon_queue())

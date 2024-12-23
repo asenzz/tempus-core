@@ -13,25 +13,24 @@
 namespace svr {
 namespace datamodel {
 
-struct MultivalRequest : public Entity
-{
+struct MultivalRequest : public Entity {
     bigint dataset_id = 0;
     std::string user_name;
     bpt::ptime request_time, value_time_start, value_time_end;
-    size_t resolution = 0;
+    bpt::time_duration resolution;
     std::string value_columns;
 
     MultivalRequest();
 
     MultivalRequest(
-            bigint request_id,
-            std::string user_name,
-            bigint dataset_id,
-            bpt::ptime request_time,
-            bpt::ptime value_time_start,
-            bpt::ptime value_time_end,
-            size_t resolution,
-            std::string const &value_columns);
+            const bigint request_id,
+            const std::string &user_name,
+            const bigint dataset_id,
+            const bpt::ptime &request_time,
+            const bpt::ptime &value_time_start,
+            const bpt::ptime &value_time_end,
+            const bpt::time_duration &resolution,
+            const std::string &value_columns);
 
     virtual void init_id() override;
 
@@ -44,14 +43,13 @@ struct MultivalRequest : public Entity
     bool operator==(MultivalRequest const &o) const;
 };
 
-struct MultivalResponse : public Entity
-{
+struct MultivalResponse : public Entity {
     bigint request_id = 0;
     bpt::ptime value_time;
     std::string value_column;
     double value = std::numeric_limits<double>::quiet_NaN();
 
-    MultivalResponse(const bigint response_id, const bigint request_id, bpt::ptime value_time, std::string value_column, double value);
+    MultivalResponse(const bigint response_id, const bigint request_id, const bpt::ptime &value_time, const std::string &value_column, const double value);
 
     MultivalResponse();
 
@@ -62,8 +60,7 @@ struct MultivalResponse : public Entity
     bool operator==(MultivalResponse const &o) const;
 };
 
-struct ValueRequest : public Entity
-{
+struct ValueRequest : public Entity {
     bpt::ptime request_time;
     bpt::ptime value_time;
     std::string value_column;

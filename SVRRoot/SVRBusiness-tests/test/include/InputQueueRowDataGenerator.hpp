@@ -32,7 +32,7 @@ public:
 
         _currentValueTime += _queue->get_resolution();
 
-        while(_input_queue_service.adjust_time_on_grid(_queue, _currentValueTime) == bpt::not_a_date_time){
+        while(_input_queue_service.adjust_time_on_grid(*_queue, _currentValueTime) == bpt::not_a_date_time){
             _currentValueTime += bpt::seconds(1);
         }
 

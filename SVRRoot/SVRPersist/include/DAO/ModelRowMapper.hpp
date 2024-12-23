@@ -18,7 +18,7 @@ namespace dao {
 class ModelRowMapper : public IRowMapper<datamodel::Model>
 {
 public:
-    datamodel::Model_ptr mapRow(const pqxx_tuple &row_set) const override
+    datamodel::Model_ptr map_row(const pqxx_tuple &row_set) const override
     {
         return ptr<datamodel::Model>(
                 row_set["id"].as<bigint>(0),
@@ -40,7 +40,7 @@ public:
 class SVRModelRowMapper : public IRowMapper<datamodel::OnlineMIMOSVR>
 {
 public:
-    datamodel::OnlineMIMOSVR_ptr mapRow(const pqxx_tuple &row_set) const override
+    datamodel::OnlineMIMOSVR_ptr map_row(const pqxx_tuple &row_set) const override
     {
         std::stringstream model_bin;
         const auto &binstr = row_set["model_binary"].as<std::basic_string<std::byte>>();

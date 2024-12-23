@@ -136,8 +136,8 @@ void Ensemble::set_models(const std::deque<datamodel::Model_ptr> &new_models, co
     const auto prev_size = models.size();
     for (const auto &p_new_model: new_models) {
         std::atomic<bool> found = false;
-#pragma omp parallel for num_threads(adj_threads(prev_size))
-        for (size_t i = 0; i < prev_size; ++i)
+#pragma omp parallel for ADJ_THREADS(prev_size)
+        for (DTYPE(prev_size) i = 0; i < prev_size; ++i)
             if (models[i]->get_decon_level() == p_new_model->get_decon_level() &&
                 (!models[i]->get_ensemble_id() || !p_new_model->get_ensemble_id() || models[i]->get_ensemble_id() == p_new_model->get_ensemble_id())) {
                 if (overwrite || models[i]->get_gradients().empty()) {
@@ -235,12 +235,12 @@ std::string Ensemble::to_string() const
     return s.str();
 }
 
-size_t Ensemble::get_level_ct() const
+uint16_t Ensemble::get_level_ct() const
 {
     return business::ModelService::to_level_ct(models.size());
 }
 
-size_t Ensemble::get_model_ct() const
+uint16_t Ensemble::get_model_ct() const
 {
     return models.size();
 }

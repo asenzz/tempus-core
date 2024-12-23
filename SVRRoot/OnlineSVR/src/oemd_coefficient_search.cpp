@@ -17,7 +17,7 @@
 namespace svr {
 namespace oemd {
 
-oemd_coefficients_search::oemd_coefficients_search(const unsigned levels, const bpt::time_duration &resolution, const unsigned label_len) :
+oemd_coefficients_search::oemd_coefficients_search(const uint16_t levels, const bpt::time_duration &resolution, const uint32_t label_len) :
         resolution(resolution),
         sample_rate(onesec / resolution),
         levels(levels),
@@ -28,28 +28,27 @@ oemd_coefficients_search::oemd_coefficients_search(const unsigned levels, const 
 }
 
 
-
 double
-oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const unsigned siftings)
+oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_mask_fft, const uint16_t siftings)
 {
     const double coeff = double(h_mask_fft.size()) / 250.;
     double result = 0;
     constexpr auto cplx_one = std::complex<double>(1.);
-    const unsigned end_i = h_mask_fft.size() * 2. * lambda1 / coeff;
+    const uint32_t end_i = h_mask_fft.size() * 2. * lambda1 / coeff;
     OMP_FOR_(end_i, simd reduction(+:result))
-    for (unsigned i = 0; i < end_i; ++i) {
+    for (DTYPE(end_i) i = 0; i < end_i; ++i) {
         std::complex<double> zz(1 - h_mask_fft[i].x, -h_mask_fft[i].y);
         std::complex<double> p(1, 0);
         UNROLL()
-        for (unsigned k = 0; k < siftings; ++k) p *= zz;
+        for (DTYPE(siftings) k = 0; k < siftings; ++k) p *= zz;
         result += std::norm(p) + fabs(1. - std::norm(cplx_one - p));
     }
     OMP_FOR_(h_mask_fft.size(), simd reduction(+:result))
-    for (unsigned i = end_i; i < h_mask_fft.size(); ++i) {
+    for (auto i = end_i; i < h_mask_fft.size(); ++i) {
         std::complex<double> zz(h_mask_fft[i].x, h_mask_fft[i].y);
         std::complex<double> p(1, 0);
         UNROLL()
-        for (unsigned k = 0; k < siftings; ++k) p *= zz;
+        for (DTYPE(siftings) k = 0; k < siftings; ++k) p *= zz;
         result += i < h_mask_fft.size() * 2. * lambda2 / coeff ? std::norm(p) : C_smooth_factor * std::norm(p);
     }
 #ifdef __GNUC__
@@ -65,7 +64,7 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
 }
 
 
-void oemd_coefficients_search::do_diff_mult(const unsigned M, const unsigned N, const std::vector<double> &diff, std::vector<double> &Bmatrix)
+void oemd_coefficients_search::do_diff_mult(const uint32_t M, const uint32_t N, const std::vector<double> &diff, std::vector<double> &Bmatrix)
 {
     const auto MM = M * M;
     const auto MM2 = MM / 2;
@@ -75,11 +74,11 @@ void oemd_coefficients_search::do_diff_mult(const unsigned M, const unsigned N, 
 #else
     OMP_FOR_(MM2, simd collapse(2))
 #endif
-    for (unsigned i = 0; i < M; ++i) {
-        for (unsigned j = 0; j <= i; ++j) {
+    for (DTYPE(M) i = 0; i < M; ++i) {
+        for (DTYPE(i) j = 0; j <= i; ++j) {
             auto ptr_ix = Bmatrix.data() + i * M + j;
             *ptr_ix = 0;
-            for (unsigned k = 0; k < N - M - 1; ++k)
+            for (DTYPE(N) k = 0; k < N - M - 1; ++k)
                 *ptr_ix += diff[i + k] * diff[j + k];
         }
     }
@@ -88,34 +87,32 @@ void oemd_coefficients_search::do_diff_mult(const unsigned M, const unsigned N, 
 #else
     OMP_FOR_(MM2, simd collapse(2))
 #endif
-    for (unsigned i = 0; i < M; ++i) {
-        for (unsigned j = i + 1; j < M; ++j)
+    for (DTYPE(M) i = 0; i < M; ++i)
+        for (auto j = i + 1; j < M; ++j)
             Bmatrix[i * M + j] = Bmatrix[j * M + i];
-    }
 }
 
-void oemd_coefficients_search::prep_x_matrix(const unsigned M, const unsigned N, CPTRd x, std::vector<double> &Bmatrix, std::vector<double> &Fmatrix)
+void oemd_coefficients_search::prep_x_matrix(const uint32_t M, const uint32_t N, CPTRd x, std::vector<double> &Bmatrix, std::vector<double> &Fmatrix)
 {
     std::vector<double> diff(N - 1, 0.);
-    for (unsigned i = 0; i < N - 1; ++i)
-        diff[i] = x[i + 1] - x[i];
+    for (DTYPE(N) i = 0; i < N - 1; ++i) diff[i] = x[i + 1] - x[i];
     do_diff_mult(M, N, diff, Bmatrix);
     Fmatrix.resize(M);
     OMP_FOR(M)
-    for (unsigned i = 0; i < M; ++i)
+    for (DTYPE(M) i = 0; i < M; ++i)
         Fmatrix[i] = -2. * Bmatrix[i];
 }
 
 #if 0
-int make_P_from_dense(CPTRd H, unsigned m, c_int &P_nnz, std::vector<c_float> &P_x_vector, std::vector<c_int> &P_i_vector, std::vector<c_int> &P_p_vector)
+int make_P_from_dense(CPTRd H, uint32_t m, c_int &P_nnz, std::vector<c_float> &P_x_vector, std::vector<c_int> &P_i_vector, std::vector<c_int> &P_p_vector)
 {
     P_nnz = 0;
     P_x_vector.clear();
     P_i_vector.clear();
     P_p_vector.clear();
-    for (unsigned i = 0; i < m; i++) {
+    for (DTYPE(m) i = 0; i < m; i++) {
         P_p_vector.push_back(P_nnz);
-        for (unsigned j = 0; j <= i; j++) {
+        for (DTYPE(i) j = 0; j <= i; j++) {
             P_i_vector.push_back(j);
             P_x_vector.push_back(H[i * m + j]);//assume H is symmetric!
             P_nnz++;
@@ -126,11 +123,11 @@ int make_P_from_dense(CPTRd H, unsigned m, c_int &P_nnz, std::vector<c_float> &P
 }
 
 
-int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsigned input_size, CPTRd x, const int gpu_id)
+int do_osqp(const uint32_t mask_size, std::vector<double> &good_mask, const uint32_t input_size, CPTRd x, const int gpu_id)
 {
-    unsigned fft_size = C_mask_expander * mask_size;
-    unsigned M = mask_size;
-    unsigned N = input_size;
+    uint32_t fft_size = C_mask_expander * mask_size;
+    uint32_t M = mask_size;
+    uint32_t N = input_size;
     std::vector<double> Bmatrix;
     std::vector<double> Fmatrix;
     prep_x_matrix(M, N, x, Bmatrix, Fmatrix);
@@ -147,8 +144,8 @@ int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsi
     lo_vector[0] = 1 - eps;
     up_vector[0] = 1 + eps;
 
-    unsigned A_nnz = C_mask_expander * mask_size;
-    for (unsigned i = 0; i < mask_size; i++) {
+    uint32_t A_nnz = C_mask_expander * mask_size;
+    for (uint32_t i = 0; i < mask_size; i++) {
         A_p_vector.push_back(2 * i);
         A_i_vector.push_back(0);
         A_x_vector.push_back(1.);
@@ -174,10 +171,10 @@ int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsi
 
     do_mult(mask_size, 2 * (fft_size / 2 + 1), A_x, H);//mult by 2 because both real and imaginary
 
-    for (unsigned i = 0; i < H.size(); i++) {
+    for (uint32_t i = 0; i < H.size(); i++) {
         H[i] += Bmatrix[i] * C_b_factor;
     }
-    for (unsigned i = 0; i < F_x.size(); i++) {
+    for (uint32_t i = 0; i < F_x.size(); i++) {
         F_x[i] += Fmatrix[i] * C_b_factor;
     }
 
@@ -197,7 +194,7 @@ int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsi
     csc_set_data(P, mask_size, mask_size, P_nnz, P_x_vector.data(), P_i_vector.data(), P_p_vector.data());
 
     c_float *q = F_x.data();
-    for (unsigned i = 0; i < mask_size; ++i) {
+    for (uint32_t i = 0; i < mask_size; ++i) {
         q[i] = q[i] / 2;
     }
 
@@ -233,7 +230,7 @@ int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsi
     c_float *real_solution = sol->x;
 
     good_mask.resize(mask_size, 0.);
-    for (unsigned i = 0; i < mask_size; i++) good_mask[i] = real_solution[i];
+    for (uint32_t i = 0; i < mask_size; i++) good_mask[i] = real_solution[i];
     fix_mask(mask_size, good_mask.data());
     osqp_cleanup(solver);
     return 0;
@@ -243,8 +240,8 @@ int do_osqp(const unsigned mask_size, std::vector<double> &good_mask, const unsi
 void
 oemd_coefficients_search::prepare_masks(
         std::deque<std::vector<double>> &masks,
-        std::deque<unsigned> &siftings,
-        const unsigned levels)
+        std::deque<uint16_t> &siftings,
+        const uint16_t levels)
 {
 #if 0
     if (masks.size() != levels - 1) masks.resize(levels - 1);
@@ -257,8 +254,8 @@ oemd_coefficients_search::prepare_masks(
         masks.back().resize(C_fir_mask_end_len);
     }
     OMP_FOR(masks.size() - 1)
-    for (unsigned i = 1; i < masks.size() - 1; ++i) { // TODO Masks are in inverted order, fix!
-        const auto new_size = (unsigned) round(
+    for (uint16_t i = 1; i < masks.size() - 1; ++i) { // TODO Masks are in inverted order, fix!
+        const auto new_size = (uint32_t) round(
                 std::pow<double>(C_fir_mask_start_len, double(masks.size() - i) / masks.size()) *
                 std::pow<double>(C_fir_mask_end_len, double(i) / double(masks.size())));
         if (masks[i].size() != new_size) {
@@ -280,22 +277,22 @@ oemd_coefficients_search::prepare_masks(
 void
 oemd_coefficients_search::smoothen_mask(std::vector<double> &mask, common::t_drand48_data_ptr buffer)
 {
-    const unsigned window_size = 3 + 2. * (mask.size() * common::drander(buffer) / 10.);
-    const auto mask_size = mask.size();
+    const uint32_t window_size = 3 + 2. * (mask.size() * common::drander(buffer) / 10.);
+    const uint32_t mask_size = mask.size();
 
     std::vector<double> weights(window_size);
     double wsum = 0;
 #pragma omp simd reduction(+:wsum)
-    for (unsigned i = 0; i < window_size; ++i) {
+    for (DTYPE(window_size) i = 0; i < window_size; ++i) {
         weights[i] = exp(-pow((3. * ((double) i - (window_size / 2))) / (double) (window_size / 2), 2) / 2.);
         wsum += weights[i];
     }
 
     std::vector<double> nmask(mask_size);
 #pragma omp simd
-    for (unsigned i = 0; i < mask_size; ++i) {
+    for (DTYPE(mask_size) i = 0; i < mask_size; ++i) {
         double sum = 0;
-        for (unsigned j = std::max<unsigned>(0, i - window_size / 2); j <= std::min<unsigned>(i + window_size / 2, mask_size - 1); ++j)
+        for (auto j = std::max<DTYPE(window_size) >(0, i - window_size / 2); j <= std::min<DTYPE(window_size) >(i + window_size / 2, mask_size - 1); ++j)
             sum += weights[window_size / 2 + i - j] * mask[j];
         nmask[i] = sum / wsum;
     }
@@ -307,10 +304,10 @@ void
 oemd_coefficients_search::save_mask(
         const std::vector<double> &mask,
         const std::string &queue_name,
-        const unsigned level,
-        const unsigned levels)
+        const uint16_t level,
+        const uint16_t levels)
 {
-    unsigned ctr = 0;
+    uint16_t ctr = 0;
     LOG4_TRACE("Saving mask for level " << level << " of " << levels << ", queue " << queue_name << ", mask " <<
                                         common::present(arma::vec((double *) mask.data(), mask.size(), false, true)));
     while (common::file_exists(oemd_coefficients::get_mask_file_name(ctr, level, levels, queue_name))) { ++ctr; }
@@ -330,10 +327,10 @@ oemd_coefficients_search::save_mask(
 }
 
 #if 0
-double get_std(double *x, const unsigned input_size)
+double get_std(double *x, const uint32_t input_size)
 {
     double sum = 0.;
-    for (unsigned i = 0; i < input_size - 1; ++i) {
+    for (uint32_t i = 0; i < input_size - 1; ++i) {
         sum += pow(x[i] - x[i + 1], 2);
     }
     return sqrt(sum / (double) input_size);
@@ -341,21 +338,21 @@ double get_std(double *x, const unsigned input_size)
 #endif
 
 std::vector<double>
-oemd_coefficients_search::fill_auto_matrix(const unsigned M, const unsigned siftings, const unsigned N, CPTRd x)
+oemd_coefficients_search::fill_auto_matrix(const uint32_t M, const uint16_t siftings, const uint32_t N, CPTRd x)
 {
     return {};
 
     std::vector<double> diff(N - 1);
 #pragma omp parallel for num_threads(adj_threads(N - 1))
-    for (unsigned i = 0; i < N - 1; ++i)
+    for (DTYPE(N) i = 0; i < N - 1; ++i)
         diff[i] = x[i + 1] - x[i];
 
-    const unsigned Msift = M * siftings;
+    const DTYPE(M) Msift = M * siftings;
     std::vector<double> global_sift_matrix(Msift);
 #pragma omp parallel for num_threads(adj_threads(Msift))
-    for (unsigned i = 0; i < Msift; ++i) {
+    for (DTYPE(Msift) i = 0; i < Msift; ++i) {
         double sum = 0;
-        for (unsigned j = N / 2; j < N - 1 - i; ++j)
+        for (auto j = N / 2; j < N - 1 - i; ++j)
             sum += diff[j] * diff[j + i];
         global_sift_matrix[i] = sum / double(N - 1. - i - N / 2.);
     }

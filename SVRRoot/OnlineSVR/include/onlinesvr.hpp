@@ -35,7 +35,7 @@ constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 constexpr magma_int_t C_rbt_iter = 40; // default 30
 constexpr float C_rbt_threshold = 0; // [0..1] default 1
 constexpr uint32_t C_features_superset_coef = 100; // [1..+inf)
-constexpr float C_solve_opt_coef = 1; // Rows count divisor to calculate iterations for iterative solver
+constexpr float C_solve_opt_coef = 1; // Rows count multiplier to calculate iterations for NL solver, 1 is the best so far
 constexpr uint16_t C_solve_opt_particles = 100;
 #ifdef EMO_DIFF
 constexpr double C_diff_coef = 1;
@@ -43,7 +43,7 @@ constexpr double C_diff_coef = 1;
 constexpr double C_diff_coef = 1;
 #endif
 
-#define SINGLE_CHUNK_LEVEL
+// #define SINGLE_CHUNK_LEVEL // TODO Seems like its buggy
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
 
@@ -167,9 +167,9 @@ public:
     void set_dataset(const Dataset_ptr &p_dataset);
 
     // Move to solver module
-    static void solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const unsigned iters_irwls);
+    static void solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters_irwls);
 
-    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const unsigned iters);
+    static void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &y, arma::mat &w, const uint16_t iters);
 
     static std::deque<arma::mat> solve_batched_irwls(
             const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
@@ -201,13 +201,13 @@ public:
 
     void set_param_set(const DTYPE(OnlineMIMOSVR::param_set) &param_set_);
 
-    void set_params(const SVRParameters_ptr &p_svr_parameters_, const unsigned chunk_ix = 0);
+    void set_params(const SVRParameters_ptr &p_svr_parameters_, const uint16_t chunk_ix = 0);
 
-    void set_params(const SVRParameters &param, const unsigned chunk_ix = 0);
+    void set_params(const SVRParameters &param, const uint16_t chunk_ix = 0);
 
-    SVRParameters &get_params(const unsigned chunk_ix = 0) const;
+    SVRParameters &get_params(const uint16_t chunk_ix = 0) const;
 
-    SVRParameters_ptr get_params_ptr(const unsigned chunk_ix = 0) const;
+    SVRParameters_ptr get_params_ptr(const uint16_t chunk_ix = 0) const;
 
     SVRParameters_ptr is_manifold() const;
 
@@ -241,9 +241,7 @@ public:
 
     std::deque<arma::uvec> generate_indexes() const;
 
-    arma::mat predict(const arma::mat &x_predict);
-
-    arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time);
+    arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
 
     arma::mat manifold_predict(const arma::mat &x_predict) const;
 
@@ -266,7 +264,8 @@ public:
 
     static mat_ptr prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
 
-    static mat_ptr prepare_Ky(const datamodel::SVRParameters &params, const arma::mat &x_train_t, const arma::mat &x_predict_t, const uint8_t devices);
+    static mat_ptr prepare_Ky(business::calc_cache &ccache, const datamodel::SVRParameters &params, const arma::mat &x_train_t, const arma::mat &x_predict_t,
+                                      const bpt::ptime &predict_time, const bpt::ptime &trained_time, const uint8_t devices);
 
     static mat_ptr prepare_K(business::calc_cache &ccache, SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
 

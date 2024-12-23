@@ -68,20 +68,20 @@ typedef std::set<datamodel::SVRParameters_ptr, less_SVRParameters_ptr> t_param_s
 typedef std::shared_ptr<t_param_set> t_param_set_ptr; // TODO Convert to a new class
 
 // Default SVR parameters
-constexpr unsigned C_default_svrparam_decon_level = 0;
-constexpr unsigned C_default_svrparam_step = 0;
-constexpr unsigned C_default_svrparam_chunk_ix = 0;
-constexpr unsigned C_default_svrparam_grad_level = 0;
+constexpr uint16_t C_default_svrparam_decon_level = 0;
+constexpr uint16_t C_default_svrparam_step = 0;
+constexpr uint16_t C_default_svrparam_chunk_ix = 0;
+constexpr uint16_t C_default_svrparam_grad_level = 0;
 constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
 constexpr double C_default_svrparam_kernel_param2 = 0;
-constexpr unsigned C_default_svrparam_decrement_distance = common::C_best_decrement;
+constexpr uint32_t C_default_svrparam_decrement_distance = common::C_best_decrement;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
 constexpr svr::datamodel::e_kernel_type C_default_svrparam_kernel_type = svr::datamodel::e_kernel_type::PATH;
-constexpr unsigned C_default_svrparam_kernel_type_uint = unsigned(svr::datamodel::e_kernel_type::PATH);
-constexpr unsigned C_default_svrparam_lag_count = 100; // All parameters should have the same lag count because of kernel function limitations
-const unsigned C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
+constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(svr::datamodel::e_kernel_type::PATH);
+constexpr uint32_t C_default_svrparam_lag_count = 100; // All parameters should have the same lag count because of kernel function limitations
+const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
 struct t_feature_mechanics
 {
@@ -102,11 +102,11 @@ class SVRParameters : public Entity
 
     std::string input_queue_table_name; // TODO Replace with pointer to Input Queue
     std::string input_queue_column_name; // TODO Replace with pointer to Input Queue
-    unsigned levels_ct = C_default_svrparam_decon_level + 1;
-    unsigned decon_level_ = C_default_svrparam_decon_level;
-    unsigned step_ = C_default_svrparam_step;
-    unsigned chunk_ix_ = C_default_svrparam_chunk_ix;
-    unsigned grad_level_ = C_default_svrparam_grad_level;
+    uint16_t levels_ct = C_default_svrparam_decon_level + 1;
+    uint16_t decon_level_ = C_default_svrparam_decon_level;
+    uint16_t step_ = C_default_svrparam_step;
+    uint16_t chunk_ix_ = C_default_svrparam_chunk_ix;
+    uint16_t grad_level_ = C_default_svrparam_grad_level;
     // TODO Implement manifold projection index
 
     double svr_C = C_default_svrparam_svr_cost; // TODO Remove
@@ -116,9 +116,9 @@ class SVRParameters : public Entity
     arma::vec gamma; // TODO Save to DB and init properly
     double svr_kernel_param2 = C_default_svrparam_kernel_param2;
     double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio;
-    std::set<unsigned> adjacent_levels;
+    std::set<uint16_t> adjacent_levels;
     e_kernel_type kernel_type = C_default_svrparam_kernel_type;
-    unsigned lag_count = C_default_svrparam_lag_count;
+    uint32_t lag_count = C_default_svrparam_lag_count;
 
     t_feature_mechanics feature_mechanics; // TODO Save to DB and init properly
 
@@ -130,20 +130,20 @@ public:
             const bigint dataset_id,
             const std::string &input_queue_table_name,
             const std::string &input_queue_column_name,
-            const unsigned level_ct,
-            const unsigned decon_level,
-            const unsigned step,
-            const unsigned chunk_ix = C_default_svrparam_chunk_ix,
-            const unsigned grad_level = C_default_svrparam_grad_level,
+            const uint16_t level_ct,
+            const uint16_t decon_level,
+            const uint16_t step,
+            const uint16_t chunk_ix = C_default_svrparam_chunk_ix,
+            const uint16_t grad_level = C_default_svrparam_grad_level,
             const double svr_C = C_default_svrparam_svr_cost,
             const double svr_epsilon = C_default_svrparam_svr_epsilon,
             const double svr_kernel_param = C_default_svrparam_kernel_param1,
             const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
-            const u_int64_t svr_decremental_distance = C_default_svrparam_decrement_distance,
+            const uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
             const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
             const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
-            const unsigned lag_count = C_default_svrparam_lag_count,
-            const std::set<unsigned> &adjacent_levels = {});
+            const uint32_t lag_count = C_default_svrparam_lag_count,
+            const std::set<uint16_t> &adjacent_levels = {});
 
     SVRParameters(const SVRParameters &o);
 
@@ -169,25 +169,25 @@ public:
 
     void set_input_queue_table_name(const std::string &value);
 
-    unsigned get_level_count() const noexcept;
+    uint16_t get_level_count() const noexcept;
 
-    void set_level_count(const unsigned levels) noexcept;
+    void set_level_count(const uint16_t levels) noexcept;
 
-    unsigned get_decon_level() const noexcept;
+    uint16_t get_decon_level() const noexcept;
 
-    void set_decon_level(const unsigned _decon_level) noexcept;
+    void set_decon_level(const uint16_t _decon_level) noexcept;
 
-    unsigned get_step() const noexcept;
+    uint16_t get_step() const noexcept;
 
-    void set_step(const unsigned _step) noexcept;
+    void set_step(const uint16_t _step) noexcept;
 
-    unsigned get_chunk_index() const noexcept;
+    uint16_t get_chunk_index() const noexcept;
 
-    void set_chunk_index(const unsigned _chunk_ix) noexcept;
+    void set_chunk_index(const uint16_t _chunk_ix) noexcept;
 
-    unsigned get_grad_level() const noexcept;
+    uint16_t get_grad_level() const noexcept;
 
-    void set_grad_level(const unsigned _grad_level) noexcept;
+    void set_grad_level(const uint16_t _grad_level) noexcept;
 
     void decrement_gradient() noexcept;
 
@@ -219,7 +219,7 @@ public:
 
     PROPERTY(double, kernel_param3, .75);
 
-    PROPERTY(unsigned, svr_decremental_distance, C_default_svrparam_decrement_distance) // TODO Refactor all class properties to use the PROPERTY macro
+    PROPERTY(uint32_t, svr_decremental_distance, C_default_svrparam_decrement_distance) // TODO Refactor all class properties to use the PROPERTY macro
 
     PROPERTY(double, min_Z, 0);
 
@@ -230,9 +230,9 @@ public:
 
     void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio) noexcept;
 
-    std::set<unsigned> &get_adjacent_levels();
+    std::set<uint16_t> &get_adjacent_levels();
 
-    const std::set<unsigned> &get_adjacent_levels() const;
+    const std::set<uint16_t> &get_adjacent_levels() const;
 
     e_kernel_type get_kernel_type() const noexcept;
 
@@ -241,9 +241,9 @@ public:
     void set_kernel_type(const e_kernel_type _kernel_type) noexcept;
 
     // Lag count across all models should be the same with the current infrastructure inplace // Only head param (chunk 0, grad 0, manifold 0) takes effect
-    unsigned get_lag_count() const noexcept;
+    uint32_t get_lag_count() const noexcept;
 
-    void set_lag_count(const unsigned _lag_count) noexcept;
+    void set_lag_count(const uint32_t _lag_count) noexcept;
 
     t_feature_mechanics &get_feature_mechanics();
 
@@ -289,7 +289,7 @@ struct t_parameter_predictions_set {
 };
 
 using t_parameter_predictions_set_ptr = std::shared_ptr<t_parameter_predictions_set>;
-typedef std::unordered_map<unsigned /* level */, t_parameter_predictions_set> t_level_tuned_parameters;
+typedef std::unordered_map<uint16_t /* level */, t_parameter_predictions_set> t_level_tuned_parameters;
 using t_level_tuned_parameters_ptr = std::shared_ptr<t_level_tuned_parameters>;
 
 }

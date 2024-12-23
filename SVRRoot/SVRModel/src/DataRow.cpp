@@ -183,6 +183,13 @@ DataRow::construct(const std::deque<MultivalResponse_ptr> &responses)
     return result;
 }
 
+void DataRow::sort(container &rows_container)
+{
+    std::sort(C_default_exec_policy, rows_container.begin(), rows_container.end(), [](const DataRow_ptr &lhs, const DataRow_ptr &rhs) {
+        return lhs->get_value_time() < rhs->get_value_time();
+    });
+}
+
 void DataRow::set_value(const unsigned column_index, const double value)
 {
     if (values_.size() <= column_index) LOG4_THROW("Invalid column index " << column_index << " of " << values_.size() << " columns.");

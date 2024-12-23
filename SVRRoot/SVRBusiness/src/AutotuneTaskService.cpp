@@ -5,20 +5,18 @@
 #include <model/AutotuneTask.hpp>
 #include <DAO/AutotuneTaskDAO.hpp>
 
-using svr::common::reject_nullptr;
-
 namespace svr{
 namespace business{
 
 bool AutotuneTaskService::exists(const AutotuneTask_ptr &autotuneTask)
 {
-    reject_nullptr(autotuneTask);
+    REJECT_NULLPTR(autotuneTask);
     return autotuneTaskDao.exists(autotuneTask->get_id());
 }
 
 int AutotuneTaskService::save(AutotuneTask_ptr &autotuneTask)
 {
-    reject_nullptr(autotuneTask);
+    REJECT_NULLPTR(autotuneTask);
 
     if (autotuneTask->get_id() == 0)
         autotuneTask->set_id(autotuneTaskDao.get_next_id());
@@ -28,7 +26,7 @@ int AutotuneTaskService::save(AutotuneTask_ptr &autotuneTask)
 
 int AutotuneTaskService::remove(const AutotuneTask_ptr &autotuneTask)
 {
-    reject_nullptr(autotuneTask);
+    REJECT_NULLPTR(autotuneTask);
 
     return autotuneTaskDao.remove(autotuneTask);
 }

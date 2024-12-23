@@ -27,7 +27,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
 
         datamodel::MultivalRequest_ptr request = datamodel::MultivalRequest_ptr( new
             MultivalRequest(bigint(0), default_user_name, default_dataset_id, nw
-            , default_request_time, default_request_time + default_resolution * 15, default_resolution.total_seconds()
+            , default_request_time, default_request_time + default_resolution * 15, default_resolution
             , "{open,high,low,close}")
         );
 
@@ -48,7 +48,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
             , default_dataset_id
             , default_request_time
             , default_request_time + default_resolution * 15
-            , default_resolution.total_seconds()
+            , default_resolution
         );
 
         ASSERT_NE(0UL, results.size());

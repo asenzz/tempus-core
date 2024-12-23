@@ -53,10 +53,10 @@ Dataset::Dataset(
         const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
         const Priority &priority,
         const std::string &description,
-        const unsigned gradients,
-        const unsigned chunk_size,
-        const unsigned multistep,
-        const unsigned spectrum_levels,
+        const uint16_t gradients,
+        const uint32_t chunk_size,
+        const uint16_t multistep,
+        const uint16_t spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
@@ -101,10 +101,10 @@ Dataset::Dataset(
         const std::deque<std::string> &aux_input_queue_table_names,
         const Priority &priority,
         const std::string &description,
-        const unsigned gradients,
-        const unsigned chunk_size,
-        const unsigned multistep,
-        const unsigned spectrum_levels,
+        const uint16_t gradients,
+        const uint32_t chunk_size,
+        const uint16_t multistep,
+        const uint16_t spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
@@ -229,31 +229,31 @@ oemd::online_emd &Dataset::get_oemd_transformer()
 bool Dataset::get_initialized()
 { return initialized; }
 
-unsigned Dataset::get_gradient_count() const
+uint16_t Dataset::get_gradient_count() const
 { return gradients_; };
 
-unsigned Dataset::get_max_chunk_size() const
+uint32_t Dataset::get_max_chunk_size() const
 { return max_chunk_size_; };
 
-unsigned Dataset::get_multistep() const
+uint16_t Dataset::get_multistep() const
 { return multistep_; };
 
-void Dataset::set_gradients(const unsigned grads)
+void Dataset::set_gradients(const uint16_t grads)
 { gradients_ = grads; }
 
-void Dataset::set_chunk_size(const unsigned chunk_size)
+void Dataset::set_chunk_size(const uint32_t chunk_size)
 { max_chunk_size_ = chunk_size; }
 
-void Dataset::set_multistep(const unsigned multistep)
+void Dataset::set_multistep(const uint16_t multistep)
 { multistep_ = multistep; }
 
-std::string Dataset::get_dataset_name() const
+const std::string &Dataset::get_dataset_name() const
 { return dataset_name_; }
 
 void Dataset::set_dataset_name(const std::string &dataset_name)
 { Dataset::dataset_name_ = dataset_name; }
 
-std::string Dataset::get_user_name() const
+const std::string &Dataset::get_user_name() const
 { return user_name_; }
 
 void Dataset::set_user_name(const std::string &user_name)
@@ -278,7 +278,7 @@ std::deque<datamodel::InputQueue_ptr> Dataset::get_aux_input_queues() const
 }
 
 
-datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const unsigned idx) const
+datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const uint16_t idx) const
 {
     return aux_input_queues_[idx].get_obj();
 }
@@ -311,7 +311,7 @@ void Dataset::set_priority(Priority const &priority)
     priority_ = priority;
 }
 
-std::string Dataset::get_description() const
+const std::string &Dataset::get_description() const
 {
     return description_;
 }
@@ -321,50 +321,50 @@ void Dataset::set_description(const std::string &description)
     description_ = description;
 }
 
-unsigned Dataset::get_spectral_levels() const
+uint16_t Dataset::get_spectral_levels() const
 {
     return spectrum_levels_ >= MIN_LEVEL_COUNT ? spectrum_levels_ : 1;
 }
 
-unsigned Dataset::get_trans_levix() const
+uint16_t Dataset::get_trans_levix() const
 {
     return business::SVRParametersService::get_trans_levix(spectrum_levels_);
 }
 
-unsigned Dataset::get_model_count() const
+uint16_t Dataset::get_model_count() const
 {
     return business::ModelService::to_model_ct(spectrum_levels_);
 }
 
-unsigned Dataset::get_spectrum_levels_cvmd() const
+uint16_t Dataset::get_spectrum_levels_cvmd() const
 {
 #ifdef VMD_ONLY
     return spectrum_levels_ / 2;
 #elif defined(EMD_ONLY)
     return 0;
 #else
-    return spectrum_levels_ >= MIN_LEVEL_COUNT ? std::max<unsigned>(1, spectrum_levels_ / 2) : 0;
+    return spectrum_levels_ >= MIN_LEVEL_COUNT ? std::max<uint16_t>(1, spectrum_levels_ / 2) : 0;
 #endif
 }
 
-unsigned Dataset::get_spectrum_levels_oemd() const noexcept
+uint16_t Dataset::get_spectrum_levels_oemd() const noexcept
 {
 #ifdef VMD_ONLY
     return 0;
 #elif defined(EMD_ONLY)
     return spectrum_levels_;
 #else
-    return spectrum_levels_ >= MIN_LEVEL_COUNT ? std::max<unsigned>(1, spectrum_levels_ / 4) : 0;
+    return spectrum_levels_ >= MIN_LEVEL_COUNT ? std::max<uint16_t>(1, spectrum_levels_ / 4) : 0;
 #endif
 }
 
-void Dataset::set_spectrum_levels(const unsigned spectrum_levels)
+void Dataset::set_spectrum_levels(const uint16_t spectrum_levels)
 {
     assert(spectrum_levels >= 1);
     spectrum_levels_ = spectrum_levels;
 }
 
-std::string Dataset::get_transformation_name() const noexcept
+const std::string &Dataset::get_transformation_name() const noexcept
 {
     return transformation_name_;
 }
@@ -392,12 +392,13 @@ void Dataset::set_max_lookback_time_gap(const bpt::time_duration &max_lookback_t
     max_lookback_time_gap_ = max_lookback_time_gap;
 }
 
-
 std::deque<datamodel::Ensemble_ptr> &Dataset::get_ensembles() noexcept
 { return ensembles_; }
 
-std::deque<datamodel::Ensemble_ptr> Dataset::get_ensembles() const noexcept
+
+const std::deque<datamodel::Ensemble_ptr> &Dataset::get_ensembles() const noexcept
 { return ensembles_; }
+
 
 datamodel::Ensemble_ptr Dataset::get_ensemble(const std::string &column_name) noexcept
 {
@@ -433,6 +434,7 @@ void Dataset::set_decon_queue(const datamodel::DeconQueue_ptr &p_decon_queue)
     LOG4_THROW("Decon queue " << p_decon_queue->to_string() << " not found in dataset!");
 }
 
+
 std::unordered_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr>
 Dataset::get_decon_queues() const
 {
@@ -445,6 +447,7 @@ Dataset::get_decon_queues() const
     }
     return result;
 }
+
 
 void Dataset::clear_data()
 {
@@ -476,28 +479,28 @@ datamodel::DeconQueue_ptr Dataset::get_decon_queue(const std::string &table_name
     return nullptr;
 }
 
-datamodel::Ensemble_ptr Dataset::get_ensemble(const unsigned idx)
+datamodel::Ensemble_ptr Dataset::get_ensemble(const uint16_t idx)
 {
     return ensembles_[idx];
 }
 
-unsigned Dataset::get_ensemble_count() const
+uint16_t Dataset::get_ensemble_count() const
 {
     return input_queue_.get_obj()->get_value_columns().size();
 }
 
 void Dataset::set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensembles, const bool overwrite)
 {
-    const unsigned prev_size = ensembles_.size();
+    const auto prev_size = ensembles_.size();
 
-#pragma omp parallel num_threads(adj_threads(ensembles_.size() + new_ensembles.size()))
+#pragma omp parallel ADJ_THREADS(ensembles_.size() + new_ensembles.size())
 #pragma omp single
     {
-#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
+	OMP_TASKLOOP_1(untied)
         for (const auto &e: new_ensembles) {
             std::atomic<bool> found = false;
-#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
-            for (unsigned i = 0; i < prev_size; ++i)
+            OMP_TASKLOOP_1(firstprivate(prev_size) untied)
+            for (DTYPE(prev_size) i = 0; i < prev_size; ++i)
                 if (e->get_column_name() == ensembles_[i]->get_column_name()) {
                     found.store(true, std::memory_order_relaxed);
                     if (!overwrite) continue;
@@ -533,7 +536,9 @@ std::deque<datamodel::IQScalingFactor_ptr> Dataset::get_iq_scaling_factors(const
 datamodel::IQScalingFactor_ptr Dataset::get_iq_scaling_factor(const std::string &input_queue_table_name, const std::string &input_queue_column_name) const
 {
     const auto res = std::find_if(C_default_exec_policy, iq_scaling_factors_.cbegin(), iq_scaling_factors_.cend(),
-                 [&](const auto &iqsf) { return iqsf->get_input_queue_table_name() == input_queue_table_name && iqsf->get_input_queue_column_name() == input_queue_column_name; });
+                                  [&](const auto &iqsf) {
+                                      return iqsf->get_input_queue_table_name() == input_queue_table_name && iqsf->get_input_queue_column_name() == input_queue_column_name;
+                                  });
     return res == iq_scaling_factors_.cend() ? nullptr : *res;
 }
 
@@ -541,14 +546,14 @@ void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor
 {
     const auto prev_size = iq_scaling_factors_.size();
     t_omp_lock iq_scaling_factors_l;
-#pragma omp parallel num_threads(adj_threads(new_iq_scaling_factors.size() + prev_size))
+#pragma omp parallel ADJ_THREADS(new_iq_scaling_factors.size() + prev_size)
 #pragma omp single
     {
-#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
+	OMP_TASKLOOP_1(untied)
         for (const auto &new_iqsf: new_iq_scaling_factors) {
             std::atomic<bool> found = false;
-#pragma omp taskloop firstprivate(prev_size) mergeable untied default(shared) grainsize(1)
-            for (unsigned i = 0; i < prev_size; ++i) {
+            OMP_TASKLOOP_1(firstprivate(prev_size) untied)
+            for (DTYPE(prev_size) i = 0; i < prev_size; ++i) {
                 auto &old_iqsf = iq_scaling_factors_[i];
                 if (new_iqsf->get_input_queue_table_name() == old_iqsf->get_input_queue_table_name() &&
                     new_iqsf->get_input_queue_column_name() == old_iqsf->get_input_queue_column_name()) {
@@ -570,9 +575,9 @@ void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor
     }
 }
 
-unsigned Dataset::get_max_lag_count() const
+uint32_t Dataset::get_max_lag_count() const
 {
-    unsigned max_lag_count = 0;
+    uint32_t max_lag_count = 0;
     for (const auto &e: ensembles_)
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
@@ -583,9 +588,9 @@ unsigned Dataset::get_max_lag_count() const
     return max_lag_count;
 }
 
-unsigned Dataset::get_max_quantise() const
+uint32_t Dataset::get_max_quantise() const
 {
-    unsigned res = 0;
+    uint32_t res = 0;
     for (const auto &e: ensembles_)
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
@@ -597,9 +602,9 @@ unsigned Dataset::get_max_quantise() const
     return res;
 }
 
-unsigned Dataset::get_max_decrement() const
+uint32_t Dataset::get_max_decrement() const
 {
-    unsigned res = 0;
+    uint32_t res = 0;
     for (const auto &e: ensembles_)
         for (const auto &m: e->get_models())
             for (const auto &svr: m->get_gradients())
@@ -610,24 +615,24 @@ unsigned Dataset::get_max_decrement() const
     return res;
 }
 
-unsigned Dataset::get_max_residuals_length() const
+uint32_t Dataset::get_max_residuals_length() const
 {
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
-    unsigned result = 0;
+    uint32_t result = 0;
     t_omp_lock max_residuals_l;
-#pragma omp parallel num_threads(adj_threads(ensembles_.size() + 1))
+#pragma omp parallel ADJ_THREADS(2 * ensembles_.size())
 #pragma omp single
     {
-#pragma omp taskloop mergeable untied default(shared) grainsize(1)
+        OMP_TASKLOOP_(ensembles_.size(), untied)
         for (const auto &p_ensemble: ensembles_) {
-            const unsigned res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
+            const auto res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
             max_residuals_l.set();
             MAXAS(result, res_count);
             max_residuals_l.unset();
-#pragma omp taskloop mergeable untied default(shared) grainsize(1)
+            OMP_TASKLOOP_(p_ensemble->get_aux_decon_queues().size(), untied)
             for (const auto &p_decon: p_ensemble->get_aux_decon_queues()) {
-                const unsigned res_count_aux = get_residuals_length(p_decon->get_table_name());
+                const auto res_count_aux = get_residuals_length(p_decon->get_table_name());
                 max_residuals_l.set();
                 MAXAS(result, res_count_aux);
                 max_residuals_l.unset();
@@ -637,19 +642,19 @@ unsigned Dataset::get_max_residuals_length() const
     return result;
 }
 
-unsigned Dataset::get_max_possible_residuals_length() const
+uint32_t Dataset::get_max_possible_residuals_length() const
 {
     return get_residuals_length(common::gen_random(8));
 }
 
-unsigned Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
+uint32_t Dataset::get_residuals_length(const std::string &decon_queue_table_name) const
 {
-    return std::max<unsigned>(
+    return std::max<uint32_t>(
             p_cvmd_transformer ? p_cvmd_transformer->get_residuals_length(decon_queue_table_name) : 0,
             p_oemd_transformer_fat ? p_oemd_transformer_fat->get_residuals_length(decon_queue_table_name) : 0);
 }
 
-size_t Dataset::get_residuals_length(const unsigned levels)
+uint32_t Dataset::get_residuals_length(const uint16_t levels)
 {
     if (levels < MIN_LEVEL_COUNT) return 0;
 
@@ -676,18 +681,18 @@ std::string Dataset::to_string() const
 {
     std::stringstream s;
 
-    s << "Id " << get_id()
-      << ", name " << get_dataset_name()
+    s << "Id " << id
+      << ", name " << dataset_name_
       << ", input queue table name " << input_queue_.get_id()
-      << ", user name " << get_user_name()
-      << ", priority " << svr::datamodel::to_string(get_priority())
-      << ", description " << get_description()
+      << ", user name " << user_name_
+      << ", priority " << datamodel::to_string(priority_)
+      << ", description " << description_
       << ", transformation levels " << spectrum_levels_
       << ", transformation name " << transformation_name_
       << ", gradients " << gradients_
       << ", chunk size " << max_chunk_size_
       << ", multi out " << multistep_
-      << ", max lookback time gap " << bpt::to_simple_string(get_max_lookback_time_gap())
+      << ", max lookback time gap " << get_max_lookback_time_gap()
       << ", is active " << get_is_active();
 
     return s.str();

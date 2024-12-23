@@ -59,8 +59,8 @@ int PgPredictionTaskDAO::remove(const PredictionTask_ptr &predictionTask)
 
 PredictionTask_ptr PgPredictionTaskDAO::get_by_id(const bigint id)
 {
-    PredictionTaskRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), id);
+    PredictionTaskRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_id"), id);
 }
 
 } /* namespace dao */

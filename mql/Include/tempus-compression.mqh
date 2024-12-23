@@ -1,5 +1,4 @@
 #import "tempus-compression.dll"
-
    int LZ4_versionNumber();
 
    uint getMaxBufferSize();

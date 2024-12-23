@@ -8,7 +8,6 @@
 #include <DAO/DataSource.hpp>
 
 using svr::common::C_decon_queue_table_name_prefix;
-using svr::common::reject_empty;
 
 namespace svr { namespace dao {
 
@@ -16,13 +15,13 @@ PgDeconQueueDAO::PgDeconQueueDAO(svr::common::PropertiesFileReader& tempus_confi
 : DeconQueueDAO(tempus_config, data_source)
 {}
 
-datamodel::DeconQueue_ptr PgDeconQueueDAO::get_decon_queue_by_table_name(const std::string &tableName) {
-    DeconQueueRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_decon_queue_by_table_name"), tableName);
+datamodel::DeconQueue_ptr PgDeconQueueDAO::get_decon_queue_by_table_name(const std::string &table_name) {
+    DeconQueueRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_decon_queue_by_table_name"), table_name);
 }
 
 std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_data(const std::string& deconQueueTableName, bpt::ptime const &timeFrom, bpt::ptime const &timeTo, const size_t limit) {
-    reject_empty(deconQueueTableName);
+    REJECT_EMPTY(deconQueueTableName);
 
     boost::format sqlFormat (AbstractDAO::get_sql("get_data"));
     sqlFormat % deconQueueTableName;
@@ -33,35 +32,35 @@ std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_data(const std::string& 
         sql += " LIMIT " + std::to_string(limit);
     }
 
-    DataRowRowMapper rowMapper;
-    return data_source.query_for_deque(rowMapper, sql, timeFrom, timeTo);
+    DataRowRowMapper row_mapper;
+    return data_source.query_for_deque(row_mapper, sql, timeFrom, timeTo);
 }
 
 std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_latest_data(const std::string& deconQueueTableName, bpt::ptime const &timeTo, const size_t limit)
 {
-    reject_empty(deconQueueTableName);
+    REJECT_EMPTY(deconQueueTableName);
 
     boost::format sqlFormat (AbstractDAO::get_sql("get_latest_data"));
     sqlFormat % deconQueueTableName;
 
     std::string sql = sqlFormat.str();
 
-    DataRowRowMapper rowMapper;
+    DataRowRowMapper row_mapper;
 
-    return data_source.query_for_deque(rowMapper, sql, timeTo, limit);
+    return data_source.query_for_deque(row_mapper, sql, timeTo, limit);
 }
 
 bool PgDeconQueueDAO::exists(const datamodel::DeconQueue_ptr& deconQueue) {
     return exists(deconQueue->get_table_name());
 }
 
-bool PgDeconQueueDAO::exists(const std::string &tableName) {
-    if(tableName == ""){
+bool PgDeconQueueDAO::exists(const std::string &table_name) {
+    if(table_name == ""){
         return false;
     }
 
-    return data_source.query_for_type<int>(AbstractDAO::get_sql("decon_queue_exists"), tableName) == 1 &&
-            data_source.query_for_type<int>(AbstractDAO::get_sql("table_exists"), tableName) == 1;
+    return data_source.query_for_type<int>(AbstractDAO::get_sql("decon_queue_exists"), table_name) == 1 &&
+            data_source.query_for_type<int>(AbstractDAO::get_sql("table_exists"), table_name) == 1;
 }
 
 void PgDeconQueueDAO::save(datamodel::DeconQueue_ptr const &p_decon_queue, const boost::posix_time::ptime &start_time)
@@ -137,12 +136,12 @@ long PgDeconQueueDAO::save_data(const datamodel::DeconQueue_ptr& p_decon_queue, 
 
 std::deque<datamodel::DataRow_ptr> PgDeconQueueDAO::get_data_having_update_time_greater_than(const std::string &deconQueueTableName, const bpt::ptime &updateTime, const size_t limit)
 {
-    DataRowRowMapper rowMapper;
+    DataRowRowMapper row_mapper;
     std::string sql = get_sql("get_data_having_update_time_greater_than");
     boost::format sqlFormat(sql);
     sqlFormat % deconQueueTableName;
 
-    return data_source.query_for_deque(rowMapper, sqlFormat.str(), updateTime, limit);
+    return data_source.query_for_deque(row_mapper, sqlFormat.str(), updateTime, limit);
 }
 
 int PgDeconQueueDAO::clear(const datamodel::DeconQueue_ptr &deconQueue) {

@@ -32,7 +32,7 @@ datamodel::DeconQueue_ptr DeconQueueService::get_by_table_name(const std::string
 
 void DeconQueueService::save(datamodel::DeconQueue_ptr const &p_decon_queue, boost::posix_time::ptime start_time)
 {
-    common::reject_nullptr(p_decon_queue);
+    REJECT_NULLPTR(p_decon_queue);
     if (start_time == bpt::min_date_time && p_decon_queue->get_data().size()) {
         const auto last_saved_row = decon_queue_dao.get_latest_data(p_decon_queue->get_table_name(), bpt::max_date_time, 1);
         if (!last_saved_row.empty()) start_time = last_saved_row.back()->get_value_time();
@@ -42,7 +42,7 @@ void DeconQueueService::save(datamodel::DeconQueue_ptr const &p_decon_queue, boo
 
 bool DeconQueueService::exists(datamodel::DeconQueue_ptr const &p_decon_queue)
 {
-    common::reject_nullptr(p_decon_queue);
+    REJECT_NULLPTR(p_decon_queue);
     return decon_queue_dao.exists(p_decon_queue->get_table_name());
 }
 
@@ -62,14 +62,11 @@ void DeconQueueService::prepare_decon(datamodel::Dataset &dataset, const datamod
 {
     LOG4_BEGIN();
 
-    const auto first_offending = InputQueueService::compare_to_decon_queue(input_queue, decon_queue);
-    if (first_offending == bpt::max_date_time)
-        return;
-    else if (first_offending == bpt::min_date_time)
-        decon_queue.get_data().clear();
-    else if (first_offending < decon_queue.back()->get_value_time())
+    const auto first_offending = InputQueueService::validate_decon_data(input_queue, decon_queue);
+    if (first_offending == bpt::max_date_time) return;
+    else if (first_offending == bpt::min_date_time && decon_queue.get_data().size()) decon_queue.get_data().clear();
+    else if (decon_queue.size() && first_offending < decon_queue.back()->get_value_time())
         decon_queue.get_data().erase(lower_bound_back(decon_queue.get_data(), first_offending), decon_queue.end());
-
     deconstruct(dataset, input_queue, decon_queue);
 
     LOG4_END();
@@ -168,7 +165,7 @@ DeconQueueService::deconstruct(
 #ifdef INTEGRATION_TEST
     const auto test_offset = res_ratio * common::C_integration_test_validation_window;
 #else
-    constexpr size_t test_offset = 0;
+    constexpr uint32_t test_offset = 0;
 #endif
     const auto residuals = dataset.get_residuals_length(decon_queue.get_table_name());
     LOG4_DEBUG("Input data length " << input_queue.size() << ", columns " << input_queue.front()->size() << ", combined residual length " << residuals <<
@@ -327,22 +324,29 @@ void DeconQueueService::reconstruct(
         const datamodel::t_iqscaler &iq_unscaler)
 {
     LOG4_BEGIN();
+
     if (decon.distance() < 1) LOG4_THROW("No deconstructed data to reconstruct.");
-    std::function<void(double &, const double)> op;
-    switch (type) {
-        case recon_type_e::ADDITIVE:
-            op = [](double &inout, const double in) -> void { inout += in; };
-            break;
-
-        case recon_type_e::MULTIPLICATIVE:
-            op = [](double &inout, const double in) -> void { inout *= in; };
-            break;
-
-        default:
-            LOG4_THROW("Reconstruction type " << int(type) << " not supported!");
-    }
 
     const auto levct = decon.levels();
+
+    if (levct < 1)
+        LOG4_THROW("No levels to reconstruct.");
+
+    std::function<void(double &, const double)> op;
+    if (levct > 1)
+        switch (type) {
+            case recon_type_e::ADDITIVE:
+                op = [](double &inout, const double in) -> void { inout += in; };
+                break;
+
+            case recon_type_e::MULTIPLICATIVE:
+                op = [](double &inout, const double in) -> void { inout *= in; };
+                break;
+
+            default:
+                LOG4_THROW("Reconstruction type " << int(type) << " not supported!");
+        }
+
     const auto trans_levix = SVRParametersService::get_trans_levix(levct);
     if (recon.size()) recon.erase(lower_bound(recon, decon.front()->get_value_time()), recon.end());
     const auto startout = recon.size();
@@ -352,12 +356,16 @@ void DeconQueueService::reconstruct(
     LOG4_DEBUG("Reconstructing " << ct << " rows of " << levct << " levels, type " << int(type) << ", output starting " << startout);
     OMP_FOR_i(ct) {
         const datamodel::DataRow &d = **(decon.cbegin() + i);
-        double v = 0;
-UNROLL()
-        for (DTYPE(levct) l = 0; l < levct; l += LEVEL_STEP)
-            if (l != trans_levix)
-                op(v, d.get_value(l));
-        recon[startout + i] = ptr<datamodel::DataRow>(d.get_value_time(), time_nau, d.get_tick_volume(), std::vector{iq_unscaler(v)});
+        double v;
+        if (levct == 1) v = d[0];
+        else {
+            v = 0;
+            UNROLL()
+            for (DTYPE(levct) l = 0; l < levct; l += LEVEL_STEP)
+                if (l != trans_levix)
+                    op(v, d.get_value(l));
+        }
+        recon[startout + i] = otr<datamodel::DataRow>(d.get_value_time(), time_nau, d.get_tick_volume(), std::vector{iq_unscaler(v)});
     }
     LOG4_END();
 }
@@ -396,14 +404,14 @@ DeconQueueService::load_latest(datamodel::DeconQueue &decon_queue, const bpt::pt
 
 int DeconQueueService::clear(const datamodel::DeconQueue_ptr &decon_queue)
 {
-    common::reject_nullptr(decon_queue);
+    REJECT_NULLPTR(decon_queue);
     return decon_queue_dao.clear(decon_queue);
 }
 
 
 long DeconQueueService::count(const datamodel::DeconQueue_ptr &decon_queue)
 {
-    common::reject_nullptr(decon_queue);
+    REJECT_NULLPTR(decon_queue);
     return decon_queue_dao.count(decon_queue);
 }
 
@@ -415,28 +423,31 @@ datamodel::DeconQueue_ptr DeconQueueService::find_decon_queue(
 {
     LOG4_BEGIN();
     auto p_decon_queue_iter = std::find_if(C_default_exec_policy, decon_queues.cbegin(), decon_queues.cend(),
-            [&input_queue_table_name, &input_queue_column_name](const auto &p_decon_queue) {
-                return p_decon_queue->get_input_queue_table_name() == input_queue_table_name &&
-                       p_decon_queue->get_input_queue_column_name() == input_queue_column_name;
-            }
+                                           [&input_queue_table_name, &input_queue_column_name](const auto &p_decon_queue) {
+                                               return p_decon_queue->get_input_queue_table_name() == input_queue_table_name &&
+                                                      p_decon_queue->get_input_queue_column_name() == input_queue_column_name;
+                                           }
     );
 
     if (p_decon_queue_iter == decon_queues.cend()) {
         LOG4_ERROR("Unable to find decon queue for input table name " << input_queue_table_name << ", input column " << input_queue_column_name << ", decon queues ct "
-                    << decon_queues.size());
+                                                                      << decon_queues.size());
         return nullptr;
     }
 
     return *p_decon_queue_iter;
 }
 
+
 const datamodel::DeconQueue_ptr &DeconQueueService::find_decon_queue(
         const std::deque<datamodel::DeconQueue_ptr> &decon_queues, const std::string &decon_queue_table_name)
 {
     LOG4_DEBUG("Looking for " << decon_queue_table_name);
 
-    auto p_decon_queue_iter = find_if(C_default_exec_policy, decon_queues.cbegin(), decon_queues.cend(),
-            [&decon_queue_table_name](const datamodel::DeconQueue_ptr &p_decon_queue) { return p_decon_queue->get_table_name() == decon_queue_table_name; } );
+    auto p_decon_queue_iter = std::find_if(C_default_exec_policy, decon_queues.cbegin(), decon_queues.cend(),
+                                      [&decon_queue_table_name](const datamodel::DeconQueue_ptr &p_decon_queue) {
+                                          return p_decon_queue->get_table_name() == decon_queue_table_name;
+                                      });
 
     if (p_decon_queue_iter == decon_queues.cend())
         THROW_EX_FS(std::invalid_argument, "Couldn't not find decon queue for table name " << decon_queue_table_name << ", decon queues ct " << decon_queues.size());
@@ -444,15 +455,17 @@ const datamodel::DeconQueue_ptr &DeconQueueService::find_decon_queue(
     return *p_decon_queue_iter;
 }
 
+
 std::string DeconQueueService::make_queue_table_name(
         const std::string &input_queue_table_name,
         const bigint dataset_id,
         const std::string &input_queue_column_name)
 {
     if (input_queue_table_name.empty() || input_queue_column_name.empty())
-        LOG4_THROW("Illegal arguments, input queue table name " << input_queue_table_name << ", input queue column name " << input_queue_column_name << ", dataset id " << dataset_id);
-    std::string result = common::sanitize_db_table_name(common::formatter() <<
-            common::C_decon_queue_table_name_prefix << "_" << input_queue_table_name << "_" << dataset_id << "_" << input_queue_column_name);
+        LOG4_THROW(
+                "Illegal arguments, input queue table name " << input_queue_table_name << ", input queue column name " << input_queue_column_name << ", dataset id " << dataset_id);
+    std::string result = common::sanitize_db_table_name( common::formatter() <<
+            common::C_decon_queue_table_name_prefix << "_" << input_queue_table_name << "_" << std::to_string(dataset_id) << "_" << input_queue_column_name);
     std::for_each(C_default_exec_policy, result.begin(), result.end(), ::tolower);
     return result;
 }

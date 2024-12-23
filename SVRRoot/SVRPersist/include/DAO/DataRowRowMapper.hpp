@@ -9,25 +9,25 @@ namespace dao {
 
 class DataRowRowMapper : public IRowMapper<svr::datamodel::DataRow> {
 public:
-    datamodel::DataRow_ptr mapRow(const pqxx_tuple &rowSet) const override
+    datamodel::DataRow_ptr map_row(const pqxx_tuple &row_set) const override
     {
-        if (rowSet.size() < 3) {
-            LOG4_ERROR("Illegal number of columns " << rowSet.size());
+        if (row_set.size() < 3) {
+            LOG4_ERROR("Illegal number of columns " << row_set.size());
             return nullptr;
         }
         std::vector<double> levels;
-        const size_t num_levels = (rowSet.size() - 3);
+        const size_t num_levels = (row_set.size() - 3);
         for (size_t col_ix = 3; col_ix < num_levels + 3; col_ix++)
-            levels.emplace_back(rowSet[col_ix].as<double>(std::numeric_limits<double>::quiet_NaN()));
+            levels.emplace_back(row_set[col_ix].as<double>(std::numeric_limits<double>::quiet_NaN()));
 
-        const auto value_time = bpt::time_from_string(rowSet["value_time"].as<std::string>(""));
-        if (value_time.is_not_a_date_time() or value_time.is_special() or value_time.is_infinity() or value_time.date().year() <= 1400 or value_time.date().year() >= 10000)
-            LOG4_ERROR("Value time not parsed correctly from string " << rowSet["value_time"].as<std::string>(""));
+        const auto value_time = row_set["value_time"].as<bpt::ptime>(bpt::not_a_date_time);
+        if (value_time.is_special() or value_time.date().year() <= 1900 or value_time.date().year() >= 2200)
+            LOG4_ERROR("Value time not parsed correctly from string " << row_set["value_time"].as<std::string>(""));
 
         return ptr<svr::datamodel::DataRow>(
                 value_time,
-                bpt::time_from_string(rowSet["update_time"].as<std::string>("")),
-                rowSet["tick_volume"].as<double>(std::numeric_limits<double>::quiet_NaN()),
+                row_set["update_time"].as<bpt::ptime>(bpt::not_a_date_time),
+                row_set["tick_volume"].as<double>(std::numeric_limits<double>::quiet_NaN()),
                 levels
         );
     }

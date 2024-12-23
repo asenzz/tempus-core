@@ -39,9 +39,10 @@ arma::mat get_reference_Z(const arma::mat &y, const unsigned train_len)
     return r;
 }
 
+// TODO Port to CUDA
 arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, const float dual_lag_ratio)
 {
-    assert(lag_ratio < .5);
+    assert(dual_lag_ratio < .5);
     const uint32_t lag = (labels.n_rows - 1) * dual_lag_ratio;
     arma::vec score(labels.n_rows, arma::fill::none);
     const auto lag_2 = 2 * lag;
@@ -90,9 +91,9 @@ void OnlineMIMOSVR::tune_fast()
     weight_chunks.resize(num_chunks);
 
 #ifdef KERNEL_PARAM_3
-    constexpr uint8_t opt_particles = 50;
-    constexpr uint8_t opt_iters = 50;
-    constexpr uint8_t D = 3;
+    constexpr uint16_t opt_particles = 50;
+    constexpr uint16_t opt_iters = 50;
+    constexpr uint16_t D = 3;
 #else
     constexpr uint8_t opt_particles = 40;
     constexpr uint8_t opt_iters = 40;
@@ -106,7 +107,7 @@ void OnlineMIMOSVR::tune_fast()
         return r;
     }();
     static const auto x0 = [&]() -> arma::mat {
-        const uint8_t tail_D = D - 1;
+        const auto tail_D = D - 1;
         arma::mat r(tail_D, opt_particles, arma::fill::none);
         common::equispaced(r, bounds.tail_rows(tail_D), {});
         return arma::join_cols(arma::mat(1, opt_particles, arma::fill::value(.5)), r);
@@ -123,14 +124,14 @@ void OnlineMIMOSVR::tune_fast()
     std::array<arma::mat, C_max_j> test_labels;
     std::array<arma::mat, C_max_j> test_last_knowns;
     UNROLL(C_max_j)
-    for (uint16_t j = 0; j < C_max_j; ++j) {
-        const unsigned test_tail = test_ixs.n_rows - j * C_slide_skip;
+    for (DTYPE(C_max_j) j = 0; j < C_max_j; ++j) {
+        const auto test_tail = test_ixs.n_rows - j * C_slide_skip;
         test_labels[j] = p_labels->tail_rows(test_tail);
         test_last_knowns[j] = p_last_knowns->tail_rows(test_tail);
     }
 
 #pragma omp parallel for schedule(static, 1) TUNE_THREADS(num_chunks) default(shared) firstprivate(num_chunks, opt_particles, opt_iters)
-    for (uint16_t chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
+    for (DTYPE(num_chunks) chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_chunk_params = get_params_ptr(chunk_ix);
         if (!p_chunk_params) {
             for (const auto &p: param_set)
@@ -176,7 +177,6 @@ void OnlineMIMOSVR::tune_fast()
         LOG4_TRACE("Before scaling chunk " << chunk_ix << ", tune labels " << common::present(tune_labels) << ", tune features " << common::present(tune_features_t) <<
               ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features " << common::present(train_feature_chunks_t[chunk_ix]) <<
               ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
-
 #endif
 
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, lag, features_sf, train_feature_chunks_t[chunk_ix]);
@@ -192,17 +192,20 @@ void OnlineMIMOSVR::tune_fast()
             // const arma::vec sum_Kz = arma::sum(*Kz, 1);
             solvers::kernel_from_distances_I(*Kz, calc_gamma(*Kz, tune_labels));
             if (Kz->has_nonfinite()) LOG4_THROW("Kernel matrix has non-finites!");
+#if 0
             constexpr double C_weights_slope = 1;
             const arma::mat bias_labels = tune_labels % arma::linspace(1., C_weights_slope, tune_labels.n_rows);
-            // const auto epsco = calc_epsco(*Kz, bias_labels);
+            const auto epsco = calc_epsco(*Kz, bias_labels);
 #ifdef INSTANCE_WEIGHTS
-            const auto w = calc_weights(
-                    *Kz, bias_labels, weight_matrix(chunk_ixs_tune, *p_input_weights), epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * C_solve_opt_coef);
+            const auto &w = bias_labels; // calc_weights(*Kz, bias_labels, weight_matrix(chunk_ixs_tune, *p_input_weights), epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * C_solve_opt_coef);
 #else
-            const auto &w = bias_labels; // calc_weights(*Kz, bias_labels, epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * C_solve_opt_coef);
+            const auto w = calc_weights(*Kz, bias_labels, epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * C_solve_opt_coef);
 #endif
             const arma::uvec sorted_ixs = C_shift_lim + arma::stable_sort_index(
-                    arma::pow(arma::abs(self_predict(*Kz, w, bias_labels)), 0) % score_dataset(bias_labels, tune_features_t, .001));
+                    arma::pow(arma::abs(self_predict(*Kz, w, bias_labels)), 1) % score_dataset(bias_labels, tune_features_t, 1e-2));
+#else
+            const arma::uvec sorted_ixs = C_shift_lim + arma::stable_sort_index(score_dataset(tune_labels, tune_features_t, 1e-2));
+#endif
             ixs[chunk_ix] = arma::sort(sorted_ixs.tail(max_chunk_size));
             train_label_chunks[chunk_ix] = p_labels->rows(ixs[chunk_ix]);
             train_feature_chunks_t[chunk_ix] = p_features->rows(ixs[chunk_ix]).t();

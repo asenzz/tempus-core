@@ -72,14 +72,14 @@ int PgDatasetDAO::remove(const datamodel::Dataset_ptr &dataset)
 
 datamodel::Dataset_ptr PgDatasetDAO::get_by_id(const bigint dataset_id)
 {
-    DatasetRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, AbstractDAO::get_sql("get_by_id"), dataset_id);
+    DatasetRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_id"), dataset_id);
 }
 
 datamodel::Dataset_ptr PgDatasetDAO::get_by_name(const std::string &user_name, const std::string &dataset_name)
 {
-    DatasetRowMapper rowMapper;
-    return data_source.query_for_object(&rowMapper, get_sql("get_by_name"), dataset_name, user_name);
+    DatasetRowMapper row_mapper;
+    return data_source.query_for_object(&row_mapper, get_sql("get_by_name"), dataset_name, user_name);
 }
 
 bigint PgDatasetDAO::get_next_id()
@@ -89,8 +89,8 @@ bigint PgDatasetDAO::get_next_id()
 
 std::deque<datamodel::Dataset_ptr> PgDatasetDAO::find_all_user_datasets(const std::string &user_name)
 {
-    DatasetRowMapper rowMapper;
-    return data_source.query_for_deque(rowMapper, AbstractDAO::get_sql("find_all_user_datasets"), user_name);
+    DatasetRowMapper row_mapper;
+    return data_source.query_for_deque(row_mapper, AbstractDAO::get_sql("find_all_user_datasets"), user_name);
 }
 
 bool PgDatasetDAO::link_user_to_dataset(const std::string &user_name, const datamodel::Dataset_ptr &dataset)
@@ -106,11 +106,11 @@ bool PgDatasetDAO::unlink_user_from_dataset(const std::string &user_name, const 
 // TODO Return a set of bigints
 PgDatasetDAO::UserDatasetPairs PgDatasetDAO::get_active_datasets()
 {
-    UserDatasetRowMapper rowMapper;
+    UserDatasetRowMapper row_mapper;
 
     PgDatasetDAO::UserDatasetPairs result;
 
-    for (auto p: data_source.query_for_array(rowMapper, AbstractDAO::get_sql("get_active_datasets")))
+    for (auto p: data_source.query_for_array(row_mapper, AbstractDAO::get_sql("get_active_datasets")))
         result.emplace_back(p->first, p->second);
 
     return result;

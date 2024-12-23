@@ -65,7 +65,7 @@ public:
 
     const std::string &get_logical_name() const;
 
-    void set_logical_name(const std::string &logicalName);
+    void set_logical_name(const std::string &p_input_queue);
 
     const std::string &get_owner_user_name() const;
 
@@ -79,7 +79,7 @@ public:
 
     void set_time_zone(const std::string &time_zone);
 
-    const std::string get_value_column(const size_t i) const;
+    const std::string &get_value_column(const size_t i) const;
 
     const std::deque<std::string> &get_value_columns() const;
 

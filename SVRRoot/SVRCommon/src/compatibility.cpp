@@ -7,6 +7,7 @@
 
 #include "common/parallelism.hpp"
 
+#include "util/validation_utils.hpp"
 
 namespace svr {
 
@@ -15,8 +16,8 @@ namespace svr {
 
 #include <cxxabi.h>
 
-std::string demangle(const std::string &name) {
-
+std::string demangle(const std::string &name)
+{
     int status = -1;
     std::unique_ptr<char, void(*)(void*)> res {abi::__cxa_demangle(name.c_str(), NULL, NULL, &status), std::free};
     return !status ? res.get() : name;
