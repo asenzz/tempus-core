@@ -6,3 +6,4 @@ SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_1_test_data.sql filt
 /SVRRoot/OnlineSVR/test/online_emd_test_data/transform_input_eurusd_avg_1_cvmd_level_0 filter=lfs diff=lfs merge=lfs -text
 /SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_1_test_data.sql.bz2 filter=lfs diff=lfs merge=lfs -text
 /SVRRoot/OnlineSVR/test/online_emd_test_data/transform_input_eurusd_avg_1_cvmd_level_0.bz2 filter=lfs diff=lfs merge=lfs -text
+lib/magma-tempus-backup.tar.bz2 filter=lfs diff=lfs merge=lfs -text
