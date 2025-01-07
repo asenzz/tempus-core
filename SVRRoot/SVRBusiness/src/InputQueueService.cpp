@@ -381,7 +381,7 @@ InputQueueService::validate_decon_data(const datamodel::InputQueue &input_queue,
         && input_queue.front()->get_value_time() == decon_queue.front()->get_value_time()
         && input_queue.size() == decon_queue.size()) {
         LOG4_DEBUG("Input queue " << input_queue.get_table_name() << " and decon queue " << decon_queue.get_table_name() << " seem to be equal.");
-        return boost::posix_time::min_date_time;
+        return boost::posix_time::max_date_time;
     }
 
 #ifdef INDEPTH_COMPARE
@@ -437,7 +437,7 @@ InputQueueService::prepare_queues(datamodel::Dataset &dataset)
         for (const auto &p_ensemble: dataset.get_ensembles()) {
             DeconQueueService::prepare_decon(dataset, *dataset.get_input_queue(), *p_ensemble->get_decon_queue());
             std::map<InputQueue_ptr, DeconQueue_ptr> aux_decon_queues;
-            OMP_TASKLOOP_1()
+//            OMP_TASKLOOP_1() // Started crashing because ICPX
             for (const auto &p_ensemble_aux_decon: p_ensemble->get_aux_decon_queues())
                 DeconQueueService::prepare_decon(dataset, *dataset.get_aux_input_queue(p_ensemble_aux_decon->get_input_queue_table_name()), *p_ensemble_aux_decon);
         }
@@ -447,7 +447,7 @@ InputQueueService::prepare_queues(datamodel::Dataset &dataset)
             OMP_TASKLOOP_1()
             for (const auto &p_ensemble: dataset.get_ensembles()) {
                 APP.decon_queue_service.save(p_ensemble->get_decon_queue());
-                OMP_TASKLOOP_1()
+//                OMP_TASKLOOP_1()
                 for (const auto &p_aux_decon_decon_queue: p_ensemble->get_aux_decon_queues())
                     APP.decon_queue_service.save(p_aux_decon_decon_queue);
             }

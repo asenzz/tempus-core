@@ -54,7 +54,7 @@ struct device_info
 #endif
 };
 
-template<const uint16_t ctx_per_gpu>
+template<const uint16_t ctx_per_gpu = 1>
 class gpu_handler : boost::noncopyable
 {
 #ifdef IPC_GPU
@@ -79,11 +79,17 @@ public:
 
     std::deque<uint16_t> get_free_gpus(const uint16_t gpu_ct);
 
-    void return_gpu(const uint16_t id);
+    void return_gpu(const uint16_t context_id);
 
     void return_gpus(uint16_t gpu_ct);
 
     void sort_free_gpus();
+
+    uint16_t context_id(const DTYPE(available_devices_)::const_iterator &it) const;
+
+    static uint16_t dev_id(const uint16_t context_id);
+
+    static uint16_t stream_id(const uint16_t context_id);
 
     gpu_handler(const gpu_handler &) = delete;
 
@@ -133,6 +139,8 @@ public:
 
     uint16_t phy_id() const;
 
+    uint16_t stream_id() const;
+
     viennacl::ocl::context &ctx() const;
 
     operator bool() const;
@@ -168,7 +176,7 @@ public:
 
 namespace cl12 {
 template<typename cl_class>
-struct naf : public cl_class// Null at finish
+struct naf : public cl_class // Null at finish
 {
     template<class handler_type>
     naf(handler_type const &handler) : cl_class(handler)

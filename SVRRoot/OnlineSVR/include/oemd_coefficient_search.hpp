@@ -39,9 +39,6 @@ class oemd_coefficients_search {
 
     void smoothen_mask(std::vector<double> &mask, common::t_drand48_data_ptr buffer);
 
-    std::vector<double>
-    fill_auto_matrix(const uint32_t M, const uint16_t siftings, const uint32_t N, CPTRd x);
-
     void transform(double *d_values, CPTRd d_mask, const uint32_t input_len, const uint32_t mask_size, const uint16_t siftings, double *d_temp, const cudaStream_t custream) const;
 
     // 18k mask len is the maximum for 16GB video card that won't make OSQP crash

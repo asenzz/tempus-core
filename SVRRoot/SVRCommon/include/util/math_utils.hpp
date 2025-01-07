@@ -11,8 +11,9 @@
 #include <numeric>
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
-#include <common.hpp>
+#include <boost/math/ccmath/ccmath.hpp>
 #include <mkl_cblas.h>
+#include "common.hpp"
 #include "common/compatibility.hpp"
 #include "util/math_utils.hpp"
 #include "common/gpu_handler.hpp"
@@ -37,7 +38,7 @@ template <typename A, typename B> using common_signed_t = std::conditional_t<std
 #define OMPMINAS(X, Y) X = _MIN(X, Y)
 #define OMPMAXAS(X, Y) X = _MAX(X, Y)
 
-#define CDIV(X, Y) std::ceil(double(X) / double(Y))
+#define CDIV(X, Y) boost::math::ccmath::ceil(double(X) / double(Y))
 #define CDIVI(X, Y) ((X) / (Y) + ((X) % (Y) != 0))
 #define LDi(i, m, ld) (((i) % (m)) + ((i) / (m)) * (ld))
 
@@ -65,7 +66,7 @@ template <typename Dividend, typename Divisor> inline constexpr common_signed_t<
     }
 }
 
-template<typename T1, typename T2> inline T1 cdiv(const T1 l, const T2 r) { return CDIV((l), (r)); }
+template<typename T1, typename T2> inline constexpr T1 cdiv(const T1 l, const T2 r) { return CDIV((l), (r)); }
 
 std::vector<double> operator*(const std::vector<double> &v1, const double &m);
 
@@ -604,7 +605,7 @@ template<typename T> inline T scale(const T &v, const double sf, const double dc
 template<> arma::mat scale(const arma::mat &m, const double sf, const double dc);
 
 
-template<typename T> inline T &scale_I(T &v, const double sf, const double dc)
+template<typename T> __host__ __device__ inline T &scale_I(T &v, const double sf, const double dc)
 {
     return v = (v - dc) / sf;
 }

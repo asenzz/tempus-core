@@ -167,7 +167,7 @@ template<typename T> inline unsigned adj_threads(const T iterations)
 }
 
 #define ADJ_THREADS(T) num_threads(adj_threads(T))
-
+#define ADJ_THREADS_MIN(T1, T2) num_threads(adj_threads(std::min<DTYPE(T1)>(T1, T2)))
 
 class t_omp_lock {
     omp_lock_t l;

@@ -27,9 +27,11 @@ namespace kernel::path {
 
 constexpr double C_overscale = 2;
 
+#define DBLTILE(x) double (x)[common::C_cu_tile_width][common::C_cu_tile_width]
+
 __device__ __forceinline__ double
-do_product_sum(const uint32_t rows, const uint16_t lag, const uint16_t dim, const uint16_t lag_TILE_WIDTH, const double lambda, const double tau,
-               CRPTRd X, CRPTRd Y, double power_mult[32], double ta[32][32], double tam1[32][32], double tb[32][32], double tbm1[32][32],
+do_product_sum(const uint32_t rows, const uint16_t lag, const uint16_t dim, const uint16_t lag_TILE_WIDTH, const double lambda, const double tau, CRPTRd X, CRPTRd Y,
+               double power_mult[common::C_cu_tile_width], DBLTILE(ta), DBLTILE(tam1), DBLTILE(tb), DBLTILE(tbm1),
                const uint32_t kk, const uint32_t mm, const bool kk_X, const bool mm_Y, const bool do_matrix_product_sum)
 {
     double matrix_prod_sum = 0;
@@ -41,7 +43,7 @@ UNROLL()
             const auto kk_internal_big_TILE_WIDTH = kk_internal_big * common::C_cu_tile_width;
             const auto ty_kk_internal_big_TILE_WIDTH = ty + kk_internal_big_TILE_WIDTH;
             if (ty_kk_internal_big_TILE_WIDTH < lag) {
-                if (!tx) power_mult[ty] = pow(1. / double(lag - ty_kk_internal_big_TILE_WIDTH), lambda);
+                if (tx == 0) power_mult[ty] = pow(1. / double(lag - ty_kk_internal_big_TILE_WIDTH), lambda);
                 if (kk_X) {
                     ta[tx][ty] = blockXX(kk, ty_kk_internal_big_TILE_WIDTH + jA_lag);
                     if (ty_kk_internal_big_TILE_WIDTH) tam1[tx][ty] = ta[tx][ty] - blockXX(kk, ty_kk_internal_big_TILE_WIDTH + jA_lag - 1);
@@ -82,11 +84,8 @@ G_distances_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows
 {
     if (blockIdx.x * blockDim.x >= X_cols || blockIdx.y * blockDim.y >= Y_cols) return;
 
-    __shared__ double power_mult[common::C_cu_tile_width];
-    __shared__ double ta[common::C_cu_tile_width][common::C_cu_tile_width];
-    __shared__ double tam1[common::C_cu_tile_width][common::C_cu_tile_width]; // for index-1
-    __shared__ double tb[common::C_cu_tile_width][common::C_cu_tile_width];
-    __shared__ double tbm1[common::C_cu_tile_width][common::C_cu_tile_width]; // for index-1
+    __shared__ double power_mult[common::C_cu_tile_width], ta[common::C_cu_tile_width][common::C_cu_tile_width], tb[common::C_cu_tile_width][common::C_cu_tile_width];
+    __shared__ double tam1[common::C_cu_tile_width][common::C_cu_tile_width], tbm1[common::C_cu_tile_width][common::C_cu_tile_width]; // for index-1
 
     const auto kk = threadIdx.x + blockIdx.x * blockDim.x;
     const auto mm = threadIdx.y + blockIdx.y * blockDim.y;
@@ -109,11 +108,8 @@ G_kernel_xy(const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, c
 {
     if (blockIdx.x * blockDim.x >= X_cols || blockIdx.y * blockDim.y >= Y_cols) return;
 
-    __shared__ double power_mult[common::C_cu_tile_width];
-    __shared__ double ta[common::C_cu_tile_width][common::C_cu_tile_width];
-    __shared__ double tam1[common::C_cu_tile_width][common::C_cu_tile_width];
-    __shared__ double tb[common::C_cu_tile_width][common::C_cu_tile_width];
-    __shared__ double tbm1[common::C_cu_tile_width][common::C_cu_tile_width];
+    __shared__ double power_mult[common::C_cu_tile_width], ta[common::C_cu_tile_width][common::C_cu_tile_width], tb[common::C_cu_tile_width][common::C_cu_tile_width];
+    __shared__ double tam1[common::C_cu_tile_width][common::C_cu_tile_width], tbm1[common::C_cu_tile_width][common::C_cu_tile_width]; // for index-1
 
     const auto kk = threadIdx.x + blockIdx.x * blockDim.x;
     const auto mm = threadIdx.y + blockIdx.y * blockDim.y;
@@ -140,7 +136,7 @@ std::pair<double, double> cu_distances_xy(
         const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint16_t lag, const uint16_t dim, const uint16_t lag_TILE_WIDTH, const double lambda,
             const double tau, CRPTRd X, CRPTRd Y, RPTR(double) Z, const cudaStream_t custream)
 {
-    G_distances_xy<<<CU_BLOCKS_THREADS_2D2(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
+    G_distances_xy<<<CU_BLOCKS_THREADS_2D2(_MAX(common::C_cu_tile_width, X_cols), _MAX(common::C_cu_tile_width, Y_cols)), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
     // const auto min = 0; const auto max = 1;
     const auto n = X_cols * Y_cols;
     auto [mean, min, max] = solvers::meanminmax(Z, n, custream);
@@ -150,13 +146,14 @@ std::pair<double, double> cu_distances_xy(
     return {min, max};
 }
 
+#define PATH_BLOCKS(x, y) CU_BLOCKS_THREADS_2D2(_MAX(common::C_cu_tile_width, (x)), _MAX(common::C_cu_tile_width, (y)))
 
 std::pair<double, double> cu_kernel_xy(
         const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint16_t lag, const uint16_t dim, const uint16_t lag_TILE_WIDTH, const double lambda,
         const double tau, const double gamma, CRPTRd X, CRPTRd Y, RPTR(double) Z, const cudaStream_t custream)
 {
     // G_kernel_xy<<<CU_BLOCKS_THREADS_2D2(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, gamma, X, Y, Z);
-    G_distances_xy<<<CU_BLOCKS_THREADS_2D2(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
+    G_distances_xy<<<PATH_BLOCKS(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
     const auto n = X_cols * Y_cols;
     // const auto min = 0; const auto max = 1;
     auto [mean, min, max] = solvers::meanminmax(Z, n, custream);
@@ -171,7 +168,7 @@ void cu_distances_xy(
         const uint32_t X_cols, const uint32_t Y_cols, const uint32_t rows, const uint16_t lag, const uint16_t dim, const uint16_t lag_TILE_WIDTH, const double lambda,
         const double tau, const double min_Z, const double max_Z, CRPTRd X, CRPTRd Y, RPTR(double) Z, const cudaStream_t custream)
 {
-    G_distances_xy<<<CU_BLOCKS_THREADS_2D2(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
+    G_distances_xy<<<PATH_BLOCKS(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
     const auto n = X_cols * Y_cols;
     // Rewrite G_threshold<<<CU_BLOCKS_THREADS(n), 0, custream>>>(v, n, meanabs_Z);
     solvers::G_normalize_distances_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(Z, min_Z, max_Z, n);
@@ -184,12 +181,11 @@ void cu_kernel_xy(
         const double tau, const double gamma, const double min_Z, const double max_Z, CRPTRd X, CRPTRd Y, RPTR(double) Z, const cudaStream_t custream)
 {
     // G_kernel_xy<<<CU_BLOCKS_THREADS_2D2(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, gamma, X, Y, Z); // TODO fix and retest
-    G_distances_xy<<<CU_BLOCKS_THREADS_2D2(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
+    G_distances_xy<<<PATH_BLOCKS(X_cols, Y_cols), 0, custream>>>(X_cols, Y_cols, rows, lag, dim, lag_TILE_WIDTH, lambda, tau, X, Y, Z);
     const auto n = X_cols * Y_cols;
-    // TODO Rewrite G_threshold<<<CU_BLOCKS_THREADS(n), 0, custream>>>(v, n, meanabs_Z);
+    // TODO Rewrite and test G_threshold<<<CU_BLOCKS_THREADS(n), 0, custream>>>(v, n, meanabs_Z);
     solvers::G_normalize_distances_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(Z, min_Z, max_Z, n);
     solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(n), 0, custream>>>(Z, n, gamma);
-    return;
 }
 
 std::pair<double, double> distances_xx(const uint32_t cols, const uint32_t rows, const uint16_t lag, const double lambda, const double tau, CRPTR(double) X, RPTR(double) Z)
@@ -261,6 +257,26 @@ void kernel_xy(
     const auto K_size = K_len * sizeof(double);
     double *d_K;
     CTX4_CUSTREAM;
+    const auto d_X = cumallocopy(X, custream, X_cols * rows);
+    const auto d_Xy = cumallocopy(Xy, custream, Xy_cols * rows);
+    cu_errchk(cudaMallocAsync(&d_K, K_size, custream));
+    cu_kernel_xy(X_cols, Xy_cols, rows, lag, rows / lag, CDIVI(lag, common::C_cu_tile_width), lambda, tau, gamma, min_Z, max_Z, d_X, d_Xy, d_K, custream);
+    cu_errchk(cudaFreeAsync(d_X, custream));
+    cu_errchk(cudaFreeAsync(d_Xy, custream));
+    cu_errchk(cudaMemcpyAsync(K, d_K, K_size, cudaMemcpyDeviceToHost, custream));
+    cu_errchk(cudaFreeAsync(d_K, custream));
+    cusyndestroy(custream);
+}
+
+void kernel_xy(
+        const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint16_t lag,
+        const double gamma, const double lambda, const double tau, const double min_Z, const double max_Z,
+        const double *const X, const double *const Xy, double *K, const uint16_t gpu_id)
+{
+    const auto K_len = X_cols * Xy_cols;
+    const auto K_size = K_len * sizeof(double);
+    double *d_K;
+    DEV_CUSTREAM(gpu_id);
     const auto d_X = cumallocopy(X, custream, X_cols * rows);
     const auto d_Xy = cumallocopy(Xy, custream, Xy_cols * rows);
     cu_errchk(cudaMallocAsync(&d_K, K_size, custream));

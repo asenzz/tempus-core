@@ -2,6 +2,7 @@
 // Created by zarko on 9/29/22.
 //
 
+#include <jemalloc/jemalloc.h>
 #include <ipp/ipp.h>
 #include <execution>
 #include <cublas_v2.h>
@@ -60,7 +61,7 @@ arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, co
         }
         score[i] = 1. / std::abs(
                 arma::mean(arma::vectorise(labels.row(i))) - arma::mean(arma::vectorise(labels.rows(start_i, end_i))) *
-                arma::mean(arma::vectorise(features_t.col(i)) - arma::mean(arma::vectorise(features_t.cols(start_i, end_i)))));
+                                                             arma::mean(arma::vectorise(features_t.col(i)) - arma::mean(arma::vectorise(features_t.cols(start_i, end_i)))));
     }
     return score;
 }
@@ -91,8 +92,8 @@ void OnlineMIMOSVR::tune_fast()
     weight_chunks.resize(num_chunks);
 
 #ifdef KERNEL_PARAM_3
-    constexpr uint16_t opt_particles = 50;
-    constexpr uint16_t opt_iters = 50;
+    constexpr uint16_t opt_particles = 64;
+    constexpr uint16_t opt_iters = 64;
     constexpr uint16_t D = 3;
 #else
     constexpr uint8_t opt_particles = 40;
@@ -175,8 +176,9 @@ void OnlineMIMOSVR::tune_fast()
 
 #ifndef NDEBUG
         LOG4_TRACE("Before scaling chunk " << chunk_ix << ", tune labels " << common::present(tune_labels) << ", tune features " << common::present(tune_features_t) <<
-              ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features " << common::present(train_feature_chunks_t[chunk_ix]) <<
-              ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
+                                           ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features "
+                                           << common::present(train_feature_chunks_t[chunk_ix]) <<
+                                           ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
 #endif
 
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, lag, features_sf, train_feature_chunks_t[chunk_ix]);
@@ -251,12 +253,11 @@ void OnlineMIMOSVR::tune_fast()
         business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, lag, features_sf, tune_features_t);
         business::DQScalingFactorService::scale_labels(*p_labels_sf, tune_labels);
         LOG4_TRACE("After scaling chunk " << chunk_ix << ", tune labels " << common::present(tune_labels) << ", tune features " << common::present(tune_features_t) <<
-                                          ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features "
-                                          << common::present(train_feature_chunks_t[chunk_ix]) <<
-                                          ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
+            ", train labels " << common::present(train_label_chunks[chunk_ix]) << ", train features " << common::present(train_feature_chunks_t[chunk_ix]) <<
+                ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
 
-        const auto &train_cuml = ccache().get_cached_cumulatives(*p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
-        const auto &tune_cuml = ccache().get_cached_cumulatives(*p_chunk_params, tune_features_t, last_trained_time);
+        const auto &train_cuml = ccache().get_cumulatives(*p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
+        const auto &tune_cuml = ccache().get_cumulatives(*p_chunk_params, tune_features_t, last_trained_time);
         assert(tune_labels.n_rows - C_test_len - ixs[chunk_ix].n_elem == 0);
         tune_labels *= C_diff_coef;
         t_omp_lock chunk_preds_l;
@@ -270,57 +271,59 @@ void OnlineMIMOSVR::tune_fast()
             W_train = weight_matrix(ixs[chunk_ix], *p_input_weights);
         }
 #endif
-        auto costF = [&, lag](const double x[], double *const f) {
-            ++call_ct;
-            const auto xx = optimizer::pprune::ensure_bounds(x, bounds);
-            const auto lambda = (C_tune_range_max_lambda - C_tune_range_min_lambda) * xx[1] + C_tune_range_min_lambda;
+        {
+            cuvalidate cv(
+                    lag, tune_cuml, train_cuml, tune_features_t, train_feature_chunks_t[chunk_ix], tune_labels, train_label_chunks[chunk_ix], W_tune, W_train, train_L_m, labels_f);
+            auto costF = [&](const double x[], double *const f) {
+                ++call_ct;
+                const auto xx = optimizer::pprune::ensure_bounds(x, bounds);
+                const auto lambda = (C_tune_range_max_lambda - C_tune_range_min_lambda) * xx[1] + C_tune_range_min_lambda;
 #ifdef KERNEL_PARAM_3
-            constexpr double C_tune_range_max_tau = 10;
-            const auto tau = xx[2] * C_tune_range_max_tau;
+                constexpr double C_tune_range_max_tau = 10;
+                const auto tau = xx[2] * C_tune_range_max_tau;
 #else
-            constexpr double tau = 1;
+                constexpr double tau = 1;
 #endif
-            const auto [score, gamma, epsco, p_predictions] = cuvalidate(
-                    lambda, xx[0], tau, lag, tune_cuml, train_cuml, tune_features_t, train_feature_chunks_t[chunk_ix], tune_labels, train_label_chunks[chunk_ix], W_tune, W_train,
-                    train_L_m, labels_f);
-            *f = score;
-            chunk_preds_l.set();
-            const auto prev_score = tune_results.param_pred.front().score;
-            if (score < prev_score) {
-                p_chunk_params->set_svr_kernel_param(gamma);
-                p_chunk_params->set_svr_kernel_param2(lambda);
+                const auto [score, gamma, epsco, p_predictions] = cv(lambda, xx[0], tau);
+                *f = score;
+                chunk_preds_l.set();
+                const auto prev_score = tune_results.param_pred.front().score;
+                if (score < prev_score) {
+                    p_chunk_params->set_svr_kernel_param(gamma);
+                    p_chunk_params->set_svr_kernel_param2(lambda);
 #ifdef KERNEL_PARAM_3
-                p_chunk_params->set_kernel_param3(tau);
+                    p_chunk_params->set_kernel_param3(tau);
 #endif
-                p_chunk_params->set_svr_C(1. / epsco);
-                if (PROPS.get_recombine_parameters()) {
-                    std::rotate(tune_results.param_pred.begin(), tune_results.param_pred.begin() + 1, tune_results.param_pred.end());
-                    tune_results.param_pred.front().free();
-                    tune_results.param_pred.front().p_predictions = p_predictions;
-                    tune_results.param_pred.front().params = *p_chunk_params;
+                    p_chunk_params->set_svr_C(1. / epsco);
+                    if (PROPS.get_recombine_parameters()) {
+                        std::rotate(tune_results.param_pred.begin(), tune_results.param_pred.begin() + 1, tune_results.param_pred.end());
+                        tune_results.param_pred.front().free();
+                        tune_results.param_pred.front().p_predictions = p_predictions;
+                        tune_results.param_pred.front().params = *p_chunk_params;
+                    }
+                    tune_results.param_pred.front().score = score;
+                    LOG4_TRACE("New best score " << score << ", previous best " << prev_score << ", improvement " << common::imprv(score, prev_score) << "pc, parameters " <<
+                                                 *p_chunk_params << ", prima callback count " << call_ct << ", opt arg " << arma::conv_to<arma::rowvec>::from(xx));
+                    chunk_preds_l.unset();
+                    return;
                 }
-                tune_results.param_pred.front().score = score;
-                LOG4_TRACE("New best score " << score << ", previous best " << prev_score << ", improvement " << common::imprv(score, prev_score) << "pc, parameters " <<
-                                             *p_chunk_params << ", prima callback count " << call_ct << ", opt arg " << arma::conv_to<arma::rowvec>::from(xx));
                 chunk_preds_l.unset();
-                return;
-            }
-            chunk_preds_l.unset();
+                if (PROPS.get_recombine_parameters()) {
+                    t_param_preds::free_predictions(p_predictions);
+                    delete p_predictions;
+                }
+            };
+            const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, opt_particles, bounds, costF, opt_iters, 0, 0, x0);
+            RELEASE_CONT(chunk_ixs_tune);
+            RELEASE_CONT(tune_labels);
+            RELEASE_CONT(tune_features_t);
+            // p_chunk_params->set_svr_kernel_param2(res.best_parameters[1] * (C_tune_range_max_lambda - C_tune_range_min_lambda) + C_tune_range_min_lambda);
+            // const auto &Z = ccache().get_Z(*p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
+            // p_chunk_params->set_svr_kernel_param(calc_gamma(Z, train_label_chunks[chunk_ix], res.best_parameters[0]));
             if (PROPS.get_recombine_parameters()) {
-                t_param_preds::free_predictions(p_predictions);
-                delete p_predictions;
+                tune_results.param_pred.front().params = *p_chunk_params;
+                tune_results.param_pred.front().score = res.best_score;
             }
-        };
-        const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, opt_particles, bounds, costF, opt_iters, 0, 0, x0);
-        RELEASE_CONT(chunk_ixs_tune);
-        RELEASE_CONT(tune_labels);
-        RELEASE_CONT(tune_features_t);
-        // p_chunk_params->set_svr_kernel_param2(res.best_parameters[1] * (C_tune_range_max_lambda - C_tune_range_min_lambda) + C_tune_range_min_lambda);
-        // const auto &Z = ccache().get_cached_Z(*p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
-        // p_chunk_params->set_svr_kernel_param(calc_gamma(Z, train_label_chunks[chunk_ix], res.best_parameters[0]));
-        if (PROPS.get_recombine_parameters()) {
-            tune_results.param_pred.front().params = *p_chunk_params;
-            tune_results.param_pred.front().score = res.best_score;
         }
         chunks_score[chunk_ix].first = tune_results.param_pred.front().score;
         tune_results.labels = test_labels;
@@ -335,6 +338,8 @@ void OnlineMIMOSVR::tune_fast()
             set_params(p_chunk_params, chunk_ix);
         p_kernel_matrices->at(chunk_ix) = *prepare_K(ccache(), *p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
         // p_chunk_params->set_svr_C(1. / calc_epsco(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix]));
+        mallctl("prof.dump", NULL, NULL, NULL, 0);
+        std::this_thread::sleep_for(std::chrono::seconds(30));
         calc_weights(chunk_ix, PROPS.get_stabilize_iterations_count(), ixs[chunk_ix].n_rows * C_solve_opt_coef);
         LOG4_INFO("Tune best score " << chunks_score[chunk_ix] << ", final parameters " << *p_chunk_params);
     }

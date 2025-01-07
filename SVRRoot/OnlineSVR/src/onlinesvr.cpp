@@ -40,7 +40,7 @@ class onlinesvr_lib_init {
 public:
     onlinesvr_lib_init()
     {
-        mlockall(MCL_CURRENT | MCL_FUTURE);
+        // mlockall(MCL_CURRENT | MCL_FUTURE);
         // ip_errchk(ippInit());
         ma_errchk(magma_init());
         static int petsc_argc = 1;
@@ -54,7 +54,7 @@ public:
 
     ~onlinesvr_lib_init()
     {
-        munlockall();
+        // munlockall();
         PetscFinalize();
     }
 };
@@ -412,16 +412,17 @@ void OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::ma
 
 #if 1
 
-    constexpr uint16_t C_hybrid_solve_threshold = 16000;
+    solvers::score_weights sw(K, rhs, K.n_rows, rhs.n_cols, rhs.n_elem, K.n_elem);
+    constexpr uint16_t C_hybrid_solve_threshold = 6000; // CUDA score seems to shave off 2% of alpha
     const auto loss_fun =
             K.n_rows < C_hybrid_solve_threshold ?
-            (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size](CPTRd x, double *const f) {
+            (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size](CPTRd x, RPTR(double) f) {
                 auto tmp = (double *) alloca(rhs_size);
                 self_predict(K.n_rows, rhs.n_cols, K.mem, x, rhs.mem, tmp);
                 *f = cblas_dasum(rhs.n_elem, tmp, 1);
-            } : (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size](CPTRd x, double *const f) {
-                *f = solvers::score_weights(K.mem, x, rhs.mem, K.n_rows, rhs.n_cols, rhs.n_elem, K.n_elem);
-                if (*f) return;
+            } : (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size, &sw](CPTRd x, RPTR(double) f) {
+                *f = sw(x);
+                if (std::isnormal(*f)) return;
                 auto tmp = (double *) alloca(rhs_size);
                 self_predict(K.n_rows, rhs.n_cols, K.mem, x, rhs.mem, tmp);
                 *f = cblas_dasum(rhs.n_elem, tmp, 1);
@@ -431,7 +432,6 @@ void OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::ma
     bounds.col(1).fill(lim);
     const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, C_solve_opt_particles, bounds, loss_fun, iters, 0, 0, solved);
     memcpy(solved.memptr(), res.best_parameters.mem, rhs_size);
-
 #else // Solve using PETSc
 
     Vec x, xl, xu, b;                       // Solution and RHS vectors
@@ -810,9 +810,9 @@ bool OnlineMIMOSVR::is_gradient() const
 
 mat_ptr OnlineMIMOSVR::all_cumulatives(const SVRParameters &p, const arma::mat &features_t)
 {
-    const unsigned lag = p.get_lag_count();
-    const unsigned levels = features_t.n_rows / lag;
-    auto cuml = ptr<arma::mat>(arma::size(features_t), arma::fill::none);
+    const auto lag = p.get_lag_count();
+    const DTYPE(lag) levels = features_t.n_rows / lag;
+    const auto cuml = ptr<arma::mat>(arma::size(features_t), arma::fill::none);
     OMP_FOR_i(levels) cuml->rows(i * lag, (i + 1) * lag - 1) = arma::cumsum(features_t.rows(i * lag, (i + 1) * lag - 1));
     LOG4_TRACE("Prepared " << levels << " cumulatives with " << lag << " lag, from features t " << arma::size(features_t));
     return cuml;
@@ -822,8 +822,8 @@ mat_ptr OnlineMIMOSVR::all_cumulatives(const SVRParameters &p, const arma::mat &
 std::shared_ptr<std::deque<arma::mat>> OnlineMIMOSVR::prepare_cumulatives(const SVRParameters &params, const arma::mat &features_t)
 {
     const auto lag = params.get_lag_count();
-    const auto levels = features_t.n_rows / lag;
-    const auto p_cums = otr<std::deque<arma::mat>>(levels);
+    const DTYPE(lag) levels = features_t.n_rows / lag;
+    const auto p_cums = ptr<std::deque<arma::mat>>(levels);
     OMP_FOR_i(levels) p_cums->at(i) = arma::cumsum(features_t.rows(i * lag, (i + 1) * lag - 1));
     LOG4_TRACE("Prepared " << levels << " cumulatives with " << lag << " lag, parameters " << params << ", from features_t " << arma::size(features_t));
     return p_cums;
@@ -834,6 +834,7 @@ double OnlineMIMOSVR::calc_epsco(const arma::mat &K, const arma::mat &labels)
 {
     return arma::mean(arma::mean(labels, 1) - arma::sum(K, 1));
 }
+
 
 std::array<double, OnlineMIMOSVR::C_epscos_len> OnlineMIMOSVR::get_epscos(const double K_mean)
 {
@@ -895,7 +896,7 @@ mat_ptr OnlineMIMOSVR::prepare_Z(business::calc_cache &ccache, SVRParameters &pa
             *p_Z = kernel::path_distances_t(features_t, features_t, params.get_lag_count(), params.get_svr_kernel_param2(), params.get_kernel_param3());
 #else
             const auto [min_Z, max_Z] = kernel::path::distances_xx(features_t.n_cols, features_t.n_rows, params.get_lag_count(), params.get_svr_kernel_param2(), params.get_kernel_param3(),
-                                          ccache.get_cached_cumulatives(params, features_t, time).mem, p_Z->memptr());
+                                          ccache.get_cumulatives(params, features_t, time).mem, p_Z->memptr());
             params.set_min_Z(min_Z);
             params.set_max_Z(max_Z);
 #endif
@@ -951,8 +952,8 @@ mat_ptr OnlineMIMOSVR::prepare_Zy(business::calc_cache &ccache, const SVRParamet
             kernel::path::distances_xy(features_t.n_cols, predict_features_t.n_cols, features_t.n_rows, params.get_lag_count(),
                                           params.get_svr_kernel_param2(), params.get_kernel_param3(),
                                           params.get_min_Z(), params.get_max_Z(),
-                                          ccache.get_cached_cumulatives(params, features_t, trained_time).mem,
-                                          ccache.get_cached_cumulatives(params, predict_features_t, predict_time).mem,
+                                          ccache.get_cumulatives(params, features_t, trained_time).mem,
+                                          ccache.get_cumulatives(params, predict_features_t, predict_time).mem,
                                           p_Zy->memptr());
 #endif
             LOG4_DEBUG("Returning Zy " << arma::size(*p_Zy) << ", features t " << arma::size(features_t) << ", predict features t " << arma::size(predict_features_t) <<
@@ -1002,7 +1003,7 @@ mat_ptr OnlineMIMOSVR::prepare_K(business::calc_cache &ccache, SVRParameters &pa
     switch (params.get_kernel_type()) {
         case e_kernel_type::PATH: {
             auto K = ptr<arma::mat>(x_t.n_cols, x_t.n_cols, arma::fill::none);
-            solvers::kernel_from_distances(K->memptr(), ccache.get_cached_Z(params, x_t, time).mem, K->n_rows, K->n_cols, params.get_svr_kernel_param());
+            solvers::kernel_from_distances(K->memptr(), ccache.get_Z(params, x_t, time).mem, K->n_rows, K->n_cols, params.get_svr_kernel_param());
             return K;
         }
         default:
@@ -1046,8 +1047,7 @@ mat_ptr OnlineMIMOSVR::prepare_Ky(
     switch (params.get_kernel_type()) {
         case datamodel::e_kernel_type::PATH: {
             solvers::kernel_from_distances(
-                    Ky->memptr(),
-                    ccache.get_cached_Zy(params, x_train_t, x_predict_t, predict_time, trained_time).mem,
+                    Ky->memptr(), ccache.get_Zy(params, x_train_t, x_predict_t, predict_time, trained_time).mem,
                     Ky->n_rows, Ky->n_cols, params.get_svr_kernel_param());
             break;
         }
@@ -1092,24 +1092,27 @@ mat_ptr OnlineMIMOSVR::prepare_Ky(business::calc_cache &ccache, const datamodel:
     assert(x_train_t.n_rows == x_predict_t.n_rows);
     switch (params.get_kernel_type()) {
         case datamodel::e_kernel_type::PATH: {
-            const uint16_t cols_dev = CDIVI(x_train_t.n_cols, devices);
+            const uint16_t cols_dev = x_train_t.n_cols / devices;
 #ifdef NEW_PATH
             auto Ky = ptr<arma::mat>();
             *Ky = kernel::path_distances_t(x_train_t, x_predict_t, params.get_lag_count(), params.get_svr_kernel_param2(), params.get_kernel_param3());
             solvers::kernel_from_distances_I(*Ky, params.get_svr_kernel_param());
 #else
             auto Ky = ptr<arma::mat>(x_predict_t.n_cols, x_train_t.n_cols, arma::fill::none);
-            const auto &cuml_train = ccache.get_cached_cumulatives(params, x_train_t, trained_time);
-            const auto &cuml_predict = ccache.get_cached_cumulatives(params, x_predict_t, predict_time);
+            const auto cuml_train = ccache.get_cumulatives(params, x_train_t, trained_time);
+            const auto cuml_predict = ccache.get_cumulatives(params, x_predict_t, predict_time);
 #endif
-            OMP_FOR(devices)
-            for (uint32_t i = 0; i < x_train_t.n_cols; i += cols_dev) {
-                const auto this_dev_cols = i + cols_dev > x_train_t.n_cols ? x_train_t.n_cols - i : cols_dev;
+            OMP_FOR_i(devices) {
+                const uint32_t start_col = i * cols_dev;
+                const auto this_dev_cols = i == devices - 1 ? x_train_t.n_cols - start_col : cols_dev;
                 kernel::path::kernel_xy(
                         this_dev_cols, x_predict_t.n_cols, x_train_t.n_rows,
                         params.get_lag_count(), params.get_svr_kernel_param(), params.get_svr_kernel_param2(), params.get_kernel_param3(), params.get_min_Z(), params.get_max_Z(),
-                        cuml_train.colptr(i), cuml_predict.mem, Ky->colptr(i));
+                        cuml_train.colptr(start_col), cuml_predict.mem, Ky->colptr(start_col), i);
             }
+            LOG4_TRACE("Train cuml t " << common::present(cuml_train) << ", from " << common::present(x_train_t) <<
+                ", predict cuml t " << common::present(cuml_predict) << ", from " << common::present(x_predict_t) <<
+                ", Ky " << common::present(*Ky) << ", parameters " << params << ", trained time " << trained_time << ", predict time " << predict_time);
             return Ky;
         }
         default:

@@ -85,7 +85,7 @@ long DataSource::batch_update(const std::string &table_name, const datamodel::Da
 
 void DataSource::upsert_row(CRPTR(char) table_name, CRPTR(char *) row_fields, const uint16_t n_fields)
 {
-    assert(n > 3);
+    assert(n_fields > 3);
     assert(table_name);
     assert(row_fields);
     assert(*row_fields);

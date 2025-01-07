@@ -201,9 +201,8 @@ DeconQueueService::deconstruct(
 
 
 void DeconQueueService::dummy_decon(
-        const datamodel::InputQueue &input_queue,
-        datamodel::DeconQueue &decon_queue,
-        const size_t levix, const size_t levct, const datamodel::t_iqscaler &iq_scaler)
+        const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue,
+        const uint16_t levix, const uint16_t levct, const datamodel::t_iqscaler &iq_scaler)
 {
     LOG4_DEBUG("Dummy decon of main input queue " << input_queue.get_table_name());
 
@@ -428,13 +427,12 @@ datamodel::DeconQueue_ptr DeconQueueService::find_decon_queue(
                                                       p_decon_queue->get_input_queue_column_name() == input_queue_column_name;
                                            }
     );
-
     if (p_decon_queue_iter == decon_queues.cend()) {
         LOG4_ERROR("Unable to find decon queue for input table name " << input_queue_table_name << ", input column " << input_queue_column_name << ", decon queues ct "
                                                                       << decon_queues.size());
         return nullptr;
     }
-
+    LOG4_END();
     return *p_decon_queue_iter;
 }
 

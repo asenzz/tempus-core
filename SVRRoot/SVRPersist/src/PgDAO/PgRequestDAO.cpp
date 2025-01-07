@@ -22,9 +22,9 @@ bigint PgRequestDAO::get_next_result_id()
     return data_source.query_for_type<bigint>(get_sql("get_next_result_id"));
 }
 
+// TODO Implement save a vector of requests at once
 int PgRequestDAO::save(const datamodel::MultivalRequest_ptr &request)
 {
-
     if (request->get_id() > 0) {
         return data_source.update(get_sql("multival_update"),
                                   request->dataset_id,

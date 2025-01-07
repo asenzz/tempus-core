@@ -535,6 +535,7 @@ find_nearest_before(
 data_row_container::const_iterator
 lower_bound(const data_row_container &data, const data_row_container::const_iterator &hint_start, const bpt::ptime &key)
 {
+    if (data.empty()) return data.end();
     return std::lower_bound(hint_start, data.cend(), key, comp_lb);
 }
 
@@ -542,18 +543,21 @@ lower_bound(const data_row_container &data, const data_row_container::const_iter
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
 {
+    if (data.empty()) return data.end();
     return std::lower_bound(data.cbegin(), hint_end, time_key, comp_lb);
 }
 
 data_row_container::iterator
 lower_bound_back(const data_row_container::iterator &begin, const data_row_container::iterator &end, const bpt::ptime &time_key)
 {
+    if (std::distance(begin, end) < 1) return end;
     return std::lower_bound(begin, end, time_key, comp_lb);
 }
 
 data_row_container::iterator
 lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
 {
+    if (data.empty()) return data.end();
     return std::lower_bound(data.begin(), hint_end, time_key, comp_lb);
 }
 
@@ -577,6 +581,10 @@ lower_bound_or_before_back(const data_row_container &data, const data_row_contai
         return data.cend();
     }
     auto row_iter = lower_bound_back(data, hint_end, time_key);
+    if (row_iter == data.cend()) {
+        if (row_iter == data.cbegin()) return row_iter;
+        --row_iter;
+    }
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() > time_key) --row_iter;
     if ((**row_iter).get_value_time() > time_key) LOG4_ERROR(
             "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
@@ -591,6 +599,10 @@ lower_bound_or_before_back(const data_row_container &data, const bpt::ptime &tim
         return data.cend();
     }
     auto row_iter = lower_bound_back(data, data.cend(), time_key);
+    if (row_iter == data.cend()) {
+        if (row_iter == data.cbegin()) return row_iter;
+        --row_iter;
+    }
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() > time_key) --row_iter;
     if ((**row_iter).get_value_time() > time_key) LOG4_ERROR(
             "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
@@ -606,6 +618,10 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
         return data.cend();
     }
     auto row_iter = lower_bound_back(data, hint_end, time_key);
+    if (row_iter == data.cend()) {
+        if (row_iter == data.cbegin()) return row_iter;
+        --row_iter;
+    }
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
     if ((**row_iter).get_value_time() >= time_key) LOG4_ERROR(
             "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
@@ -620,6 +636,10 @@ lower_bound_back_before(data_row_container &data, const data_row_container::iter
         return data.end();
     }
     auto row_iter = lower_bound_back(data, hint_end, time_key);
+    if (row_iter == data.end()) {
+        if (row_iter == data.begin()) return row_iter;
+        --row_iter;
+    }
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
     if ((**row_iter).get_value_time() > time_key)
         LOG4_ERROR("Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());

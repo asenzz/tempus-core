@@ -72,14 +72,14 @@ constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif
 #define MAIN_QUEUE_RES 3600
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
-const auto C_placement_delay = bpt::seconds(3);
+const auto C_placement_delay = bpt::seconds(2);
 const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_validation_window;
 const std::string C_test_input_name = "q_svrwave_test_xauusd_avg_";
 const std::string C_test_input_table_name = C_test_input_name + STR_MAIN_QUEUE_RES;
 const std::string C_test_aux_input_table_name = C_test_input_name + "1";
 constexpr uint16_t C_test_levels = 1;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
-constexpr auto C_overload_factor = 1.5; // Load surplus data from database just in case
+constexpr auto C_overload_factor = 1.5; // Load surplus data from database in case rows discarded during preparation
 const auto C_decon_tail = svr::datamodel::Dataset::get_residuals_length(C_test_levels);
 const uint32_t C_max_features_len = C_test_lag * datamodel::C_features_superset_coef * business::ModelService::C_max_quantisation;
 const uint32_t C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
@@ -204,11 +204,8 @@ TEST(manifold_tune_train_predict, basic_integration)
             business::IQScalingFactorService::unscale(*p_iqsf, recon_predicted);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_last_knowns);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);
-            const auto n_good_preds = common::C_integration_test_validation_window - common::C_cu_tile_width;
-            LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual.head_rows(n_good_preds) - recon_predicted.head_rows(n_good_preds))
-                                                              << ", last known to actual difference "
-                                                              << common::present<double>(recon_actual.head_rows(n_good_preds) - recon_last_knowns.head_rows(n_good_preds)));
-
+            LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual - recon_predicted) << ", last known to actual difference " <<
+                                                              common::present<double>(recon_actual - recon_last_knowns));
             double mae = 0, mae_lk = 0, recon_mae = 0, recon_lk_mae = 0, pips_won = 0, pips_lost = 0, drawdown = 0, max_drawdown = 0;
             uint16_t positive_mae_ct = 0, pos_direct = 0, price_hits = 0;
             const auto validated_ct = recon_actual.size();

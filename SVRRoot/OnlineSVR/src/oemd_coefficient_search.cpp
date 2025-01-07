@@ -39,7 +39,7 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
     for (DTYPE(end_i) i = 0; i < end_i; ++i) {
         std::complex<double> zz(1 - h_mask_fft[i].x, -h_mask_fft[i].y);
         std::complex<double> p(1, 0);
-        UNROLL()
+        // UNROLL()
         for (DTYPE(siftings) k = 0; k < siftings; ++k) p *= zz;
         result += std::norm(p) + fabs(1. - std::norm(cplx_one - p));
     }
@@ -47,7 +47,7 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
     for (auto i = end_i; i < h_mask_fft.size(); ++i) {
         std::complex<double> zz(h_mask_fft[i].x, h_mask_fft[i].y);
         std::complex<double> p(1, 0);
-        UNROLL()
+        // UNROLL()
         for (DTYPE(siftings) k = 0; k < siftings; ++k) p *= zz;
         result += i < h_mask_fft.size() * 2. * lambda2 / coeff ? std::norm(p) : C_smooth_factor * std::norm(p);
     }
@@ -253,7 +253,7 @@ oemd_coefficients_search::prepare_masks(
         LOG4_DEBUG("Resizing last mask " << masks.size() - 1 << " to " << C_fir_mask_end_len);
         masks.back().resize(C_fir_mask_end_len);
     }
-    OMP_FOR(masks.size() - 1)
+    // OMP_FOR(masks.size() - 1)
     for (uint16_t i = 1; i < masks.size() - 1; ++i) { // TODO Masks are in inverted order, fix!
         const auto new_size = (uint32_t) round(
                 std::pow<double>(C_fir_mask_start_len, double(masks.size() - i) / masks.size()) *
@@ -327,6 +327,7 @@ oemd_coefficients_search::save_mask(
 }
 
 #if 0
+
 double get_std(double *x, const uint32_t input_size)
 {
     double sum = 0.;
@@ -335,13 +336,10 @@ double get_std(double *x, const uint32_t input_size)
     }
     return sqrt(sum / (double) input_size);
 }
-#endif
 
 std::vector<double>
 oemd_coefficients_search::fill_auto_matrix(const uint32_t M, const uint16_t siftings, const uint32_t N, CPTRd x)
 {
-    return {};
-
     std::vector<double> diff(N - 1);
 #pragma omp parallel for num_threads(adj_threads(N - 1))
     for (DTYPE(N) i = 0; i < N - 1; ++i)
@@ -358,6 +356,8 @@ oemd_coefficients_search::fill_auto_matrix(const uint32_t M, const uint16_t sift
     }
     return global_sift_matrix;
 }
+
+#endif
 
 
 int oemd_coefficients_search::do_filter(const std::vector<cufftDoubleComplex> &h_mask_fft)

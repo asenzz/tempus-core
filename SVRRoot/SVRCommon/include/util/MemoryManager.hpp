@@ -51,7 +51,7 @@ public:
 
     static bool threads_available();
 
-    static double get_process_resident_set();
+    static float get_proc_rss();
 };
 
 

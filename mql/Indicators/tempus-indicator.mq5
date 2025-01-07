@@ -160,9 +160,9 @@ AveragePrice *prepareAverage(const int time_index)
       AveragePrice *p_current = new AveragePrice(rates, copied_ct);
       return p_current;
       //svr_client.send_bar(InputQueueFinal, StrPeriod, true, current);
-      //LOG_INFO("", "Sent Tick for Time: " + string(current.tm) + " Value: " + string(current.value));
+      //LOG_INFO("Sent Tick for Time: " + string(current.tm) + " Value: " + string(current.value));
    } else {
-      LOG_ERROR("", "Failed to get history data for the symbol " + Symbol() + " at position " + string(time_index));
+      LOG_ERROR("Failed to get history data for the symbol " + Symbol() + " at position " + string(time_index));
       return NULL;
    }
 }
@@ -196,7 +196,7 @@ int doCalculate(const int rates_total)
       controller.doRequest(net, nextFigure, BarNumber, DataSet);
       pending_requests[request_ix] = nextFigure;
       
-      LOG_INFO("", "Requested " + string(BarNumber) + " bar(s) starting from " + 
+      LOG_INFO("Requested " + string(BarNumber) + " bar(s) starting from " + 
                string(nextFigure) + " request #" + string(request_ix));
             
       view.fadeFigure();
@@ -210,7 +210,7 @@ int doCalculate(const int rates_total)
    {
       if ( TimeCurrent() >= nearestResponseTime && pending_requests[request_ix] != C_zero_time) 
       { 
-         LOG_DEBUG("", "Retrieving response " + string(pending_requests[request_ix]) + 
+         LOG_DEBUG("Retrieving response " + string(pending_requests[request_ix]) + 
                   " request #" + string(request_ix));
          TempusFigure figs[];
          if(controller.getResults(net, pending_requests[request_ix], BarNumber, DataSet, figs))
@@ -218,19 +218,19 @@ int doCalculate(const int rates_total)
             static datetime lastBarTime = C_zero_time;
             const uint ai = ArraySize(figs) - 1;
 		
-            LOG_DEBUG("", "Received bars from " + string(figs[0].tm) + " to " + string(figs[ai].tm));
+            LOG_DEBUG("Received bars from " + string(figs[0].tm) + " to " + string(figs[ai].tm));
 	         if (floor(figs[0].tm / PeriodSeconds()) == floor(current_bar_time/( PeriodSeconds() ))) {
 	            GlobalVariableSet(C_chart_predictions_identifier, figs[0].cl);
                view.redraw(figs, pending_requests[request_ix], Average);
                redrawn = true;
             } else {               
-		         LOG_ERROR("", "Received old bar with time value " +  TimeToStr(figs[0].tm,TIME_DATE| TIME_SECONDS) + ". Current bar is: " + TimeToStr(current_bar_time,TIME_DATE| TIME_SECONDS) + ". Skipping it");
+		         LOG_ERROR("Received old bar with time value " +  TimeToStr(figs[0].tm,TIME_DATE| TIME_SECONDS) + ". Current bar is: " + TimeToStr(current_bar_time,TIME_DATE| TIME_SECONDS) + ". Skipping it");
             }
             
             if(figs[ai].tm > lastBarTime)
             {            
                lastBarTime = figs[ai].tm;
-               LOG_INFO("", "Received a bar dated " + string(lastBarTime) + " high: " + StringFormat("%.5f", figs[ai].hi) + 
+               LOG_INFO("Received a bar dated " + string(lastBarTime) + " high: " + StringFormat("%.5f", figs[ai].hi) + 
                         " low: " + StringFormat("%.5f", figs[ai].lo) + " of request #"+string(request_ix) + " at " +TimeToStr(pending_requests[request_ix]));
             }
             pending_requests[request_ix] = C_zero_time;
@@ -273,7 +273,7 @@ int doCalculate(const int rates_total)
             }
 #endif
          } else {
-            LOG_DEBUG("", "Response for request #" + string(request_ix) + " " + string(pending_requests[request_ix]) + " not ready yet.");
+            LOG_DEBUG("Response for request #" + string(request_ix) + " " + string(pending_requests[request_ix]) + " not ready yet.");
          }
       }
    }

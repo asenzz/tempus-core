@@ -66,7 +66,7 @@ OnlineMIMOSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, con
         tuned = true;
     }
 
-    const unsigned num_chunks = ixs.size();
+    const uint16_t num_chunks = ixs.size();
     if (!tuned && precalc_kernel_matrices && precalc_kernel_matrices->size() == num_chunks) {
         p_kernel_matrices = precalc_kernel_matrices;
         LOG4_DEBUG("Using " << num_chunks << " precalculated matrices.");
@@ -105,6 +105,10 @@ void OnlineMIMOSVR::learn(
         const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const arma::mat &new_w, const bpt::ptime &last_value_time,
         const bool temp_learn, const std::deque<uint32_t> &forget_ixs)
 {
+    // TODO Review and fix this method
+    last_trained_time = last_value_time;
+    return;
+
     if (new_x.empty() || new_y.empty() || new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols || new_ylk.n_rows != new_y.n_rows || new_x.n_rows != new_y.n_rows)
         LOG4_THROW("New data dimensions labels " << arma::size(new_y) << ", last-knowns " << arma::size(new_ylk) << ", features " << arma::size(new_x) <<
                                                  " not sane or do not match model data dimensions labels " << arma::size(*p_labels) << ", features " << arma::size(*p_features)

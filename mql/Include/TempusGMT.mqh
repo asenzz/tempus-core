@@ -87,7 +87,7 @@ string FormatDateTime(const int year, const int iMonth, const int iDay, const in
 //+------------------------------------------------------------------+
 void TempusGMTInit(const ENUM_TIMEFRAMES targetPeriod, const int timeOffset, const bool DisableDST_)
 {
-    LOG_INFO(, "Server time to local time difference " + TimeToString(TimeTradeServer() - TimeLocal(), C_time_mode));
+    LOG_INFO("Server time to local time difference " + TimeToString(TimeTradeServer() - TimeLocal(), C_time_mode));
     _TargetPeriod = targetPeriod;
     _TimeOffset = timeOffset;
     _OffsetHours = _TimeOffset / MINUTES_IN_HOUR;

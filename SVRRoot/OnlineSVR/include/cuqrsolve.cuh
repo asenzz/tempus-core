@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <npp.h>
 #include <cublas_v2.h>
 #include <magma_types.h>
@@ -8,31 +9,59 @@
 
 namespace svr::solvers {
 
-struct mmm_t { double mean = 0, max = 0, min = 0; };
+class score_weights {
+    static constexpr uint16_t streams_gpu = 4;
+    static const uint16_t n_gpus;
+    const uint32_t m, n, mn, mm;
+    const uint64_t L_size;
+
+    struct dev_ctx {
+        struct stream_ctx {
+            cudaStream_t custream;
+            cublasHandle_t cublas_H;
+            double *tmp_L;
+        };
+        double *K, *L;
+        std::deque<stream_ctx> stream_cublas;
+    };
+
+    std::deque<dev_ctx> K_rhs_dev;
+
+public:
+    score_weights(const arma::mat &K, const arma::mat &L, const uint32_t m, const uint32_t n, const uint64_t mn, const uint64_t mm);
+
+    ~score_weights();
+
+    double operator()(CPTRd weights);
+};
+
+struct mmm_t {
+    double mean = 0, max = 0, min = 0;
+};
 
 constexpr double C_gamma_variance = 6e4; // Inverse tuning gamma variance
 
-__global__ void G_normalize_distances_I(RPTR(double) x, const double dc, const double a, const unsigned n);
+__global__ void G_normalize_distances_I(RPTR(double) x, const double dc, const double a, const uint32_t n);
 
-__global__ void G_div_I(RPTR(double) x, const double a, const unsigned n);
+__global__ void G_div_I(RPTR(double) x, const double a, const uint32_t n);
 
-__global__ void G_mul_I(RPTR(double) x, const double a, const unsigned n);
+__global__ void G_mul_I(RPTR(double) x, const double a, const uint32_t n);
 
-__global__ void G_absdif(CRPTRd labels_train, RPTR(double) error_mat, const unsigned mn);
+__global__ void G_absdif(CRPTRd labels_train, RPTR(double) error_mat, const uint32_t mn);
 
-__global__ void G_pred_absdif_I(CRPTRd j_test_labels, RPTR(double) work, const double svr_epsilon, const unsigned test_len_n);
+__global__ void G_pred_absdif_I(CRPTRd j_test_labels, RPTR(double) work, const double svr_epsilon, const uint32_t test_len_n);
 
-__global__ void G_set_diag(RPTR(double) K, CRPTRd d, const unsigned m);
+__global__ void G_set_diag(RPTR(double) K, CRPTRd d, const uint32_t m);
 
-__global__ void G_set_diag(RPTR(double) K, const double d, const unsigned m);
+__global__ void G_set_diag(RPTR(double) K, const double d, const uint32_t m);
 
-__global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const unsigned m);
+__global__ void G_augment_K(RPTR(double) K, CRPTRd w, const double d, const uint32_t m);
 
-__global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const unsigned m, const unsigned n, const uint32_t ld);
+__global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const uint32_t m, const uint32_t n, const uint32_t ld);
 
-double *cu_calc_epscos(CPTRd K, CPTRd L, const unsigned m, const unsigned n, const cudaStream_t custream);
+double *cu_calc_epscos(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const cudaStream_t custream);
 
-double cu_calc_epsco(CPTRd K, CPTRd L, const unsigned m, const unsigned n, const uint32_t ld, const cudaStream_t custream);
+double cu_calc_epsco(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const uint32_t ld, const cudaStream_t custream);
 
 
 void kernel_from_distances(double *K, CPTRd Z, const uint32_t m, const uint32_t n, const double gamma);
@@ -115,8 +144,6 @@ double unscaled_distance(
 double autocorrelation(CPTRd d_x, CPTRd d_y, const uint32_t n, const cudaStream_t stm);
 
 double autocorrelation_n(CPTRd d_in, const uint32_t n, const std::vector<uint32_t> &offsets, const cudaStream_t stm);
-
-double score_weights(CPTRd K, CPTRd weights, CPTRd labels, const uint32_t m, const uint32_t n, const uint32_t mn, const uint32_t mm);
 
 
 // Solvers

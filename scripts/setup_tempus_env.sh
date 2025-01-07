@@ -38,7 +38,7 @@ export ONLINETEST_OUTPUT=${LOGDIR}svronline_tests.log
 export BUSINESSTEST_OUTPUT=${LOGDIR}svrbusiness_tests.log
 export BACKTEST_OUTPUT=${LOGDIR}svrbacktest.log
 export WEB_OUTPUT=${LOGDIR}svrweb.log
-export DAEMON_OUTPUT=${LOGDIR}svrdaemon_test.log
+export DAEMON_OUTPUT=${LOGDIR}svrdaemon.log
 export TEST_DB_INIT_SCRIPTS=${DAEMON_DIR}/../../tempus-db/dbscripts/init_db.sh
 
 GR='\033[1;32m'
@@ -62,10 +62,10 @@ export LD_PRELOAD=`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jema
 # export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 
 export OMP_NESTED=true
-export OMP_CANCELLATION=true
-# export OMP_PROC_BIND=spread
-# export OMP_STACKSIZE=16M
-# export KMP_AFFINITY=compact # Kills performance
+# export OMP_CANCELLATION=true # Seems to slow down OMP code
+# export OMP_PROC_BIND=spread # TODO Tune
+# export OMP_STACKSIZE=16M # TODO Tune
+# export KMP_AFFINITY=compact # Kills performance TODO Tune
 # export KMP_HW_SUBSET=2s,10c,2t # Slows down noticeably, find better values
 export OMP_WAIT_POLICY=PASSIVE                             # Sets spincount to zero
 export OMP_SCHEDULE=static,1                               # May disable nesting (bug in OMP?)

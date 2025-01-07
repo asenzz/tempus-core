@@ -131,7 +131,7 @@ bool wasDSTActiveThen(datetime history_moment)
         case 2021:
             return year21.isInPeriod(history_moment);
         default:
-            LOG_ERROR("","Request date " + string(history_moment) + " does not have specified DST period ");
+            LOG_ERROR("Request date " + string(history_moment) + " does not have specified DST period ");
             return false;
     }
 }

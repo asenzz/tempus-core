@@ -29,11 +29,16 @@ done
 
 if [ $CLEAN_DB -eq 1 ]; then
     echo Cleaning up database.
-    PGPASSWORD=svrwave psql -U svrwave -h /var/run/postgres -d svrwave -c "DELETE FROM svr_parameters; DELETE FROM dq_scaling_factors; DELETE FROM iq_scaling_factors; DELETE FROM multival_requests"
+    PGPASSWORD=svrwave psql -U svrwave -h /var/run/postgresql -d svrwave -c "
+      DELETE FROM svr_parameters;
+      DELETE FROM dq_scaling_factors;
+      DELETE FROM iq_scaling_factors;
+      DELETE FROM multival_requests WHERE processed = 't'"
 fi
 
 if [ $WEB_ONLY -eq 0 ]; then
     while (pidof -csn SVRDaemon); do
+        echo "Stopping SVRDaemon . . ."
         pkill SVRDaemon
         sleep 1
     done
@@ -41,6 +46,7 @@ if [ $WEB_ONLY -eq 0 ]; then
 fi
 
 while (pidof -csn SVRWeb); do
+  echo "Stopping SVRWeb . . ."
   pkill SVRWeb
   sleep 1
 done

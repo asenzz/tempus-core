@@ -12,7 +12,8 @@
 #include "model/Model.hpp"
 #include "model/User.hpp"
 
-constexpr uint16_t C_parallel_train_models = 1; // Adjust with RAM
+constexpr uint16_t C_parallel_train_models = 1; // Adjust with RAM size
+constexpr uint16_t C_parallel_train_ensembles = 1;
 
 namespace svr {
 namespace dao { class EnsembleDAO; }

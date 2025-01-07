@@ -77,28 +77,28 @@ struct cached : cached_iface
 class calc_cache
 {
     tbb::mutex tuners_mx;
-    std::unordered_map<std::tuple<std::string /* ensemble */, unsigned /* step */, unsigned /* gradient */, unsigned /* chunk */>, levels_tune_data> tune_results;
+    std::unordered_map<std::tuple<std::string /* ensemble */, uint16_t /* step */, uint16_t /* gradient */, uint16_t /* chunk */>, levels_tune_data> tune_results;
 
 public:
     explicit calc_cache();
 
-    double get_cached_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const arma::mat &L);
+    double get_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const arma::mat &L);
 
-    arma::mat &get_cached_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    arma::mat &get_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
-    arma::mat &get_cached_Z(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    arma::mat &get_Z(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
-    arma::mat &get_cached_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &predict_time,
+    arma::mat &get_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &predict_time,
                              const bpt::ptime &trained_time);
 
-    arma::mat &get_cached_K(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    arma::mat &get_K(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
     std::tuple<mat_ptr, vec_ptr, data_row_container_ptr>
-    get_cached_labels(const unsigned step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
-                      const unsigned level, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
-                      const bpt::time_duration &main_queue_resolution, const unsigned multistep, const unsigned lag);
+    get_labels(const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
+                      const uint16_t level, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
+                      const bpt::time_duration &main_queue_resolution, const uint16_t multistep, const uint16_t lag);
 
-    mat_ptr get_cached_weights(
+    mat_ptr get_weights(
             const bigint dataset_id, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
             const bpt::time_duration &resolution_main);
 
@@ -106,11 +106,11 @@ public:
 
     void clear();
 
-    datamodel::t_parameter_predictions_set &checkin_tuner(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix);
+    datamodel::t_parameter_predictions_set &checkin_tuner(const datamodel::OnlineMIMOSVR &svr, const uint16_t chunk_ix);
 
-    void checkout_tuner(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix);
+    void checkout_tuner(const datamodel::OnlineMIMOSVR &svr, const uint16_t chunk_ix);
 
-    datamodel::t_level_tuned_parameters *recombine_go(const datamodel::OnlineMIMOSVR &svr, const unsigned chunk_ix);
+    datamodel::t_level_tuned_parameters *recombine_go(const datamodel::OnlineMIMOSVR &svr, const uint16_t chunk_ix);
 };
 
 typedef std::shared_ptr<calc_cache> t_calc_cache_ptr;

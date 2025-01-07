@@ -515,7 +515,7 @@ public:
         return _errCode;
     }
 
-    string getErrorMessage() {
+    string get_error_msg() {
         return _errMsg;
     }
 
@@ -841,7 +841,7 @@ void json_demo() {
     JSONValue *jv = parser.parse(s);
     Print("json:");
     if (jv == NULL) {
-        Print("error:" + (string) parser.getErrorCode() + parser.getErrorMessage());
+        Print("error:" + (string) parser.getErrorCode() + parser.get_error_msg());
     } else {
         Print("PARSED:" + jv.toString());
         if (jv.isObject()) {

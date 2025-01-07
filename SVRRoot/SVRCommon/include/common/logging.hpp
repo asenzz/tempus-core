@@ -22,8 +22,12 @@
 
 namespace bpt = boost::posix_time;
 
-// #define FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
+#ifdef __FILE_NAME__
 #define FILE_NAME __FILE_NAME__
+#else
+#define FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#endif
 #define LOG_FORMAT std::setprecision(std::numeric_limits<double>::max_digits10) << boost::format("%|_4|:%|_2| [%|-4|] %s")
 
 class logging {
@@ -127,19 +131,37 @@ extern const logging l__;
 
 #define START_TIME__ TOKENPASTE2(__start_time_, __LINE__)
 
+#ifdef NDEBUG
+
+#define PROFILE_EXEC_TIME(X, M_NAME)    \
+{                                       \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
+    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__)); \
+}
+
+#define PROFILE_(X)    \
+{                                       \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
+    LOG4_INFO("Execution time of " #X " is " << (bpt::microsec_clock::local_time() - START_TIME__)); \
+}
+
+#else
+
 #define PROFILE_EXEC_TIME(X, M_NAME)    \
 {                                       \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
     LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
-        svr::common::memory_manager::get_process_resident_set() << " MB"); \
+        svr::common::memory_manager::get_proc_rss() << " MB"); \
 }
 
 #define PROFILE_(X)    \
 {                                       \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
     LOG4_INFO("Execution time of " #X " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
-    svr::common::memory_manager::get_process_resident_set() << " MB"); \
+    svr::common::memory_manager::get_proc_rss() << " MB"); \
 }
+
+#endif
 
 #include <cufft.h>
 #include <sstream>

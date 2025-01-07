@@ -32,39 +32,39 @@ public:
         Dispose();
     }
 
-    bool isSuccessfulResponse(const string &response);
-    string getErrorMessage(const string &response);
-    JSONObject *getResultObject(const string &response);
-    JSONValue *getResultValue(const string &response);
-    JSONArray *getResultArray(const string &response);
+    bool is_response_successful(const string &response);
+    string get_error_msg(const string &response);
+    JSONObject *get_result_obj(const string &response);
+    JSONValue *get_result_val(const string &response);
+    JSONArray *get_result_array(const string &response);
 };
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool RequestUtils::isSuccessfulResponse(const string &response)
+bool RequestUtils::is_response_successful(const string &response)
 {
     if(StringLen(response) < 1) return true;
 
     JSONParser parser;
-    bool isSuccessful = false;
+    bool is_successful = false;
     Dispose();
     jv = parser.parse(response);
     if (jv != NULL && jv.isObject()) {
         JSONObject *jo = jv;
-        isSuccessful = jo.getValue("error").isNull();
+        is_successful = jo.getValue("error").isNull();
     }
-    return isSuccessful;
+    return is_successful;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-string RequestUtils::getErrorMessage(const string &response)
+string RequestUtils::get_error_msg(const string &response)
 {
     if (StringLen(response) < 1) return "";
 
-    string errorMessage;
+    string error_msg;
     JSONParser parser;
 
     Dispose();
@@ -73,24 +73,24 @@ string RequestUtils::getErrorMessage(const string &response)
     if (jv != NULL && jv.isObject()) {
         JSONObject *jo = jv;
         if (jo.getValue("error").isNull())
-            LOG_DEBUG("", "No error message");
+            LOG_DEBUG("No error message");
         else
-            errorMessage = jo.getString("error");
+            error_msg = jo.getString("error");
     } else
-        LOG_ERROR("", "Cannot parse error message from response " + response);
+        LOG_ERROR("Cannot parse error message from response " + response);
         
-    return errorMessage;
+    return error_msg;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-JSONObject* RequestUtils::getResultObject(const string &response)
+JSONObject* RequestUtils::get_result_obj(const string &response)
 {
 
     JSONObject *result = NULL;
     if (StringLen(response) < 1) {
-        LOG_ERROR("", "Empty response string.");
+        LOG_ERROR("Empty response string.");
         return result;
     }
     JSONParser parser;
@@ -99,20 +99,20 @@ JSONObject* RequestUtils::getResultObject(const string &response)
     if (jv != NULL && jv.isObject()) {
         JSONObject *jo = jv;
         if (jo.getObject("result").isNull()) {
-            LOG_ERROR("", "No result object");
+            LOG_ERROR("No result object");
         } else {
             result = jo.getObject("result");
-            LOG_VERBOSE("", "Result object is " + result.getString("timeFrom"));
+            LOG_VERBOSE("Result object is " + result.getString("timeFrom"));
         }
     } else
-        LOG_ERROR("", "Cannot read result object from response " + response);
+        LOG_ERROR("Cannot read result object from response " + response);
     return result;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-JSONValue* RequestUtils::getResultValue(const string &response)
+JSONValue* RequestUtils::get_result_val(const string &response)
 {
 
     JSONValue *result = NULL;
@@ -123,18 +123,18 @@ JSONValue* RequestUtils::getResultValue(const string &response)
     if (jv != NULL && jv.isObject()) {
         JSONObject *jo = jv;
         if (jo.getValue("result").isNull()) 
-            LOG_ERROR("", "No result value");
+            LOG_ERROR("No result value");
         else 
             result = jo.getValue("result");
     } else 
-        LOG_ERROR("", "Cannot read result value from response: " + response);
+        LOG_ERROR("Cannot read result value from response: " + response);
     return result;
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-JSONArray* RequestUtils::getResultArray(const string &response)
+JSONArray* RequestUtils::get_result_array(const string &response)
 {
 
     JSONArray *result = NULL;
@@ -147,9 +147,9 @@ JSONArray* RequestUtils::getResultArray(const string &response)
         if (jo.isArray() && !jo.getArray("result").isNull())
             result = jo.getArray("result");
         else
-            LOG_ERROR("", "No result array");
+            LOG_ERROR("No result array");
     } else
-        LOG_ERROR("", "Cannot read result array from response: " + response);
+        LOG_ERROR("Cannot read result array from response: " + response);
     return result;
 }
 //+------------------------------------------------------------------+

@@ -153,7 +153,7 @@ int TempusController::doRequest(MqlNet &mql_net, const datetime time_start, cons
     params.hPutString("resolution", C_period_time_str);
     string response;
     int final_result = -1;
-    LOG_DEBUG("", "Sending request " + TimeToString(time_start, C_time_mode) + " RPC call.");
+    LOG_DEBUG("Sending request " + TimeToString(time_start, C_time_mode) + " RPC call.");
     static const string request_call = "request";
     static const string function_name = "makeMultivalRequest";
     mql_net.RpcCall(request_call, function_name, params, response);
@@ -162,27 +162,27 @@ int TempusController::doRequest(MqlNet &mql_net, const datetime time_start, cons
     JSONParser parser;
     JSONValue *jv = parser.parse(response);
     if (!jv) {
-        LOG_ERROR("", "JSON Value for " + TimeToString(time_start, C_time_mode) + " is null.");
+        LOG_ERROR("JSON Value for " + TimeToString(time_start, C_time_mode) + " is null.");
         return final_result;
     }
 
     if (!jv.isObject()) {
-        LOG_ERROR("", "Received value for "  + TimeToString(time_start, C_time_mode) + " is not object");
+        LOG_ERROR("Received value for "  + TimeToString(time_start, C_time_mode) + " is not object");
         delete jv;
         return final_result;
     }
 
     JSONObject *jo = jv;
     if (jo.getValue("error").isNull()) {
-        LOG_DEBUG("", "Error is null");
+        LOG_DEBUG("Error is null");
         JSONObject *result = jo.getObject("result");
         final_result = result.getInt("request_id");
-        LOG_VERBOSE("", "Request id " + IntegerToString(final_result));
+        LOG_VERBOSE("Request id " + IntegerToString(final_result));
     } else {
-        LOG_ERROR("", "Error is not null.");
+        LOG_ERROR("Error is not null.");
         const string err_msg = jo.getString("error");
         if (StringFind(err_msg, "already exists", 0) != -1) final_result = 0;
-        LOG_ERROR("", err_msg);
+        LOG_ERROR(err_msg);
     }
     delete jv;
 
@@ -196,7 +196,7 @@ bool TempusController::getResults(MqlNet &mql_net, const datetime time_start, co
 {
     Hash params;
     params.hPutString("resolution", C_period_time_str);
-    LOG_VERBOSE("", "Getting results for " + TimeToString(time_start, C_time_mode));
+    LOG_VERBOSE("Getting results for " + TimeToString(time_start, C_time_mode));
     params.hPutString("dataset", dataset);
     params.hPutString("value_time_start", TimeToString(time_start, C_time_mode));
     params.hPutString("value_time_end", TimeToString(time_start + resolution * bars, C_time_mode));
@@ -208,15 +208,15 @@ bool TempusController::getResults(MqlNet &mql_net, const datetime time_start, co
     mql_net.RpcCall(request, get_multival_results, params, response);
 
     if (StringLen(response) <= 0) {
-        LOG_ERROR("", "Response empty for " + TimeToString(time_start, C_time_mode));
+        LOG_ERROR("Response empty for " + TimeToString(time_start, C_time_mode));
         return result;
     }
     JSONParser parser;
-    LOG_VERBOSE("", "Parsing " + response);
+    LOG_VERBOSE("Parsing " + response);
 
     JSONValue *jv = parser.parse(response);
     if (!jv || !jv.isObject()) {
-        LOG_ERROR("", "Failed parsing response " + response + " for time " + TimeToString(time_start, C_time_mode));
+        LOG_ERROR("Failed parsing response " + response + " for time " + TimeToString(time_start, C_time_mode));
         return result;
     }
 
@@ -224,20 +224,20 @@ bool TempusController::getResults(MqlNet &mql_net, const datetime time_start, co
     JSONValue *jv_error = jo.getValue("error");
     if (jv_error != NULL && !jv_error.isNull()) {
         const string err = jv_error.getString();
-        LOG_ERROR("", "Received error message, " + err);
+        LOG_ERROR("Received error message, " + err);
         delete jv;
         return true;
     }
 
     if (jo.getArray("result").isNull()) {
         delete jv;
-        LOG_ERROR("", "Result array in response for " + TimeToString(time_start, C_time_mode) + " is null.");
+        LOG_ERROR("Result array in response for " + TimeToString(time_start, C_time_mode) + " is null.");
         return result;
     }
 
     JSONArray *res = jo.getArray("result");
     if (res.size() < 1) {
-        LOG_ERROR("", "Parsed no bars from response.");
+        LOG_ERROR("Parsed no bars from response.");
         delete jv;
         return false;
     }
@@ -248,17 +248,17 @@ bool TempusController::getResults(MqlNet &mql_net, const datetime time_start, co
         JSONObject *jo_row = res.getObject(i);
         figs[j].tm = StringToTime(jo_row.getString("tm"));
         if(figs[j].tm < time_start) {
-            LOG_ERROR("", "Skipping invalid result " + IntegerToString(i) + " with time " + TimeToString(figs[j].tm, C_time_mode));
+            LOG_ERROR("Skipping invalid result " + IntegerToString(i) + " with time " + TimeToString(figs[j].tm, C_time_mode));
             continue;
         }
         if (average) {
             string bid, ask;
             if (jo_row.getString(res_bid_column, bid) == false) {
-                LOG_ERROR("", "Column " + res_bid_column + " is missing, discarding row " + jo_row.getString("tm") + ", " + IntegerToString(i) + ", " + jo_row.toString());
+                LOG_ERROR("Column " + res_bid_column + " is missing, discarding row " + jo_row.getString("tm") + ", " + IntegerToString(i) + ", " + jo_row.toString());
                 continue;
             }
             if (jo_row.getString(res_ask_column, ask) == false) {
-                LOG_ERROR("", "Column " + res_ask_column + " is missing, discarding row " + jo_row.getString("tm") + ", " + IntegerToString(i) + ", " + jo_row.toString());
+                LOG_ERROR("Column " + res_ask_column + " is missing, discarding row " + jo_row.getString("tm") + ", " + IntegerToString(i) + ", " + jo_row.toString());
                 continue;
             }
             figs[j].cl.set(StringToDouble(bid), StringToDouble(ask));
@@ -269,11 +269,11 @@ bool TempusController::getResults(MqlNet &mql_net, const datetime time_start, co
             figs[j].cl.set(jo_row.getDouble(res_close_bid_column), jo_row.getDouble(res_close_ask_column));
         }
         result = true;
-        LOG_VERBOSE("", "Received figure " + IntegerToString(i) + ", " + figs[j].to_string());
+        LOG_VERBOSE("Received figure " + IntegerToString(i) + ", " + figs[j].to_string());
         ++j;
     }
     if (ArraySize(figs) != j) ArrayResize(figs, j);
-    LOG_VERBOSE("", "Parsed " + IntegerToString(j) + " figures from response.");
+    LOG_VERBOSE("Parsed " + IntegerToString(j) + " figures from response.");
     return result;
 }
 
@@ -338,7 +338,7 @@ void TempusGraph::init(const uint fig_num_, const uint fig_res_, const bool keep
     SetIndexStyle(1, DRAW_ARROW, STYLE_SOLID, 2, clrRed);
     PlotIndexSetString(1, PLOT_LABEL, _Symbol + " Sell");
 
-    LOG_DEBUG("", "View inited.");
+    LOG_DEBUG("View inited.");
 }
 
 //+------------------------------------------------------------------+
@@ -362,7 +362,7 @@ bool TempusGraph::redraw(const TempusFigure &new_figs[], const datetime req_time
 {
     const int new_figs_size = ArraySize(new_figs);
     if (new_figs_size < 1) {
-        LOG_DEBUG("", "New figures are empty!");
+        LOG_DEBUG("New figures are empty!");
         return false;
     }
 // Append new figures
@@ -388,12 +388,12 @@ bool TempusGraph::fadeFigure()
     const datetime offset_start = datetime(predict_offset * C_period_seconds - 1);
     for(int i = 0; i < ArraySize(figures); ++i) {
         if (figures[i].empty()) {
-            LOG_ERROR("", "Skipping unitialized figure " + string(i) + " " + figures[i].to_string());
+            LOG_ERROR("Skipping unitialized figure " + string(i) + " " + figures[i].to_string());
             continue;
         }
         const datetime anchor_time = figures[i].tm - offset_start;
         const aprice anchor_price = get_price(anchor_time);
-        //LOG_DEBUG("", "Anchor time " + TimeToString(anchor_time, C_time_mode) + ", anchor close price " + DoubleToString(anchor_price));
+        //LOG_DEBUG("Anchor time " + TimeToString(anchor_time, C_time_mode) + ", anchor close price " + DoubleToString(anchor_price));
         if (figures[i].tm > lasttm) {
             last_anchor_time = anchor_time;
             last_anchor_price = anchor_price;
@@ -402,7 +402,7 @@ bool TempusGraph::fadeFigure()
         }
         const int ind_ix = iBarShift(_Symbol, PERIOD_CURRENT, figures[i].tm); // (iTime(_Symbol, Period(), 0) - figures[i].tm) / resolution;
         if(ind_ix < 0 || ind_ix >= ArraySize(hi) || ind_ix >= ArraySize(lo)) {
-            LOG_DEBUG("", "Figure " + figures[i].to_string() + " index " + string(ind_ix) + " out of bounds " + string(ArraySize(hi) - 1));
+            LOG_DEBUG("Figure " + figures[i].to_string() + " index " + string(ind_ix) + " out of bounds " + string(ArraySize(hi) - 1));
             continue;
         }
         if (ind_ix == 0) {
@@ -422,7 +422,7 @@ bool TempusGraph::fadeFigure()
     }
     bool redrawn = false;
     if (last_price <= 0 || last_price == prev_drawn_price) {
-        LOG_VERBOSE("", "No new price " + string(last_price) + ", previous " + string(prev_drawn_price));
+        LOG_VERBOSE("No new price " + string(last_price) + ", previous " + string(prev_drawn_price));
         return redrawn;
     }
     GlobalVariableSet(C_chart_predictions_identifier, last_price);
@@ -430,19 +430,19 @@ bool TempusGraph::fadeFigure()
 
     /*
         if (ObjectFind(0, TempusGraphAvgLineName) <= 0 && !ObjectCreate(0, TempusGraphAvgLineName, OBJ_HLINE, 0, 0, last_price)) {
-            LOG_ERROR("", "Creating graph line failed.");
+            LOG_ERROR("Creating graph line failed.");
         } else {
             ObjectSetInteger(0, TempusGraphAvgLineName, OBJPROP_COLOR, clrBlueViolet);
             ObjectSetInteger(0, TempusGraphAvgLineName, OBJPROP_STYLE, STYLE_SOLID);
         }
 
         if (!ObjectSetDouble(0, TempusGraphAvgLineName, OBJPROP_PRICE, last_price)) {
-            LOG_ERROR("", "Failed setting new price " + string(last_price) + " to hline.");
+            LOG_ERROR("Failed setting new price " + string(last_price) + " to hline.");
             return redrawn;
         }
 
         if (ObjectFind(0, TempusGraphTimeLineName) <= 0 && !ObjectCreate(0, TempusGraphTimeLineName, OBJ_VLINE, 0, lasttm, 0)) {
-            LOG_ERROR("", "Failed drawing vline");
+            LOG_ERROR("Failed drawing vline");
             return redrawn;
         } else {
             ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_COLOR, clrBlueViolet);
@@ -450,12 +450,12 @@ bool TempusGraph::fadeFigure()
         }
 
         if (!ObjectSetInteger(0, TempusGraphTimeLineName, OBJPROP_TIME, lasttm)) {
-            LOG_ERROR("", "Failed setting time to hline.");
+            LOG_ERROR("Failed setting time to hline.");
             return redrawn;
         }
     */
     prev_drawn_price = last_price;
-    LOG_VERBOSE("", "Drawn price " + DoubleToString(last_price, 15));
+    LOG_VERBOSE("Drawn price " + DoubleToString(last_price, 15));
     /*
         bool prev_incorrect = false;
         for (long i = 0; i < ArraySize(figures); ++i) {
@@ -465,7 +465,7 @@ bool TempusGraph::fadeFigure()
                 MqlTick prev_ticks[];
                 const long copied_ct = SVRApi::copy_ticks_safe(_Symbol, prev_ticks, COPY_TICKS_ALL, prev_time, prev_time + PeriodSeconds());
                 if (copied_ct < 1) {
-                   LOG_ERROR("", "No ticks copied for prev time " + TimeToString(prev_time, C_time_mode));
+                   LOG_ERROR("No ticks copied for prev time " + TimeToString(prev_time, C_time_mode));
                    continue;
                 }
                 const AveragePrice prev_average_price(prev_ticks, prev_time, PeriodSeconds(), iOpen(_Symbol, PERIOD_CURRENT, iBarShift(_Symbol, PERIOD_H1, prev_time)));
@@ -490,7 +490,7 @@ bool TempusGraph::fadeFigure()
     ObjectDelete(0, TempusPredictSign);
     const ENUM_OBJECT arrow_type = sign_buy ? OBJ_ARROW_BUY : OBJ_ARROW_SELL;
     if (!ObjectCreate(0, TempusPredictSign, arrow_type, 0, lasttm, last_anchor_price))
-        LOG_ERROR("", "Failed creating signal display!");
+        LOG_ERROR("Failed creating signal display!");
 
     ObjectSetDouble(0, TempusPredictSign, OBJPROP_PRICE, last_anchor_price);
     ObjectSetInteger(0, TempusPredictSign, OBJPROP_TIME, lasttm);
@@ -528,7 +528,7 @@ void TempusController::doRequest(MqlNet &mql_net, const datetime r_time, const s
 bool TempusController::getResults(MqlNet &mql_net, const datetime r_time, const string &dataset, TempusFigure &fig)
 {
     bool result = false;
-    LOG_VERBOSE("", "Getting results " + string(average));
+    LOG_VERBOSE("Getting results " + string(average));
 
     TempusFigure temp;
     if(average) {
@@ -593,34 +593,34 @@ aprice TempusController::queryForecast(MqlNet &mql_net, const datetime r_time, c
     const string send_tick_call = "sendTick";
     const string request_post_payload = request ? "makeForecastRequest" : "getForecastResult";
     mql_net.RpcCall(request_call, request_post_payload, param, response);
-    LOG_VERBOSE("", "Got response");
+    LOG_VERBOSE("Got response");
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
     if(StringLen(response) > 0) {
         JSONParser parser;
-        LOG_VERBOSE("", "Parsing response: " + response);
+        LOG_VERBOSE("Parsing response: " + response);
         JSONValue *jv = parser.parse(response);
         if (jv != NULL && jv.isObject()) {
             JSONObject *jo = jv;
             if (!jo.getValue("error").isNull()) {
-                LOG_VERBOSE("", "Received error.");
+                LOG_VERBOSE("Received error.");
                 string err = jo.getString("error");
                 if (request && StringFind(err, "Cannot make forecast request because it already exists") != -1 )
                     final_result = -1;
                 else if (StringFind(err, "Response is not ready yet") == -1)
-                    LOG_ERROR("TempusController::queryForecast", err);
+                    LOG_ERROR(err);
             } else {
                 if (!jo.getObject("result").isNull()) {
-                    LOG_VERBOSE("", "Received result.");
+                    LOG_VERBOSE("Received result.");
                     JSONObject *result = jo.getObject("result");
                     final_result = result.getDouble(request ? "request_id" : "x");
                     LOG_VERBOSE ("TempusController::queryForecast", (request ? "request_id:" : "forecasted_value:") + string(final_result));
                 }
             }
         }
-        LOG_VERBOSE("", "Done.");
+        LOG_VERBOSE("Done.");
         delete jv;
     }
 

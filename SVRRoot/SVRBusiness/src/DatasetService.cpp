@@ -246,13 +246,22 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
 
 void DatasetService::process(datamodel::Dataset &dataset)
 {
+    LOG4_BEGIN();
     dataset.get_calc_cache().clear();
     InputQueueService::prepare_queues(dataset);
-    std::for_each(C_default_exec_policy, dataset.get_ensembles().begin(), dataset.get_ensembles().end(), [&dataset](auto &p_ensemble) {
+
+#ifdef NO_ONLINE_TRAINING
+    if (dataset.get_ensembles().size()
+        && dataset.get_ensemble()->get_models().size()
+        && dataset.get_ensemble()->get_model(0, 0)->get_last_modeled_value_time() > bpt::min_date_time) return;
+#endif
+
+#pragma omp parallel for schedule(static, 1) ADJ_THREADS_MIN(C_parallel_train_ensembles, dataset.get_ensembles().size())
+    for (auto &p_ensemble: dataset.get_ensembles())
         PROFILE_EXEC_TIME(EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
-    });
     LOG4_END();
 }
+
 
 // By specification, a multival request's time period to predict is [start_predict_time, end_predict_time) i.e. right-hand exclusive.
 void DatasetService::process_requests(const datamodel::User &user, datamodel::Dataset &dataset)
@@ -304,14 +313,12 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
                                                                         << " until " << (**predicted_recon.crbegin()).get_value_time());
                     OMP_TASKLOOP_(predicted_recon.size(),)
                     for (const auto &p_result_row: predicted_recon) {
-                        if (p_result_row->get_value_time() < p_request->value_time_start or p_result_row->get_value_time() > p_request->value_time_end) {
-                            LOG4_DEBUG("Skipping save response " << *p_result_row);
-                            continue;
-                        }
-                        const auto p_response = ptr<datamodel::MultivalResponse>(
-                                0, p_request->get_id(), p_result_row->get_value_time(), request_column, p_result_row->get_value(0));
-                        LOG4_TRACE("Saving " << *p_response);
-                        APP.request_service.save(p_response); // Requests get marked processed here
+                        REQCHK(p_result_row->get_value_time() < p_request->value_time_start
+                            || p_result_row->get_value_time() >= p_request->value_time_end
+                            || !std::isnormal(p_result_row->get_value(0)),
+                            "Skipping save of invalid response " << *p_result_row);
+                        APP.request_service.save(
+                                ptr<datamodel::MultivalResponse>(0, p_request->get_id(), p_result_row->get_value_time(), request_column, p_result_row->get_value(0)));
                     }
                 }
 

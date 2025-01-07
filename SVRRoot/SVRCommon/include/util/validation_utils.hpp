@@ -41,8 +41,8 @@ template<typename T> inline constexpr void reject_nullptr(const std::shared_ptr<
 #define REJECT_NULLPTR_1(ptr)
 #define REJECT_NULLPTR_2(ptr, msg)
 #else
-#define REJECT_NULLPTR_2(ptr, msg) reject_nullptr(ptr, msg)
-#define REJECT_NULLPTR_1(ptr) reject_nullptr(ptr)
+#define REJECT_NULLPTR_2(ptr, msg) common::reject_nullptr(ptr, msg)
+#define REJECT_NULLPTR_1(ptr) common::reject_nullptr(ptr)
 #endif
 #define REJECT_NULLPTR(...) PP_MACRO_OVERLOAD(REJECT_NULLPTR, __VA_ARGS__)
 
@@ -55,7 +55,7 @@ inline constexpr void reject_not_a_date_time(const bpt::ptime &time, const std::
 #ifdef NDEBUG
 #define REJECT_NOT_A_DATE_TIME(time, msg)
 #else
-#define REJECT_NOT_A_DATE_TIME(time, msg) reject_not_a_date_time(time, msg)
+#define REJECT_NOT_A_DATE_TIME(time, msg) common::reject_not_a_date_time(time, msg)
 #endif
 
 
@@ -67,7 +67,7 @@ inline constexpr void reject_special_date_time(const bpt::ptime &time, const std
 #ifdef NDEBUG
 #define REJECT_SPECIAL_DATE_TIME(time, msg)
 #else
-#define REJECT_SPECIAL_DATE_TIME(time, msg) reject_special_date_time(time, msg)
+#define REJECT_SPECIAL_DATE_TIME(time, msg) common::reject_special_date_time(time, msg)
 #endif
 
 

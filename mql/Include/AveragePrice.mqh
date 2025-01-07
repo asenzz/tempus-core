@@ -77,7 +77,7 @@ class aprice {
             break;
 
         default:
-            LOG_ERROR("", "Unknown value type " + string(type));
+            LOG_ERROR("Unknown value type " + string(type));
             DebugBreak();
         }
 
@@ -171,7 +171,7 @@ aprice get_rate(const string &symbol, const int shift, const e_rate_type type)
     ArraySetAsSeries(rate, true);
     const int copied = CopyRates(symbol, _Period, shift, 1, rate);
     if (copied < 1) {
-        LOG_ERROR("", "Failed copying rates for " + IntegerToString(shift));
+        LOG_ERROR("Failed copying rates for " + IntegerToString(shift));
         return aprice();
     }
     aprice result(rate[0], type);
@@ -210,7 +210,7 @@ struct AveragePrice {
 aprice calc_msec_twap(const MqlTick &ticks[], int &tick_ix, const int ticks_len, const datetime time_iter, aprice &twap_price, uint &volume, const aprice &cur_price_)
 {
     aprice cur_price = cur_price_;
-    if (ticks[tick_ix].time != time_iter) LOG_ERROR("", "Starting tick does not equal time iter!");
+    if (ticks[tick_ix].time != time_iter) LOG_ERROR("Starting tick does not equal time iter!");
     int last_ms = 0;
     const int start_tick_ix = tick_ix;
     for (; tick_ix < ticks_len && ticks[tick_ix].time == time_iter; ++tick_ix) {
@@ -239,7 +239,7 @@ aprice persec_prices( // returns last processed tick price
     const int start_out)
 {
     if (duration_sec < 1) {
-        LOG_ERROR("", "Duration seconds is illegal " + string(duration_sec));
+        LOG_ERROR("Duration seconds is illegal " + string(duration_sec));
         return aprice();
     }
     datetime time_iter = bar_time;
@@ -252,7 +252,7 @@ aprice persec_prices( // returns last processed tick price
 
     const int end_out = start_out + duration_sec;
     if (ticks_len < 1) {
-        LOG_ERROR("", "Ticks array is empty, copying open price " + last_tick_price.to_string());
+        LOG_ERROR("Ticks array is empty, copying open price " + last_tick_price.to_string());
         for (int i = start_out; i < end_out; ++i, ++time_iter) {
             prices[i] = last_tick_price;
             times[i] = time_iter;
@@ -282,7 +282,7 @@ aprice persec_prices( // returns last processed tick price
 AveragePrice::AveragePrice(const MqlRates &rates[], const int size)
 {
     if (ArraySize(rates) < 1) {
-        LOG_ERROR("", "Rates are empty, user provided length " + IntegerToString(size));
+        LOG_ERROR("Rates are empty, user provided length " + IntegerToString(size));
         return;
     }
     AveragePrice(rates, size, rates[0].time);
@@ -294,7 +294,7 @@ AveragePrice::AveragePrice(const MqlRates &rates[], const int size)
 AveragePrice::AveragePrice(const MqlRates &rates[], const int size, const datetime time_set)
 {
     if (ArraySize(rates) < 1) {
-        LOG_ERROR("", "Rates for " + TimeToString(time_set, C_time_mode) + " are empty");
+        LOG_ERROR("Rates for " + TimeToString(time_set, C_time_mode) + " are empty");
         return;
     }
     value.set(rates[0], e_rate_type::price_open);
@@ -327,7 +327,7 @@ AveragePrice::AveragePrice(const MqlTick &ticks[], const datetime bar_time, cons
             value.reset();
             close_price.reset();
         }
-        LOG_ERROR("", "Ticks array is empty!");
+        LOG_ERROR("Ticks array is empty!");
         return;
     }
    

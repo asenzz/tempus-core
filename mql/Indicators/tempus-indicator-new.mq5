@@ -83,7 +83,7 @@ int OnInit()
 
 
     string input_queue = input_queue_name_from_symbol(Symbol());
-    LOG_INFO("", "Starting up ...");
+    LOG_INFO("Starting up ...");
     TempusGMTInit(_Period, TimeOffset, DisableDST);
 
     if(!net.Open(ServerUrl)) {
@@ -93,7 +93,7 @@ int OnInit()
     long StatusCode;
     net.Post("mt4/login", "username=" + Username + "&password=" + Password, StatusCode);
     if (StatusCode != 200) {
-        LOG_ERROR("", "Authentication error occured " + string(StatusCode) + " " + ErrorDescription(StatusCode));
+        LOG_ERROR("Authentication error occured " + string(StatusCode) + " " + ErrorDescription(StatusCode));
         return(INIT_PARAMETERS_INCORRECT);
     }
 
@@ -103,28 +103,28 @@ int OnInit()
 #ifdef INIT_TEST
     ArrayResize(pending_requests, MaxPendingRequests, MaxPendingRequests);
     if (ArraySize(pending_requests) < 1) {
-        LOG_ERROR("", "Failed setting request size array to " + string(MaxPendingRequests));
+        LOG_ERROR("Failed setting request size array to " + string(MaxPendingRequests));
         return(INIT_PARAMETERS_INCORRECT);
     }
     if (ArraySize(pending_requests) > 1) ArrayFill(pending_requests, 1, ArraySize(pending_requests) - 1, 0);
     const datetime current_bar_time = DemoMode == false ? GetTargetTime(0) : GetTargetTime(BarNumber);
     controller.doRequest(net, current_bar_time, BarNumber, DataSet);
-    LOG_DEBUG("", "Initial request for time " + string(current_bar_time) + " placed.");
+    LOG_DEBUG("Initial request for time " + string(current_bar_time) + " placed.");
     pending_requests[0] = current_bar_time;
 
     TempusFigure results[];
     if(controller.getResults(net, current_bar_time, BarNumber, DataSet, results)) {
         const int last_bar_ix = ArraySize(results) - 1;
         if (last_bar_ix < 0) {
-            LOG_DEBUG("", "No results received yet!");
+            LOG_DEBUG("No results received yet!");
         } else {
             view.redraw(results, current_bar_time, Average);
-            LOG_INFO("", "Received high: " + StringFormat("%.5f", results[last_bar_ix].hi) +
+            LOG_INFO("Received high: " + StringFormat("%.5f", results[last_bar_ix].hi) +
                      " low: " + StringFormat("%.5f", results[last_bar_ix].lo) + " of initial request at " + TimeToString(pending_requests[0], C_time_mode));
             pending_requests[0] = 0;
         }
     } else {
-        LOG_DEBUG("", "Response for initial request for time " + TimeToString(pending_requests[0]) + " not ready yet.");
+        LOG_DEBUG("Response for initial request for time " + TimeToString(pending_requests[0]) + " not ready yet.");
         G_last_request_time = current_bar_time;
         G_soonest_response_time = TimeLocal() + PauseBeforePolling;
     }
@@ -183,7 +183,7 @@ int doCalculate(const int rates_total)
         else if (TimeLocal() + PauseBeforePolling < G_soonest_response_time) 
             G_soonest_response_time = TimeLocal() + PauseBeforePolling;
 
-        LOG_INFO("", "Requested " + string(BarNumber) + " bar(s) starting from " +
+        LOG_INFO("Requested " + string(BarNumber) + " bar(s) starting from " +
                  string(current_bar_time) + " request #" + string(request_ix) + ", soonest response " + string(G_soonest_response_time));
     }
 
@@ -194,25 +194,25 @@ int doCalculate(const int rates_total)
     if (TimeLocal() > next_results_time) {
         for (ulong request_ix = 0; request_ix < MaxPendingRequests; ++request_ix) {
             if (pending_requests[request_ix] && G_soonest_response_time && TimeLocal() >= G_soonest_response_time) {
-                LOG_DEBUG("", "Retrieving response " + string(pending_requests[request_ix]) + " request #" + string(request_ix));
+                LOG_DEBUG("Retrieving response " + string(pending_requests[request_ix]) + " request #" + string(request_ix));
                 TempusFigure results[];
                 if(controller.getResults(net, pending_requests[request_ix], BarNumber, DataSet, results)) {
                     const int last_bar_ix = ArraySize(results) - 1;
                     if (last_bar_ix < 0) {
-                        LOG_DEBUG("", "Results are empty!");
+                        LOG_DEBUG("Results are empty!");
                         continue;
                     }
     
-                    LOG_DEBUG("", "Received bars from " + TimeToString(results[0].tm, C_time_mode) + " to " + TimeToString(results[last_bar_ix].tm, C_time_mode));
+                    LOG_DEBUG("Received bars from " + TimeToString(results[0].tm, C_time_mode) + " to " + TimeToString(results[last_bar_ix].tm, C_time_mode));
                     if (results[0].tm >= current_bar_time) {
                         redrawn |= view.redraw(results, pending_requests[request_ix], Average);
                     } else
-                        LOG_ERROR("", "Received old bar with time value " +  TimeToString(results[0].tm, C_time_mode) + ". Current bar is " + TimeToString(current_bar_time, C_time_mode) + ". Skipping it");
+                        LOG_ERROR("Received old bar with time value " +  TimeToString(results[0].tm, C_time_mode) + ". Current bar is " + TimeToString(current_bar_time, C_time_mode) + ". Skipping it");
     
                     pending_requests[request_ix] = 0;
                 } else {
                     next_results_time = TimeLocal() + PauseBeforePolling;
-                    LOG_DEBUG("", "Response for request #" + string(request_ix) + " " + string(pending_requests[request_ix]) + " not ready yet.");
+                    LOG_DEBUG("Response for request #" + string(request_ix) + " " + string(pending_requests[request_ix]) + " not ready yet.");
                 }
             }
         }

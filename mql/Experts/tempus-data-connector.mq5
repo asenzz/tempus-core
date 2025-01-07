@@ -33,11 +33,14 @@ input double    PredictHorizon = .2; // Forecast delay in seconds, Horizon .2 = 
 #include <TempusGMT.mqh>
 
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 const int C_forecast_delay = int(PredictHorizon * C_period_seconds);
 const int C_time_offset_secs = TimeOffset * 60;
 const int C_tick_bar_index = DemoMode == false ? 1 : DemoBars + 1;
 const datetime C_forecast_delay_period = 2 * C_period_seconds - C_forecast_delay;
-const bool C_period_isnt_m1 = _Period != PERIOD_M1;
+const bool C_period_is_not_M1 = _Period != PERIOD_M1;
 const bool C_do_aux = AuxInputName != "";
 const string C_input_queue_name = input_queue_name_from_symbol(_Symbol);
 const string C_server_queue_name = C_input_queue_name + input_queue_name_from_symbol(AuxInputName) + (Average ? "_avg" : "");
@@ -51,40 +54,40 @@ SVRApi svr_client(DemoMode, DemoBars, Average, AuxInputName, OneSecondData, Time
 int OnInit()
 {
     if (OneSecondData && _Period != PERIOD_M1) {
-        LOG_ERROR("", "Chart time frame must be 1 minute in order to send 1 second data!");
-        return(INIT_PARAMETERS_INCORRECT);
-    }    
-    if (AuxInputName != "" && !Average) {
-        LOG_ERROR("", "Aux input data can only be sent when average is enabled!");
+        LOG_ERROR("Chart time frame must be 1 minute in order to send 1 second data!");
         return(INIT_PARAMETERS_INCORRECT);
     }
-    disableDST = DisableDST;    
+    if (AuxInputName != "" && !Average) {
+        LOG_ERROR("Aux input data can only be sent when average is enabled!");
+        return(INIT_PARAMETERS_INCORRECT);
+    }
+    disableDST = DisableDST;
 
 #ifdef RUN_TEST
     MqlTick ticks[];
     const datetime bar_time = iTime(_Symbol, _Period, 1);
     const int ticksCount = svr_client.copy_ticks_safe(_Symbol, ticks, COPY_TICKS_ALL, bar_time, bar_time + C_period_seconds);
-    for (int i = 0; i < ticksCount; ++i) 
-        LOG_INFO("", "Tick " + string(i) + " has time " + TimeToString(ticks[i].time, C_time_mode) + "." + string(ticks[i].time_msc % 1000));
+    for (int i = 0; i < ticksCount; ++i)
+        LOG_INFO("Tick " + string(i) + " has time " + TimeToString(ticks[i].time, C_time_mode) + "." + string(ticks[i].time_msc % 1000));
     aprice prices[C_period_seconds];
     datetime times[C_period_seconds];
     uint volumes[C_period_seconds];
     persec_prices(get_rate(1, e_rate_type::price_open), ticks, bar_time, C_period_seconds, prices, times, volumes, 0);
     for (int i = 0; i < ArraySize(prices); ++i)
         LOG_INFO(, "Second " + string(i) + ", price " + prices[i].to_string() + ", time " + TimeToString(times[i], C_time_mode) + ", tick volume " + volumes[i]);
-    
-    LOG_INFO("init checks: Time", "DSTActive: " + string(wasDSTActiveThen(iTime(_Symbol, PERIOD_M1, 0))) +
+
+    LOG_INFO("DSTActive: " + string(wasDSTActiveThen(iTime(_Symbol, PERIOD_M1, 0))) +
              " H1(0): " + string(iTime(_Symbol, PERIOD_H1, 0)) + " H1(1): " + string(iTime(_Symbol, PERIOD_H1, 1)) +
              " H4(0): " + string(iTime(_Symbol, PERIOD_H4, 0)) + " H4(1): " + string(iTime(_Symbol, PERIOD_H4, 1)));
-    LOG_INFO("init checks: TempusGMT", "DSTActive: " + string(wasDSTActiveThen(iTime(_Symbol, _Period, 0))) +
+    LOG_INFO("DSTActive: " + string(wasDSTActiveThen(iTime(_Symbol, _Period, 0))) +
              " TargetTime(0): " + string(GetTargetTime(0)) + " TargetTime(1): " + string(GetTargetTime(1)));
-    LOG_INFO("", "Test error description: " + ErrorDescription(GetLastError()));
-    
-    static int file_handle = FileOpen("history_bars_" + _Symbol + "_" + C_period_secs_str + ".sql", FILE_WRITE|FILE_ANSI|FILE_CSV);
+    LOG_INFO("Test error description: " + ErrorDescription(GetLastError()));
+
+    static const int file_handle = FileOpen("history_bars_" + _Symbol + "_" + C_period_secs_str + ".sql", FILE_WRITE | FILE_ANSI | FILE_CSV);
     if (file_handle != INVALID_HANDLE) {
         FileSeek(file_handle, 0, SEEK_END);
-        FileWrite(file_handle, 
-            TimeToString(TimeCurrent(), C_time_mode), TimeToString(TimeCurrent(), C_time_mode), IntegerToString(100), DoubleToString(1.2345, DOUBLE_PRINT_DECIMALS));
+        FileWrite(file_handle,
+                  TimeToString(TimeCurrent(), C_time_mode), TimeToString(TimeCurrent(), C_time_mode), IntegerToString(100), DoubleToString(1.2345, DOUBLE_PRINT_DECIMALS));
         FileFlush(file_handle);
         FileClose(file_handle);
     }
@@ -100,7 +103,7 @@ int OnInit()
     const string period_str = OneSecondData ? C_one_str : C_period_seconds_str;
     if (!svr_client.send_history(C_server_queue_name, period_str)) return INIT_FAILED;
 
-    EventSetTimer(1);
+    EventSetTimer(C_period_seconds);
 
     return INIT_SUCCEEDED;
 }
@@ -122,12 +125,12 @@ void OnTick()
 
     if (target_time <= last_finalized) return;
     // So decompose starts in time on Tempus
-    if (C_period_isnt_m1 && datetime(GlobalVariableGet(C_one_minute_chart_identifier)) < target_time + C_forecast_delay_period) return;
+    if (C_period_is_not_M1 && datetime(GlobalVariableGet(C_one_minute_chart_identifier)) < target_time + C_forecast_delay_period) return;
 
 #ifdef DEBUG_CONNECTOR
-    LOG_INFO("", "Target time " + TimeToString(target_time, C_time_mode) + ", last finalized " + TimeToString(last_finalized, C_time_mode));
+    LOG_INFO("Target time " + TimeToString(target_time, C_time_mode) + ", last finalized " + TimeToString(last_finalized, C_time_mode));
 #endif
-    
+
     if (Average) {
         int end_bar = last_finalized ? iBarShift(_Symbol, _Period, last_finalized, false) - 1 : C_tick_bar_index;
         if (end_bar < C_tick_bar_index) end_bar = C_tick_bar_index;
@@ -140,17 +143,17 @@ void OnTick()
     } else {
         MqlRates rates[];
         CopyRates(_Symbol, _Period, C_tick_bar_index, 1, rates);
-        if (ArraySize(rates) < 1) 
-            LOG_ERROR("", "No rates found for bar " + IntegerToString(C_tick_bar_index));
-        else 
-            svr_client.send_bar(C_server_queue_name, C_period_seconds_str, true,  
-                            aprice(rates[0], e_rate_type::price_open), 
-                            aprice(rates[0], e_rate_type::price_high), 
-                            aprice(rates[0], e_rate_type::price_low),
-                            aprice(rates[0], e_rate_type::price_close),
-                            (uint) rates[0].tick_volume, rates[0].time);
+        if (ArraySize(rates) < 1)
+            LOG_ERROR("No rates found for bar " + IntegerToString(C_tick_bar_index));
+        else
+            svr_client.send_bar(C_server_queue_name, C_period_seconds_str, true,
+                                aprice(rates[0], e_rate_type::price_open),
+                                aprice(rates[0], e_rate_type::price_high),
+                                aprice(rates[0], e_rate_type::price_low),
+                                aprice(rates[0], e_rate_type::price_close),
+                                (uint) rates[0].tick_volume, rates[0].time);
     }
-        
+
     last_finalized = target_time;
     GlobalVariableSet(C_chart_identifier, last_finalized);
 }
@@ -168,27 +171,27 @@ void send_avg(const int bar_index)
     const int copied_ct = SVRApi::copy_ticks_safe(_Symbol, ticks, COPY_TICKS_ALL, bar_before_time, bar_time + C_period_seconds);
     int aux_copied_ct = 0;
     if (C_do_aux) {
-        LOG_ERROR("", "Aux not supported!"); // TODO Implement if needed!
+        LOG_ERROR("Aux not supported!"); // TODO Implement if needed!
         //aux_copied_ct = SVRApi::copy_ticks_safe(AuxInputName, PERIOD_M1, bar_time, time_to, rates); // Safer for non current chart
     } else
         aux_copied_ct = 1;
-    
+
     if (copied_ct > 0 && aux_copied_ct > 0) {
         const AveragePrice current_price(ticks, GetTargetTime(bar_index), C_period_seconds, get_rate(bar_index, e_rate_type::price_open));
         if (C_do_aux) {
-            LOG_ERROR("", "Not implemented!");
+            LOG_ERROR("Not implemented!");
             /*
-            if (aux_copied_ct != copied_ct) LOG_ERROR("", "aux_copied_ct " + string(aux_copied_ct) + " != " + string(copied_ct) + " copied_ct");
+            if (aux_copied_ct != copied_ct) LOG_ERROR("aux_copied_ct " + string(aux_copied_ct) + " != " + string(copied_ct) + " copied_ct");
             AveragePrice current_aux_price(ratesAux, aux_copied_ct, bar_time);
             svr_client.send_bar(C_server_queue_name, C_period_secs_str, true, current_price, current_aux_price, C_input_queue_name, AuxInputName);
-            LOG_INFO("", "Sent Tick for Time: " + string(current_price.tm) + " Value: " + string(current_price.value) + " Aux value: " + string(current_aux_price.value));
+            LOG_INFO("Sent Tick for Time: " + string(current_price.tm) + " Value: " + string(current_price.value) + " Aux value: " + string(current_aux_price.value));
             */
         } else {
             svr_client.send_bar(C_server_queue_name, C_period_seconds_str, true, current_price);
-            LOG_INFO("", "Sent bar for time " + TimeToString(current_price.tm, C_time_mode) + ", value " + current_price.value.to_string());
+            LOG_INFO("Sent bar for time " + TimeToString(current_price.tm, C_time_mode) + ", value " + current_price.value.to_string());
         }
-    } else 
-        LOG_ERROR("", "Failed to get history data for the symbol " + _Symbol + " " + AuxInputName);
+    } else
+        LOG_ERROR("Failed to get history data for the symbol " + _Symbol + " " + AuxInputName);
 }
 
 //+------------------------------------------------------------------+
@@ -220,42 +223,24 @@ void send_average_secs(const int bar_index)
         const aprice init_price = get_rate(AuxInputName, bar_index, e_rate_type::price_open);
         persec_prices(init_price, ticksaux, bar_time, C_period_seconds, pricesaux, timesaux, volumesaux, 0);
         svr_client.send_bars(C_server_queue_name, C_one_str, true, prices, volumes, pricesaux, volumesaux, timesaux, C_input_queue_name, AuxInputName);
-        LOG_DEBUG("", "Sent " + C_period_seconds_str + " aux bars for time " + TimeToString(bar_time, C_time_mode));
+        LOG_DEBUG("Sent " + C_period_seconds_str + " aux bars for time " + TimeToString(bar_time, C_time_mode));
     } else {
         svr_client.send_bars(C_server_queue_name, C_one_str, true, prices, times, volumes);
-        LOG_DEBUG("", "Sent " + C_period_seconds_str + " bars for time " + TimeToString(bar_time, C_time_mode));
+        LOG_DEBUG("Sent " + C_period_seconds_str + " bars for time " + TimeToString(bar_time, C_time_mode));
     }
 }
-    
+
 
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 void OnTimer()
 {
-    /* No need to reconcile in a separate thread, initial reconciliation is done in init
-    static bool timerSetup = false;
-    if(!timerSetup)
-    {
-       long currentSeconds = TimeCurrent() - Time[0];
-       if( (currentSeconds >= PeriodSeconds() / 2) && (currentSeconds < (PeriodSeconds() / 2 + 3))) // Do the reconciliation in the first 3 seconds of the second half of a period
-       {
-          timerSetup = true;
-          EventSetTimer(PeriodSeconds());
-       }
-       else
-          return;
-    }
-
-    datetime start = TimeCurrent();
-
-    bool result = true;
-    while(result && TimeSeconds(TimeLocal()) < 55)
-    {
-       result = svr_client.ReconcileHistoricalData(C_server_queue_name, C_period_secs_str);
-    }
-    if( svr_client.history_reconciled() )
-       EventKillTimer();
-    */
+    const datetime current_server_time = TimeCurrent();
+    MqlDateTime current_server_time_st;
+    TimeToStruct(current_server_time, current_server_time_st);
+    if (current_server_time_st.day_of_week != 5 && current_server_time_st.hour >= 22) return;
+    
+    OnTick();
 }
 //+------------------------------------------------------------------+
 

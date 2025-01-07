@@ -6,10 +6,9 @@
 
 // #define INTEGRATION_TEST
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
-
+#define NO_ONLINE_TRAINING // Disable online training, buggy and resource-hungry
 #define CTX_PER_GPU 2 // Default streams per GPU
 
-#define NO_MAIN_DECON // Don't decompose main input queue
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
 #define REMOVE_OUTLIERS

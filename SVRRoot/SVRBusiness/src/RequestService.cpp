@@ -75,6 +75,7 @@ int RequestService::force_finalize(const datamodel::MultivalRequest_ptr &request
 
 int RequestService::save(const datamodel::MultivalResponse_ptr &response)
 {
+    LOG4_TRACE("Saving " << *response);
     return request_dao.save(response);
 }
 

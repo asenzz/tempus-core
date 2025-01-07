@@ -74,26 +74,31 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
 #pragma omp single
     {
         OMP_TASKLOOP_1()
-        for (size_t chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
+        for (uint16_t chunk_ix = 0; chunk_ix < ixs.size(); ++chunk_ix) {
             const auto p_params = get_params_ptr(chunk_ix);
             arma::mat scaled_x_predict_t = x_predict_t;
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
             business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
-#ifdef SINGLE_CHUNK_LEVEL
-            const auto chunk_predict_K = prepare_Ky(*p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time,
-                                                    common::gpu_handler<1>::get().get_gpu_devices_count());
+#ifdef SINGLE_CHUNK_LEVEL // TODO Remove and properly distribute GPU load
+            static const auto n_gpu = common::gpu_handler<>::get().get_gpu_devices_count();
+            const auto chunk_predict_K = time == bpt::not_a_date_time ?
+                                         prepare_Ky(*p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t) :
+                                         prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time, n_gpu);
 #else
             const auto chunk_predict_K = time == bpt::not_a_date_time ?
                                          prepare_Ky(*p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t) :
                                          prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time);
 #endif
             LOG4_TRACE(
-                    "Predicting " << arma::size(x_predict) << ", indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", size " << arma::size(ixs[chunk_ix])
-                                  << ", parameters " << *p_params << ", K " << common::present(*chunk_predict_K) << ", w " << common::present(weight_chunks[chunk_ix]));
+                    "Predicting " << arma::size(x_predict) << ", indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", size " << arma::size(ixs[chunk_ix]) <<
+                                  ", parameters " << *p_params << ", K " << common::present(*chunk_predict_K) << ", w " << common::present(weight_chunks[chunk_ix]) <<
+                                  ", scaled predict " << common::present(scaled_x_predict_t) << ", chunk sf " << chunk_sf << "train features "
+                                  << common::present(train_feature_chunks_t[chunk_ix]));
+            LOG4_TRACE("K predict is " << *chunk_predict_K);
             arma::mat multiplicated(chunk_predict_K->n_rows, weight_chunks[chunk_ix].n_cols);
             OMP_TASKLOOP_(chunk_predict_K->n_rows * weight_chunks[chunk_ix].n_cols, collapse(2))
-            for (size_t r = 0; r < chunk_predict_K->n_rows; ++r)
-                for (size_t c = 0; c < weight_chunks[chunk_ix].n_cols; ++c)
+            for (uint32_t r = 0; r < chunk_predict_K->n_rows; ++r)
+                for (uint32_t c = 0; c < weight_chunks[chunk_ix].n_cols; ++c)
                     multiplicated(r, c) = arma::as_scalar(chunk_predict_K->row(r) * weight_chunks[chunk_ix].col(c));// - p_params->get_svr_epsilon();
             business::DQScalingFactorService::unscale_labels(*business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true),
                                                              multiplicated);

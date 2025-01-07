@@ -25,7 +25,7 @@ void OnStart() {
     JSONValue *jv = parser.parse(s);
 
     if (jv == NULL) {
-        Print("error:" + (string) parser.getErrorCode() + parser.getErrorMessage());
+        Print("error:" + (string) parser.getErrorCode() + parser.get_error_msg());
     } else {
 
 

@@ -35,6 +35,11 @@ void kernel_xy(
     const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint16_t lag, const double tau, const double lambda, const double gamma, const double min_Z, const double max_Z,
       const double *const X, const double *const Xy, double *Z);
 
+void kernel_xy(
+        const uint32_t X_cols, const uint32_t Xy_cols, const uint32_t rows, const uint16_t lag,
+        const double gamma, const double lambda, const double tau, const double min_Z, const double max_Z,
+        const double *const X, const double *const Xy, double *K, const uint16_t gpu_id);
+
 // Distances to kernel value
 __forceinline__ __host__ __device__ double z2k(const double z, const double gamma)
 {

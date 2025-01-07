@@ -171,6 +171,9 @@ parse_time_range(session_interface &session, cppcms::json::object obj, string &l
 
 }
 
+/* TODO Implement time zone conversion at time_from_string() calls, thorough range checking for missing values according to forex market hours and comparison with other queues
+ * by adding time zone information to the client POST request and a 'thorough' flag.
+ */
 void InputQueueView::getNextTimeRangeToBeSent(cppcms::json::object obj)
 {
     LOG4_BEGIN();

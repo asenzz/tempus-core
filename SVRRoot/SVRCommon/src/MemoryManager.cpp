@@ -120,28 +120,34 @@ memory_manager::read_memory(memory_info_t &mem_info, std::ifstream &mem_info_fil
             mem_info.cached = val;
         else if (key == "Buffers")
             mem_info.buffers = val;
-/*        else if (key == "SwapTotal")
+/*      
+        else if (key == "SwapTotal")
             mem_info.swap_total = val;
         else if (key == "SwapFree")
-            mem_info.swap_free = val; */
+            mem_info.swap_free = val; 
+*/
     }
     mem_info_file.clear();
     mem_info_file.seekg(0);
 }
 
 // In MB
-double memory_manager::get_process_resident_set()
+float memory_manager::get_proc_rss()
 {
     FILE *self_statm = fopen("/proc/self/statm", "r");
-    long s = -1;
     if (!self_statm) {
         LOG4_ERROR("Failed opening /proc/self/statm");
         return 1;
     }
-    fscanf(self_statm, "%ld", &s);
-    constexpr double mbd = 1024 * 1024;
-    static const double pagesize_mbd = sysconf(_SC_PAGESIZE) / mbd;
-    return s * pagesize_mbd;
+    while (fgetc(self_statm) != ' ') {}
+    // fscanf(self_statm, "%ld", &s);
+    constexpr uint8_t bufl = 16;
+    char buf[bufl];
+    fread(buf, sizeof(*buf), bufl, self_statm);
+    constexpr float mbd = 1024 * 1024;
+    static const float pagesize_mbd = sysconf(_SC_PAGESIZE) / mbd;
+    *(char *) memchr(buf, ' ', bufl) = 0;
+    return std::atol(buf) * pagesize_mbd;
 }
 
 static size_t num_of_threads = 0;

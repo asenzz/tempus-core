@@ -4,6 +4,7 @@
 // TODO test gradient boosting, find warm-start online solver, test manifold
 
 #include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/math/ccmath/ccmath.hpp>
 #include <memory>
 #include <set>
 #include <deque>
@@ -35,15 +36,16 @@ constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 constexpr magma_int_t C_rbt_iter = 40; // default 30
 constexpr float C_rbt_threshold = 0; // [0..1] default 1
 constexpr uint32_t C_features_superset_coef = 100; // [1..+inf)
-constexpr float C_solve_opt_coef = 1; // Rows count multiplier to calculate iterations for NL solver, 1 is the best so far
-constexpr uint16_t C_solve_opt_particles = 100;
+constexpr float C_solve_opt_coef = 2; // Rows count multiplier to calculate iterations for NL solver
+constexpr uint16_t C_solve_opt_particles = 80;
+constexpr uint16_t C_weight_cols = 1;
 #ifdef EMO_DIFF
 constexpr double C_diff_coef = 1;
 #else
 constexpr double C_diff_coef = 1;
 #endif
 
-// #define SINGLE_CHUNK_LEVEL // TODO Seems like its buggy
+#define SINGLE_CHUNK_LEVEL
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
 
@@ -117,11 +119,6 @@ class OnlineMIMOSVR final : public Entity
     arma::mat predict_chunk_t(const arma::mat &x_predict);
 
 public:
-    static std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
-    cuvalidate(const double lambda, const double gamma_bias, const double tau, const unsigned lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
-               const arma::mat &tune_features_t, const arma::mat &train_features_t, const arma::mat &tune_label_chunk, const arma::mat &train_label_chunk, const arma::mat &tune_W,
-               const arma::mat &train_W, const solvers::mmm_t &train_L_m, const double labels_sf);
-
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
     OnlineMIMOSVR(
@@ -312,6 +309,52 @@ public:
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+
+// ICPX bug forced to move this out of cuvalidate
+constexpr uint8_t get_streams_per_gpu(const uint32_t n_rows)
+{
+    const uint32_t C_max_alloc_gpu = 4232085504; // NVidia V100 16GB has malloc limit of VRAM/4
+    return boost::math::ccmath::fmax(1, boost::math::ccmath::round(.04 * C_max_alloc_gpu / (n_rows * n_rows)));
+}
+
+class cuvalidate {
+
+    static constexpr auto streams_per_gpu = get_streams_per_gpu(common::C_default_kernel_max_chunk_len);
+    static const uint16_t n_gpus;
+
+    static constexpr uint8_t irwls_iters = 4, magma_iters = 4;
+    static constexpr double one = 1, oneneg = -1, zero = 0;
+    static constexpr uint32_t train_clamp = 0; // C_test_len
+    const solvers::mmm_t &train_L_m;
+    const double labels_sf, iters_mul;
+    const bool weighted;
+    const uint16_t dim, lag_tile_width, lag;
+    const uint32_t m, n, train_len, tune_len, calc_start, calc_len, train_F_rows, train_F_cols, train_cuml_rows, tune_F_rows, tune_F_cols, tune_cuml_rows;
+    const uint64_t mm, mm_size, K_train_len, K_train_size, train_len_n, train_n_size, tune_len_n, tune_n_size, K_tune_len;
+
+    struct dev_ctx {
+        struct stream_ctx {
+            cudaStream_t custream;
+            cublasHandle_t cublas_H;
+            magma_queue_t ma_queue;
+            double *d_K_train, *K_train_off, *d_K_epsco, *j_solved, *j_work, *j_K_work, *d_best_weights, *d_Kz_tune;
+        };
+        double *d_train_label_chunk, *d_tune_label_chunk, *train_label_off, *d_train_features_t, *d_train_cuml, *d_train_W, *d_tune_W, *d_tune_features_t, *d_tune_cuml;
+        std::deque<stream_ctx> sx;
+    };
+    std::deque<dev_ctx> dx;
+
+public:
+    cuvalidate(
+            const uint16_t lag,
+            const arma::mat &tune_cuml, const arma::mat &train_cuml,
+            const arma::mat &tune_features_t, const arma::mat &train_features_t,
+            const arma::mat &tune_label_chunk, const arma::mat &train_label_chunk,
+            const arma::mat &tune_W, const arma::mat &train_W, const solvers::mmm_t &train_L_m, const double labels_sf);
+    ~cuvalidate();
+
+    std::tuple<double, double, double, t_param_preds::t_predictions_ptr> operator()(const double lambda, const double gamma_bias, const double tau);
+};
 
 } // datamodel
 } // svr

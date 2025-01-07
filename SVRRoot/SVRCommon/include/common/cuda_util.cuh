@@ -40,7 +40,7 @@ constexpr unsigned C_cufft_input_limit = 64e5;
 #define CU_BLOCKS_THREADS_t(n) std::pair{CU_BLOCKS_THREADS(n)}
 
 #define CU_THREADS_2D(x) unsigned((x) > common::C_cu_tile_width ? common::C_cu_tile_width : (x))
-#define CU_BLOCKS_2D(x) (unsigned) CDIV((x), common::C_cu_tile_width)
+#define CU_BLOCKS_2D(x) (unsigned) CDIVI((x), common::C_cu_tile_width)
 #define CU_BLOCKS_THREADS_2D(x) dim3(CU_BLOCKS_2D(x), CU_BLOCKS_2D(x)), dim3(CU_THREADS_2D(x), CU_THREADS_2D(x))
 #define CU_BLOCKS_THREADS_2D2(x, y) dim3(CU_BLOCKS_2D(x), CU_BLOCKS_2D(y)), dim3(CU_THREADS_2D(x), CU_THREADS_2D(y))
 #define CU_BLOCKS_THREADS_2D2_t(x, y) std::pair{CU_BLOCKS_THREADS_2D2((x), (y))}
@@ -116,10 +116,15 @@ template<typename T> void cu_fill(T *const data, const unsigned n, const T value
 
 constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set to cudaStreamNonBlocking
 
+#define DEV_CUSTREAM(x)                             \
+    cu_errchk(cudaSetDevice((x)));                  \
+    cudaStream_t custream;                          \
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
+
 #define CTX_CUSTREAM_(x)                            \
     common::gpu_context_<(x)> ctx;                  \
-    cudaStream_t custream;                          \
     cu_errchk(cudaSetDevice(ctx.phy_id()));         \
+    cudaStream_t custream;                          \
     cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
 
 #define CTX_CUSTREAM CTX_CUSTREAM_(CTX_PER_GPU)

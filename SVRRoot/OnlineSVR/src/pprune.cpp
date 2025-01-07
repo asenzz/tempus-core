@@ -1,4 +1,4 @@
-//
+                //
 // Created by zarko on 3/24/24.
 //
 
@@ -23,28 +23,28 @@
 namespace svr {
 namespace optimizer {
 
-constexpr unsigned C_max_population = 2500;
+constexpr uint32_t C_max_population = 3333;
 
 constexpr std::array<double, 1> C_maxfun_drop_coefs {.5};
 
 constexpr double C_default_rhoend = 5e-10;
 constexpr double C_default_rhobeg = .25;
 
-constexpr unsigned C_elect_threshold = 10;
-constexpr int C_rand_disperse = 2;
+constexpr uint32_t C_elect_threshold = 10;
+constexpr int32_t C_rand_disperse = 2;
 
 struct t_calfun_data {
     bool no_elect = true;
     std::shared_ptr<std::deque<t_calfun_data *>> p_particles;
     const t_pprune_cost_fun cost_fun;
-    const unsigned particle_index = 0;
-    const unsigned maxfun = 0;
-    const unsigned D = 0;
+    const uint32_t particle_index = 0;
+    const uint32_t maxfun = 0;
+    const uint32_t D = 0;
     double best_f = std::numeric_limits<double>::max();
-    unsigned nf = 0;
+    uint32_t nf = 0;
     bool zombie = false;
 
-    bool drop(const unsigned keep_particles);
+    bool drop(const uint32_t keep_particles);
 };
 
 #ifdef USE_KNITRO
@@ -91,13 +91,13 @@ public:
     void getMinValues(double *const p) const override
     {
         OMP_FOR(bounds.n_rows)
-        for (unsigned i = 0; i < bounds.n_rows; ++i) p[i] = bounds(i, 0);
+        for (uint32_t i = 0; i < bounds.n_rows; ++i) p[i] = bounds(i, 0);
     }
 
     void getMaxValues(double *const p) const override
     {
         OMP_FOR(bounds.n_rows)
-        for (unsigned i = 0; i < bounds.n_rows; ++i) p[i] = bounds(i, 1);
+        for (uint32_t i = 0; i < bounds.n_rows; ++i) p[i] = bounds(i, 1);
     }
 
     double optcost(CPTRd x) override
@@ -364,7 +364,7 @@ pprune::pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost
 #pragma omp single
     {
 #pragma omp taskloop simd mergeable default(shared) grainsize(1) firstprivate(maxfun, no_elect, C_rand_disperse, C_biteopt_depth) untied // Untied task is a must
-        for (unsigned i = 0; i < n_particles; ++i) {
+        for (uint16_t i = 0; i < n_particles; ++i) {
             auto const calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun, D};
             CBiteRnd rnd(std::pow(C_rand_disperse * i, C_rand_disperse));
             std::deque<std::shared_ptr<t_biteopt_cost>> biteopt(depth);
@@ -374,8 +374,8 @@ pprune::pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost
                 o->init(rnd, x0.colptr(i));
             }
             UNROLL()
-            for (unsigned j = 0; j < maxfun / biteopt.size(); ++j) {
-                for (unsigned d = 0; d < biteopt.size(); ++d)
+            for (uint32_t j = 0; j < maxfun / biteopt.size(); ++j) {
+                for (uint16_t d = 0; d < biteopt.size(); ++d)
                     biteopt[d]->optimize(rnd, d + 1 >= biteopt.size() ? nullptr : biteopt[d + 1].get());
                 if (calfun_data->zombie) {
                     calfun_data->nf = maxfun;

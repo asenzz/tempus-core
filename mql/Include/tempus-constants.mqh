@@ -14,6 +14,7 @@
 const int C_time_mode = TIME_DATE | TIME_SECONDS;
 const int C_bars_offered = INT_MAX; // Maximum offered bars limit
 const int C_period_seconds = PeriodSeconds();
+const uint C_period_m1_seconds = PeriodSeconds(PERIOD_M1);
 const string C_one_str = IntegerToString(1);
 const string C_period_seconds_str = IntegerToString(C_period_seconds);
 const string C_period_time_str = TimeToString(datetime(C_period_seconds), TIME_SECONDS);// Limited to 24 hours period

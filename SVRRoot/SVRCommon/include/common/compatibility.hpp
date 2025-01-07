@@ -692,3 +692,14 @@ void remove_if(ContainerT &items, const PredicateT &predicate)
 } // namespace common
 } // namespace svr
 
+/* #ifndef __CUDACC__
+
+#ifndef __host__
+#define __host__
+#endif
+
+#ifndef __device__
+#define __device__
+#endif
+
+#endif */

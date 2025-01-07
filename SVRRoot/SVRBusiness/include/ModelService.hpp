@@ -24,6 +24,7 @@
 #include "common/constants.hpp"
 #include "model/InputQueue.hpp"
 #include "DatasetService.hpp"
+#include "model_features.hpp"
 
 // #define PRINTOUT_PER_LEVEL_VALUES
 
@@ -125,7 +126,8 @@ public:
 
     static void train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
-    static void train_batch(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_lastknowns, const mat_ptr &p_weights, const bpt::ptime &last_value_time);
+    static void train_batch(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_lastknowns, const mat_ptr &p_weights,
+                            const bpt::ptime &last_value_time);
 
     static void train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights,
                              const bpt::ptime &last_value_time);
@@ -150,6 +152,12 @@ public:
     validate(const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
              const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times, const bool online, const bool verbose);
 
+    static void
+    do_features(
+            arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels, const uint16_t n_queues,
+            const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period, const std::deque<uint32_t> &chunk_len_quantise,
+            const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<arma::u32_vec> &times_F,
+            const std::deque<std::vector<t_feat_params>> &feat_params);
 };
 
 } /* namespace business */

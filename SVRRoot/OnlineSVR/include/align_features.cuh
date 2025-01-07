@@ -7,6 +7,7 @@
 
 #include "common/compatibility.hpp"
 #include "common/cuda_util.cuh"
+#include "model_features.hpp"
 
 namespace svr {
 
@@ -28,10 +29,6 @@ constexpr uint32_t C_max_label_ixs = 3600 + 1; // TODO Deduce from main input qu
 typedef struct _label_ix {
     uint32_t n_ixs, label_ixs[C_max_label_ixs];
 } t_label_ix, *t_label_ix_ptr;
-
-typedef struct _feat_params {
-    uint32_t end_time, time_start, ix_end, ix_start;
-} t_feat_params, *t_feat_params_ptr;
 
 #ifndef __CUDACC__
 __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { return _MIN(a, b); }

@@ -23,7 +23,7 @@ namespace solvers {
 
 __global__ void G_normalize_distances_I(RPTR(double) x, const double dc, const double a, const uint32_t n)
 {
-    CU_STRIDED_FOR_i(n) x[i] = (x[i] - dc) / a;
+    CU_STRIDED_FOR_i(n) common::scale_I(x[i], a, dc);
 }
 
 __global__ void G_div_I(RPTR(double) x, const double a, const uint32_t n)
@@ -111,29 +111,73 @@ double cu_calc_epsco(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const
     return mean_epsco;
 }
 
-double score_weights(CPTRd K, CPTRd weights, CPTRd labels, const uint32_t m, const uint32_t n, const uint32_t mn, const uint32_t mm)
+const uint16_t score_weights::n_gpus = common::gpu_handler_1::get().get_gpu_devices_count();
+
+score_weights::score_weights(const arma::mat &K, const arma::mat &L, const uint32_t m, const uint32_t n, const uint64_t mn, const uint64_t mm) :
+ m(m), n(n), mn(mn), mm(mm), L_size(L.n_elem * sizeof(double))
 {
-    constexpr double one = 1., minus_one = -1.;
-    common::gpu_context_<4> ctx(true);
-    if (!ctx) return 0;
-    cudaStream_t custream;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
-    const auto d_K = cumallocopy(K, custream, mm);
-    const auto d_weights = cumallocopy(weights, custream, mn);
-    const auto d_labels = cumallocopy(labels, custream, mn);
-    cublasHandle_t cublasH;
-    cb_errchk(cublasCreate(&cublasH));
-    cb_errchk(cublasSetStream(cublasH, custream));
-    if (n == 1) {cb_errchk(cublasDgemv(cublasH, CUBLAS_OP_N, m, m, &one, d_K, m, d_weights, 1, &minus_one, d_labels, 1)); }
-    else cb_errchk(cublasDgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, d_K, m, d_weights, m, &minus_one, d_labels, m));
-    cu_errchk(cudaFreeAsync(d_K, custream));
-    cu_errchk(cudaFreeAsync(d_weights, custream));
-    double res;
-    cb_errchk(cublasDasum(cublasH, mn, d_labels, 1, &res));
-    cu_errchk(cudaFreeAsync(d_labels, custream));
-    cb_errchk(cublasDestroy(cublasH));
-    cusyndestroy(custream);
+    K_rhs_dev.resize(n_gpus);
+    const auto K_size = K.n_elem * sizeof(double);
+    OMP_FOR_i(n_gpus) {
+        DEV_CUSTREAM(i);
+        cu_errchk(cudaMallocAsync((void **) &K_rhs_dev[i].K, K_size, custream));
+        cu_errchk(cudaMallocAsync((void **) &K_rhs_dev[i].L, L_size, custream));
+        cu_errchk(cudaMemcpyAsync(K_rhs_dev[i].K, K.mem, K_size, cudaMemcpyHostToDevice, custream));
+        cu_errchk(cudaMemcpyAsync(K_rhs_dev[i].L, L.mem, L_size, cudaMemcpyHostToDevice, custream));
+        cusyndestroy(custream);
+
+        UNROLL(streams_gpu)
+        for (DTYPE(streams_gpu) j = 0; j < streams_gpu; ++j) {
+            cudaStream_t custream_j;
+            cu_errchk(cudaStreamCreateWithFlags(&custream_j, C_cu_default_stream_flags));
+            cublasHandle_t cublas_H;
+            cb_errchk(cublasCreate(&cublas_H));
+            cb_errchk(cublasSetStream(cublas_H, custream_j));
+            cb_errchk(cublasSetPointerMode(cublas_H, CUBLAS_POINTER_MODE_HOST));
+            double *tmp_L;
+            cu_errchk(cudaMallocAsync((void **) &tmp_L, L_size, custream_j));
+            K_rhs_dev[i].stream_cublas.emplace_back(dev_ctx::stream_ctx{custream_j, cublas_H, tmp_L});
+        }
+    }
+}
+
+score_weights::~score_weights()
+{
+    OMP_FOR_i(n_gpus) {
+        DEV_CUSTREAM(i);
+        UNROLL(streams_gpu)
+        for (auto &stream_cubla : K_rhs_dev[i].stream_cublas) {
+            cu_errchk(cudaFreeAsync((void *) stream_cubla.tmp_L, stream_cubla.custream));
+            cb_errchk(cublasDestroy(stream_cubla.cublas_H));
+            cusyndestroy(stream_cubla.custream);
+        }
+        cu_errchk(cudaFreeAsync((void *) K_rhs_dev[i].K, custream));
+        cu_errchk(cudaFreeAsync((void *) K_rhs_dev[i].L, custream));
+        cusyndestroy(custream);
+    }
+}
+
+double score_weights::operator()(CPTRd weights)
+{
+    constexpr double one = 1, minus_one = -1;
+
+    common::gpu_context_<streams_gpu> ctx(true);
+    if (!ctx) return std::numeric_limits<double>::quiet_NaN();
+
+    const auto dev_phy_id = ctx.phy_id();
+    const auto &ctx_dev = K_rhs_dev[dev_phy_id];
+    const auto &ctx_stream = ctx_dev.stream_cublas[ctx.stream_id()];
+
+    cu_errchk(cudaSetDevice(dev_phy_id));
+    const auto d_weights = cumallocopy(weights, ctx_stream.custream, mn);
+    cu_errchk(cudaMemcpyAsync(ctx_stream.tmp_L, ctx_dev.L, L_size, cudaMemcpyDeviceToDevice, ctx_stream.custream));
+    if (n == 1) { cb_errchk(cublasDgemv(ctx_stream.cublas_H, CUBLAS_OP_N, m, m, &one, ctx_dev.K, m, d_weights, 1, &minus_one, ctx_stream.tmp_L, 1)); }
+    else cb_errchk(cublasDgemm(ctx_stream.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, ctx_dev.K, m, d_weights, m, &minus_one, ctx_stream.tmp_L, m));
+    cu_errchk(cudaFreeAsync(d_weights, ctx_stream.custream));
+
+    const auto res = sumabs(ctx_stream.tmp_L, mn, ctx_stream.custream);
+    // cb_errchk(cublasDasum(ctx_stream.cublas_H, mn, ctx_stream.tmp_L, 1, &res));
+
     return res;
 }
 
@@ -1603,7 +1647,7 @@ UNROLL()
 
 double
 solve_hybrid(const double *const j_K_epsco, const uint32_t n, const uint32_t train_len, double *j_solved, const uint32_t magma_iters, const double magma_threshold,
-             const magma_queue_t ma_queue, const uint16_t irwls_iters, const double *const j_train_labels, const size_t train_n_size, double *j_work,
+             const magma_queue_t ma_queue, const uint16_t irwls_iters, const double *const __restrict__ j_train_labels, const size_t train_n_size, double *j_work,
              const cudaStream_t custream, const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t train_len_n,
              double *d_best_weights, const uint32_t K_train_len, double *j_K_epsco_reweighted, magma_int_t &info, const double iters_mul, const uint32_t m)
 {
@@ -1626,7 +1670,7 @@ solve_hybrid(const double *const j_K_epsco, const uint32_t n, const uint32_t tra
         } else if (score < best_score) {
 #ifndef NDEBUG
             LOG4_TRACE("IRWLS iteration " << i << ", kernel dimensions " << train_len << "x" << train_len << ", former best score " << best_score <<
-                ", new best score " << score << ", improvement " << 100. * (1. - score / best_score) << " pct.");
+                                          ", new best score " << score << ", improvement " << 100. * (1. - score / best_score) << " pct.");
 #endif
             best_score = score;
             cu_errchk(cudaMemcpyAsync(d_best_weights, j_solved, train_n_size, cudaMemcpyDeviceToDevice, custream));
