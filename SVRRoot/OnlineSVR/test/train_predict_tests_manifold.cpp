@@ -86,16 +86,20 @@ const uint32_t C_test_features_len_h = C_overload_factor * (C_test_labels_len_h 
 const uint32_t C_dataset_id = 0xDeadBeef;
 const auto C_dataset_id_str = std::to_string(C_dataset_id);
 const auto C_test_features_len_h_str = std::to_string(C_test_features_len_h);
+constexpr char C_last_test_time[] = "2025-01-13 01:00:00";
 
 }
 
 void prepare_test_queue(datamodel::Dataset &dataset, datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon)
 {
+    static tbb::mutex m;
+    const tbb::mutex::scoped_lock l(m);
     const auto table_name = input_queue.get_table_name();
     PROFILE_EXEC_TIME(APP.input_queue_service.load(input_queue), "Loading " << table_name);
     PROFILE_EXEC_TIME(APP.iq_scaling_factor_service.prepare(dataset, input_queue, false), "Prepare input scaling factors for " << table_name);
     PROFILE_EXEC_TIME(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
 }
+
 
 TEST(manifold_tune_train_predict, basic_integration)
 {
@@ -109,11 +113,11 @@ TEST(manifold_tune_train_predict, basic_integration)
         pqxx::work w(c);
         const std::string q =
                 "DROP VIEW IF EXISTS " + C_test_aux_input_table_name + "; " \
-                "CREATE VIEW " + C_test_aux_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_1" + \
-                     " ORDER BY value_time DESC LIMIT " + C_test_features_len_h_str + " * " STR_MAIN_QUEUE_RES ") ORDER BY value_time ASC; " \
+                "CREATE VIEW " + C_test_aux_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_1 "
+                "WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_features_len_h_str + " * " STR_MAIN_QUEUE_RES ") ORDER BY value_time ASC; " \
                 "DROP VIEW IF EXISTS " + C_test_input_table_name + ";" \
                 "CREATE VIEW " + C_test_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_" STR_MAIN_QUEUE_RES \
-                     " ORDER BY value_time DESC LIMIT " + C_test_features_len_h_str + ") ORDER BY value_time ASC;" \
+                     " WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_features_len_h_str + ") ORDER BY value_time ASC;" \
                 "DELETE FROM w_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
@@ -129,7 +133,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             C_test_gradient_count, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
-#pragma omp parallel ADJ_THREADS(std::min<unsigned>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
+#pragma omp parallel ADJ_THREADS(std::min<uint16_t>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
 #pragma omp single
     {
         OMP_TASKLOOP_1()
@@ -147,8 +151,8 @@ TEST(manifold_tune_train_predict, basic_integration)
             arma::vec recon_last_knowns(common::C_integration_test_validation_window);
             t_omp_lock recon_l;
             OMP_TASKLOOP_1(collapse(2))
-            for (unsigned l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
-                for (unsigned s = 0; s < p_dataset->get_multistep(); ++s)
+            for (uint16_t l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
+                for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
                         auto p_model = p_ensemble->get_model(l, s);
                         if (!p_model) LOG4_THROW("Model not found!");
@@ -168,8 +172,8 @@ TEST(manifold_tune_train_predict, basic_integration)
                                 business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_labels_len_h);
                         assert(p_model_labels->n_rows == C_test_labels_len_h);
                         assert(p_model_times->size() == C_test_labels_len_h);
-                        const unsigned train_start = p_model_labels->n_rows - C_test_labels_len_h;
-                        const unsigned train_end = p_model_labels->n_rows - common::C_integration_test_validation_window - 1;
+                        const uint32_t train_start = p_model_labels->n_rows - C_test_labels_len_h;
+                        const uint32_t train_end = p_model_labels->n_rows - common::C_integration_test_validation_window - 1;
                         LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_labels_len_h);
                         const auto feat_levels = p_head_params->get_adjacent_levels();
                         const auto last_value_time = p_model_times->back()->get_value_time();
@@ -177,7 +181,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                                                             otr<arma::mat>(p_model_labels->rows(train_start, train_end)),
                                                             otr<arma::vec>(p_model_last_knowns->rows(train_start, train_end)),
 #ifdef INSTANCE_WEIGHTS
-                                otr<arma::mat>(p_weights->rows(train_start, train_end)),
+                                                            otr<arma::mat>(p_weights->rows(train_start, train_end)),
 #else
                                                             nullptr,
 #endif
@@ -200,7 +204,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             recon_predicted = arma::mean(recon_predicted, 1);
             recon_actual = arma::mean(recon_actual, 1);
 
-            const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_dataset->get_aux_input_queue()->get_table_name(), p_dataset->get_ensemble()->get_column_name());
+            const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_predicted);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_last_knowns);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);
@@ -210,15 +214,16 @@ TEST(manifold_tune_train_predict, basic_integration)
             uint16_t positive_mae_ct = 0, pos_direct = 0, price_hits = 0;
             const auto validated_ct = recon_actual.size();
             const auto resolution = p_dataset->get_input_queue()->get_resolution();
-            const auto offset_period = resolution * PROPS.get_prediction_horizon();
+            const auto horizon_duration = resolution * PROPS.get_prediction_horizon();
             const auto validate_start = p_times->size() - validated_ct;
+            const auto column_ix = p_dataset->get_input_queue()->get_value_column_index(column);
             UNROLL()
             for (uint16_t i = 0; i < validated_ct; ++i) {
                 const auto i_div = i + 1.;
                 const auto cur_time = p_times->at(validate_start + i)->get_value_time();
-                const auto actual = ***lower_bound(*p_dataset->get_input_queue(), cur_time);
-                const auto last_known_iter = lower_bound_back_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - resolution * PROPS.get_prediction_horizon());
-                const auto last_known = ***last_known_iter;
+                const auto actual = (**lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
+                const auto last_known_iter = lower_bound_back_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
+                const auto last_known = (**last_known_iter)[column_ix];
                 const auto diff_actual_last_known = actual - last_known;
                 const auto diff_recon_actual_last_known = recon_actual[i] - recon_last_knowns[i];
                 const auto predicted_move = recon_predicted[i] - recon_last_knowns[i];
@@ -242,7 +247,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto sign_predicted_move = std::signbit(predicted_move);
                 const auto start_aux_it = lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time);
                 const auto last_aux_it = lower_bound(start_aux_it, p_dataset->get_aux_input_queue()->cend(), cur_time + resolution);
-                const auto placement_it = lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time - offset_period + C_placement_delay);
+                const auto placement_it = lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time - horizon_duration + C_placement_delay);
                 const auto placement_price = ***placement_it;
                 const auto last_aux_price = ***std::prev(last_aux_it);
                 constexpr auto time_comp = [](const auto &lhs, const auto &rhs) { return lhs->get_value_time() < rhs->get_value_time(); };
@@ -255,7 +260,6 @@ TEST(manifold_tune_train_predict, basic_integration)
                         ++price_hits;
                         pips_won += placement_price - recon_predicted[i];
                     } else if (last_aux_price < placement_price) {
-                        ++price_hits;
                         pips_won += placement_price - last_aux_price;
                     } else
                         pips_lost += last_aux_price - placement_price;
@@ -269,7 +273,6 @@ TEST(manifold_tune_train_predict, basic_integration)
                         ++price_hits;
                         pips_won += recon_predicted[i] - placement_price;
                     } else if (last_aux_price > placement_price) {
-                        ++price_hits;
                         pips_won += last_aux_price - placement_price;
                     } else
                         pips_lost += placement_price - last_aux_price;
@@ -282,8 +285,8 @@ TEST(manifold_tune_train_predict, basic_integration)
                 }
                 if (cur_recon_error > std::numeric_limits<double>::epsilon() || cur_recon_lk_error > std::numeric_limits<double>::epsilon())
                     LOG4_WARN("Recon differ at " << cur_time << " between actual price " << actual << " and recon price " << \
-                    recon_actual[i] << ", is " << cur_recon_diff << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i]
-                                                 << ", last known difference " << last_known - recon_last_knowns[i]);
+                    recon_actual[i] << ", is " << cur_recon_diff << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i] << \
+                    ", last known difference " << last_known - recon_last_knowns[i]);
                 drawdown += this_drawdown;
                 MAXAS(max_drawdown, this_drawdown);
                 const auto net_pips = pips_won - pips_lost;
@@ -292,7 +295,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto leverage = drawdown_pos > 0 ? std::max(0., pips_pos / drawdown_pos) : pips_pos;
                 const auto abs_leverage = max_drawdown > 0 ? std::max(0., net_pips / max_drawdown) : net_pips;
                 const auto positive_preds_pc = 100. * positive_mae_ct / i_div;
-                LOG4_DEBUG("Position " << i << ", column " << column << \
+                LOG4_DEBUG("Position " << i << ", column " << column << " " << column_ix << \
                        ", price time " << cur_time << \
                        ", actual price " << actual << \
                        ", recon actual price " << recon_actual[i] << \
@@ -311,8 +314,9 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", current alpha " << cur_alpha_pct << "pc" \
                        ", cumulative alpha " << cml_alpha_pct << "pc" \
                        ", recon error " << cur_recon_error << \
-                       ", average recon error " << 100. * recon_mae / i_div << "pc" \
-                       ", average recon error last-known " << 100. * recon_lk_mae / i_div << "pc" \
+                       ", recon error last-known " << cur_recon_lk_error << \
+                       ", recon label MAE " << 100. * recon_mae / i_div << \
+                       ", recon last-known MAE " << 100. * recon_lk_mae / i_div << \
                        ", price hits " << 100. * double(price_hits) / i_div << "pc" \
                        ", won " << pips_won << \
                        ", lost " << pips_lost << \

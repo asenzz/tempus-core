@@ -624,7 +624,7 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
     }
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
     if ((**row_iter).get_value_time() >= time_key) LOG4_ERROR(
-            "Couldn't find equal or before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
+            "Couldn't find before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
 }
 

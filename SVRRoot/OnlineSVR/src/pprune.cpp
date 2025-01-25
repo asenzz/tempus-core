@@ -354,7 +354,7 @@ void pprune::pprune_knitro(const unsigned n_particles, const t_pprune_cost_fun &
 
 // TODO Implement depth
 void
-pprune::pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0, const unsigned depth)
+pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0, const uint32_t depth)
 {
     const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
     auto p_particles = ptr<std::deque<t_calfun_data_ptr>>(n_particles);
@@ -364,7 +364,7 @@ pprune::pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost
 #pragma omp single
     {
 #pragma omp taskloop simd mergeable default(shared) grainsize(1) firstprivate(maxfun, no_elect, C_rand_disperse, C_biteopt_depth) untied // Untied task is a must
-        for (uint16_t i = 0; i < n_particles; ++i) {
+        for (DTYPE(n_particles) i = 0; i < n_particles; ++i) {
             auto const calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun, D};
             CBiteRnd rnd(std::pow(C_rand_disperse * i, C_rand_disperse));
             std::deque<std::shared_ptr<t_biteopt_cost>> biteopt(depth);
@@ -375,7 +375,7 @@ pprune::pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost
             }
             UNROLL()
             for (uint32_t j = 0; j < maxfun / biteopt.size(); ++j) {
-                for (uint16_t d = 0; d < biteopt.size(); ++d)
+                for (uint32_t d = 0; d < biteopt.size(); ++d)
                     biteopt[d]->optimize(rnd, d + 1 >= biteopt.size() ? nullptr : biteopt[d + 1].get());
                 if (calfun_data->zombie) {
                     calfun_data->nf = maxfun;

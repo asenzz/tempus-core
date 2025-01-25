@@ -111,15 +111,14 @@ DQScalingFactorService::calculate(const unsigned chunk_ix, const datamodel::Onli
     t_omp_lock add_sf_l;
     const auto lag = p_params->get_lag_count();
     const auto num_levels = features_t.n_rows / lag;
-#pragma omp parallel for ADJ_THREADS(num_levels) schedule(static, 1)
-    for (unsigned levix = 0; levix < num_levels; ++levix) {
-        const auto level_feats = features_t.rows(levix * lag, (levix + 1) * lag - 1);
+    OMP_FOR_i(num_levels) {
+        const auto level_feats = features_t.rows(i * lag, (i + 1) * lag - 1);
         const auto [dc_offset, scaling_factor] = calc(level_feats);
         if (!std::isnormal(scaling_factor) || !common::isnormalz(dc_offset))
-            LOG4_THROW("Scaling factors not sane, level " << levix << ", lag " << lag << ", chunk " << chunk_ix << ", gradient " << svr_model.get_gradient_level() <<
-                    ", step " << svr_model.get_step() << ", scaling factor " << scaling_factor << ", DC offset " << dc_offset << ", data " << common::present(level_feats));
+            LOG4_THROW("Scaling factors not sane, level " << i << ", lag " << lag << ", chunk " << chunk_ix << ", gradient " << svr_model.get_gradient_level() <<
+                                                          ", step " << svr_model.get_step() << ", scaling factor " << scaling_factor << ", DC offset " << dc_offset << ", data " << common::present(level_feats));
         const auto p_sf = otr<datamodel::DQScalingFactor>(
-                dataset_id, svr_model.get_model_id(), levix, labels_step, svr_model.get_gradient_level(), chunk_ix, scaling_factor, std::numeric_limits<double>::quiet_NaN(), dc_offset);
+                dataset_id, svr_model.get_model_id(), i, labels_step, svr_model.get_gradient_level(), chunk_ix, scaling_factor, std::numeric_limits<double>::quiet_NaN(), dc_offset);
         add_sf_l.set();
         add(res, p_sf);
         add_sf_l.unset();
@@ -132,15 +131,14 @@ void DQScalingFactorService::scale_features(const unsigned chunk_ix, const unsig
                                             const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t)
 {
     const auto num_levels = features_t.n_rows / lag;
-#pragma omp parallel for simd ADJ_THREADS(num_levels) schedule(static, 1)
-    for (unsigned levix = 0; levix < num_levels; ++levix) {
-        const auto row1 = levix * lag;
-        const auto row2 = (levix + 1) * lag - 1;
-        const auto p_sf = find(sf, 0, chunk_ix, grad_level, step, levix, true, false);
+    OMP_FOR_i(num_levels) {
+        const auto row1 = i * lag;
+        const auto row2 = (i + 1) * lag - 1;
+        const auto p_sf = find(sf, 0, chunk_ix, grad_level, step, i, true, false);
         auto features_t_view = features_t.rows(row1, row2);
         features_t_view = common::scale<arma::mat>(features_t_view, p_sf->get_features_factor(), p_sf->get_dc_offset_features());
         if (features_t_view.has_nonfinite())
-            LOG4_THROW("Scaled features not sane, factors " << *p_sf << ", level " << levix << ", feats " << features_t_view << ", start " << row1 << ", end " << row2 <<
+            LOG4_THROW("Scaled features not sane, factors " << *p_sf << ", level " << i << ", feats " << features_t_view << ", start " << row1 << ", end " << row2 <<
                                                             ", lag " << lag << ", chunk " << chunk_ix << ", gradient " << grad_level);
     }
 }

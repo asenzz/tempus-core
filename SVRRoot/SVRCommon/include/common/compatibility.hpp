@@ -59,7 +59,7 @@ namespace bpt = boost::posix_time;
     public:                      \
         inline T get_##X() const { return X; } \
         inline T &get_##X() { return X; } \
-        inline void set_##X(const T &X) { this->X = X; }
+        inline void set_##X(const T &X##_) { X = X##_; }
 
 #define PROPERTY_2(T, X) private: T X; PROPERTY_PUBLISHED(T, X)
 #define PROPERTY_3(T, X, D) private: T X = D; PROPERTY_PUBLISHED(T, X)

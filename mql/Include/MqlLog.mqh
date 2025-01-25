@@ -60,7 +60,7 @@ void log_msg(const string type, const string &method, const string &file, const 
 #define LOG_SYS_ERR(message) if (LogErrorEnabled || LogInfoEnabled || LogDebugEnabled) log_msg("ERROR: ", __FUNCTION__, __FILE__, string(__LINE__), message + " Sys: " + IntegerToString(GetLastError()) + ", " + ErrorDescription(GetLastError()))
 #define LOG_INFO(message) if (LogInfoEnabled || LogDebugEnabled || LogVerboseEnabled) log_msg("INFO: ", __FUNCTION__, __FILE__, string(__LINE__), message )
 #define LOG_DEBUG(message) if (LogDebugEnabled || LogVerboseEnabled) log_msg("DEBUG: ", __FUNCTION__, __FILE__, string(__LINE__), message)
-#define LOG_VERBOSE(message) if (LogVerboseEnabled) log_msg("VERBS: ", __FUNCTION__, __FILE__, string(__LINE__), message)
+#define LOG_VERBOSE(message) if (LogVerboseEnabled) log_msg("VERBOSE: ", __FUNCTION__, __FILE__, string(__LINE__), message)
 #define LOG_PERF(message) if (LogPerfEnabled) log_msg("PERF: ", __FUNCTION__, __FILE__, string(__LINE__), message)
 
 //+------------------------------------------------------------------+

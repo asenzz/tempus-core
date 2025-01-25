@@ -47,13 +47,13 @@ __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd feature
     UNROLL(C_align_validate)
     for (uint32_t r = validate_rows - C_align_validate; r < validate_rows; ++r)
         res += abs(labels[r] - features[STRETCHSKIP_(r)]);
-    return res / validate_rows;
+    return res;
 }
 
 __global__ void G_align_features(
         CRPTRd features, CRPTRd labels,
         RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts, RPTR(float) skips,
-        const uint32_t n_rows, const uint32_t n_cols, const uint32_t n_rows_integration)
+        const uint32_t n_rows, const uint32_t n_cols)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
@@ -63,7 +63,7 @@ __global__ void G_align_features(
             // const uint32_t shift_limit_sh = shift_limit - sh;
             // CPTRd mean_L_sh = labels + shift_limit_sh;
             CPTRd mean_L_sh = labels + sh;
-            const auto validate_rows = n_rows_integration - sh;
+            const auto validate_rows = n_rows - sh;
             UNROLL()
             for (float st = 1; st > C_stretch_limit; st *= C_stretch_multiplier) {
 // UNROLL()
@@ -93,7 +93,9 @@ void align_features(
     if (n_rows < C_active_window) LOG4_THROW("Rows " << n_rows << " less than active window " << C_active_window);
 #endif
     CTX4_CUSTREAM;
-    const auto d_features = cumallocopy(p_features, custream, n_rows * n_cols);
+    double *d_features;
+    cu_errchk(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
+    copy_submat(p_features, d_features, n_rows, 0, 0, n_rows_integration, n_cols, n_rows_integration, cudaMemcpyHostToDevice, custream);
     const auto d_labels = cumallocopy(labels, custream, n_rows);
     double *d_scores;
     cu_errchk(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
@@ -103,7 +105,7 @@ void align_features(
     cu_errchk(cudaMallocAsync((void **) &d_skips, cols_size_float, custream));
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
-    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows, n_cols, n_rows_integration);
+    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols);
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
@@ -219,7 +221,7 @@ __global__ void G_quantise_labels_quick(
         UNROLL(36)
         for (uint32_t j = 0; j < d_label_ixs[i].n_ixs; ++j) d_labels[rows * (j / step_ixs) + i] += d_in[d_label_ixs[i].label_ixs[j]];
         const auto lk = d_in[ix_end_F[i] - 1];
-        for (uint32_t j = 0; j < multistep; ++j) {
+        for (uint16_t j = 0; j < multistep; ++j) {
             const auto lix = j * rows + i;
             d_labels[lix] /= step_ixs;
 #ifdef EMO_DIFF

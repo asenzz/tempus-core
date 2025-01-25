@@ -31,10 +31,9 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
-        const auto p_param = p_model->get_head_params();
-        ModelService::prepare_features(*p_features, times, aux_decons, *p_param, max_gap, aux_res, main_res);
+        ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params(), max_gap, aux_res, main_res);
         res_l.set();
-        res.emplace(std::tuple{p_param->get_decon_level(), p_param->get_step()}, datamodel::t_level_predict_features{times, p_features});
+        res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
         res_l.unset();
     }
 
@@ -61,7 +60,7 @@ void EnsembleService::load_decon(const datamodel::Ensemble &ensemble)
 #pragma omp task
         if (ensemble.get_decon_queue())
             APP.decon_queue_service.load_latest(*ensemble.get_decon_queue());
-#pragma omp taskloop simd untied grainsize(1)
+#pragma omp taskloop SSIMD untied grainsize(1)
         for (auto &p_aux_decon_queue: ensemble.get_aux_decon_queues())
             if (p_aux_decon_queue)
                 APP.decon_queue_service.load_latest(*p_aux_decon_queue);
@@ -173,7 +172,11 @@ int EnsembleService::save(const datamodel::Ensemble_ptr &p_ensemble)
     }
     int res = ensemble_dao_.save(p_ensemble);
     model_service_.remove_by_ensemble_id(p_ensemble->get_id());
+#ifdef __GNUC__
+    OMP_FOR_(models.size(), reduction(&:res))
+#else
     OMP_FOR_(models.size(), simd reduction(&:res))
+#endif
     for (const auto &p_model: models)
         res &= model_service_.save(p_model);
 
@@ -187,7 +190,7 @@ bool EnsembleService::save_ensembles(const std::deque<datamodel::Ensemble_ptr> &
 {
     LOG4_BEGIN();
     bool res = false;
-    OMP_FOR_(ensembles.size(), simd reduction(&:res))
+    OMP_FOR_(ensembles.size(), SSIMD reduction(&:res))
     for (const datamodel::Ensemble_ptr &e: ensembles) {
         if (save_decon_queues && e->get_decon_queue()) decon_queue_service_.save(e->get_decon_queue());
         res &= save(e);
@@ -228,7 +231,7 @@ int EnsembleService::remove(const datamodel::Ensemble_ptr &p_ensemble)
 bool EnsembleService::check(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<std::string> &value_columns)
 {
     tbb::concurrent_vector<bool> present(value_columns.size(), false);
-    OMP_FOR_(ensembles.size() * value_columns.size(), simd collapse(2))
+    OMP_FOR_(ensembles.size() * value_columns.size(), SSIMD collapse(2))
     for (const auto &e: ensembles)
         for (size_t i = 0; i < value_columns.size(); ++i)
             if (e->get_column_name() == value_columns[i])
@@ -273,7 +276,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
                                          return p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_main_decon->get_input_queue_table_name() &&
                                                 p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
                                      });
-#if 0
+#if 0 // Combine features from different columns, seems to yield worse results
         const auto &ensemble_aux_queues = aux_decon_queues;
 #else
         DTYPE(aux_decon_queues) ensemble_aux_queues;

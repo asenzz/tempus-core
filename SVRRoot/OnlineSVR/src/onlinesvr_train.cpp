@@ -249,7 +249,7 @@ void OnlineMIMOSVR::learn(
 #pragma omp single
     {
 #pragma omp taskloop mergeable grainsize(1) default(shared)
-        for (uint16_t i = 0; i < affected_chunks.size(); ++i) {
+        for (uint16_t i = 0; i < CAST2(i) affected_chunks.size(); ++i) {
             const auto chunk_ix = affected_chunks % i;
             const auto &af = affected_chunks ^ i;
             const auto chunk_shed_rows = af.first;

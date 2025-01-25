@@ -92,8 +92,8 @@ void OnlineMIMOSVR::tune_fast()
     weight_chunks.resize(num_chunks);
 
 #ifdef KERNEL_PARAM_3
-    constexpr uint16_t opt_particles = 64;
-    constexpr uint16_t opt_iters = 64;
+    constexpr uint16_t opt_particles = 1; // 64;
+    constexpr uint16_t opt_iters = 1; // 64;
     constexpr uint16_t D = 3;
 #else
     constexpr uint8_t opt_particles = 40;
@@ -208,10 +208,11 @@ void OnlineMIMOSVR::tune_fast()
 #else
             const arma::uvec sorted_ixs = C_shift_lim + arma::stable_sort_index(score_dataset(tune_labels, tune_features_t, 1e-2));
 #endif
-            ixs[chunk_ix] = arma::sort(sorted_ixs.tail(max_chunk_size));
+            const auto max_chunk_rows = std::min<uint32_t>(sorted_ixs.n_rows - C_test_len - C_shift_lim - C_outlier_slack, max_chunk_size);
+            ixs[chunk_ix] = arma::sort(sorted_ixs.tail(max_chunk_rows));
             train_label_chunks[chunk_ix] = p_labels->rows(ixs[chunk_ix]);
             train_feature_chunks_t[chunk_ix] = p_features->rows(ixs[chunk_ix]).t();
-            chunk_ixs_tune = arma::join_cols(arma::sort(sorted_ixs(arma::find(sorted_ixs < (p_labels->n_rows - C_test_len))).eval().tail_rows(max_chunk_size)), test_ixs);
+            chunk_ixs_tune = arma::join_cols(arma::sort(sorted_ixs(arma::find(sorted_ixs < (p_labels->n_rows - C_test_len))).eval().tail_rows(max_chunk_rows)), test_ixs);
             LOG4_TRACE("Train chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk tune ixs " << common::present(chunk_ixs_tune) <<
                                       ", sorted ixs " << common::present(sorted_ixs) << ", labels rows " << p_labels->n_rows);
 #if 0 // TODO Test BACON outlier detection

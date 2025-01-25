@@ -14,8 +14,8 @@ bool Model::operator==(const Model &o) const
            && last_modified == o.last_modified && last_modeled_value_time == o.last_modeled_value_time && svr_models == o.svr_models;
 }
 
-Model::Model(const bigint id, const bigint ensemble_id, const unsigned decon_level, const unsigned step,
-             const unsigned multiout_, const unsigned gradient_ct, const unsigned chunk_size,
+Model::Model(const bigint id, const bigint ensemble_id, const uint16_t decon_level, const uint16_t step,
+             const uint16_t multiout_, const uint16_t gradient_ct, const uint32_t chunk_size,
              std::deque<OnlineMIMOSVR_ptr> svr_model, const bpt::ptime &last_modified,
              const bpt::ptime &last_modeled_value_time)
         : Entity(id),
@@ -43,18 +43,18 @@ void Model::init_id()
     }
 }
 
-unsigned Model::get_gradient_count() const
+uint16_t Model::get_gradient_count() const
 { return gradient_ct; }
 
-void Model::set_max_chunk_size(const unsigned chunk_size)
+void Model::set_max_chunk_size(const uint32_t chunk_size)
 {
     max_chunk_size = chunk_size;
 }
 
-unsigned Model::get_max_chunk_size() const
+uint32_t Model::get_max_chunk_size() const
 { return max_chunk_size; }
 
-unsigned Model::get_multiout() const
+uint16_t Model::get_multiout() const
 { return multiout; }
 
 void Model::reset()
@@ -80,30 +80,30 @@ void Model::set_ensemble_id(const bigint ensemble_id)
 }
 
 /** Get the wavelet deconstruction level this model is predicting. */
-unsigned Model::get_decon_level() const
+uint16_t Model::get_decon_level() const
 {
     return decon_level;
 }
 
 /** Set the decon level this model is predicting */
-void Model::set_decon_level(const unsigned _decon_level)
+void Model::set_decon_level(const uint16_t _decon_level)
 {
     decon_level = _decon_level;
 }
 
-unsigned Model::get_step() const
+uint16_t Model::get_step() const
 {
     return step;
 }
 
 /** Set the decon level this model is predicting */
-void Model::set_step(const unsigned _step)
+void Model::set_step(const uint16_t _step)
 {
     step = _step;
 }
 
 /** Get pointer to an OnlineSVR model instance */
-OnlineMIMOSVR_ptr Model::get_gradient(const unsigned i) const
+OnlineMIMOSVR_ptr Model::get_gradient(const uint16_t i) const
 {
     const auto svr_model_iter = std::find_if(C_default_exec_policy, svr_models.begin(), svr_models.end(), [&](const auto &p_svr_model) {
         return p_svr_model->get_gradient_level() == i;
@@ -115,7 +115,13 @@ OnlineMIMOSVR_ptr Model::get_gradient(const unsigned i) const
 
 datamodel::SVRParameters_ptr Model::get_head_params() const
 {
-    return (svr_models.empty() || (**svr_models.cbegin()).get_param_set().empty()) ? nullptr : *(**svr_models.cbegin()).get_param_set().cbegin();
+    if (svr_models.empty())
+        return nullptr;
+    else
+        for (const auto &m: svr_models)
+            if (!m->get_param_set().empty())
+                return *(m->get_param_set().cbegin());
+    return nullptr;
 }
 
 std::deque<OnlineMIMOSVR_ptr> &Model::get_gradients()
@@ -132,11 +138,10 @@ std::deque<OnlineMIMOSVR_ptr> Model::get_gradients() const
 void Model::set_gradient(const OnlineMIMOSVR_ptr &m)
 {
     std::atomic<bool> found{false};
-#pragma omp parallel for num_threads(adj_threads(svr_models.size()))
-    for (unsigned g = 0; g < svr_models.size(); ++g) {
-        if (m->get_gradient_level() == svr_models[g]->get_gradient_level()) {
-            svr_models[g] = m;
-            svr_models[g]->set_model_id(id);
+    OMP_FOR_i(svr_models.size()) {
+        if (m->get_gradient_level() == svr_models[i]->get_gradient_level()) {
+            svr_models[i] = m;
+            svr_models[i]->set_model_id(id);
             found.store(true, std::memory_order_relaxed);
         }
     }
@@ -150,11 +155,10 @@ void Model::set_gradient(const OnlineMIMOSVR_ptr &m)
  */
 void Model::set_gradients(const std::deque<OnlineMIMOSVR_ptr> &new_svr_models, const bool overwrite)
 {
-    const unsigned prev_size = svr_models.size();
+    const uint16_t prev_size = svr_models.size();
     for (const auto &new_m: new_svr_models) {
         std::atomic<bool> found = false;
-#pragma omp parallel for num_threads(adj_threads(prev_size))
-        for (unsigned i = 0; i < prev_size; ++i)
+        OMP_FOR_i(prev_size)
             if (new_m->get_gradient_level() == svr_models[i]->get_gradient_level() && new_m->get_decon_level() == svr_models[i]->get_decon_level()) {
                 if (overwrite) {
                     svr_models[i] = new_m;

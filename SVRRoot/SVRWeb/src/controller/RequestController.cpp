@@ -53,7 +53,7 @@ void RequestView::makeMultivalRequest(cppcms::json::object data)
     const auto request_id = APP.request_service.make_request(user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str, value_columns);
     if (request_id < 1) {
         const string msg = common::formatter() << "Failed making forecast request " << user << ", " << dataset_id_str << ", " << value_time_start_str << ", " << value_time_end_str
-                << ", " << resolution_str << " " << value_columns;
+                                               << ", " << resolution_str << " " << value_columns;
         LOG4_ERROR(msg);
         return_error(msg);
         return;
@@ -117,7 +117,7 @@ void RequestView::getMultivalResults(json::object data)
     if (responses.empty()) {
         const std::string error =
                 common::formatter() << "Couldn't find any responses for user " << user << ", dataset " << dataset_id_str << ", starting " << value_time_start_str <<
-                            ", until " << value_time_end_str << ", resolution " << resolution_str;
+                                    ", until " << value_time_end_str << ", resolution " << resolution_str;
         LOG4_WARN(error);
         return_error(error);
         return;

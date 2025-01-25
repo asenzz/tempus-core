@@ -456,6 +456,8 @@ std::string SVRParameters::to_string() const
       << ", kernel param 2 " << svr_kernel_param2
       << ", kernel param 3 " << kernel_param3
       << ", decrement distance " << svr_decremental_distance
+      << ", min Z " << min_Z
+      << ", max Z " << max_Z
       << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
       << ", kernel type " << static_cast<int>(kernel_type)
       << ", lag count " << lag_count

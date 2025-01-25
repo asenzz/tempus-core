@@ -719,7 +719,7 @@ extrude_rows(const arma::Mat<T> &m, const size_t ct)
 template<typename T> std::stringstream present_s(const arma::Mat<T> &m)
 {
     std::stringstream res;
-    res << "elements " << m.n_elem << ", size " << arma::size(m);
+    res << std::setprecision(std::numeric_limits<double>::max_digits10) << "elements " << m.n_elem << ", size " << arma::size(m);
     if (m.empty()) {
         res << ", empty";
         return res;
@@ -764,10 +764,15 @@ present(const arma::subview<T> &m)
 {
     std::stringstream res;
     const arma::vec vm = arma::conv_to<arma::vec>::from(m);
-    res << "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
+    res << std::setprecision(std::numeric_limits<double>::max_digits10) <<
+        "elements " << m.n_elem << ", size " << arma::size(m) << ", mean " << arma::mean(vm) << ", max " << arma::max(vm) << ", min " << arma::min(vm) << ", stddev "
         << arma::stddev(vm) <<
         ", var " << arma::var(vm) << ", median " << arma::median(vm) << ", medianabs " << arma::median(arma::abs(vm)) << ", range " << arma::range(vm) << ", meanabs "
-        << arma::mean(arma::abs(vm));
+        << arma::mean(arma::abs(vm)) << ", values ";
+    if (m.n_elem) {
+        for (uint16_t i = 0; i < std::min<size_t>(m.n_elem, 5) - 1; ++i) res << m[i] << ", ";
+        res << m.back();
+    }
     return res.str();
 }
 

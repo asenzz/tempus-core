@@ -233,6 +233,8 @@ public:
     business::calc_cache &get_calc_cache();
 
     void init_id() override;
+
+    PROPERTY(bpt::ptime, last_self_request, bpt::min_date_time); // Last time the dataset created self-request for prediction
 };
 
 template<typename T>

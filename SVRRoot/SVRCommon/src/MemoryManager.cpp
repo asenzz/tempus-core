@@ -143,7 +143,14 @@ float memory_manager::get_proc_rss()
     // fscanf(self_statm, "%ld", &s);
     constexpr uint8_t bufl = 16;
     char buf[bufl];
-    fread(buf, sizeof(*buf), bufl, self_statm);
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+#endif
+    static_cast<void>( fread(buf, sizeof(*buf), bufl, self_statm) );
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
     constexpr float mbd = 1024 * 1024;
     static const float pagesize_mbd = sysconf(_SC_PAGESIZE) / mbd;
     *(char *) memchr(buf, ' ', bufl) = 0;

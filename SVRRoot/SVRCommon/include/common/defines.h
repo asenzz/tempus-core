@@ -3,7 +3,6 @@
 /* Global constants and defines */
 
 // #define NO_PARALLEL // Disable parallelisation macros
-
 // #define INTEGRATION_TEST
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
 #define NO_ONLINE_TRAINING // Disable online training, buggy and resource-hungry

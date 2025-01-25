@@ -29,6 +29,7 @@ class PropertiesFileReader
     static const std::string SCALING_ALPHA;
     static const std::string SLIDE_COUNT;
     static const std::string TUNE_RUN_LIMIT;
+    static const std::string SELF_REQUEST;
 
     MessageProperties property_files;
     char delimiter;
@@ -51,6 +52,7 @@ class PropertiesFileReader
     size_t tune_run_limit_;
     std::string db_connection_string_;
     boost::log::trivial::severity_level log_level_;
+    bool self_request_;
 
     size_t read_property_file(std::string property_file_name);
     bool is_comment(const std::string &line);
@@ -88,8 +90,9 @@ public:
     inline size_t get_validation_window() const { return validation_window_; }
     inline size_t get_tune_run_limit() const { return tune_run_limit_; }
     inline boost::log::trivial::severity_level get_log_level() const { return log_level_; };
+    inline bool get_self_request() const { return self_request_; }
 
-    static unsigned char S_log_threshold;
+    static uint8_t S_log_threshold;
 };
 
 

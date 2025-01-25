@@ -37,7 +37,7 @@ const string C_login_url = "mt4/login";
 const string C_post_payload = "username=" + Username + "&password=" + Password;
 
 #define EXPERT_MAGIC 132435   // MagicNumber of the expert
-#define NOSIGNAL 0xDeadBeef
+const int C_no_signal = (int) 0xDeadBeef;
 
 #include <TempusGMT.mqh>
 #include <TempusMVC.mqh>
@@ -113,7 +113,10 @@ int OnInit()
     if (!C_backtesting && !GlobalVariableCheck(C_one_minute_chart_identifier)) LOG_ERROR("One minute tempus data connector is not active!");
 
     controller.init(C_input_queue_name, C_period_seconds, 0, 0, 0, 0, 1);
-    return(INIT_SUCCEEDED);
+
+    EventSetTimer(1);
+
+    return INIT_SUCCEEDED;
 }
 
 
@@ -122,6 +125,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+    EventKillTimer();
 }
 
 
@@ -233,7 +237,7 @@ void CheckOpenOrders(const int signal_type, const double price_bid, const double
             if (PositionGetString(POSITION_SYMBOL) == _Symbol) {
                 const datetime position_time = (datetime) PositionGetInteger(POSITION_TIME);
                 if (server_time - position_time < C_period_seconds) continue;
-                
+
                 const ENUM_POSITION_TYPE position_type = (ENUM_POSITION_TYPE) PositionGetInteger(POSITION_TYPE);
                 const double pos_price = position_type == POSITION_TYPE_BUY ? price_ask : price_bid;
                 if (position_type == signal_type)
@@ -262,8 +266,9 @@ void OnTick()
     if (current_server_time_st.day_of_week >= Stop_Day && current_server_time_st.hour >= Stop_Hour) return;
     const datetime next_bar_offset = current_bar_time + C_period_seconds - C_forecast_offset;
     aprice anchor_price, predicted_price;
-    if (((C_backtesting && current_server_time >= next_bar_offset) || (!C_backtesting && datetime(GlobalVariableGet(C_one_minute_chart_identifier)) >= next_bar_offset - C_period_m1_seconds)) 
-        && current_bar_time >= G_pending_request_time) {
+    const bool make_request = C_backtesting ? current_server_time >= next_bar_offset : datetime(GlobalVariableGet(C_one_minute_chart_identifier)) >= next_bar_offset - C_period_m1_seconds;
+    if (make_request && current_bar_time >= G_pending_request_time) {
+        Sleep(100);// TODO Remove temporary fix
         G_pending_request_time = current_bar_time + C_period_seconds;
         int req_res, req_retries = 0;
         do req_res = controller.doRequest(net, G_pending_request_time, 1, C_dataset_id_str);
@@ -299,7 +304,7 @@ void OnTick()
         else if (predicted_price.bid < anchor_price.bid)
             signal = POSITION_TYPE_SELL;
         else
-            signal = (int) NOSIGNAL;
+            signal = C_no_signal;
 
         MqlTick ticknow;
         ZeroMemory(ticknow);
@@ -317,9 +322,10 @@ void OnTick()
         }
         CheckOpenOrders(signal, price_bid, price_ask, takeprofit, stoploss, current_server_time);
         const double price_spread = MathAbs(price_ask - price_bid);
-        LOG_DEBUG("Take profit price is " + DoubleToString(takeprofit, DOUBLE_PRINT_DECIMALS) + ", last known price bid is " + DoubleToString(price_bid, DOUBLE_PRINT_DECIMALS) +
-                  ", ask is " + DoubleToString(price_ask, DOUBLE_PRINT_DECIMALS) + ", current spread " + DoubleToString(price_spread, DOUBLE_PRINT_DECIMALS));
-        if (current_dev >= StdDev_Threshold && price_spread < Spread_Threshold && signal != int(NOSIGNAL)) {
+        LOG_DEBUG("Take profit price is " + DoubleToString(takeprofit, DOUBLE_PRINT_DECIMALS) + ", current price bid is " + DoubleToString(price_bid, DOUBLE_PRINT_DECIMALS) +
+                  ", ask is " + DoubleToString(price_ask, DOUBLE_PRINT_DECIMALS) + ", current spread " + DoubleToString(price_spread, DOUBLE_PRINT_DECIMALS) + 
+                  ", anchor price " + anchor_price.to_string());
+        if (current_dev >= StdDev_Threshold && price_spread < Spread_Threshold && signal != C_no_signal) {
             MqlTradeRequest request;
             ZeroMemory(request);
             MqlTradeResult result;
@@ -346,8 +352,17 @@ void OnTick()
                 LOG_DEBUG("Order sent, retcode " + IntegerToString(result.retcode) + " deal " + IntegerToString(result.deal) + ", order " + IntegerToString(result.order));
         } else {
             LOG_DEBUG("Price movement too small " + DoubleToString(current_dev, DOUBLE_PRINT_DECIMALS) +
-                      " or spread too high " + DoubleToString(price_spread, DOUBLE_PRINT_DECIMALS));
+                      " or spread too high " + DoubleToString(price_spread, DOUBLE_PRINT_DECIMALS) + ", signal " + IntegerToString(signal));
         }
     }
+}
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void OnTimer()
+{
+    OnTick();
 }
 //+------------------------------------------------------------------+

@@ -335,8 +335,7 @@ VMD(const svr::data_row_container::const_iterator iterin, const size_t save_T,
     const auto T_2 = T / 2;
     const auto T_3_2 = 3 * T / 2;
     std::vector<double> f(2 * T);
-    OMP_FOR(T)
-    for (size_t i = 0; i < T; ++i) {
+    OMP_FOR_i(T) {
         f[T_2 + i] = scaler( (**(iterin + i))[input_column_index] );
         if (i < T / 2) {
             f[i] = scaler( (**(iterin + T_2 - 1 - i))[input_column_index] );

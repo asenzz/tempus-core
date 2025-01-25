@@ -134,7 +134,9 @@ container_range<C, C_range_iter, T>::distance() const
 
 template<typename C, typename C_range_iter, typename T>
 C_range_iter container_range<C, C_range_iter, T>::begin() const
-{ return begin_; }
+{
+    return begin_;
+}
 
 template<typename C, typename C_range_iter, typename T>
 C_range_iter container_range<C, C_range_iter, T>::end() const
@@ -144,7 +146,9 @@ C_range_iter container_range<C, C_range_iter, T>::end() const
 
 template<typename C, typename C_range_iter, typename T>
 typename container_range<C, C_range_iter, T>::C_citer container_range<C, C_range_iter, T>::cbegin() const
-{ return begin_; }
+{
+    return begin_;
+}
 
 template<typename C, typename C_range_iter, typename T>
 typename container_range<C, C_range_iter, T>::C_citer container_range<C, C_range_iter, T>::cend() const
@@ -180,26 +184,26 @@ typename container_range<C, C_range_iter, T>::C_criter container_range<C, C_rang
 template<typename C, typename C_range_iter, typename T>
 T &container_range<C, C_range_iter, T>::front()
 {
-    return *container_.begin();
+    return *begin();
 }
 
 
 template<typename C, typename C_range_iter, typename T>
 T container_range<C, C_range_iter, T>::front() const
 {
-    return *container_.begin();
+    return *cbegin();
 }
 
 template<typename C, typename C_range_iter, typename T>
 T &container_range<C, C_range_iter, T>::back()
 {
-    return *container_.end();
+    return *rbegin();
 }
 
 template<typename C, typename C_range_iter, typename T>
 T container_range<C, C_range_iter, T>::back() const
 {
-    return *container_.end();
+    return *crbegin();
 }
 
 

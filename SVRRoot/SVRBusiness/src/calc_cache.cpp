@@ -114,7 +114,8 @@ calc_cache::get_labels(const std::string &column_name, const uint16_t step, cons
                               const bpt::time_duration &main_resolution, const uint16_t multistep, const uint16_t lag)
 {
     const auto k = std::tuple{column_name, (**main_data.begin()).get_value_time(), main_data.distance(), level, multistep, main_resolution, aux_queue_res};
-
+    LOG4_TRACE("Getting labels for " << column_name << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " << level << ", step " << step <<
+        ", aux last values " << labels_aux.back()->to_string());
     const auto prepare_f = [&] {
         auto p_labels = ptr<arma::mat>();
         auto p_last_knowns = ptr<arma::vec>();

@@ -109,7 +109,7 @@ constexpr char C_default_multistep_len_str[] = "1";
 constexpr char C_default_multiout_str[] = "1";
 
 constexpr uint16_t C_max_csv_token_size = 0xFF;
-constexpr uint16_t C_default_kernel_max_chunk_len = 16384; // Matrices larger than 65535x65535 will require MKL ILP64 API and all CUDA kernels modified for 2D+ indexing
+constexpr uint16_t C_default_kernel_max_chunk_len = 10000; // Matrices larger than 65535x65535 will require MKL ILP64 API and all CUDA kernels modified for 2D+ indexing
 const uint16_t C_default_multistep_len = std::stoi(C_default_multistep_len_str);
 const uint16_t C_default_multiout = std::stoi(C_default_multiout_str);
 constexpr uint16_t C_default_gradient_count = 1;

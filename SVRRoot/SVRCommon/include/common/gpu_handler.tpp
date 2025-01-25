@@ -191,7 +191,7 @@ template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::context_
 {
     assert(it->running_threads);
     assert(it->running_threads <= ctx_per_gpu);
-    assert(it - available_devices_.cbegin() < available_devices_.size());
+    assert(size_t(it - available_devices_.cbegin()) < available_devices_.size());
     return it->running_threads - 1 + ctx_per_gpu * (it - available_devices_.cbegin());
 }
 

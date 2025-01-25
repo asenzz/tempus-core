@@ -264,16 +264,15 @@ void DatasetService::process(datamodel::Dataset &dataset)
 
 
 // By specification, a multival request's time period to predict is [start_predict_time, end_predict_time) i.e. right-hand exclusive.
-void DatasetService::process_requests(const datamodel::User &user, datamodel::Dataset &dataset)
+void DatasetService::process_requests(const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests)
 {
-    LOG4_DEBUG("Processing " << user << " requests for dataset " << dataset);
+    LOG4_DEBUG("Processing " << user << " requests for dataset " << dataset << ", requests " << requests.size());
 
-    const auto requests = context::AppContext::get_instance().request_service.get_active_multival_requests(user, dataset);
     const auto timenow = bpt::second_clock::local_time();
-#pragma omp parallel ADJ_THREADS(2 * requests.size())
-#pragma omp single
+// #pragma omp parallel ADJ_THREADS(2 * requests.size())
+// #pragma omp single
     {
-        OMP_TASKLOOP_(requests.size(),)
+        // OMP_TASKLOOP_(requests.size(),)
         for (const auto &p_request: requests) {
             std::atomic<bool> request_answered = true;
 
@@ -293,7 +292,7 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
 
             // Do actual predictions
             const auto &columns = p_request->get_value_columns();
-            OMP_TASKLOOP_(columns.size(),)
+            // OMP_TASKLOOP_(columns.size(),)
             for (const auto &request_column: columns)
                 if (request_answered) {
                     const auto p_ensemble = dataset.get_ensemble(request_column);
@@ -311,13 +310,13 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
 
                     LOG4_DEBUG("Saving reconstructed predictions from " << (**predicted_recon.cbegin()).get_value_time()
                                                                         << " until " << (**predicted_recon.crbegin()).get_value_time());
-                    OMP_TASKLOOP_(predicted_recon.size(),)
+//                    OMP_TASKLOOP_(predicted_recon.size(),)
                     for (const auto &p_result_row: predicted_recon) {
-                        REQCHK(p_result_row->get_value_time() < p_request->value_time_start
-                            || p_result_row->get_value_time() >= p_request->value_time_end
-                            || !std::isnormal(p_result_row->get_value(0)),
-                            "Skipping save of invalid response " << *p_result_row);
-                        APP.request_service.save(
+                        if (p_result_row->get_value_time() < p_request->value_time_start || p_result_row->get_value_time() >= p_request->value_time_end
+                            || !std::isnormal(p_result_row->get_value(0)))
+                            LOG4_WARN("Skipping save of invalid response " << *p_result_row);
+                        else
+                            APP.request_service.save(
                                 ptr<datamodel::MultivalResponse>(0, p_request->get_id(), p_result_row->get_value_time(), request_column, p_result_row->get_value(0)));
                     }
                 }

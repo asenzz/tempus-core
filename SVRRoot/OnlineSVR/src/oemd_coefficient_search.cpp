@@ -51,11 +51,7 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
         for (DTYPE(siftings) k = 0; k < siftings; ++k) p *= zz;
         result += i < h_mask_fft.size() * 2. * lambda2 / coeff ? std::norm(p) : C_smooth_factor * std::norm(p);
     }
-#ifdef __GNUC__
-    OMP_FOR_(h_mask_fft.size(), reduction(+:result))
-#else
-    OMP_FOR_(h_mask_fft.size(), simd reduction(+:result))
-#endif
+    OMP_FOR_(h_mask_fft.size(), SSIMD reduction(+:result))
     for (const auto &i: h_mask_fft) {
         const double zz_norm = std::norm(std::complex<double>{i.x, i.y});
         result += zz_norm > 1 ? zz_norm : 0;
@@ -243,6 +239,7 @@ oemd_coefficients_search::prepare_masks(
         std::deque<uint16_t> &siftings,
         const uint16_t levels)
 {
+    assert(levels > 0);
 #if 0
     if (masks.size() != levels - 1) masks.resize(levels - 1);
     if (masks.front().size() != C_fir_mask_start_len) {
@@ -264,7 +261,7 @@ oemd_coefficients_search::prepare_masks(
         }
     }
 #else
-    if (masks.size() != levels - 1) masks.resize(levels - 1);
+    if (masks.size() != DTYPE(levels)(levels - 1)) masks.resize(levels - 1);
 #endif
     if (siftings.size() != masks.size()) {
         LOG4_DEBUG("Resizing siftings to " << masks.size());

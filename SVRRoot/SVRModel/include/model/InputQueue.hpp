@@ -34,6 +34,7 @@ class InputQueue final : public Queue
 
     std::string time_zone_;
     std::deque<std::string> value_columns_;
+    std::string value_column_str;
 
     void reinit_table_name();
 
@@ -82,6 +83,8 @@ public:
     const std::string &get_value_column(const size_t i) const;
 
     const std::deque<std::string> &get_value_columns() const;
+
+    const std::string &get_value_column_str();
 
     void set_value_columns(const std::deque<std::string> &value_columns);
 

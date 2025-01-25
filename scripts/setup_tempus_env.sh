@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+export ASAN_OPTIONS=verify_asan_link_order=0
 export NICENESS=19
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_trial_knitro_97-65-2f-5a-81.txt
@@ -10,9 +11,9 @@ if [[ -z "${SETVARS_COMPLETED}" ]]; then
   source /opt/intel/oneapi/setvars.sh --include-intel-llvm intel64 lp64
 fi
 
-# export UBSAN_OPTIONS=print_stacktrace=1:print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.ubsan.log
+export UBSAN_OPTIONS=print_stacktrace=1:print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.ubsan.log
 # export LSAN_OPTIONS=suppressions=print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.lsan.log
-export ASAN_OPTIONS=protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=0:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=0:log_threads=1
+export ASAN_OPTIONS=protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=1:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=1:log_threads=1
 # export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 
 # export LD_PRELOAD="${LD_PRELOAD}:libduma.so"
@@ -22,9 +23,9 @@ export VGRIND=/usr/local/bin/valgrind
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib"
 
 # Debugger
-# export DBG=/usr/bin/gdb # GNU debugger for GCC builds
+export DBG=/usr/bin/gdb # GNU debugger for GCC builds
 # export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
-export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
+# export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
 
 # export PERF=/opt/intel/oneapi/vtune/2024.1/bin64/amplxe-perf
 export PERF=/usr/bin/perf
@@ -90,7 +91,7 @@ ulimit -s 8192
 ulimit -i unlimited
 ulimit -n 100000
 ulimit -c unlimited
-ulimit -v unlimited
+# ulimit -v unlimited
 
 if [ `whoami` == 'root' ]
 then
@@ -118,8 +119,8 @@ fi
 # kernel.msgmax = 65535
 # kernel.hung_task_timeout_secs = 0
 # vm.swappiness = 0
-# vm.overcommit_memory = 2
-# vm.overcommit_ratio = 50
+echo 1 > /proc/sys/vm/overcommit_memory # default 2
+# vm.overcommit_ratio = 100
 # vm.min_free_kbytes = 1048576
 # vm.dirty_expire_centisecs = 500
 # vm.dirty_ratio = 20

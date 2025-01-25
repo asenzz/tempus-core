@@ -51,8 +51,8 @@ extern const logging l__;
 #define EXCEPTION_FORMAT FILE_NAME << ":" << __LINE__ << " [" << __FUNCTION__ << "] "
 #define PRINT_STACK std::cout << "Executing thread " << std::this_thread::get_id() << ", Backtrace:\n" << boost::stacktrace::stacktrace() << '\n'
 
-#define THROW_EX_F(ex, msg) CMD_WRAP( ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg); )
-#define THROW_EX_FS(ex, msg) CMD_WRAP( PRINT_STACK; ::svr::common::throwx<ex>(::svr::common::formatter() << EXCEPTION_FORMAT << msg); )
+#define THROW_EX_F(ex, msg) CMD_WRAP( svr::common::throwx<ex>( svr::common::formatter() << EXCEPTION_FORMAT << msg); )
+#define THROW_EX_FS(ex, msg) CMD_WRAP( PRINT_STACK; svr::common::throwx<ex>( svr::common::formatter() << EXCEPTION_FORMAT << msg); )
 
 #define BOOST_CODE_LOCATION LOG_FORMAT % FILE_NAME % __LINE__ % __FUNCTION__
 
@@ -109,7 +109,7 @@ extern const logging l__;
 
 #define LOG4_THROW(msg) \
     CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::error) \
-        BOOST_LOG_TRIVIAL(error) << BOOST_CODE_LOCATION % msg; THROW_EX_FS(::std::runtime_error, msg); )
+        BOOST_LOG_TRIVIAL(error) << BOOST_CODE_LOCATION % msg; THROW_EX_FS(std::runtime_error, msg); )
 
 //#define LOG4_ASSERT(cond, failmsg) { if (!(cond)) LOG4_THROW((failmsg)); } // TODO Fix!
 #define LOG4_FILE(logfile, msg) { std::ofstream of( ::svr::common::formatter() << logfile, std::ofstream::out | std::ofstream::app); of.precision(std::numeric_limits<double>::max_digits10); of << msg << '\n'; }

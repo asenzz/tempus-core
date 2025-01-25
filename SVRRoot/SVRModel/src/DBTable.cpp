@@ -108,7 +108,7 @@ datamodel::DataRow_ptr &Queue::at(const size_t i)
 
 std::string Queue::to_string() const
 {
-    return "Table name " + table_name_ + ", " + metadata_to_string() + ", " + data_to_string();
+    return metadata_to_string() + ", " + data_to_string();
 }
 
 datamodel::DataRow_ptr Queue::front() const

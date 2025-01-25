@@ -66,7 +66,8 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
                     0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
     }
     LOG4_DEBUG("Calculated scaling factors for input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id << " scaling factors on last " <<
-                row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors);
+                row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors <<
+                ", starting " << (**iter_start).get_value_time() << ", until " << input_queue.back()->get_value_time());
     return result;
 }
 
@@ -81,7 +82,9 @@ bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_p
                 && std::isnormal(sf->get_scaling_factor())
                 && common::isnormalz(sf->get_dc_offset()))
                 present[i] = true;
-    return std::all_of(C_default_exec_policy, present.begin(), present.end(), [](const auto &el) { return el; });
+    const auto all_ok = std::all_of(C_default_exec_policy, present.cbegin(), present.cend(), std::identity());
+    LOG4_TRACE("All ok " << all_ok << ", of " << common::to_string(present) << " columns");
+    return all_ok;
 }
 
 
@@ -92,25 +95,26 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     dataset.set_iq_scaling_factors(iq_scaling_factor_dao_.find_all_by_dataset_id(dataset.get_id()), false);
     if (check(dataset.get_iq_scaling_factors(input_queue), input_queue.get_value_columns())) return;
 
-    const auto resolution_ratio = dataset.get_input_queue()->get_resolution() / input_queue.get_resolution();
+    const auto p_main_input_queue = dataset.get_input_queue();
+    const auto resolution_ratio = p_main_input_queue->get_resolution() / input_queue.get_resolution();
+    const auto calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::C_max_quantisation * datamodel::C_features_superset_coef + dataset.get_max_decrement() * resolution_ratio;
 #ifdef INTEGRATION_TEST
-    auto p_test_input_queue = input_queue.clone(0, input_queue.size() - common::C_integration_test_validation_window * resolution_ratio);
-    PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
-            *p_test_input_queue, dataset.get_id(),
-            dataset.get_max_possible_residuals_length() +
-            dataset.get_max_lag_count() * ModelService::C_max_quantisation * datamodel::C_features_superset_coef +
-            dataset.get_max_decrement() * resolution_ratio), true),
-                      "Calculate input queue scaling factors for " << input_queue.get_table_name());
+    const auto last_label_time = (**(p_main_input_queue->get_data().rbegin() + common::C_integration_test_validation_window)).get_value_time() + p_main_input_queue->get_resolution();
+    const uint32_t test_offset = resolution_ratio > 1 ?
+            lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
+            input_queue.size() - common::C_integration_test_validation_window;
+    auto p_test_input_queue = input_queue.clone(0, test_offset);
+    PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(*p_test_input_queue, dataset.get_id(), calc_len), true),
+                      "Calculate test input queue scaling factors for " << input_queue.get_table_name() << ", last label time " << last_label_time);
     p_test_input_queue.reset();
 #else
-    PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(
-            input_queue, dataset.get_id(), dataset.get_max_possible_residuals_length() + dataset.get_max_decrement() * resolution_ratio), true),
-        "Calculate input queue scaling factors for " << input_queue.get_table_name());
+    PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(input_queue, dataset.get_id(), calc_len), true),
+                      "Calculate input queue scaling factors for " << input_queue.get_table_name());
 #endif
 
     if (!save_factors) return;
     const auto &dataset_iqsf = dataset.get_iq_scaling_factors(input_queue);
-#pragma omp parallel for num_threads(adj_threads(dataset_iqsf.size())) schedule(static, 1)
+#pragma omp parallel for ADJ_THREADS(dataset_iqsf.size()) schedule(static, 1)
     for (const auto &p_sf: dataset_iqsf) {
         if (exists(p_sf)) remove(p_sf);
         save(p_sf);
@@ -121,7 +125,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool save)
 {
     prepare(dataset, *dataset.get_input_queue(), save);
-#pragma omp parallel for schedule(static, 1) num_threads(adj_threads(dataset.get_aux_input_queues().size()))
+    OMP_FOR(dataset.get_aux_input_queues().size())
     for (const auto &p_aux_input: dataset.get_aux_input_queues()) prepare(dataset, *p_aux_input, save);
 }
 

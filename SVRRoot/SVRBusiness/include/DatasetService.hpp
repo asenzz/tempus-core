@@ -78,7 +78,7 @@ public:
 
     static void process(datamodel::Dataset &dataset);
 
-    static void process_requests(const datamodel::User &user, datamodel::Dataset &dataset);
+    static void process_requests(const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests);
 };
 
 } /* namespace business */

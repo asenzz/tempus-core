@@ -36,7 +36,7 @@ constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 constexpr magma_int_t C_rbt_iter = 40; // default 30
 constexpr float C_rbt_threshold = 0; // [0..1] default 1
 constexpr uint32_t C_features_superset_coef = 100; // [1..+inf)
-constexpr float C_solve_opt_coef = 2; // Rows count multiplier to calculate iterations for NL solver
+constexpr float C_solve_opt_coef = .001; // 2; // Rows count multiplier to calculate iterations for NL solver
 constexpr uint16_t C_solve_opt_particles = 80;
 constexpr uint16_t C_weight_cols = 1;
 #ifdef EMO_DIFF
@@ -97,12 +97,12 @@ class OnlineMIMOSVR final : public Entity
     std::deque<arma::uvec> ixs;
     std::deque<std::pair<double, double>> chunks_score;
     arma::mat all_weights;
-    unsigned multiout = common::C_default_multiout;
-    unsigned max_chunk_size = common::C_default_kernel_max_chunk_len;
-    unsigned gradient = C_default_svrparam_grad_level;
-    unsigned level = C_default_svrparam_decon_level;
-    unsigned step = C_default_svrparam_step;
-    unsigned projection = 0;
+    uint16_t multiout = common::C_default_multiout;
+    uint32_t max_chunk_size = common::C_default_kernel_max_chunk_len;
+    uint16_t gradient = C_default_svrparam_grad_level;
+    uint16_t level = C_default_svrparam_decon_level;
+    uint16_t step = C_default_svrparam_step;
+    uint16_t projection = 0;
 
     virtual void init_id() override;
 

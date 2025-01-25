@@ -62,7 +62,7 @@ fi
 # cgexec -g cpu,cpuset:Tempus ./SVRWeb -a $DAEMON_DIR/../config/app.config -c $DAEMON_DIR/../config/config.json >> ${WEB_OUTPUT} 2>&1 &
 ./SVRWeb -a $DAEMON_DIR/../config/app.config -c $DAEMON_DIR/../config/config.json >> ${WEB_OUTPUT} 2>&1 &
 if [ $WEB_ONLY -eq 1 ]; then
-  echo Starting only REST interface.
+  echo Started only REST interface.
 	exit 0
 fi
 

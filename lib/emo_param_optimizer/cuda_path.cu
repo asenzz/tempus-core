@@ -312,7 +312,7 @@ int do_gpu_kernel_compute_mat_xx(size_t sizeX, size_t startX, size_t startY, siz
     size_t full_sizeX = sizeX * total_len_features;
     size_t full_sizeZ = sizeX * sizeX;
     thrust::device_vector<double> d_X(full_sizeX);
-    gpuErrchk(cudaMemcpy(thrust::raw_pointer_cast(d_X.data()), &X[0], sizeof(double) * full_sizeX, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(thrust::raw_pointer_cast(d_X.data()), &X[0], sizeofgpu_kernel_xx_compute(double) * full_sizeX, cudaMemcpyHostToDevice));
     ctimes[1] += msecs() - times1;
     double times2 = msecs();
     gpuErrchk(cudaPeekAtLastError());

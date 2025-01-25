@@ -48,9 +48,8 @@ datamodel::InputQueue_ptr InputQueue::clone(const size_t start_ix, const size_t 
 {
     auto p_new_queue = clone_empty();
     if (data_.empty()) return p_new_queue;
-    else if (data_.size() > start_ix) p_new_queue->data_ = clone_datarows(
-            data_.cbegin() + std::min(start_ix, data_.size() - 1),
-            data_.cbegin() + std::min(end_ix, data_.size()));
+    else if (data_.size() > start_ix)
+        p_new_queue->data_ = clone_datarows(data_.cbegin() + std::min(start_ix, data_.size() - 1), data_.cbegin() + std::min(end_ix, data_.size()));
     else
         LOG4_ERROR("Start index " << start_ix << " exceeds data size " << data_.size());
     return p_new_queue;
@@ -90,7 +89,20 @@ const std::deque<std::string> &InputQueue::get_value_columns() const
 { return value_columns_; }
 
 void InputQueue::set_value_columns(const std::deque<std::string> &value_columns)
-{ value_columns_ = value_columns; }
+{
+    value_columns_ = value_columns;
+    value_column_str.clear();
+}
+
+
+const std::string &InputQueue::get_value_column_str()
+{
+    if (value_column_str.empty() && value_columns_.size()) {
+        for (uint16_t i = 0; i < value_columns_.size() - 1; ++i) value_column_str += value_columns_[i] + ", ";
+        value_column_str += value_columns_.back();
+    }
+    return value_column_str;
+}
 
 bool InputQueue::is_tick_queue() const
 { return resolution_ < onesec; }
@@ -105,8 +117,7 @@ size_t InputQueue::get_value_column_index(const std::string &column_name) const
 {
     const auto pos = find(value_columns_.begin(), value_columns_.end(), column_name);
     if (pos == value_columns_.end())
-        THROW_EX_FS(
-                std::invalid_argument, "Column " << column_name << " is not part of input queue " << table_name_);
+        THROW_EX_FS(std::invalid_argument, "Column " << column_name << " is not part of input queue " << table_name_);
     return std::distance(value_columns_.begin(), pos);
 }
 

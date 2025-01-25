@@ -749,8 +749,8 @@ oemd_coefficients_search::evaluate_mask(
                 d_features, d_imf, d_times, d_feat_params_q, validate_rows, feat_cols_ileave, qt, interleave_qt, interleave_qt * .5);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
         cu_errchk(cudaStreamSynchronize(custream));
-        G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>( /* no integration test offset here, already in call to run() */
-                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, validate_rows);
+        G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
+                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave);
         cu_errchk(cudaStreamSynchronize(custream));
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {

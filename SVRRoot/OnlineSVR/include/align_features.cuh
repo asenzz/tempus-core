@@ -40,7 +40,7 @@ __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { r
 
 __global__ void G_align_features(
         CRPTRd features, CRPTRd labels,
-        RPTR(double) scores, RPTR(float) stretches, RPTR(unsigned) shifts, RPTR(float) skips, const unsigned n_rows, const unsigned n_cols, const unsigned integration_test);
+        RPTR(double) scores, RPTR(float) stretches, RPTR(unsigned) shifts, RPTR(float) skips, const uint32_t n_rows, const uint32_t n_cols);
 
 __global__ void G_quantise_features(
         RPTR(double) features /* zeroed out before */, CRPTRd d_decon_F, CRPTR(uint32_t) d_times_F, CRPTR(t_feat_params) d_feat_params,

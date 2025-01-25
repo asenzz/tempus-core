@@ -8,7 +8,7 @@
 namespace svr {
 namespace common {
 
-auto PropertiesFileReader::S_log_threshold = (uint8_t) boost::log::trivial::severity_level::trace;
+uint8_t PropertiesFileReader::S_log_threshold = (uint8_t) boost::log::trivial::severity_level::trace;
 
 const std::string PropertiesFileReader::FEATURE_QUANTIZATION = "FEATURE_QUANTIZATION";
 const std::string PropertiesFileReader::PREDICTION_HORIZON = "PREDICTION_HORIZON";
@@ -28,6 +28,7 @@ const std::string PropertiesFileReader::SCALING_ALPHA = "SCALING_ALPHA";
 const std::string PropertiesFileReader::CONNECTION_STRING = "CONNECTION_STRING";
 const std::string PropertiesFileReader::SLIDE_COUNT = "SLIDE_COUNT";
 const std::string PropertiesFileReader::TUNE_RUN_LIMIT = "TUNE_RUN_LIMIT";
+const std::string PropertiesFileReader::SELF_REQUEST = "SELF_REQUEST";
 
 boost::log::trivial::severity_level set_global_log_level(const std::string &log_level_value)
 {
@@ -132,6 +133,7 @@ PropertiesFileReader::PropertiesFileReader(const std::string &app_config_file, c
     error_tolerance_ = get_property<double>(app_config_file, ERROR_TOLERANCE, C_default_error_tolerance_str);
     slide_count_ = get_property<size_t>(app_config_file, SLIDE_COUNT, C_default_slide_count_str);
     tune_run_limit_ = get_property<size_t>(app_config_file, TUNE_RUN_LIMIT, C_default_tune_run_limit_str);
+    self_request_ = get_property<bool>(app_config_file, SELF_REQUEST, "0");
     scaling_alpha_ = get_property<double>(app_config_file, SCALING_ALPHA, C_default_scaling_alpha_str);
     db_connection_string_ = get_property<std::string>(app_config_file, CONNECTION_STRING, C_default_connection_str);
 }

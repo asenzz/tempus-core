@@ -31,8 +31,7 @@ template<typename scalar_type>
 class kernel_global_alignment : public kernel_base<scalar_type>
 {
 public:
-    kernel_global_alignment<scalar_type>(const SVRParameters &p) : kernel_base<scalar_type>(p)
-    {}
+    kernel_global_alignment(const SVRParameters &p) : kernel_base<scalar_type>(p) {}
 
 #if 0 // TODO port to Armadillo
     double logGAK_t(const vektor<scalar_type> &va, const vektor<scalar_type> &vb);

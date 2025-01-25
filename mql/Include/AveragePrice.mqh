@@ -150,9 +150,10 @@ aprice get_price(const datetime at)
     uint retries = 0;
     datetime start_time = iTime(_Symbol, _Period, iBarShift(_Symbol, _Period, at) + 1);
     if (start_time == at) start_time -= C_period_seconds;
+    const ulong atms = at * 1000;
     MqlTick ticks[];
     do {
-        CopyTicksRange(_Symbol, ticks, COPY_TICKS_ALL, start_time * 1000, at * 1000);
+        CopyTicksRange(_Symbol, ticks, COPY_TICKS_ALL, start_time * 1000, atms);
         start_time -= C_period_seconds;
         ++retries;
     } while(ArraySize(ticks) < 1 && retries < max_retries);

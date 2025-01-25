@@ -413,7 +413,7 @@ void OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::ma
 #if 1
 
     solvers::score_weights sw(K, rhs, K.n_rows, rhs.n_cols, rhs.n_elem, K.n_elem);
-    constexpr uint16_t C_hybrid_solve_threshold = 6000; // CUDA score seems to shave off 2% of alpha
+    constexpr uint16_t C_hybrid_solve_threshold = 16000; // CUDA score seems to shave off 2% of alpha
     const auto loss_fun =
             K.n_rows < C_hybrid_solve_threshold ?
             (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size](CPTRd x, RPTR(double) f) {
@@ -553,6 +553,7 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &K_epsco, const arma::mat &K, co
     cu_errchk(cudaMallocAsync(&d_rwork, rhs_size, custream));
     cu_errchk(cudaMallocAsync(&d_lwork, 2 * K_size, custream));
     const auto iters_mul = common::C_itersolve_range / double(iters);
+    if (rhs.n_rows != solved.n_rows && rhs.n_cols * C_weight_cols != solved.n_cols) solved.set_size(rhs.n_rows, C_weight_cols);
     magma_int_t info;
     (void) solvers::solve_hybrid(
             d_K_epsco, rhs.n_cols, K.n_rows, d_solved, C_rbt_iter, C_rbt_threshold, maqueue, PROPS.get_stabilize_iterations_count(), d_labels, rhs_size,
@@ -562,7 +563,6 @@ void OnlineMIMOSVR::solve_irwls(const arma::mat &K_epsco, const arma::mat &K, co
     cu_errchk(cudaFreeAsync(d_labels, custream));
     cu_errchk(cudaFreeAsync(d_rwork, custream));
     cu_errchk(cudaFreeAsync(d_lwork, custream));
-    if (arma::size(rhs) != arma::size(solved)) solved.set_size(arma::size(rhs));
 //    cu_errchk(cudaHostRegister((void *) solved.memptr(), rhs_size, cudaHostRegisterDefault));
     cu_errchk(cudaMemcpyAsync(solved.memptr(), d_solved, rhs_size, cudaMemcpyDeviceToHost, custream));
     cu_errchk(cudaFreeAsync(d_solved, custream));
@@ -663,21 +663,22 @@ uint16_t OnlineMIMOSVR::get_num_chunks() const
 }
 
 std::deque<arma::uvec>
-generate_chunk_indexes(const unsigned n_rows_dataset, const unsigned decrement, const unsigned max_chunk_size)
+generate_chunk_indexes(const uint32_t n_rows_dataset, const uint32_t decrement, const uint32_t max_chunk_size)
 {
     // Make sure we train on the latest data
     const auto n_rows_train = OnlineMIMOSVR::get_full_train_len(n_rows_dataset, decrement);
     const auto start_offset = n_rows_dataset - n_rows_train;
     const auto num_chunks = OnlineMIMOSVR::get_num_chunks(n_rows_train, max_chunk_size);
+    assert(num_chunks);
     std::deque<arma::uvec> indexes(num_chunks);
     if (num_chunks == 1) {
         indexes[0] = start_offset + arma::regspace<arma::uvec>(0, n_rows_train - 1);
         LOG4_DEBUG("Linear single chunk indexes size " << arma::size(indexes[0]));
         return indexes;
     }
-    const size_t this_chunk_size = n_rows_train / ((num_chunks + 1. / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
-    const size_t last_part_size = this_chunk_size * C_chunk_tail;
-    const size_t first_part_chunk_size = this_chunk_size - last_part_size;
+    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1. / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
+    const uint32_t last_part_size = this_chunk_size * C_chunk_tail;
+    const uint32_t first_part_chunk_size = this_chunk_size - last_part_size;
     const arma::uvec first_part = arma::regspace<arma::uvec>(0, n_rows_train - last_part_size - 1);
     const arma::uvec last_part = arma::regspace<arma::uvec>(n_rows_train - last_part_size, n_rows_train - 1);
     LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks <<
@@ -685,13 +686,13 @@ generate_chunk_indexes(const unsigned n_rows_dataset, const unsigned decrement, 
                               << ", last part size " << last_part_size << ", start offset " << start_offset << ", first part " << arma::size(first_part) <<
                               ", last part " << arma::size(last_part) << ", chunk offlap " << C_chunk_offlap);
     OMP_FOR(num_chunks)
-    for (size_t i = 0; i < num_chunks; ++i) {
-        const size_t start_row = i * this_chunk_size * C_chunk_offlap;
+    for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
+        const uint32_t start_row = i * this_chunk_size * C_chunk_offlap;
         arma::uvec first_part_rows = arma::regspace<arma::uvec>(start_row, start_row + first_part_chunk_size - 1);
         // first_part_rows.rows(arma::find(first_part_rows >= first_part.n_rows)) -= first_part.n_rows;
         first_part_rows.shed_rows(arma::find(first_part_rows >= first_part.n_rows));
         indexes[i] = start_offset + arma::join_cols(first_part.rows(first_part_rows), last_part);
-        if (!i || i == num_chunks - 1)
+        if (!i || i == DTYPE(i)(num_chunks - 1))
             LOG4_DEBUG("Chunk " << i << " first part " << first_part_rows.front() << ".." << first_part_rows.back() << ", last part " << last_part.front() << ".." <<
                                 last_part.back() << ", start row " << start_row);
     }
@@ -708,10 +709,10 @@ std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
 {
     return projection ?
            generate_indexes(p_labels->n_rows, (**param_set.cbegin()).get_svr_decremental_distance(), max_chunk_size) :
-           #ifdef REMOVE_OUTLIERS
-           std::deque<arma::uvec>{arma::regspace<arma::uvec>(C_shift_lim + C_test_len, p_labels->n_rows - 1)};
+#ifdef REMOVE_OUTLIERS
+            std::deque<arma::uvec>{arma::regspace<arma::uvec>(C_shift_lim + C_test_len, p_labels->n_rows - 1)};
 #else
-    std::deque<arma::uvec>{arma::regspace<arma::uvec>(p_labels->n_rows - max_chunk_size, p_labels->n_rows - 1)};
+            std::deque<arma::uvec>{arma::regspace<arma::uvec>(p_labels->n_rows - max_chunk_size, p_labels->n_rows - 1)};
 #endif
 }
 
@@ -814,7 +815,7 @@ mat_ptr OnlineMIMOSVR::all_cumulatives(const SVRParameters &p, const arma::mat &
     const DTYPE(lag) levels = features_t.n_rows / lag;
     const auto cuml = ptr<arma::mat>(arma::size(features_t), arma::fill::none);
     OMP_FOR_i(levels) cuml->rows(i * lag, (i + 1) * lag - 1) = arma::cumsum(features_t.rows(i * lag, (i + 1) * lag - 1));
-    LOG4_TRACE("Prepared " << levels << " cumulatives with " << lag << " lag, from features t " << arma::size(features_t));
+    LOG4_TRACE("Prepared " << levels << " cumulatives " << common::present(*cuml) << " with " << lag << " lag, from features t " << common::present(features_t));
     return cuml;
 }
 
@@ -1077,6 +1078,9 @@ mat_ptr OnlineMIMOSVR::prepare_Ky(const datamodel::SVRParameters &params, const 
                                     params.get_svr_kernel_param2(), params.get_svr_kernel_param(), params.get_min_Z(), params.get_max_Z(),
                                     cuml_train->mem, cuml_predict->mem, Ky->memptr());
 #endif
+            LOG4_TRACE("Train cuml t " << common::present(*cuml_train) << ", from " << common::present(x_train_t) <<
+                ", predict cuml t " << common::present(*cuml_predict) << ", from " << common::present(x_predict_t) <<
+                ", Ky " << common::present(*Ky) << ", parameters " << params);
             return Ky;
         }
         default:
