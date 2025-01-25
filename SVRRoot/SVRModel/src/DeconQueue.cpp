@@ -85,7 +85,7 @@ void DeconQueue::update_data(const DataRow::container &new_data, const bool over
     if (new_data.front()->get_value_time() <= data_.front()->get_value_time() && new_data.back()->get_value_time() >= data_.back()->get_value_time()) {
         data_ = new_data;
     } else if (new_data.front()->get_value_time() < data_.front()->get_value_time()) {
-        const auto data_iter_end = upper_bound_back(data_, new_data.back()->get_value_time());
+        const auto data_iter_end = upper_bound(data_, new_data.back()->get_value_time());
         if (data_iter_end != data_.end()) data_.erase(data_.begin(), data_iter_end);
         data_.insert(data_.begin(), new_data.begin(), new_data.end());
     } else if (new_data.front()->get_value_time() >= data_.front()->get_value_time()) {

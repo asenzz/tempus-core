@@ -317,7 +317,7 @@ fast_cvmd::transform(
         iterin = input.cbegin();
         soln[0] = scaler((**iterin)[in_colix]);
     } else {
-        iterin = lower_bound_back(input, decon.back()->get_value_time());
+        iterin = lower_bound(input, decon.back()->get_value_time());
         while ((**iterin).get_value_time() <= decon.back()->get_value_time() && iterin != input.cend()) ++iterin;
         if (iterin == input.cend()) {
             LOG4_WARN("No input data newer than " << decon.back()->get_value_time() << " to deconstruct.");

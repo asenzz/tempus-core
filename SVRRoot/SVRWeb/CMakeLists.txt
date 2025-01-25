@@ -6,7 +6,9 @@ ELSE()
 ENDIF()
 #Define project dependencies
 SET(DEPENDENCIES SVRBusiness SVRPersist SVRCommon SVRModel OnlineSVR)
-
+IF(NOT USE_INTEL_COMPILER)
+    LINK_LIBRARIES(libsycl.a libmpicxx.a)
+ENDIF()
 INCLUDE(../../cmake/IncludeDependencies.cmake)
 INCLUDE(../../cmake/SourceList.cmake)
 

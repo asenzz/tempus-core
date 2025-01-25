@@ -85,7 +85,7 @@ const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_de
 
 struct t_feature_mechanics
 {
-    arma::u32_vec quantization;
+    arma::u32_vec quantization; // Quantisation is per level - until computational resources allow for different quantisation per feature column
     arma::fvec stretches;
     std::deque<arma::uvec> trims;
     arma::u32_vec shifts;

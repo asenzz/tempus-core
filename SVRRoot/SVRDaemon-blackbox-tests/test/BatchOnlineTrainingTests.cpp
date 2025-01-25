@@ -203,7 +203,7 @@ compare_by_value_mean_erroraux(
             continue;
         }
 
-        const auto it_label_start = lower_bound_back(etalon, forecast_time);
+        const auto it_label_start = lower_bound(etalon, forecast_time);
         const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * PROPS.get_prediction_horizon());
         const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : std::prev(last_known_iter)->get()->get_value(0);
         const auto last_known_time = std::prev(last_known_iter)->get()->get_value_time();
@@ -279,7 +279,7 @@ compare_by_value_error_ohlcaux(
             continue;
         }
         std::vector<double> etalon_aux_vals;
-        auto etalon_iter = lower_bound_back(etalon, forecast_row->get()->get_value_time());
+        auto etalon_iter = lower_bound(etalon, forecast_row->get()->get_value_time());
         if (etalon_iter == etalon.end()) {
             LOG4_ERROR("Not found etalon row for time " << forecast_row->get()->get_value_time());
             continue;

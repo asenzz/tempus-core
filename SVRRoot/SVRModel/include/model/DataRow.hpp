@@ -289,16 +289,16 @@ data_row_container::iterator
 upper_bound(data_row_container &c, const bpt::ptime &t);
 
 data_row_container::const_iterator
-upper_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key);
+upper_bound(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::iterator
-upper_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
+upper_bound(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::iterator
-upper_bound_back(data_row_container &data, const bpt::ptime &time_key);
+upper_bound(data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
-upper_bound_back(const data_row_container &data, const bpt::ptime &time_key);
+upper_bound(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
 lower_bound(const data_row_container &data, const data_row_container::const_iterator &hint_start, const bpt::ptime &key);
@@ -306,13 +306,10 @@ lower_bound(const data_row_container &data, const data_row_container::const_iter
 data_row_container::const_iterator
 lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint, const bpt::ptime &time_key);
 
-data_row_container::iterator
-lower_bound_back(const data_row_container::iterator &begin, const data_row_container::iterator &end, const bpt::ptime &time_key);
-
 data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
-lower_bound_back(const data_row_container &data, const bpt::ptime &time_key);
+lower_bound(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
 lower_bound_back_before(
@@ -321,7 +318,7 @@ lower_bound_back_before(
         const bpt::ptime &time_key);
 
 data_row_container::const_iterator
-lower_bound_back_before(
+lower_bound_before(
         const data_row_container &data,
         const bpt::ptime &time_key);
 
@@ -329,19 +326,23 @@ data_row_container::iterator
 lower_bound_back_before(data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
-lower_bound_or_before_back(
+lower_bound_or_before(
         const data_row_container &data,
         const data_row_container::const_iterator &hint_end,
         const bpt::ptime &time_key);
 
 data_row_container::const_iterator lower_bound_or_before_back(const data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_or_before(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator
 lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
 
-data_row_container::iterator lower_bound_back(data_row_container &data, const bpt::ptime &time_key);
+
+data_row_container::const_iterator
+lower_bound_or_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
+
+data_row_container::iterator lower_bound(data_row_container &data, const bpt::ptime &time_key);
 
 datamodel::DataRow::container::const_iterator
 find(
@@ -412,6 +413,19 @@ generate_twap_indexes(
         const boost::posix_time::ptime &end_time, // Exact end time
         const bpt::time_duration &resolution, // Aux input queue resolution
         const unsigned n_out); // Input column index
+
+template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
+        uint32_t *const out, // Output array
+        const bool maxmin, // Min or max
+        const I &cbegin, // Begin of container
+        const I &start_it, // At start time or before
+        const I &it_end, // At end time or after
+        const bpt::ptime &start_time, // Exact start time
+        const bpt::ptime &end_time, // Exact end time
+        const bpt::time_duration &resolution, // Aux input queue resolution
+        const uint32_t n_out, // Count of positions to output
+        const uint16_t level // Level
+        );
 
 bool
 generate_twav( // Time-weighted average volume

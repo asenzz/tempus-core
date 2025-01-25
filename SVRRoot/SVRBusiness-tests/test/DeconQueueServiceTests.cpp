@@ -120,7 +120,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     double total_input_diff = 0;
     size_t compared_ct = 0;
     for (const auto &row_1h: p_all_data_inputqueue_1h->get_data()) {
-        const auto it_row_1s = svr::lower_bound_before(p_all_data_inputqueue->get_data(), row_1h->get_value_time());
+        const auto it_row_1s = svr::lower_bound_or_before(p_all_data_inputqueue->get_data(), row_1h->get_value_time());
         // const auto it_row_1s = p_all_data_inputqueue->get_data().find(row_1h->get_value_time());
         if (it_row_1s == p_all_data_inputqueue->end()) {
             LOG4_DEBUG("Row not found in hires data for " << row_1h->get_value_time());

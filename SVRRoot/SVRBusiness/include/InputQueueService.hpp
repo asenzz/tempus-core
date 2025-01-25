@@ -60,7 +60,7 @@ public:
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &input_queue_table_name);
 
     data_row_container
-    load(const std::string &table_name, const bpt::ptime &time_from = bpt::min_date_time, const bpt::ptime &timeTo = bpt::max_date_time, size_t limit = 0);
+    load(const std::string &table_name, const bpt::ptime &time_from = bpt::min_date_time, const bpt::ptime &time_to = bpt::max_date_time, size_t limit = 0);
 
     void load(datamodel::InputQueue &input_queue);
 

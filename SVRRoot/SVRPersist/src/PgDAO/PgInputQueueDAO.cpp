@@ -35,7 +35,7 @@ std::deque<datamodel::DataRow_ptr> PgInputQueueDAO::get_queue_data_by_table_name
         const bpt::ptime &time_to,
         size_t limit)
 {
-    LOG4_DEBUG("Reading data from queue " << table_name);// << " from " << time_from << " to " << time_to);
+    LOG4_DEBUG("Reading data from queue " << table_name << ", from " << time_from << ", to " << time_to << ", limit " << limit);
     DataRowRowMapper row_mapper;
 
     std::string sql = (boost::format(AbstractDAO::get_sql("get_queue_data_by_table_name")) % table_name).str();
