@@ -66,6 +66,7 @@ const auto l = []() {
 namespace svr {
 namespace datamodel {
 
+
 OnlineMIMOSVR::OnlineMIMOSVR() : Entity(0), multiout(PROPS.get_multiout())
 {
     LOG4_WARN("Created OnlineMIMOSVR object with default constructor and default multistep_len " << multiout);
@@ -676,18 +677,18 @@ generate_chunk_indexes(const uint32_t n_rows_dataset, const uint32_t decrement, 
         LOG4_DEBUG("Linear single chunk indexes size " << arma::size(indexes[0]));
         return indexes;
     }
-    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1. / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
-    const uint32_t last_part_size = this_chunk_size * C_chunk_tail;
+    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1. / OnlineMIMOSVR::C_chunk_offlap - OnlineMIMOSVR::C_end_chunks) * OnlineMIMOSVR::C_chunk_offlap);
+    const uint32_t last_part_size = this_chunk_size * OnlineMIMOSVR::C_chunk_tail;
     const uint32_t first_part_chunk_size = this_chunk_size - last_part_size;
     const arma::uvec first_part = arma::regspace<arma::uvec>(0, n_rows_train - last_part_size - 1);
     const arma::uvec last_part = arma::regspace<arma::uvec>(n_rows_train - last_part_size, n_rows_train - 1);
     LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks <<
                               ", max chunk size " << max_chunk_size << ", chunk size " << this_chunk_size << ", chunk first part size " << first_part_chunk_size
                               << ", last part size " << last_part_size << ", start offset " << start_offset << ", first part " << arma::size(first_part) <<
-                              ", last part " << arma::size(last_part) << ", chunk offlap " << C_chunk_offlap);
+                              ", last part " << arma::size(last_part) << ", chunk offlap " << OnlineMIMOSVR::C_chunk_offlap);
     OMP_FOR(num_chunks)
     for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
-        const uint32_t start_row = i * this_chunk_size * C_chunk_offlap;
+        const uint32_t start_row = i * this_chunk_size * OnlineMIMOSVR::C_chunk_offlap;
         arma::uvec first_part_rows = arma::regspace<arma::uvec>(start_row, start_row + first_part_chunk_size - 1);
         // first_part_rows.rows(arma::find(first_part_rows >= first_part.n_rows)) -= first_part.n_rows;
         first_part_rows.shed_rows(arma::find(first_part_rows >= first_part.n_rows));
@@ -819,7 +820,7 @@ mat_ptr OnlineMIMOSVR::all_cumulatives(const SVRParameters &p, const arma::mat &
     return cuml;
 }
 
-
+// Not used
 std::shared_ptr<std::deque<arma::mat>> OnlineMIMOSVR::prepare_cumulatives(const SVRParameters &params, const arma::mat &features_t)
 {
     const auto lag = params.get_lag_count();

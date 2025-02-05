@@ -643,7 +643,7 @@ void iter_magma_solve(
     }
 
     __solve_dgesv:
-    ma_errchk(magma_dgesv_rbt_async(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info, datamodel::C_rbt_iter, datamodel::C_rbt_threshold, magma_queue));
+    ma_errchk(magma_dgesv_rbt_async(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info, datamodel::OnlineMIMOSVR::C_rbt_iter, datamodel::OnlineMIMOSVR::C_rbt_threshold, magma_queue));
     if (psd) LOG4_DEBUG("Call to magma_dgesv_rbt triunfo.");
     magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
 }
@@ -656,7 +656,7 @@ void iter_magma_solve(
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue);
     magma_dsetmatrix(m, n, b, m, d_b, m, magma_queue);
     cu_errchk(cudaDeviceSynchronize());
-    ma_errchk(magma_dgesv_rbt_async(magma_bool_t::MagmaTrue, m, n, d_a, m, d_b, m, &info, datamodel::C_rbt_iter, datamodel::C_rbt_threshold, magma_queue));
+    ma_errchk(magma_dgesv_rbt_async(magma_bool_t::MagmaTrue, m, n, d_a, m, d_b, m, &info, datamodel::OnlineMIMOSVR::C_rbt_iter, datamodel::OnlineMIMOSVR::C_rbt_threshold, magma_queue));
     cu_errchk(cudaDeviceSynchronize());
     magma_dgetmatrix(m, n, d_b, m, output, m, magma_queue);
     cu_errchk(cudaDeviceSynchronize());
@@ -1524,12 +1524,12 @@ unscaled_distance(CPTRd d_labels, CPTRd d_predictions, const double scale, const
 
 double max(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
 {
-    return thrust::async::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, std::numeric_limits<double>::min(), thrust::maximum<double>()).get();
+    return thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, std::numeric_limits<double>::min(), thrust::maximum<double>());
 }
 
 double min(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
 {
-    return thrust::async::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, std::numeric_limits<double>::max(), thrust::minimum<double>()).get();
+    return thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, std::numeric_limits<double>::max(), thrust::minimum<double>());
 }
 
 double mean(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
@@ -1549,7 +1549,7 @@ double sum(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
     cu_errchk(cudaMallocAsync(&temp_storage, temp_storage_bytes, stm));
     return res;
 #else
-    return thrust::async::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, double(0), thrust::plus<double>()).get();
+    return thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n);
 #endif
 }
 

@@ -83,7 +83,6 @@ bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_p
                 && common::isnormalz(sf->get_dc_offset()))
                 present[i] = true;
     const auto all_ok = std::all_of(C_default_exec_policy, present.cbegin(), present.cend(), std::identity());
-    LOG4_TRACE("All ok " << all_ok << ", of " << common::to_string(present) << " columns");
     return all_ok;
 }
 
@@ -97,7 +96,8 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     const auto p_main_input_queue = dataset.get_input_queue();
     const auto resolution_ratio = p_main_input_queue->get_resolution() / input_queue.get_resolution();
-    const auto calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::C_max_quantisation * datamodel::C_features_superset_coef + dataset.get_max_decrement() * resolution_ratio;
+    const auto calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::get_max_quantisation() *
+            datamodel::OnlineMIMOSVR::C_features_superset_coef + dataset.get_max_decrement() * resolution_ratio;
 #ifdef INTEGRATION_TEST
     const auto last_label_time = (**(p_main_input_queue->get_data().rbegin() + common::C_integration_test_validation_window)).get_value_time() + p_main_input_queue->get_resolution();
     const uint32_t test_offset = resolution_ratio > 1 ?

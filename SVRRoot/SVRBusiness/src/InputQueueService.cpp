@@ -57,10 +57,10 @@ svr::datamodel::DataRow::container
 InputQueueService::load(
         const std::string &table_name,
         const bpt::ptime &time_from,
-        const bpt::ptime &timeTo,
+        const bpt::ptime &time_to,
         size_t limit)
 {
-    return input_queue_dao.get_queue_data_by_table_name(table_name, time_from, timeTo, limit);
+    return input_queue_dao.get_queue_data_by_table_name(table_name, time_from, time_to, limit);
 }
 
 
@@ -69,7 +69,7 @@ InputQueueService::load(datamodel::InputQueue &input_queue)
 {
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
     LOG4_TRACE("Loading " << input_queue);
-
+    const tbb::mutex::scoped_lock l(input_queue.get_update_mutex());
     data_row_container &data = input_queue.get_data();
     if (data.empty()) {
         if (input_queue.get_uses_fix_connection())
@@ -85,7 +85,7 @@ InputQueueService::load(datamodel::InputQueue &input_queue)
                                       data.back()->get_value_time() + input_queue.get_resolution(),
                                       bpt::max_date_time, 0);
         if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
-            data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.end());
+            data.erase(lower_bound(data, new_data.front()->get_value_time()), data.end());
         data.insert(data.end(), new_data.begin(), new_data.end());
     }
 }
@@ -112,7 +112,7 @@ InputQueueService::load(
                               input_queue_dao.get_queue_data_by_table_name(
                                       input_queue.get_table_name(), range.begin(), range.end(), limit);
         if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
-            data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.end());
+            data.erase(lower_bound(data, new_data.front()->get_value_time()), data.end());
         data.insert(data.end(), new_data.begin(), new_data.end());
     }
 }
@@ -168,7 +168,7 @@ InputQueueService::load_latest(
     if (result.empty())
         return;
     if (p_input_queue->get_data().size()) {
-        p_input_queue->get_data().erase(lower_bound_back(p_input_queue->get_data(), result.front()->get_value_time()), p_input_queue->get_data().end());
+        p_input_queue->get_data().erase(lower_bound(p_input_queue->get_data(), result.front()->get_value_time()), p_input_queue->get_data().end());
         p_input_queue->get_data().insert(p_input_queue->get_data().end(), result.begin(), result.end());
     } else {
         p_input_queue->set_data(result);

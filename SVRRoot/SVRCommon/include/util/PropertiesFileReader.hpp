@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <boost/log/trivial.hpp>
 #include "common/types.hpp"
@@ -11,25 +12,38 @@ enum class ConcreteDaoType { PgDao, AsyncDao };
 
 class PropertiesFileReader
 {
-    static const std::string FEATURE_QUANTIZATION;
-    static const std::string PREDICTION_HORIZON;
-    static const std::string RECOMBINE_PARAMETERS;
-    static const std::string TUNE_PARAMETERS;
-    static const std::string SQL_PROPERTIES_DIR_KEY;
-    static const std::string LOG_LEVEL_KEY;
-    static const std::string COMMENT_CHARS;
-    static const std::string DAO_TYPE_KEY;
-    static const std::string SET_THREAD_AFFINITY;
-    static const std::string MULTISTEP_LEN;
-    static const std::string MULTIOUT;
-    static const std::string ONLINE_LEARN_ITER_LIMIT;
-    static const std::string STABILIZE_ITERATIONS_COUNT;
-    static const std::string ERROR_TOLERANCE;
-    static const std::string CONNECTION_STRING;
-    static const std::string SCALING_ALPHA;
-    static const std::string SLIDE_COUNT;
-    static const std::string TUNE_RUN_LIMIT;
-    static const std::string SELF_REQUEST;
+    static constexpr char MAX_LOOP_COUNT[] = "MAX_LOOP_COUNT";
+    static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
+    static constexpr char STREAM_LOOP_INTERVAL[] = "STREAM_LOOP_INTERVAL_MS";
+    static constexpr char DAEMONIZE[] = "DAEMONIZE";
+    static constexpr char FEATURE_QUANTIZATION[] = "FEATURE_QUANTIZATION";
+    static constexpr char PREDICTION_HORIZON[] = "PREDICTION_HORIZON";
+    static constexpr char TUNE_PARAMETERS[] = "TUNE_PARAMETERS";
+    static constexpr char RECOMBINE_PARAMETERS[] = "RECOMBINE_PARAMETERS";
+    static constexpr char SQL_PROPERTIES_DIR_KEY[] = "SQL_PROPERTIES_DIR";
+    static constexpr char LOG_LEVEL_KEY[] = "LOG_LEVEL";
+    static constexpr char DAO_TYPE_KEY[] = "DAO_TYPE";
+    static constexpr char COMMENT_CHARS[] = "#";
+    static constexpr char SET_THREAD_AFFINITY[] = "SET_THREAD_AFFINITY";
+    static constexpr char MULTISTEP_LEN[] = "MULTISTEP_LEN";
+    static constexpr char MULTIOUT[] = "MULTIOUT";
+    static constexpr char ONLINE_LEARN_ITER_LIMIT[] = "ONLINE_LEARN_ITER_LIMIT";
+    static constexpr char STABILIZE_ITERATIONS_COUNT[] = "STABILIZE_ITERATIONS_COUNT";
+    static constexpr char ERROR_TOLERANCE[] = "ERROR_TOLERANCE";
+    static constexpr char SCALING_ALPHA[] = "SCALING_ALPHA";
+    static constexpr char CONNECTION_STRING[] = "CONNECTION_STRING";
+    static constexpr char SLIDE_COUNT[] = "SLIDE_COUNT";
+    static constexpr char TUNE_RUN_LIMIT[] = "TUNE_RUN_LIMIT";
+    static constexpr char SELF_REQUEST[] = "SELF_REQUEST";
+    static constexpr char NUM_QUANTISATIONS[] = "NUM_QUANTISATIONS"; // Higher number of quantisations means more precision (more resource usage)
+    static constexpr char QUANTISATION_DIVISOR[] = "QUANTISATION_DIVISOR"; // Lower divisor means fine grained quantisations (more resource usage, 1 quant increment until 2 * divisor)
+    static constexpr char OEMD_COLUMN_INTERLEAVE[] = "OEMD_COLUMN_INTERLEAVE"; // Lower interleave finer OEMD FIR coefficients tuning
+    static constexpr char OEMD_QUANTISATION_SKIPDIV[] = "OEMD_QUANTISATION_SKIPDIV"; // Higher skipdiv finer OEMD FIR coefficients tuning
+    static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
+    static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
+    static constexpr char TUNE_PARTICLES[] = "TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
+    static constexpr char TUNE_ITERATIONS[] = "TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
+    static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
 
     MessageProperties property_files;
     char delimiter;
@@ -38,21 +52,19 @@ class PropertiesFileReader
     size_t feature_quantization_;
     double prediction_horizon_;
     bool set_thread_affinity_;
-    size_t multistep_len;
-    size_t multiout;
-    size_t online_learn_iter_limit_;
-    size_t stabilize_iterations_count_;
-    double error_tolerance_;
+    size_t multistep_len, multiout, online_learn_iter_limit_, stabilize_iterations_count_;
     double scaling_alpha_;
-    bool recombine_parameters_;
-    bool tune_parameters_;
-    size_t slide_count_;
-    size_t slide_skip_;
-    size_t validation_window_;
-    size_t tune_run_limit_;
+    bool recombine_parameters_, tune_parameters_;
+    size_t slide_count_, slide_skip_, validation_window_, tune_run_limit_;
     std::string db_connection_string_;
     boost::log::trivial::severity_level log_level_;
     bool self_request_;
+    long max_loop_count_;
+    std::chrono::milliseconds loop_interval_, stream_loop_interval_;
+    bool daemonize_;
+    uint16_t num_quantisations_, quantisation_divisor_, tune_particles_, tune_iterations_;
+    uint16_t oemd_column_interleave_, oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
+    float solve_iterations_coefficient_;
 
     size_t read_property_file(std::string property_file_name);
     bool is_comment(const std::string &line);
@@ -71,28 +83,40 @@ public:
         return boost::lexical_cast<T>(get_property_value(property_file, key, default_value));
     }
 
-    ConcreteDaoType get_dao_type() const;
-
-    inline size_t get_default_feature_quantization() { return feature_quantization_; }
-    inline double get_prediction_horizon() { return prediction_horizon_; }
-    inline std::string get_db_connection_string() { return db_connection_string_; }
-    inline bool get_set_thread_affinity() const { return set_thread_affinity_; }
-    inline size_t get_multistep_len() const { return multistep_len; }
-    inline size_t get_multiout() const { return multiout; }
-    inline size_t get_online_learn_iter_limit() const { return online_learn_iter_limit_; }
-    inline size_t get_stabilize_iterations_count() const { return stabilize_iterations_count_; }
-    inline double get_error_tolerance() const { return error_tolerance_; }
-    inline double get_scaling_alpha() const { return scaling_alpha_; }
-    inline bool get_tune_parameters() const { return tune_parameters_; }
-    inline bool get_recombine_parameters() const { return recombine_parameters_; }
-    inline size_t get_slide_count() const { return slide_count_; }
-    inline size_t get_slide_skip() const { return slide_skip_; }
-    inline size_t get_validation_window() const { return validation_window_; }
-    inline size_t get_tune_run_limit() const { return tune_run_limit_; }
-    inline boost::log::trivial::severity_level get_log_level() const { return log_level_; };
-    inline bool get_self_request() const { return self_request_; }
-
     static uint8_t S_log_threshold;
+
+    ConcreteDaoType get_dao_type() const noexcept;
+    size_t get_default_feature_quantization() const noexcept;
+    double get_prediction_horizon() const noexcept;
+    const std::string &get_db_connection_string() const noexcept;
+    bool get_set_thread_affinity() const noexcept;
+    size_t get_multistep_len() const noexcept;
+    size_t get_multiout() const noexcept;
+    size_t get_online_learn_iter_limit() const noexcept;
+    size_t get_stabilize_iterations_count() const noexcept;
+    double get_error_tolerance() const noexcept;
+    double get_scaling_alpha() const noexcept;
+    bool get_tune_parameters() const noexcept;
+    bool get_recombine_parameters() const noexcept;
+    size_t get_slide_count() const noexcept;
+    size_t get_slide_skip() const noexcept;
+    size_t get_validation_window() const noexcept;
+    size_t get_tune_run_limit() const noexcept;
+    boost::log::trivial::severity_level get_log_level() const noexcept;
+    bool get_self_request() const noexcept;
+    long get_max_loop_count() const noexcept;
+    std::chrono::milliseconds get_loop_interval() const noexcept;
+    std::chrono::milliseconds get_stream_loop_interval() const noexcept;
+    bool get_daemonize() const noexcept;
+    uint16_t get_num_quantisations() const noexcept;
+    uint16_t get_quantisation_divisor() const noexcept;
+    uint16_t get_oemd_column_interleave() const noexcept;
+    uint16_t get_oemd_quantisation_skipdiv() const noexcept;
+    uint16_t get_oemd_tune_particles() const noexcept;
+    uint16_t get_oemd_tune_iterations() const noexcept;
+    uint16_t get_tune_particles() const noexcept;
+    uint16_t get_tune_iterations() const noexcept;
+    float get_solve_iterations_coefficient() const noexcept;
 };
 
 

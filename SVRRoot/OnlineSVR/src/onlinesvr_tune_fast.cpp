@@ -91,13 +91,11 @@ void OnlineMIMOSVR::tune_fast()
     p_kernel_matrices->resize(num_chunks);
     weight_chunks.resize(num_chunks);
 
+    const auto opt_particles = PROPS.get_tune_particles();
+    const auto opt_iters = PROPS.get_tune_iterations();
 #ifdef KERNEL_PARAM_3
-    constexpr uint16_t opt_particles = 1; // 64;
-    constexpr uint16_t opt_iters = 1; // 64;
     constexpr uint16_t D = 3;
 #else
-    constexpr uint8_t opt_particles = 40;
-    constexpr uint8_t opt_iters = 40;
     constexpr uint8_t D = 2;
 #endif
     // static const auto equiexp = std::log(std::sqrt(C_tune_range_max_lambda)) / M_LN2;
@@ -199,9 +197,9 @@ void OnlineMIMOSVR::tune_fast()
             const arma::mat bias_labels = tune_labels % arma::linspace(1., C_weights_slope, tune_labels.n_rows);
             const auto epsco = calc_epsco(*Kz, bias_labels);
 #ifdef INSTANCE_WEIGHTS
-            const auto &w = bias_labels; // calc_weights(*Kz, bias_labels, weight_matrix(chunk_ixs_tune, *p_input_weights), epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * C_solve_opt_coef);
+            const auto &w = bias_labels; // calc_weights(*Kz, bias_labels, weight_matrix(chunk_ixs_tune, *p_input_weights), epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * PROPS.get_solve_iterations_coefficient());
 #else
-            const auto w = calc_weights(*Kz, bias_labels, epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * C_solve_opt_coef);
+            const auto w = calc_weights(*Kz, bias_labels, epsco, PROPS.get_stabilize_iterations_count(), chunk_ixs_tune.n_rows * PROPS.get_solve_iterations_coefficient());
 #endif
             const arma::uvec sorted_ixs = C_shift_lim + arma::stable_sort_index(
                     arma::pow(arma::abs(self_predict(*Kz, w, bias_labels)), 1) % score_dataset(bias_labels, tune_features_t, 1e-2));
@@ -283,7 +281,7 @@ void OnlineMIMOSVR::tune_fast()
                 constexpr double C_tune_range_max_tau = 10;
                 const auto tau = xx[2] * C_tune_range_max_tau;
 #else
-                constexpr double tau = 1;
+                constexpr double tau = C_default_svrparam_kernel_param_tau;
 #endif
                 const auto [score, gamma, epsco, p_predictions] = cv(lambda, xx[0], tau);
                 *f = score;
@@ -339,9 +337,7 @@ void OnlineMIMOSVR::tune_fast()
             set_params(p_chunk_params, chunk_ix);
         p_kernel_matrices->at(chunk_ix) = *prepare_K(ccache(), *p_chunk_params, train_feature_chunks_t[chunk_ix], last_trained_time);
         // p_chunk_params->set_svr_C(1. / calc_epsco(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix]));
-        mallctl("prof.dump", NULL, NULL, NULL, 0);
-        std::this_thread::sleep_for(std::chrono::seconds(30));
-        calc_weights(chunk_ix, PROPS.get_stabilize_iterations_count(), ixs[chunk_ix].n_rows * C_solve_opt_coef);
+        calc_weights(chunk_ix, PROPS.get_stabilize_iterations_count(), ixs[chunk_ix].n_rows * PROPS.get_solve_iterations_coefficient());
         LOG4_INFO("Tune best score " << chunks_score[chunk_ix] << ", final parameters " << *p_chunk_params);
     }
     clean_chunks();
@@ -356,7 +352,7 @@ std::deque<size_t> OnlineMIMOSVR::get_predict_chunks(const std::deque<std::pair<
 #ifdef SECOND_SCORE
     double mean_second = 0;
 #endif
-    if (chunks_score.size() <= svr::datamodel::C_predict_chunks) goto __bail;
+    if (chunks_score.size() <= C_predict_chunks) goto __bail;
 #define GOOD_SCORE(x) std::isnormal(x) && x != common::C_bad_validation
 #define ADD_NORMAL(x, y) if (GOOD_SCORE(y)) x += y
     for (const auto &p: chunks_score) {
@@ -383,10 +379,10 @@ std::deque<size_t> OnlineMIMOSVR::get_predict_chunks(const std::deque<std::pair<
 #endif
         return score_1 < score_2;
     });
-    res.erase(res.begin() + svr::datamodel::C_predict_chunks, res.end());
+    res.erase(res.begin() + C_predict_chunks, res.end());
     std::sort(C_default_exec_policy, res.begin(), res.end());
     __bail:
-    LOG4_DEBUG("Using " << svr::datamodel::C_predict_chunks << " chunks " << res << ", of all chunks with scores " << chunks_score);
+    LOG4_DEBUG("Using " << C_predict_chunks << " chunks " << res << ", of all chunks with scores " << chunks_score);
     return res;
 }
 

@@ -76,6 +76,7 @@ constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
 constexpr double C_default_svrparam_kernel_param2 = 0;
+constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::C_best_decrement;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
 constexpr svr::datamodel::e_kernel_type C_default_svrparam_kernel_type = svr::datamodel::e_kernel_type::PATH;
@@ -93,6 +94,7 @@ struct t_feature_mechanics
 
     bool needs_tuning() const noexcept;
 };
+
 
 std::ostream &operator <<(std::ostream &s, const t_feature_mechanics &fm);
 
@@ -217,7 +219,7 @@ public:
 
     void set_svr_kernel_param2(const double _svr_kernel_param2) noexcept;
 
-    PROPERTY(double, kernel_param3, .75);
+    PROPERTY(double, kernel_param3, C_default_svrparam_kernel_param_tau);
 
     PROPERTY(uint32_t, svr_decremental_distance, C_default_svrparam_decrement_distance) // TODO Refactor all class properties to use the PROPERTY macro
 

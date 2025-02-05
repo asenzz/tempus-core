@@ -307,7 +307,7 @@ void Queue::update_data(const DataRow::container &new_data, const bool overwrite
     if (!data_.empty()
         && !new_data.empty()
         && new_data.front()->get_value_time() < data_.back()->get_value_time())
-        data_.erase(lower_bound_back(data_, new_data.front()->get_value_time()), data_.cend());
+        data_.erase(lower_bound(data_, new_data.front()->get_value_time()), data_.cend());
 
     data_.insert(data_.cend(), new_data.cbegin(), new_data.cend());
 
@@ -328,6 +328,10 @@ UNROLL()
     return s.str();
 }
 
+tbb::mutex &Queue::get_update_mutex()
+{
+    return update_mx;
+}
 
 }
 }

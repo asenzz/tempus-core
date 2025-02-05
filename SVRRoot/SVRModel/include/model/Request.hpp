@@ -19,6 +19,7 @@ struct MultivalRequest : public Entity {
     bpt::ptime request_time, value_time_start, value_time_end;
     bpt::time_duration resolution;
     std::string value_columns;
+    std::deque<std::string> value_columns_;
 
     MultivalRequest();
 
@@ -32,9 +33,19 @@ struct MultivalRequest : public Entity {
             const bpt::time_duration &resolution,
             const std::string &value_columns);
 
+    MultivalRequest(
+            const bigint request_id,
+            const std::string &user_name,
+            const bigint dataset_id,
+            const bpt::ptime &request_time,
+            const bpt::ptime &value_time_start,
+            const bpt::ptime &value_time_end,
+            const bpt::time_duration &resolution,
+            const std::deque<std::string> &value_columns);
+
     virtual void init_id() override;
 
-    std::deque<std::string> get_value_columns() const;
+    const std::deque<std::string> &get_value_columns();
 
     virtual std::string to_string() const override;
 

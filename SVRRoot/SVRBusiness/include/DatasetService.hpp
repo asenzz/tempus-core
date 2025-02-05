@@ -29,6 +29,8 @@ class SVRParametersService;
 namespace svr {
 namespace business {
 
+typedef std::unordered_map<std::string /* column */, std::deque<datamodel::DataRow_ptr>> t_stream_results, *t_stream_results_ptr;
+
 class DatasetService
 {
     dao::DatasetDAO &dataset_dao;
@@ -78,7 +80,8 @@ public:
 
     static void process(datamodel::Dataset &dataset);
 
-    static void process_requests(const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests);
+    static void process_requests(
+            const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests, t_stream_results_ptr p_stream_results);
 };
 
 } /* namespace business */

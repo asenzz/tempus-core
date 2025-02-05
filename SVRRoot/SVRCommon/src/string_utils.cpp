@@ -12,7 +12,26 @@
 #include <boost/property_tree/json_parser.hpp>
 
 namespace svr {
+
 namespace common {
+
+char* concat(const char *lhs, const char *rhs)
+{
+    // Calculate the lengths of the two strings
+    const auto lhs_len = strlen(lhs);
+    const auto rhs_len = strlen(rhs);
+
+    // Allocate memory for the concatenated string (+1 for null terminator)
+    auto result = new char[lhs_len + rhs_len + 1];
+
+    // Copy the first string
+    strcpy(result, lhs);
+
+    // Concatenate the second string
+    strcat(result, rhs);
+
+    return result; // Return the dynamically allocated result
+}
 
 std::string formatter::str() const
 {

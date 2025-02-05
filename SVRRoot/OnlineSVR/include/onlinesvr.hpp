@@ -24,27 +24,6 @@ class calc_cache;
 
 namespace datamodel {
 
-constexpr uint32_t C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
-constexpr float C_tune_range_min_lambda = 0;
-constexpr float C_tune_range_max_lambda = 10;
-constexpr float C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
-constexpr float C_chunk_offlap = 1. - C_chunk_overlap;
-constexpr float C_chunk_tail = .1;
-constexpr float C_chunk_header = 1. - C_chunk_tail;
-constexpr uint16_t C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
-constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
-constexpr magma_int_t C_rbt_iter = 40; // default 30
-constexpr float C_rbt_threshold = 0; // [0..1] default 1
-constexpr uint32_t C_features_superset_coef = 100; // [1..+inf)
-constexpr float C_solve_opt_coef = .001; // 2; // Rows count multiplier to calculate iterations for NL solver
-constexpr uint16_t C_solve_opt_particles = 80;
-constexpr uint16_t C_weight_cols = 1;
-#ifdef EMO_DIFF
-constexpr double C_diff_coef = 1;
-#else
-constexpr double C_diff_coef = 1;
-#endif
-
 #define SINGLE_CHUNK_LEVEL
 #define USE_MAGMA
 #define FORGET_MIN_WEIGHT
@@ -80,6 +59,19 @@ using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 class OnlineMIMOSVR final : public Entity
 {
     constexpr static unsigned C_epscos_len = 1;
+    static constexpr uint32_t C_interlace_manifold_factor = 20; // Every Nth row is used from a manifold dataset to train the produced model
+    static constexpr float C_tune_range_min_lambda = 0;
+    static constexpr float C_tune_range_max_lambda = 10;
+    static constexpr float C_chunk_overlap = 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
+    static constexpr uint16_t C_predict_chunks = 1; // TODO Review. Best chunks used for predictions
+    static constexpr uint16_t C_solve_opt_particles = 80;
+    static constexpr uint16_t C_weight_cols = 1;
+    #ifdef EMO_DIFF
+    static constexpr double C_diff_coef = 1;
+    #else
+    static constexpr double C_diff_coef = 1;
+    #endif
+    
 
     bigint model_id = 0;
     bpt::ptime last_trained_time;
@@ -119,6 +111,14 @@ class OnlineMIMOSVR final : public Entity
     arma::mat predict_chunk_t(const arma::mat &x_predict);
 
 public:
+    static constexpr magma_int_t C_rbt_iter = 40; // default 30
+    static constexpr float C_rbt_threshold = 0; // [0..1] default 1
+    static constexpr uint16_t C_features_superset_coef = 100; // [1..+inf)
+    static constexpr float C_chunk_offlap = 1. - C_chunk_overlap;
+    static constexpr float C_chunk_tail = .1;
+    static constexpr float C_chunk_header = 1. - C_chunk_tail;
+    static constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
+
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
     OnlineMIMOSVR(

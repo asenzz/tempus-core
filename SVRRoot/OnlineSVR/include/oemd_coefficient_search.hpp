@@ -19,15 +19,13 @@ namespace oemd {
 
 class oemd_coefficients_search {
 
-    constexpr static uint8_t C_column_interleave = 8;
-    constexpr static uint8_t C_quantisation_skipdiv = 3;
     constexpr static uint16_t particles = 10;
     constexpr static uint16_t iterations = 40;
     constexpr static double lambda1 = .30;
     constexpr static double lambda2 = .33;
     constexpr static double allowed_eps_up = .1;
     constexpr static double norm_thresh = 1. + allowed_eps_up;
-    constexpr static uint8_t multistep = 1;
+    constexpr static uint8_t multistep = 1; // Leave at 1 for now
 
     const bpt::time_duration resolution;
     const double sample_rate;
@@ -106,19 +104,6 @@ public:
 
     double dominant_frequency(const std::span<double> &input, const double percentile_greatest_peak, const cudaStream_t custream) const;
 };
-
-__global__ void G_quantise_features_quick(
-        CRPTRd d_imf,
-        RPTR(double) d_features,
-        const uint32_t rows_q,
-        const uint32_t cols,
-        const uint32_t quantisation,
-        const uint32_t cols_q,
-        const uint32_t cols_rows_q,
-        const uint32_t interleave,
-        const uint32_t start_col_q,
-        const uint32_t start_row,
-        CRPTR(t_label_ix) d_label_ixs);
 
 }
 }

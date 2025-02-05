@@ -17,21 +17,36 @@ namespace common { class PropertiesFileReader; }
 
 namespace context {
 
-class AppContext{
-private:
+class AppContext {
+    static AppContext *p_instance;
+
+    AppContext(const std::string &config_path, const bool use_threadsafe_dao);
+
+    ~AppContext();
+
+    AppContext(AppContext &) = delete;
+
+    AppContext(AppContext &&) = delete;
+
+    void operator=(AppContext &) = delete;
+
+    void operator=(AppContext &&) = delete;
+
     struct AppContextImpl;
     AppContextImpl &p_impl;
 
 public:
-    static inline AppContext& get_instance() { return *p_instance; }
+    static inline AppContext &get_instance()
+    { return *p_instance; }
+
     static void init_instance(const std::string &config_path, bool use_threadsafe_dao = true);
+
     static void destroy_instance();
 
     svr::common::PropertiesFileReader &app_properties;
 
     svr::business::UserService &user_service;
     svr::business::InputQueueService &input_queue_service;
-public:
     svr::business::SVRParametersService &svr_parameters_service;
     svr::business::ModelService &model_service;
     svr::business::DeconQueueService &decon_queue_service;
@@ -50,19 +65,9 @@ public:
     void flush_dao_buffers();
 
     bool is_threadsafe_dao() const;
-
-private:
-    static AppContext *p_instance;
-    AppContext(const std::string& config_path, const bool use_threadsafe_dao);
-    ~AppContext();
-    AppContext(AppContext&)=delete;
-    AppContext(AppContext&&)=delete;
-    void operator=(AppContext&)=delete;
-    void operator=(AppContext&&)=delete;
 };
 
-struct AppContextDeleter
-{
+struct AppContextDeleter {
     ~AppContextDeleter();
 };
 

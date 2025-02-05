@@ -262,13 +262,15 @@ void DatasetService::process(datamodel::Dataset &dataset)
     LOG4_END();
 }
 
-
 // By specification, a multival request's time period to predict is [start_predict_time, end_predict_time) i.e. right-hand exclusive.
-void DatasetService::process_requests(const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests)
+void DatasetService::process_requests(
+        const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests, t_stream_results_ptr p_stream_results)
 {
     LOG4_DEBUG("Processing " << user << " requests for dataset " << dataset << ", requests " << requests.size());
 
+    tbb::mutex stream_results_mx;
     const auto timenow = bpt::second_clock::local_time();
+
 // #pragma omp parallel ADJ_THREADS(2 * requests.size())
 // #pragma omp single
     {
@@ -285,7 +287,8 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
             if (p_request->value_time_start == p_request->value_time_end)
                 predict_times.emplace_back(otr<datamodel::DataRow>(p_request->value_time_start, timenow, 0, 0));
             else
-                for (auto t = p_request->value_time_start; t < p_request->value_time_end; t += dataset.get_input_queue()->get_resolution())
+                for (auto t = bpt::time_from_string("2025-Jan-06 01:00:00")/*  p_request->value_time_start; */ ; t < p_request->value_time_end;
+                    t += dataset.get_input_queue()->get_resolution())
                     predict_times.emplace_back(otr<datamodel::DataRow>(t, timenow, 0, 0));
 
             REQCHK(predict_times.empty(), "Times grid empty.")
@@ -293,16 +296,16 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
             // Do actual predictions
             const auto &columns = p_request->get_value_columns();
             // OMP_TASKLOOP_(columns.size(),)
-            for (const auto &request_column: columns)
+            for (const auto &column: columns)
                 if (request_answered) {
-                    const auto p_ensemble = dataset.get_ensemble(request_column);
-                    REQCHK(!p_ensemble, "Ensemble for request column " << request_column << " not found.")
+                    const auto p_ensemble = dataset.get_ensemble(column);
+                    REQCHK(!p_ensemble, "Ensemble for request column " << column << " not found.")
 
                     const auto predicted_decon = EnsembleService::predict_noexcept(dataset, *p_ensemble, predict_times);
                     REQCHK(!predicted_decon, "Predicted decon empty.")
 
                     const auto unscaler = IQScalingFactorService::get_unscaler(
-                            dataset, p_ensemble->get_label_aux_decon()->get_input_queue_table_name(), request_column);
+                            dataset, p_ensemble->get_label_aux_decon()->get_input_queue_table_name(), column);
                     const auto predicted_recon = APP.decon_queue_service.reconstruct(
                             datamodel::datarow_range(predicted_decon->get_data()), recon_type_e::ADDITIVE, unscaler);
 
@@ -316,8 +319,16 @@ void DatasetService::process_requests(const datamodel::User &user, datamodel::Da
                             || !std::isnormal(p_result_row->get_value(0)))
                             LOG4_WARN("Skipping save of invalid response " << *p_result_row);
                         else
-                            APP.request_service.save(
-                                ptr<datamodel::MultivalResponse>(0, p_request->get_id(), p_result_row->get_value_time(), request_column, p_result_row->get_value(0)));
+                            if (p_stream_results) {
+                                tbb::mutex::scoped_lock l(stream_results_mx);
+                                auto it_stream_results = p_stream_results->find(column);
+                                if (it_stream_results == p_stream_results->cend())
+                                    p_stream_results->emplace(column, std::deque{p_result_row});
+                                else
+                                    it_stream_results->second.emplace_back(p_result_row);
+                            } else
+                                APP.request_service.save(
+                                    ptr<datamodel::MultivalResponse>(0, p_request->get_id(), p_result_row->get_value_time(), column, p_result_row->get_value(0)));
                     }
                 }
 

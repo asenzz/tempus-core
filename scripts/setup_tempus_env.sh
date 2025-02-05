@@ -11,9 +11,19 @@ if [[ -z "${SETVARS_COMPLETED}" ]]; then
   source /opt/intel/oneapi/setvars.sh --include-intel-llvm intel64 lp64
 fi
 
+export scriptname="$(basename $0)"
+
+killwait() {
+  while (pidof -csn $1); do
+    echo "${scriptname}: Stopping $1 . . ."
+    pkill $1
+    sleep 1
+  done
+}
+
 export UBSAN_OPTIONS=print_stacktrace=1:print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.ubsan.log
 # export LSAN_OPTIONS=suppressions=print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.lsan.log
-export ASAN_OPTIONS=protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=1:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=1:log_threads=1
+export ASAN_OPTIONS=detect_container_overflow=true:protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=1:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=0:log_threads=1
 # export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 
 # export LD_PRELOAD="${LD_PRELOAD}:libduma.so"
@@ -151,4 +161,7 @@ echo 1 > /proc/sys/vm/overcommit_memory # default 2
 # fs.file-max = 6815744
 # fs.aio-max-nr = 3145728
 # vm.nr_hugepages = 512
-
+echo always > /sys/kernel/mm/transparent_hugepage/enabled
+echo 1 > /proc/sys/vm/page_lock_unfairness
+echo 0 > /proc/sys/kernel/numa_balancing
+sysctl vm.vfs_cache_pressure=50

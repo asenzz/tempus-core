@@ -34,6 +34,8 @@ template<typename T, typename C> std::basic_ostream<C> &operator<<(std::basic_os
 
 namespace common {
 
+char* concat(const char *lhs, const char *rhs);
+
 class formatter
 {
     enum ConvertToString

@@ -80,8 +80,8 @@ ENDIF ()
 
 # UNSET(CXX_OPTIMIZATION_FLAGS COMMON_OPTIMIZATION_FLAGS_GCC COMMON_OPTIMIZATION_FLAGS_ICX LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC LINKER_OPTIMIZATION_FLAGS_ICX)
 IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-    LIST(APPEND CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -fno-trapping-math -fno-signed-zeros -fassociative-math -ffp-contract=fast -O3 -mcmodel=large) # Intel linker crash with -fsplit-stack
-    LIST(APPEND COMMON_OPTIMIZATION_FLAGS_GCC -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -finline-limit=${INLINE_INSTR_LIMIT} -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -floop-block -floop-strip-mine -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited) # Kills a bit of precision -funsafe-math-optimizations
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -fno-trapping-math -fno-signed-zeros -fassociative-math -ffp-contract=fast -O3 -mcmodel=large -pipe) # Intel linker crash with -fsplit-stack
+    LIST(APPEND COMMON_OPTIMIZATION_FLAGS_GCC -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -finline-limit=${INLINE_INSTR_LIMIT} -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -floop-block -floop-strip-mine -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited -fgraphite-identity -fno-semantic-interposition) # Kills a bit of precision -funsafe-math-optimizations
     LIST(APPEND COMMON_OPTIMIZATION_FLAGS_ICX -qopt-prefetch -qopt-dynamic-align -fvec-peel-loops -fvec-remainder-loops -fvec-with-mask -vec-threshold=0 -qopt-multiple-gather-scatter-by-shuffles -qopt-mem-layout-trans=4 -fdiagnostics-show-option -mprefer-vector-width=${CPU_VECTOR_WIDTH} -fslp-vectorize -fjump-tables -fma -Wno-overriding-option -fp-model=precise -fp-speculation=safe -fimf-use-svml=true -mbranches-within-32B-boundaries -vec -finline -qopt-matmul -qopt-jump-tables)
     IF (ENABLE_OMP_OFFLOAD)
         LIST(APPEND COMMON_OPTIMIZATION_FLAGS_ICX -fopenmp-target-loopopt -fopenmp-target-buffers=4GB -fopenmp-targets=spir64 -fopenmp-concurrent-host-device-compile) # Crashes linker -fopenmp-target-simd, # Is this correct? -fopenmp-targets=spir64_x86_64
@@ -101,7 +101,7 @@ IF (CMAKE_BUILD_TYPE MATCHES "Rel")
         IF (USE_LLD)
             LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX -Wl,--lto=full -Wl,--no-lto-legacy-pass-manager -Wl,--lto-CGO3 -Wl,--lto-O3 -Wl,--lto-whole-program-visibility) # -Wl,--no-fat-lto-objects
         ENDIF ()
-        LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -flto-partition=one)
+        LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -flto-partition=one -fdevirtualize-at-ltrans)
     ENDIF ()
     SET($ENV {MKL_ENABLE_INSTRUCTIONS} "AVX2")
 ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
@@ -110,7 +110,7 @@ ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
     ENDIF()
     # SET(LSAN_BLACKLIST "lsan-blacklist.txt" CACHE STRING "")
     # SET(UBSAN_BLACKLIST "ubsan-blacklist.txt" CACHE STRING "")
-    SET(SANITIZE "" CACHE STRING address)
+    SET(SANITIZE "" CACHE STRING "bounds-strict,undefined,float-cast-overflow,signed-integer-overflow,pointer-overflow,address")
     SET_PROPERTY(CACHE SANITIZE PROPERTY STRINGS address thread undefined "")
     LIST(APPEND COMPILER_EXTENSIONS_ICX -fimf-precision=high) # Too verbose -qnextgen-diag
     LIST(APPEND CXX_OPTIMIZATION_FLAGS -DDEBUG_BUILD -ggdb -fno-omit-frame-pointer -fstack-protector-all -fstack-clash-protection) # -fsanitize-blacklist=${LSAN_BLACKLIST}
@@ -136,7 +136,7 @@ IF (PROGRAM_MOLD)
 ENDIF ()
 
 IF (SANITIZE)
-    LIST(APPEND CXX_OPTIMIZATION_FLAGS -fno-common -fsanitize=${SANITIZE} -fno-sanitize-recover=all)
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS -fno-common -fsanitize=${SANITIZE} -fsanitize-recover=all)
     LIST(APPEND CXX_OPTIMIZATION_FLAGS_GCC --param=max-vartrack-size=100000000)
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS -fsanitize=${SANITIZE})
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC -static-libasan -static-libubsan -fsanitize=${SANITIZE})
@@ -215,7 +215,6 @@ IF (USE_INTEL_COMPILER)
     ENDFOREACH ()
 ELSE ()
     SET(ENABLE_OMP_OFFLOAD OFF)
-    # LINK_DIRECTORIES(/opt/intel/oneapi/compiler/latest/lib)
     LINK_LIBRARIES(libsycl.so)
     FOREACH (OPT IN LISTS CMAKE_PEDANTIC_FLAGS COMPILER_EXTENSIONS COMPILER_EXTENSIONS_GCC CXX_OPTIMIZATION_FLAGS CXX_OPTIMIZATION_FLAGS_GCC)
         ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:CXX>:${OPT}>")

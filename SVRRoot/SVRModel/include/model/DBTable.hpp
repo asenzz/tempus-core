@@ -1,5 +1,6 @@
 #pragma once
 
+#include <oneapi/tbb/mutex.h>
 #include <string>
 #include <memory>
 #include "DataRow.hpp"
@@ -12,6 +13,8 @@ namespace datamodel {
 
 class Queue : public Entity
 {
+    tbb::mutex update_mx;
+
 protected:
     std::string table_name_;
     data_row_container data_; // TODO Replace with pointer to data_row_container
@@ -113,6 +116,8 @@ public:
     void trim(const bpt::time_period &time_range);
 
     std::deque<double> get_tick_volume() const;
+
+    tbb::mutex &get_update_mutex();
 };
 
 } /* namespace model */

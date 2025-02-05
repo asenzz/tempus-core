@@ -31,6 +31,23 @@ MultivalRequest::MultivalRequest(
 #endif
 }
 
+MultivalRequest::MultivalRequest(
+        const bigint request_id,
+        const std::string &user_name,
+        const bigint dataset_id,
+        const bpt::ptime &request_time,
+        const bpt::ptime &value_time_start,
+        const bpt::ptime &value_time_end,
+        const bpt::time_duration &resolution,
+        const std::deque<std::string> &value_columns_)
+        : Entity(request_id), dataset_id(dataset_id), user_name(std::move(user_name)), request_time(request_time),
+          value_time_start(value_time_start), value_time_end(value_time_end), resolution(resolution), value_columns_(value_columns_)
+{
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
+}
+
 void MultivalRequest::init_id()
 {
     if (!id) {
@@ -44,9 +61,10 @@ void MultivalRequest::init_id()
     }
 }
 
-std::deque<std::string> MultivalRequest::get_value_columns() const
+const std::deque<std::string> &MultivalRequest::get_value_columns()
 {
-    return common::from_sql_array(value_columns);
+    if (value_columns_.empty()) value_columns_ = common::from_sql_array(value_columns);
+    return value_columns_;
 }
 
 std::string MultivalRequest::to_string() const

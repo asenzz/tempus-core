@@ -13,10 +13,10 @@ namespace svr {
 namespace datamodel {
 
 void
-OnlineMIMOSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
-                           const matrices_ptr &precalc_kernel_matrices)
+OnlineMIMOSVR::batch_train(
+        const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
+        const matrices_ptr &precalc_kernel_matrices)
 {
-
 #ifdef INSTANCE_WEIGHTS
     if (p_xtrain->n_rows != p_ytrain->n_rows || p_ytrain->n_rows != p_ylastknown->n_rows || p_input_weights_->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty())
         LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", last knowns " << arma::size(*p_ylastknown) <<
@@ -92,7 +92,7 @@ OnlineMIMOSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, con
             else
                 LOG4_DEBUG("Using pre-calculated kernel matrix for " << i);
 
-            calc_weights(i, PROPS.get_stabilize_iterations_count(), ixs[i].n_rows * C_solve_opt_coef);
+            calc_weights(i, PROPS.get_stabilize_iterations_count(), ixs[i].n_rows * PROPS.get_solve_iterations_coefficient());
         }
     }
     update_all_weights();
@@ -287,7 +287,7 @@ void OnlineMIMOSVR::learn(
     p_labels->insert_rows(p_labels->n_rows, new_y);
     p_last_knowns->insert_rows(p_last_knowns->n_rows, new_ylk);
 
-    OMP_FOR_i(affected_chunks.size()) calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit(), ixs[i].n_rows * (C_solve_opt_coef * C_solve_opt_coef));
+    OMP_FOR_i(affected_chunks.size()) calc_weights(affected_chunks % i, PROPS.get_online_learn_iter_limit(), ixs[i].n_rows * PROPS.get_solve_iterations_coefficient());
     update_all_weights();
     samples_trained += new_rows_ct;
     last_trained_time = last_value_time;
@@ -301,6 +301,7 @@ arma::mat OnlineMIMOSVR::weight_matrix(const arma::uvec &ixs, const arma::mat &w
     OMP_FOR_i(ixs.n_rows) w.col(i) = Wv * Wv[i];
     return arma::sqrt(w);
 }
+
 
 arma::mat OnlineMIMOSVR::calc_weights(
         arma::mat K, const arma::mat &labels, const arma::mat &instance_weights_matrix, const double epsco, const uint16_t iters_irwls, const uint16_t iters_opt)

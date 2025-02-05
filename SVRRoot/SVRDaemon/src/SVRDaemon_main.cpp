@@ -4,31 +4,26 @@
 #include <model/Request.hpp>
 #include <csignal>
 
-
 using namespace svr;
 
-
-void signal_handler(int signum)
+void signal_handler(const int signum)
 {
     LOG4_DEBUG("Interrupt signal (" << signum << ") received.");
 
     exit(signum);
 }
 
-
-std::string parse(const int argc, const char** argv)
+std::string parse(const int argc, const char **argv)
 {
     boost::program_options::options_description gen_desc = boost::program_options::options_description("Daemon options");
     gen_desc.add_options()
-        ("help",     "produce help message")
-        ("config,c",   boost::program_options::value<std::string>()->default_value("daemon.config"),
-                    "Path to file with SQL configuration for daemon");
+            ("help", "produce help message")
+            ("config,c", boost::program_options::value<std::string>()->default_value("daemon.config"), "Path to file with SQL configuration for daemon");
 
     boost::program_options::variables_map vm;
     // parse command line
     boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(gen_desc).run(), vm);
-    if (vm.count("help") or !vm.count("config"))
-    {
+    if (vm.count("help") or !vm.count("config")) {
         std::cout << gen_desc << "\n";
         exit(0);
     }
@@ -39,12 +34,11 @@ std::string parse(const int argc, const char** argv)
     return vm["config"].as<std::string>();
 }
 
-
-int main(const int argc, const char** argv)
+int main(const int argc, const char **argv)
 {
 #ifdef INTEGRATION_TEST
     LOG4_FATAL("Integration test build cannot be run in production.");
-    exit(0xff);
+    exit(0xfd);
 #endif
 
 //    mtrace();
@@ -59,7 +53,7 @@ int main(const int argc, const char** argv)
     int rc = 0;
     try {
         const std::string config_path = parse(argc, argv);
-        p_daemon_facade = ptr<daemon::DaemonFacade>(config_path);
+        p_daemon_facade = ptr<daemon::DaemonFacade>();
         p_daemon_facade->start_loop();
     } catch (const std::invalid_argument &e) {
         LOG4_ERROR(e.what());
@@ -69,7 +63,7 @@ int main(const int argc, const char** argv)
         rc = 0xff;
     } catch (...) {
         LOG4_ERROR("Unknown exception thrown. ");
-        rc = 0xff;
+        rc = 0xfe;
     }
     LOG4_INFO("Daemon process finishing");
 

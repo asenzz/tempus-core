@@ -153,7 +153,7 @@ typedef arma::Col<std::time_t> tvec;
 std::string demangle(const std::string &name);
 
 template<typename T>
-bool operator!=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
+bool operator != (const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
 {
     if (lhs.size() != rhs.size()) return true;
     for (auto lhs_iter = lhs.begin(), rhs_iter = rhs.begin(); lhs_iter != lhs.end(), rhs_iter != rhs.end(); ++lhs_iter, ++rhs_iter) {
@@ -164,9 +164,12 @@ bool operator!=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::sha
     return false;
 }
 
-bool operator<(const arma::SizeMat &lhs, const arma::SizeMat &rhs);
 
-bool operator<(const std::set<size_t> &lhs, const std::set<size_t> &rhs);
+bool operator != (const std::deque<std::string> &lhs, const std::deque<std::string> &rhs);
+
+bool operator < (const arma::SizeMat &lhs, const arma::SizeMat &rhs);
+
+bool operator < (const std::set<size_t> &lhs, const std::set<size_t> &rhs);
 
 using type_info_ref = std::reference_wrapper<const std::type_info>;
 

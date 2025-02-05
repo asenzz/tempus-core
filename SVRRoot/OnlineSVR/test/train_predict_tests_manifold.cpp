@@ -58,6 +58,11 @@ View definition:
 
 using namespace svr;
 
+const auto init_test = [] {
+    context::AppContext::init_instance("../config/app.config");
+    return true;
+} ();
+
 // #define TEST_MANIFOLD
 
 namespace {
@@ -77,11 +82,11 @@ const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_v
 const std::string C_test_input_name = "q_svrwave_test_xauusd_avg_";
 const std::string C_test_input_table_name = C_test_input_name + STR_MAIN_QUEUE_RES;
 const std::string C_test_aux_input_table_name = C_test_input_name + "1";
-constexpr uint16_t C_test_levels = 1;
+constexpr uint16_t C_test_levels = 6;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
-constexpr auto C_overload_factor = 1.5; // Load surplus data from database in case rows discarded during preparation
-const auto C_decon_tail = svr::datamodel::Dataset::get_residuals_length(C_test_levels);
-const uint32_t C_max_features_len = C_test_lag * datamodel::C_features_superset_coef * business::ModelService::C_max_quantisation;
+constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
+const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
+const uint32_t C_max_features_len = C_test_lag * datamodel::OnlineMIMOSVR::C_features_superset_coef * business::ModelService::get_max_quantisation();
 const uint32_t C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
 const uint32_t C_dataset_id = 0xDeadBeef;
 const auto C_dataset_id_str = std::to_string(C_dataset_id);
@@ -100,13 +105,11 @@ void prepare_test_queue(datamodel::Dataset &dataset, datamodel::InputQueue &inpu
     PROFILE_EXEC_TIME(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
 }
 
-
 TEST(manifold_tune_train_predict, basic_integration)
 {
     LOG4_BEGIN();
 
     omp_set_nested(true);
-    svr::context::AppContext::init_instance("../config/app.config");
 
     try {
         pqxx::connection c(PROPS.get_db_connection_string());
@@ -120,6 +123,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                      " WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_features_len_h_str + ") ORDER BY value_time ASC;" \
                 "DELETE FROM w_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
+                "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
                 "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
         w.exec(q).no_rows();
         w.commit();
@@ -133,13 +137,13 @@ TEST(manifold_tune_train_predict, basic_integration)
             C_test_gradient_count, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
-#pragma omp parallel ADJ_THREADS(std::min<uint16_t>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
-#pragma omp single
+// #pragma omp parallel ADJ_THREADS(std::min<uint16_t>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
+// #pragma omp single
     {
-        OMP_TASKLOOP_1()
+        // OMP_TASKLOOP_1()
         for (const auto &p_ensemble: p_dataset->get_ensembles()) {
             const auto &column = p_ensemble->get_column_name();
-
+//            const bool is_ask = column.find("_ask") != std::string::npos;
             prepare_test_queue(*p_dataset, *p_dataset->get_input_queue(), *p_ensemble->get_decon_queue());
             OMP_TASKLOOP_1()
             for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
@@ -150,7 +154,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep());
             arma::vec recon_last_knowns(common::C_integration_test_validation_window);
             t_omp_lock recon_l;
-            OMP_TASKLOOP_1(collapse(2))
+//            OMP_TASKLOOP_1(collapse(2))
             for (uint16_t l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
                 for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
@@ -167,7 +171,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                                 p_params->set_lag_count(C_test_lag);
                             }
 
-                        LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params);
+                        LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params << ", integration test validation_window " << common::C_integration_test_validation_window);
                         const auto [p_model_features, p_model_labels, p_model_last_knowns, p_weights, p_model_times] =
                                 business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_labels_len_h);
                         assert(p_model_labels->n_rows == C_test_labels_len_h);
@@ -176,8 +180,9 @@ TEST(manifold_tune_train_predict, basic_integration)
                         const uint32_t train_end = p_model_labels->n_rows - common::C_integration_test_validation_window - 1;
                         LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_labels_len_h);
                         const auto feat_levels = p_head_params->get_adjacent_levels();
-                        const auto last_value_time = p_model_times->back()->get_value_time();
-                        business::ModelService::train_batch(*p_model, otr<arma::mat>(p_model_features->rows(train_start, train_end)),
+                        const auto last_value_time = p_model_times->at(train_end)->get_value_time();
+                        business::ModelService::train_batch(*p_model,
+                                                            otr<arma::mat>(p_model_features->rows(train_start, train_end)),
                                                             otr<arma::mat>(p_model_labels->rows(train_start, train_end)),
                                                             otr<arma::vec>(p_model_last_knowns->rows(train_start, train_end)),
 #ifdef INSTANCE_WEIGHTS
@@ -222,12 +227,12 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto i_div = i + 1.;
                 const auto cur_time = p_times->at(validate_start + i)->get_value_time();
                 const auto actual = (**lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
-                const auto last_known_iter = lower_bound_back_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
+                const auto last_known_iter = lower_bound_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
                 const auto last_known = (**last_known_iter)[column_ix];
                 const auto diff_actual_last_known = actual - last_known;
                 const auto diff_recon_actual_last_known = recon_actual[i] - recon_last_knowns[i];
                 const auto predicted_move = recon_predicted[i] - recon_last_knowns[i];
-                const auto cur_mae = std::abs(predicted_move);
+                const auto cur_mae = std::abs(recon_predicted[i] - recon_actual[i]);
                 const auto cur_mae_lk = std::abs(diff_recon_actual_last_known);
                 const auto cur_alpha_pct = common::alpha(cur_mae_lk, cur_mae);
                 mae += cur_mae;
@@ -252,7 +257,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto last_aux_price = ***std::prev(last_aux_it);
                 constexpr auto time_comp = [](const auto &lhs, const auto &rhs) { return lhs->get_value_time() < rhs->get_value_time(); };
                 double this_drawdown;
-                if (sign_predicted_move) { // Sell signal
+                if (sign_predicted_move /* && !is_ask */ ) { // Sell signal
                     const auto min_price_it = std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
                     const auto max_price = ***std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
                     const auto min_price = ***min_price_it;
@@ -265,7 +270,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                         pips_lost += last_aux_price - placement_price;
                     this_drawdown = std::max(0., max_price - placement_price);
                     LOG4_TRACE("Sell min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
-                } else { // Buy signal
+                } else if (!sign_predicted_move/* && is_ask */) { // Buy signal
                     const auto max_price_it = std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
                     const auto min_price = ***std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
                     const auto max_price = ***max_price_it;

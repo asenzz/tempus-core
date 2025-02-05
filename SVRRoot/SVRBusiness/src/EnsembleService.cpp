@@ -172,11 +172,7 @@ int EnsembleService::save(const datamodel::Ensemble_ptr &p_ensemble)
     }
     int res = ensemble_dao_.save(p_ensemble);
     model_service_.remove_by_ensemble_id(p_ensemble->get_id());
-#ifdef __GNUC__
-    OMP_FOR_(models.size(), reduction(&:res))
-#else
-    OMP_FOR_(models.size(), simd reduction(&:res))
-#endif
+    OMP_FOR_(models.size(), SSIMD reduction(&:res))
     for (const auto &p_model: models)
         res &= model_service_.save(p_model);
 
@@ -276,6 +272,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
                                          return p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_main_decon->get_input_queue_table_name() &&
                                                 p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
                                      });
+#ifdef INTEGRATION_TEST
 #if 0 // Combine features from different columns, seems to yield worse results
         const auto &ensemble_aux_queues = aux_decon_queues;
 #else
@@ -289,6 +286,14 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
                           ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, ensemble_aux_queues)) :
                           *ens_iter;
         ens_emplace_l.unset();
+#else
+        ens_emplace_l.unset();
+        if (ens_iter == ensembles.cend()) {
+            LOG4_WARN("Ensemble for " << *p_main_decon << " not found in database.");
+            continue;
+        }
+        auto p_ensemble = *ens_iter;
+#endif
         APP.model_service.init_models(p_dataset, *p_ensemble);
     }
 

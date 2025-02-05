@@ -109,9 +109,7 @@ template<const unsigned block_size, typename T> __device__ __forceinline__ void 
 
 template<typename T> void cu_fill(T *const data, const unsigned n, const T value, const cudaStream_t custream = nullptr)
 {
-    (void) thrust::async::for_each(thrust::cuda::par.on(custream), data, data + n,[value]
-            __device__(T & d)
-    { d = value; });
+    (void) thrust::for_each(thrust::cuda::par.on(custream), data, data + n,[value] __device__(T & d) { d = value; });
 }
 
 constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set to cudaStreamNonBlocking

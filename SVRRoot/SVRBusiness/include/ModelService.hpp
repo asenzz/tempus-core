@@ -58,11 +58,9 @@ class ModelService {
               const boost::posix_time::time_duration &resolution);
 
 public:
-    static const uint32_t C_max_quantisation;
+    static uint32_t get_max_quantisation();
 
-    static constexpr uint16_t C_num_quantisations = 1; // 100;
-
-    static const std::deque<uint32_t> C_quantisations;
+    static const std::deque<uint32_t> &get_quantisations();
 
     static uint32_t get_max_row_len();
 
@@ -86,7 +84,7 @@ public:
 
     static void prepare_labels(arma::mat &all_labels, arma::vec &all_last_knowns, data_row_container &all_times, const datamodel::datarow_crange &main_data,
                                const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, const uint16_t level, const bpt::time_duration &resolution_aux,
-                               const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag);
+                               const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag, const bool askbid);
 
     static void tune_features(arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times,
                               const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res,
@@ -156,8 +154,7 @@ public:
     do_features(
             arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels, const uint16_t n_queues,
             const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period, const std::deque<uint32_t> &chunk_len_quantise,
-            const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<arma::u32_vec> &times_F,
-            const std::deque<std::vector<t_feat_params>> &feat_params);
+            const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<std::vector<t_feat_params>> &feat_params);
 };
 
 } /* namespace business */

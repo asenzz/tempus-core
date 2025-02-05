@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+export BIN=SVRDaemon
+
 source ../scripts/setup_tempus_env.sh
 
 unset SVRWAVE_TEST_WINDOW
@@ -37,20 +40,11 @@ if [ $CLEAN_DB -eq 1 ]; then
 fi
 
 if [ $WEB_ONLY -eq 0 ]; then
-    while (pidof -csn SVRDaemon); do
-        echo "Stopping SVRDaemon . . ."
-        pkill SVRDaemon
-        sleep 1
-    done
-    rm -f /dev/shm/sem.svrwave_gpu_sem /tmp/SVRDaemon_*
+  killwait ${BIN}
+  rm -f /dev/shm/sem.svrwave_gpu_sem /tmp/${BIN}_*
 fi
 
-while (pidof -csn SVRWeb); do
-  echo "Stopping SVRWeb . . ."
-  pkill SVRWeb
-  sleep 1
-done
-
+killwait SVRWeb
 
 if [ $REMOVE_OUTPUT -eq 1 ]; then
   echo Removing debug and log files.
@@ -67,10 +61,10 @@ if [ $WEB_ONLY -eq 1 ]; then
 fi
 
 if [ $DEBUG_SESSION -eq 1 ]; then
-	$DBG --ex catch\ throw --ex run --ex where --args ./SVRDaemon -c ${DAEMON_CONFIG} 2>&1 | tee -a ${DAEMON_OUTPUT}.debug
+	$DBG --ex catch\ throw --ex run --ex where --args ./${BIN} -c ${DAEMON_CONFIG} 2>&1 | tee -a ${DAEMON_OUTPUT}.debug
 elif [ $LOG_OUTPUT -eq 1 ]; then
-  ./SVRDaemon -c ${DAEMON_CONFIG} >> ${DAEMON_OUTPUT} 2>&1 &
+  ./${BIN} -c ${DAEMON_CONFIG} >> ${DAEMON_OUTPUT} 2>&1 &
 else	
-	./SVRDaemon -c ${DAEMON_CONFIG}
+	./${BIN} -c ${DAEMON_CONFIG}
 fi
-# cgclassify -g cpu,cpuset:Tempus $(pidof SVRDaemon)
+# cgclassify -g cpu,cpuset:Tempus $(pidof ${BIN})

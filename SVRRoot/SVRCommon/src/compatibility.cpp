@@ -36,6 +36,14 @@ bool operator<(const arma::SizeMat &lhs, const arma::SizeMat &rhs)
     return lhs.n_rows * lhs.n_cols < rhs.n_rows * rhs.n_cols;
 }
 
+bool operator != (const std::deque<std::string> &lhs, const std::deque<std::string> &rhs)
+{
+    if (lhs.size() != rhs.size()) return true;
+    for (auto lhs_iter = lhs.cbegin(), rhs_iter = rhs.cbegin(); rhs_iter != rhs.cend(); ++lhs_iter, ++rhs_iter)
+        if (*lhs_iter != *rhs_iter) return true;
+    return false;
+}
+
 namespace common {
 
 // TODO Do a GPU handler and ctx from a queue

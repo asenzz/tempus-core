@@ -700,6 +700,7 @@ oemd_coefficients_search::evaluate_mask(
         return common::C_bad_validation;
     }
     const auto rel_pow = std::abs(meanabs_input / meanabs_imf - levels + 1.);
+
 #else
     constexpr double meanabs_imf = 1;
     constexpr double rel_pow = 1;
@@ -707,11 +708,8 @@ oemd_coefficients_search::evaluate_mask(
 
     double *d_features, *d_scores;
     auto feat_params_it = feat_params.cbegin();
-    while (feat_params_it != feat_params.cend()
-           && feat_params_it->ix_end < max_row_len
-           && feat_params_it->ix_end - max_row_len < mask_offset
-           && feat_params.cend() - feat_params_it > C_align_window_oemd)
-        ++feat_params_it;
+    while (feat_params_it != feat_params.cend() && feat_params_it->ix_end <= max_row_len + mask_offset) ++feat_params_it;
+    if (feat_params.cend() - feat_params_it < C_align_validate) LOG4_THROW("Align validate " << C_align_validate << " to large for " << feat_params.cend() - feat_params_it);
     const std::span feat_params_trimmed(feat_params_it, feat_params.cend());
     const uint32_t validate_rows = feat_params_trimmed.size();
     auto d_labels = cucalloc<double>(custream, validate_rows);
@@ -720,12 +718,13 @@ oemd_coefficients_search::evaluate_mask(
     OMP_FOR_i(validate_rows) ix_end_F[i] = feat_params_trimmed[i].ix_end;
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
     RELEASE_CONT(ix_end_F);
-    G_quantise_labels_quick<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
+    G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
             d_imf, d_labels, validate_rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
     cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
     cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
-    constexpr auto full_feat_cols = datamodel::C_features_superset_coef * datamodel::C_default_svrparam_lag_count;
-    constexpr auto feat_cols_ileave = full_feat_cols / C_column_interleave;
+    constexpr auto full_feat_cols = datamodel::OnlineMIMOSVR::C_features_superset_coef * datamodel::C_default_svrparam_lag_count;
+    const auto column_interleave = PROPS.get_oemd_column_interleave();
+    const auto feat_cols_ileave = full_feat_cols / column_interleave;
     auto autocor = common::C_bad_validation;
     const uint32_t cols_rows_q = validate_rows * feat_cols_ileave;
     const auto features_size = cols_rows_q * sizeof(double);
@@ -735,27 +734,25 @@ oemd_coefficients_search::evaluate_mask(
     LOG4_TRACE("Allocating " << cols_rows_q << " features and " << feat_cols_ileave << " scores, rows " << validate_rows << ", feat params " << feat_params_q.size());
     const auto times_offset = times.cbegin() + mask_offset;
     const auto d_times = cumallocopy(times_offset, times.cend(), custream);
-    UNROLL(business::ModelService::C_num_quantisations / C_quantisation_interleave / 2)
-    for (uint8_t q = 0; q < business::ModelService::C_num_quantisations; q += std::max(1., double(q) / C_quantisation_skipdiv)) {
-        const auto qt = business::ModelService::C_quantisations[q];
-        OMP_FOR_i(validate_rows) {
-            feat_params_q[i].time_start = feat_params_q[i].end_time - full_feat_cols * qt;
-            feat_params_q[i].ix_start = before_bound(times.cbegin(), times.cend(), feat_params_q[i].time_start) - times_offset;
-        }
+    const auto skipdiv = PROPS.get_oemd_quantisation_skipdiv();
+    const auto num_quantisations = PROPS.get_num_quantisations();
+    const auto &quantisations = business::ModelService::get_quantisations();
+    UNROLL(2)
+    for (uint8_t q = 0; q < num_quantisations; q += std::max(1., double(q) / skipdiv)) {
+        const auto qt = quantisations[q];
+        LOG4_TRACE("Quantisation " << qt << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<
+                        ", mask offset " << mask_offset);
+        OMP_FOR_i(validate_rows) feat_params_q[i].ix_start = feat_params_q[i].ix_end - full_feat_cols * qt + 1 - mask_offset;
         const auto d_feat_params_q = cumallocopy(feat_params_q, custream);
-        const auto interleave_qt = C_column_interleave * qt;
         cu_errchk(cudaMemsetAsync(d_features, 0, features_size, custream));
         G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
-                d_features, d_imf, d_times, d_feat_params_q, validate_rows, feat_cols_ileave, qt, interleave_qt, interleave_qt * .5);
+                d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
-        cu_errchk(cudaStreamSynchronize(custream));
         G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave);
-        cu_errchk(cudaStreamSynchronize(custream));
+                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, C_stretch_multiplier);
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
             thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
-            cu_errchk(cudaStreamSynchronize(custream));
             score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
         } else
             score = solvers::sum(d_scores, feat_cols_ileave, custream);
@@ -767,17 +764,17 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaFreeAsync(d_labels, custream));
 
     // Spectral entropy
-    constexpr auto inv_entropy = 1.; // compute_spectral_entropy_cufft(d_imf, workspace.size(), custream);
+    constexpr auto inv_entropy = 1.; // Disabled TODO test compute_spectral_entropy_cufft(d_imf, workspace.size(), custream);
     cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is part of d_workspace
     cu_errchk(cudaStreamDestroy(custream));
 
     // Weights and final score
     constexpr double autocor_w = 2;
-    constexpr double rel_pow_w = .1;
-    constexpr double inv_entropy_w = 1;
+    constexpr double rel_pow_w = 1;
+    constexpr double inv_entropy_w = 0;
     const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(autocor, autocor_w) * std::pow(inv_entropy, inv_entropy_w);
     LOG4_TRACE("Returning autocorrelation " << autocor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy << ", meanabs imf " <<
-                                            meanabs_imf << ", meanabs input " << meanabs_input);
+                    meanabs_imf << ", meanabs input " << meanabs_input);
     return score;
 }
 
@@ -937,7 +934,7 @@ oemd_coefficients_search::run(
     label_ixs.reserve(label_times.size());
     std::vector<t_feat_params> feat_params;
     feat_params.reserve(label_times.size());
-    const uint32_t horizon_len_1 = label_len * PROPS.get_prediction_horizon() * 2;
+    const uint32_t horizon_len_2 = label_len * PROPS.get_prediction_horizon() * 2;
     const auto max_row_duration = horizon_duration + max_row_len * resolution;
     const auto label_len_1 = label_len + 1;
     // TODO Unify with ModelService::prepare_labels()
@@ -955,20 +952,17 @@ oemd_coefficients_search::run(
         const auto L_end_it = std::lower_bound(L_start_it, times.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : times.cend(), L_end_time);
         if (L_end_it == L_start_it) continue;
 
-        const auto F_end_time = L_start_time - horizon_duration;
-        auto F_end_it = lower_bound(L_start_it - times.cbegin() > horizon_len_1 ? L_start_it - horizon_len_1 : times.cbegin(), L_start_it, F_end_time);
+        auto F_end_it = lower_bound(L_start_it - times.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : times.cbegin(), L_start_it, L_start_time - horizon_duration);
         if (F_end_it == times.cend() || F_end_it == times.cbegin()) continue;
-        const uint32_t F_end_ix = F_end_it - times.cbegin();
+        const uint32_t F_end_ix = F_end_it - times.cbegin() - 1;
         if (F_end_ix < max_row_len) continue;
         t_label_ix *L_ins;
-        t_feat_params *F_ins;
 #pragma omp ordered
         {
             L_ins = &label_ixs.emplace_back(t_label_ix{.n_ixs = label_len});
-            F_ins = &feat_params.emplace_back(t_feat_params{.ix_end = F_end_ix});
+            (void) feat_params.emplace_back(t_feat_params{.ix_end = F_end_ix});
         }
         generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution, label_len, L_ins->label_ixs);
-        F_ins->end_time = bpt::to_time_t(F_end_time) - first_time_t;
     }
     assert(label_ixs.size() == feat_params.size());
     RELEASE_CONT(times);
@@ -993,10 +987,9 @@ oemd_coefficients_search::run(
             const auto meanabs_input = common::meanabs<double>(workspace.cbegin() + prev_masks_len, workspace.cend());
 
             // TODO Move pprune instantiation to a cpp file to combat unithreading bug in KNitro
-            LOG4_DEBUG(
-                    "Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", meanabs input " << meanabs_input <<
-                                  ", max quantisation " << business::ModelService::C_max_quantisation << ", label ixs " << label_ixs.size() << ", latest label last feature ix " <<
-                                  feat_params.back().ix_end << ", max row len " << max_row_len << ", prev masks len " << prev_masks_len);
+            LOG4_DEBUG("Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", meanabs input " << meanabs_input <<
+                       ", max quantisation " << business::ModelService::get_max_quantisation() << ", label ixs " << label_ixs.size() << ", latest label last feature ix " <<
+                       feat_params.back().ix_end << ", max row len " << max_row_len << ", prev masks len " << prev_masks_len);
             const auto loss_function = [&, siftings, meanabs_input]
 #ifdef USE_FIREFLY
                     (const std::vector<double> &x) {
@@ -1025,7 +1018,7 @@ oemd_coefficients_search::run(
                     arma::vec(h_mask.size(), arma::fill::ones), loss_function).operator std::pair<double, std::vector<double>>();
             return score;
 #else
-            const optimizer::pprune opt(optimizer::pprune::C_default_algo, 20, bounds, loss_function, 25, 0, 0/*, x0*/);
+            const optimizer::pprune opt(optimizer::pprune::C_default_algo, PROPS.get_oemd_tune_particles(), bounds, loss_function, PROPS.get_oemd_tune_iterations() /* , 0, 0, x0*/);
             const optimizer::t_pprune_res res = opt;
             masks[m] = lbp_fir(res.best_parameters[0], res.best_parameters[1], res.best_parameters[2], sample_rate);
             if (masks[m].empty()) LOG4_THROW("Bad mask for parameters " << res.best_parameters);
@@ -1033,7 +1026,7 @@ oemd_coefficients_search::run(
             LOG4_DEBUG("Level " << level << ", mask " << m << ", queue " << queue_name << ", score " << res.best_score);
             save_mask(masks[m], queue_name, m, masks.size() + 1);
         }
-        __prepare_level_below:
+__prepare_level_below:
         cu_errchk(cudaSetDevice(ctx.phy_id()));
         auto d_level_imf = cumallocopy(workspace, custream);
         const auto d_mask = cumallocopy(masks[m], custream);

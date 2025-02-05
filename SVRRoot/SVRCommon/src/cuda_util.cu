@@ -16,8 +16,8 @@ void copy_submat(CRPTRd in, RPTR(double) out, const uint32_t ldin, const uint32_
                  const uint32_t in_end_n, const uint32_t ldout, cudaMemcpyKind kind, const cudaStream_t stm)
 {
 #if 1
-    cu_errchk(cudaMemcpy2DAsync(out, ldout * sizeof(double), in + in_start_m + in_start_n * ldin, ldin * sizeof(double), (in_end_m - in_start_m) * sizeof(double),
-                                in_end_n - in_start_n, kind, stm));
+    cu_errchk(cudaMemcpy2DAsync(
+            out, ldout * sizeof(double), in + in_start_m + in_start_n * ldin, ldin * sizeof(double), (in_end_m - in_start_m) * sizeof(double), in_end_n - in_start_n, kind, stm));
 #else
     const auto out_m = in_end_m - in_start_m;
     const auto out_n = in_end_n - in_start_n;

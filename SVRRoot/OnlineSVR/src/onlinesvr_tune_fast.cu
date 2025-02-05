@@ -180,7 +180,7 @@ cuvalidate::operator()(const double lambda, const double gamma_bias, const doubl
                           test_start << ", test len " << test_len << ", train len " << train_len << ", current score " << total_score);
 #endif
         const auto best_solve_score = solvers::solve_hybrid(
-                dxsx.d_K_epsco + train_start + train_start * m, n, tune_len, dxsx.j_solved, magma_iters, C_rbt_threshold, dxsx.ma_queue, irwls_iters,
+                dxsx.d_K_epsco + train_start + train_start * m, n, tune_len, dxsx.j_solved, magma_iters, OnlineMIMOSVR::C_rbt_threshold, dxsx.ma_queue, irwls_iters,
                 dx_.d_tune_label_chunk + train_start,
                 tune_n_size, dxsx.j_work, dxsx.custream, dxsx.cublas_H, dxsx.d_Kz_tune + train_start + train_start * m, labels_sf, tune_len_n, dxsx.d_best_weights, K_tune_len,
                 dxsx.j_K_work, info, iters_mul, m);

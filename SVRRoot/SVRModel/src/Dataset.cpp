@@ -597,7 +597,7 @@ uint32_t Dataset::get_max_quantise() const
                 for (const auto &p: svr->get_param_set())
                     if (p && !p->get_feature_mechanics().needs_tuning())
                         res = std::max(res, p->get_feature_mechanics().quantization.max());
-    if (!res) res = business::ModelService::C_max_quantisation;
+    if (!res) res = business::ModelService::get_max_quantisation();
     LOG4_DEBUG("Returning  " << res);
     return res;
 }

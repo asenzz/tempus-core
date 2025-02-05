@@ -12,15 +12,15 @@
 
 namespace svr{
 namespace web{
-class MT4LoginController : public cppcms::application{
+class ConnectorLoginController : public cppcms::application{
 
     void handle_login_post();
     void handle_login_get();
 
 
 public:
-    MT4LoginController(cppcms::service &svc): application(svc){
-        dispatcher().assign("/?", &MT4LoginController::login, this);
+    ConnectorLoginController(cppcms::service &svc): application(svc){
+        dispatcher().assign("/?", &ConnectorLoginController::login, this);
         mapper().assign("login", "");
     }
 

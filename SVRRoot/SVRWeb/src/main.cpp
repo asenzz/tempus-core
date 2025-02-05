@@ -1,7 +1,7 @@
 #include <cppcms/service.h>
 #include <cppcms/mount_point.h>
 #include <controller/MainController.hpp>
-#include <controller/MT4Controller.hpp>
+#include <controller/ConnectorController.hpp>
 #include <boost/program_options.hpp>
 
 using namespace svr::web;
@@ -54,7 +54,7 @@ int main (int argc, char** argv)
         if (!parse(argc, argv))
             return 0;
         cppcms::service svc(argc, argv);
-        svc.applications_pool().mount(applications_factory<MT4Controller>(), cppcms::mount_point("/mt4(/(.*))?"));
+        svc.applications_pool().mount(applications_factory<ConnectorController>(), cppcms::mount_point("/tempus(/(.*))?"));
         svc.applications_pool().mount(applications_factory<MainController>()), cppcms::mount_point("/web(/(.*))?");
         LOG4_DEBUG("Web application has started at " << svc.settings().at("service.api").str() << "://" << svc.settings().at("service.ip").str() << ":" << svc.settings().at("service.port").number());
         svc.run();

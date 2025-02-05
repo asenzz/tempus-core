@@ -10,6 +10,8 @@
 #include <deque>
 #include "defines.h"
 
+const boost::posix_time::ptime time_to_watch = boost::posix_time::time_from_string("2025-01-06 13:00:00"); // xauusd_avg_ask |  2647.354229504221
+
 namespace svr {
 
 constexpr auto C_default_exec_policy = std::execution::par_unseq;
@@ -107,6 +109,19 @@ constexpr char C_default_scaling_alpha_str[] = "0.01";
 constexpr char C_default_connection_str[] = "dbname=svrwave user=svrwave password=svrwave host=/var/run/postgresql";
 constexpr char C_default_multistep_len_str[] = "1";
 constexpr char C_default_multiout_str[] = "1";
+constexpr char C_default_loop_count[] = "-1";
+constexpr char C_default_loop_interval_ms[] = "1000";
+constexpr char C_default_stream_loop_interval_ms[] = "10";
+constexpr char C_default_daemonize[] = "1";
+constexpr char C_default_num_quantisations[] = "10";
+constexpr char C_default_quantisation_divisor[] = "3";
+constexpr char C_default_oemd_column_interleave[] = "3";
+constexpr char C_default_oemd_quantisation_skipdiv[] = "20";
+constexpr char C_default_oemd_tune_particles[] = "16";
+constexpr char C_default_oemd_tune_iterations[] = "24";
+constexpr char C_default_tune_particles[] = "16";
+constexpr char C_default_tune_iterations[] = "24";
+constexpr char C_defaut_solve_iterations_coefficient[] = ".1";
 
 constexpr uint16_t C_max_csv_token_size = 0xFF;
 constexpr uint16_t C_default_kernel_max_chunk_len = 10000; // Matrices larger than 65535x65535 will require MKL ILP64 API and all CUDA kernels modified for 2D+ indexing

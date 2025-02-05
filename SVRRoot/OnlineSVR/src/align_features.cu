@@ -53,22 +53,20 @@ __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd feature
 __global__ void G_align_features(
         CRPTRd features, CRPTRd labels,
         RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts, RPTR(float) skips,
-        const uint32_t n_rows, const uint32_t n_cols)
+        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
         CPTRd features_col = features + n_rows * i;
         UNROLL(C_shift_lim / 10)
-        for (uint32_t sh = 0; sh < C_shift_lim; sh += umax(1, C_shift_inc_mul * sh)) { // TODO Unroll loop into an array supplied at kernel launch
-            // const uint32_t shift_limit_sh = shift_limit - sh;
-            // CPTRd mean_L_sh = labels + shift_limit_sh;
-            CPTRd mean_L_sh = labels + sh;
+        for (uint32_t sh = 0; sh < C_shift_lim; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
+            CPTRd labels_sh = labels + sh;
             const auto validate_rows = n_rows - sh;
             UNROLL()
-            for (float st = 1; st > C_stretch_limit; st *= C_stretch_multiplier) {
+            for (float st = 1; st > stretch_limit; st *= C_stretch_multiplier) {
 // UNROLL()
 //                for (float sk = 1; sk < C_skip_limit; sk *= C_skip_multiplier) {
-                const auto score = vec_dist_stretch(mean_L_sh, features_col, validate_rows, st, 1);
+                const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1);
                 if (score >= scores[i]) continue;
                 scores[i] = score;
                 if (shifts) shifts[i] = sh;
@@ -105,7 +103,7 @@ void align_features(
     cu_errchk(cudaMallocAsync((void **) &d_skips, cols_size_float, custream));
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
-    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols);
+    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols, 0, C_stretch_limit);
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
@@ -125,57 +123,47 @@ template<typename T> __device__ __forceinline__ int before_bound(CRPTR(T) cbegin
 
 
 __global__ void G_quantise_features(
-        RPTR(double) features /* zeroed out before */, CRPTRd d_decon_F, CRPTR(uint32_t) d_times_F, CRPTR(t_feat_params) d_feat_params,
-        const uint32_t rows, const uint32_t cols, const uint16_t quantise, const uint32_t interleave_quantise, const uint32_t interleave_quantise_skip)
+        RPTR(double) features /* zeroed out before */, CRPTRd d_decon_F, CRPTR(t_feat_params) d_feat_params,
+        const uint32_t rows, const uint32_t cols, const uint16_t quantise, const uint32_t interleave_quantise)
 {
     CU_STRIDED_FOR_i(rows) {
         auto const d_feat_params_i = d_feat_params + i;
         const auto ix_end = d_feat_params_i->ix_end;
-        auto ix_F = d_feat_params_i->ix_start;
         UNROLL(32)
         for (uint32_t j = 0; j < cols; ++j) {
-            auto last_price = d_decon_F[ix_F];
-            const auto j_time_start = d_feat_params_i->time_start + j * interleave_quantise;
             auto const feat_i_j_rows = features + i + j * rows;
 #ifdef EMO_DIFF
-            auto prev_ix_F = ix_F - quantise;
-            auto last_prev_price = d_decon_F[prev_ix_F];
             double prev_price = 0;
+            const auto j_interleave_quantise = d_feat_params_i->ix_start + j * interleave_quantise;
 #endif
-            for (auto time_iter = j_time_start; time_iter < j_time_start + quantise; ++time_iter) {
-                for (; ix_F < ix_end && d_times_F[ix_F] <= time_iter; ++ix_F) last_price = d_decon_F[ix_F];
-                *feat_i_j_rows += last_price;
+            uint32_t ix_F = j_interleave_quantise;
+            for (; ix_F < j_interleave_quantise + quantise && ix_F <= ix_end; ++ix_F) {
+                *feat_i_j_rows += d_decon_F[ix_F];
 #ifdef EMO_DIFF
-                const auto prev_time_iter = time_iter - quantise;
-                for (; prev_ix_F < ix_end && d_times_F[prev_ix_F] <= prev_time_iter; ++prev_ix_F) last_prev_price = d_decon_F[prev_ix_F];
-                prev_price += last_prev_price;
+                prev_price += d_decon_F[ix_F - quantise];
 #endif
             }
+
 #ifdef EMO_DIFF
-            *feat_i_j_rows = (*feat_i_j_rows - prev_price) / quantise;
-            prev_ix_F += interleave_quantise_skip;
+            *feat_i_j_rows = (*feat_i_j_rows - prev_price) / (ix_F - j_interleave_quantise);
 #else
-            *feat_i_j_rows /= quantise;
+            *feat_i_j_rows /= (ix_F - j_interleave_quantise);
 #endif
-            ix_F += interleave_quantise_skip;
         }
     }
 }
 
 __global__ void G_quantise_features(
-        CRPTRd d_decon_F, CRPTR(uint32_t) d_times_F, CRPTR(t_feat_params) d_feat_params,
-        const uint32_t n_rows, const uint16_t quantise, const uint32_t start_row, const uint32_t n_cols_,
-        RPTR(double) features /* zeroed out before */)
+        CRPTRd d_decon_F, CRPTR(t_feat_params) d_feat_params,
+        const uint32_t n_rows, const uint16_t quantise, const uint32_t start_row, const uint32_t n_cols_, RPTR(double) features /* zeroed out before */)
 {
     CU_STRIDED_FOR_i(n_rows) {
         const auto d_feat_params_i = d_feat_params + start_row + i;
-        auto ix_F = d_feat_params_i->ix_start;
-        auto last_price = d_decon_F[ix_F];
-        UNROLL(16)
-        for (auto time_iter = d_feat_params_i->time_start; time_iter < d_feat_params_i->end_time; ++time_iter) {
-            for (; ix_F < d_feat_params_i->ix_end && d_times_F[ix_F] <= time_iter; ++ix_F) last_price = d_decon_F[ix_F];
-            features[i + ((time_iter - d_feat_params_i->time_start) / quantise) * n_rows] += last_price;
-        }
+        const auto ix_start = d_feat_params_i->ix_start;
+        UNROLL(16) // fill one row of features
+        for (auto ix_F = ix_start; ix_F <= d_feat_params_i->ix_end; ++ix_F)
+            features[i + ((ix_F - ix_start) / quantise) * n_rows] += d_decon_F[ix_F];
+
         UNROLL(16)
 #ifdef EMO_DIFF
         for (auto j = n_cols_ - 1; j > 0; --j) {
@@ -189,20 +177,18 @@ __global__ void G_quantise_features(
 }
 
 // TODO Align quantisation per column
-void quantise_features(CPTRd decon, CPTR(uint32_t) times_F, CPTR(t_feat_params) feat_params,
+void quantise_features(CPTRd decon, CPTR(t_feat_params) feat_params,
                        const uint32_t start_row, const uint32_t n_rows_chunk, const uint32_t n_rows, const uint32_t n_feat_rows,
                        const uint16_t level, const uint32_t n_cols_coef_, const uint32_t n_cols_coef, const uint16_t quantise, RPTR(double) p_features)
 {
     CTX4_CUSTREAM;
     const auto end_row = start_row + n_rows_chunk - 1;
     auto d_features = cucalloc<double>(custream, n_rows_chunk * n_cols_coef_);
-    const auto d_decon_F = cumallocopy(decon + n_feat_rows * level, custream, feat_params[end_row].ix_end);
-    const auto d_times_F = cumallocopy(times_F, custream, feat_params[end_row].ix_end);
+    const auto d_decon_F = cumallocopy(decon + n_feat_rows * level, custream, feat_params[end_row].ix_end + 1);
     const auto d_feat_params = cumallocopy(feat_params, custream, end_row + 1);
     G_quantise_features<<<CU_BLOCKS_THREADS(clamp_n(n_rows_chunk)), 0, custream>>>(
-            d_decon_F, d_times_F, d_feat_params, n_rows_chunk, quantise, start_row, n_cols_coef_, d_features);
+            d_decon_F, d_feat_params, n_rows_chunk, quantise, start_row, n_cols_coef_, d_features);
     cu_errchk(cudaFreeAsync(d_decon_F, custream));
-    cu_errchk(cudaFreeAsync(d_times_F, custream));
     cu_errchk(cudaFreeAsync(d_feat_params, custream));
 #ifdef EMO_DIFF
     cb_errchk(cublasGetMatrixAsync(n_rows_chunk, n_cols_coef, sizeof(double), d_features + n_rows_chunk, n_rows_chunk, p_features + start_row, n_rows, custream));
@@ -213,23 +199,6 @@ void quantise_features(CPTRd decon, CPTR(uint32_t) times_F, CPTR(t_feat_params) 
     cusyndestroy(custream);
 }
 
-__global__ void G_quantise_labels_quick(
-        CRPTRd d_in, RPTR(double) d_labels, const uint32_t rows, const uint32_t label_len,
-        CRPTR(t_label_ix) d_label_ixs, CRPTR(uint32_t) ix_end_F, const uint16_t multistep, const uint32_t step_ixs)
-{
-    CU_STRIDED_FOR_i(rows) {
-        UNROLL(36)
-        for (uint32_t j = 0; j < d_label_ixs[i].n_ixs; ++j) d_labels[rows * (j / step_ixs) + i] += d_in[d_label_ixs[i].label_ixs[j]];
-        const auto lk = d_in[ix_end_F[i] - 1];
-        for (uint16_t j = 0; j < multistep; ++j) {
-            const auto lix = j * rows + i;
-            d_labels[lix] /= step_ixs;
-#ifdef EMO_DIFF
-            d_labels[lix] -= lk;
-#endif
-        }
-    }
-}
 
 void quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs, const std::vector<uint32_t> &ix_end_F, RPTR(double) p_labels, const uint16_t multistep)
 {
@@ -239,7 +208,9 @@ void quantise_labels(const uint32_t label_len, const std::vector<double> &in, co
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
     const auto d_label_ixs = cumallocopy(label_ixs, custream);
     const auto d_in = cumallocopy(in, custream);
-    G_quantise_labels_quick<<<CU_BLOCKS_THREADS(rows), 0, custream>>>(d_in, d_labels, rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
+    constexpr bool do_label_bias = C_label_bias > 0;
+    G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>
+            (d_in, d_labels, rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
     cu_errchk(cudaFreeAsync(d_in, custream));
     cu_errchk(cudaFreeAsync(d_label_ixs, custream));
     cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
