@@ -1,10 +1,13 @@
 #pragma once
 
+#include <boost/throw_exception.hpp>
+#include <boost/archive/binary_oarchive.hpp>
 #include <ostream>
 #include <string>
 #include "common/defines.h"
 #include "common/constants.hpp"
 #include "common/logging.hpp"
+#include "common/serialization.hpp"
 #include "model/Entity.hpp"
 
 //#define SMO_EPSILON 1e-3
@@ -75,7 +78,7 @@ constexpr uint16_t C_default_svrparam_grad_level = 0;
 constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
-constexpr double C_default_svrparam_kernel_param2 = 0;
+constexpr double C_default_svrparam_kernel_param2 = 2;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::C_best_decrement;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
@@ -86,6 +89,8 @@ const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_de
 
 struct t_feature_mechanics
 {
+    friend class boost::serialization::access;
+
     arma::u32_vec quantization; // Quantisation is per level - until computational resources allow for different quantisation per feature column
     arma::fvec stretches;
     std::deque<arma::uvec> trims;
@@ -93,6 +98,25 @@ struct t_feature_mechanics
     arma::fvec skips;
 
     bool needs_tuning() const noexcept;
+    std::stringstream save() const;
+    static t_feature_mechanics load(const std::string &bin_data);
+
+    template<typename S> void save(const t_feature_mechanics &feature_mechanics, S &output_stream) const
+    {
+        boost::archive::binary_oarchive oa(output_stream);
+        oa << feature_mechanics;
+    }
+
+    template<class A> void serialize(A &ar, const unsigned version)
+    {
+        ar & quantization;
+        ar & stretches;
+        ar & trims;
+        ar & shifts;
+        ar & skips;
+    }
+
+    bool operator == (const t_feature_mechanics &o) const;
 };
 
 
@@ -111,7 +135,6 @@ class SVRParameters : public Entity
     uint16_t grad_level_ = C_default_svrparam_grad_level;
     // TODO Implement manifold projection index
 
-    double svr_C = C_default_svrparam_svr_cost; // TODO Remove
     arma::vec epsco; // TODO Save to DB and init properly
     double svr_epsilon = C_default_svrparam_svr_epsilon;
     double svr_kernel_param = C_default_svrparam_kernel_param1;
@@ -141,11 +164,13 @@ public:
             const double svr_epsilon = C_default_svrparam_svr_epsilon,
             const double svr_kernel_param = C_default_svrparam_kernel_param1,
             const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
+            const double svr_kernel_param3 = C_default_svrparam_kernel_param_tau,
             const uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
             const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
             const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
             const uint32_t lag_count = C_default_svrparam_lag_count,
-            const std::set<uint16_t> &adjacent_levels = {});
+            const std::set<uint16_t> &adjacent_levels = {},
+            const t_feature_mechanics &feature_mechanics = {});
 
     SVRParameters(const SVRParameters &o);
 
@@ -193,10 +218,6 @@ public:
 
     void decrement_gradient() noexcept;
 
-    double get_svr_C() const noexcept;
-
-    void set_svr_C(const double _svr_C) noexcept;
-
     void set_epsco(const arma::vec &epsco) noexcept;
 
     arma::vec get_epsco() const noexcept;
@@ -218,6 +239,10 @@ public:
     double get_svr_kernel_param2() const noexcept;
 
     void set_svr_kernel_param2(const double _svr_kernel_param2) noexcept;
+
+    PROPERTY(double, svr_C, C_default_svrparam_svr_cost);
+
+    double get_svr_epsco() const noexcept;
 
     PROPERTY(double, kernel_param3, C_default_svrparam_kernel_param_tau);
 

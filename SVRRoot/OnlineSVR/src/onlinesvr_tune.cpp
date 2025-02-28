@@ -40,7 +40,7 @@ coot_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, cons
     auto p_out_labels = ptr<std::deque<arma::mat>>(C_max_j);
     auto p_out_last_knowns = ptr<std::deque<arma::mat>>(C_max_j);
     arma::mat K_epsco = K;
-    K_epsco.diag() += 1 / params.get_svr_C();
+    K_epsco.diag() += params.get_svr_epsco();
     double score = 0;
     try {
 #pragma omp parallel for simd reduction(+:score) schedule(static, 1) num_threads(adj_threads(C_max_j))
@@ -82,7 +82,7 @@ coot_eval_score(const datamodel::SVRParameters &params, const arma::mat &K, cons
                             coot::conv_to<coot::mat>::from(
                                     K.submat(start_point_K + x_train_start, start_point_K + x_train_start, start_point_K + x_train_final, start_point_K + x_train_final)),
                             coot::conv_to<coot::mat>::from(labels.rows(start_point_labels + x_train_start, start_point_labels + x_train_final)),
-                            PROPS.get_online_learn_iter_limit(), gpu_id)) - params.get_svr_epsilon();
+                            PROPS.get_online_learn_iter_limit(), PROPS.get_weight_columns())) - params.get_svr_epsilon();
             const auto this_score = common::meanabs<double>(p_out_labels->at(j) - p_out_preds->at(j)) / meanabs_labels;
             if (!std::isnormal(this_score)) LOG4_THROW("Score not normal for " << params);
             score += this_score;

@@ -43,14 +43,14 @@ void kernel_xy(
 // Distances to kernel value
 __forceinline__ __host__ __device__ double z2k(const double z, const double gamma)
 {
-    // return Z / gamma;
-    return (1. - z) / gamma;
+    return z / gamma;
+    // return (1. - z) / gamma;
 }
 
 __forceinline__ __host__ __device__ double calc_g(const double n, const double Z_mm, const double L_mm)
 {
-    // return n * Z_mm / L_mm;
-    return (n - n * Z_mm) / L_mm;
+    return n * Z_mm / L_mm;
+    // return (n - n * Z_mm) / L_mm;
 }
 
 /* In order to get min gamma, provide min Z and max L, and vice versa */
@@ -59,6 +59,16 @@ __forceinline__ __host__ __device__ double calc_qgamma(const double Z_mean, cons
     constexpr double q_1 = solvers::C_gamma_variance + 1;
     const auto Z_mm = (solvers::C_gamma_variance * Z_mean + Z_maxmin) / q_1;
     const auto L_mm = (solvers::C_gamma_variance * L_mean + L_minmax) / q_1;
+    const auto g = kernel::path::calc_g(train_len, Z_mm, L_mm);
+    // printf("calc_qgamma: Zmm %f, Lmm %f, n %f, gamma %f, quantile %f\n", Z_mm, L_mm, train_len, g, solvers::C_gamma_variance);
+    return g;
+}
+
+/* In order to get min gamma, provide min Z and max L, and vice versa */
+__forceinline__ __host__ __device__ double calc_qgamma(const double Z_mean, const double Z_maxmin, const double L_mm, const double train_len)
+{
+    constexpr double q_1 = solvers::C_gamma_variance + 1;
+    const auto Z_mm = (solvers::C_gamma_variance * Z_mean + Z_maxmin) / q_1;
     const auto g = kernel::path::calc_g(train_len, Z_mm, L_mm);
     // printf("calc_qgamma: Zmm %f, Lmm %f, n %f, gamma %f, quantile %f\n", Z_mm, L_mm, train_len, g, solvers::C_gamma_variance);
     return g;

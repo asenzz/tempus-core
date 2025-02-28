@@ -1,14 +1,10 @@
 #include "include/DaoTestFixture.h"
 #include "DAO/RequestDAO.hpp"
-
-#include <model/User.hpp>
-#include <model/Request.hpp>
-
-using namespace svr;
-using svr::datamodel::MultivalRequest;
-
+#include "model/Request.hpp"
 
 namespace svr {
+
+constexpr char C_test_primary_column[] = "xauusd_avg_bid"; // Ignore tuning or validating other input queue columns in case of aux columns
 
 #define FORECAST_COUNT (1U)
 
@@ -33,7 +29,6 @@ verify_results(
         const datamodel::InputQueue_ptr &iq,
         const datamodel::InputQueue_ptr &new_iq_ohlc_aux);
 
-}
 
 TEST_F(DaoTestFixture, backtest_xauusd)
 {
@@ -41,7 +36,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
 
     tdb.prepareSvrConfig(tdb.TestDbUserName, tdb.dao_type, -1);
 
-    datamodel::Dataset_ptr p_dataset = aci.dataset_service.load(svr::default_dataset_id);
+    datamodel::Dataset_ptr p_dataset = aci.dataset_service.load(default_dataset_id);
     datamodel::InputQueue_ptr iq = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_QUEUE);
     iq->set_data(aci.input_queue_service.load(BATCH_TRAIN_QUEUE));
 //    datamodel::InputQueue_ptr iq_aux = aci.input_queue_service.get_queue_metadata(BATCH_TRAIN_AUX_QUEUE);
@@ -70,13 +65,13 @@ TEST_F(DaoTestFixture, backtest_xauusd)
         di.trigger_next_iteration(); di.wait_iteration_finished();
 
         bpt::ptime pred_time = new_iq_iter->get()->get_value_time();
-        svr::prepare_forecast_request(iq, pred_time);
+        prepare_forecast_request(iq, pred_time);
 
         di.trigger_next_iteration(); di.wait_iteration_finished();
         di.trigger_next_iteration(); PROFILE_EXEC_TIME(di.wait_iteration_finished(), "Predicting " << pred_time);
 
         double mae = 0, mae_ohlc = 0, last_known_mae = 0, last_known_ohlc = 0;
-        std::tie( mae, mae_ohlc, last_known_mae, last_known_ohlc) = svr::verify_results(pred_time, new_iq, new_iq_aux);
+        std::tie( mae, mae_ohlc, last_known_mae, last_known_ohlc) = verify_results(pred_time, new_iq, new_iq_aux);
 
         if (mae != common::C_bad_validation and mae_ohlc != common::C_bad_validation) {
             total_mae += mae;
@@ -95,7 +90,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
             LOG4_ERROR("Forecasts validation failed for cycle at " << pred_time);
         }
 
-        svr::update_with_new_data(iq, new_iq_iter);
+        update_with_new_data(iq, new_iq_iter);
 
         const auto t_elapsed = std::chrono::duration<double, std::ratio<1,1>>(std::chrono::high_resolution_clock::now() - t_start).count();
         LOG4_INFO("Cycle at " << new_iq_iter->get()->get_value_time() << " took " << t_elapsed << " secs.");
@@ -103,7 +98,6 @@ TEST_F(DaoTestFixture, backtest_xauusd)
     LOG4_INFO("Mean absolute error of " << ctr << " comparisons is " << total_mae / double(ctr) << ".");
 }
 
-namespace svr {
 
 void
 update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter)
@@ -119,7 +113,7 @@ update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_contain
 void
 prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &start_predict_time)
 {
-    datamodel::MultivalRequest_ptr p_request = ptr<MultivalRequest>(
+    datamodel::MultivalRequest_ptr p_request = ptr<datamodel::MultivalRequest>(
             bigint(0),
             iq->get_owner_user_name(),
             default_dataset_id,
@@ -127,7 +121,7 @@ prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &
             start_predict_time,
             start_predict_time + iq->get_resolution() * FORECAST_COUNT,
             iq->get_resolution(),
-            common::formatter() << "{" << common::C_test_primary_column << "}");
+            common::formatter() << "{" << C_test_primary_column << "}");
     APP.request_service.save(p_request);
 
     APP.flush_dao_buffers();
@@ -331,7 +325,7 @@ verify_results(
         const datamodel::InputQueue_ptr &new_iq,
         const datamodel::InputQueue_ptr &new_iq_ohlc_aux)
 {
-    const auto forecasts = get_results(forecast_start_time, new_iq, common::C_test_primary_column);
+    const auto forecasts = get_results(forecast_start_time, new_iq, C_test_primary_column);
     if (forecasts.empty()) {
         LOG4_ERROR("Forecasted data for column xauusd_avg_bid is zero!");
         return {common::C_bad_validation, common::C_bad_validation, common::C_bad_validation, common::C_bad_validation};
@@ -340,7 +334,8 @@ verify_results(
     double mae, mae_ohlc, last_known_mae, last_known_ohlc;
     std::tie(mae, last_known_mae) = compare_by_value_mean_erroraux(forecasts, new_iq_ohlc_aux->get_data(), new_iq->get_resolution());
     std::tie(mae_ohlc, last_known_ohlc) = compare_by_value_error_ohlcaux(forecasts, new_iq_ohlc_aux->get_data(), new_iq->get_resolution());
-    LOG4_INFO("Mean absolute error to OHLC " << mae_ohlc << ", mean absolute error to average " << mae << ", last known OHLC " << last_known_ohlc << ", last known MAE " << last_known_mae << ", column " << common::C_test_primary_column << ", time " << forecast_start_time);
+    LOG4_INFO("Mean absolute error to OHLC " << mae_ohlc << ", mean absolute error to average " << mae << ", last known OHLC " << last_known_ohlc << ", last known MAE " <<
+        last_known_mae << ", column " << C_test_primary_column << ", time " << forecast_start_time);
 
     return {mae, mae_ohlc, last_known_mae, last_known_ohlc};
 }

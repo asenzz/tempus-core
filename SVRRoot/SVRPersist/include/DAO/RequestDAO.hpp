@@ -3,13 +3,13 @@
 #include "DAO/AbstractDAO.hpp"
 
 namespace svr {
+
 namespace datamodel {
 struct MultivalRequest;
 struct MultivalResponse;
 struct ValueRequest;
 
 class User;
-
 class Dataset;
 
 using MultivalRequest_ptr = std::shared_ptr<MultivalRequest>;
@@ -18,17 +18,14 @@ using ValueRequest_ptr = std::shared_ptr<ValueRequest>;
 using User_ptr = std::shared_ptr<User>;
 using Dataset_ptr = std::shared_ptr<Dataset>;
 }
-}
 
-namespace svr {
 namespace dao {
 
 class RequestDAO : public AbstractDAO {
 public:
-    static RequestDAO *build(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source,
-                             svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static RequestDAO *build(common::PropertiesReader &sql_properties, dao::DataSource &data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit RequestDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source);
+    explicit RequestDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
 
     virtual bigint get_next_id() = 0;
 

@@ -1,7 +1,7 @@
 #include "AsyncPredictionTaskDAO.hpp"
 #include "AsyncImplBase.hpp"
 #include "../PgDAO/PgPredictionTaskDAO.hpp"
-#include <model/PredictionTask.hpp>
+#include "model/PredictionTask.hpp"
 
 namespace svr {
 namespace dao {
@@ -18,14 +18,13 @@ static const auto cmp_whole_value = [](PredictionTask_ptr const &lhs, Prediction
 }
 
 struct AsyncPredictionTaskDAO::AsyncImpl
-        : AsyncImplBase<PredictionTask_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgPredictionTaskDAO>
-{
-    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+        : AsyncImplBase<PredictionTask_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgPredictionTaskDAO> {
+    AsyncImpl(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
-AsyncPredictionTaskDAO::AsyncPredictionTaskDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+AsyncPredictionTaskDAO::AsyncPredictionTaskDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
         : PredictionTaskDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 

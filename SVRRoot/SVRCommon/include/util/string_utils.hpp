@@ -34,12 +34,10 @@ template<typename T, typename C> std::basic_ostream<C> &operator<<(std::basic_os
 
 namespace common {
 
-char* concat(const char *lhs, const char *rhs);
+char *concat(const char *lhs, const char *rhs);
 
-class formatter
-{
-    enum ConvertToString
-    {
+class formatter {
+    enum ConvertToString {
         to_str
     };
 
@@ -57,8 +55,11 @@ public:
     }
 
     std::string str() const;
+
     operator std::string() const;
+
     explicit operator const char *() const;
+
     std::string operator>>(ConvertToString);
 
     formatter &operator=(formatter &) = delete;
@@ -67,12 +68,31 @@ public:
 };
 
 std::string &ltrim(std::string &s);
+
 // trim from end
 std::string &rtrim(std::string &s);
+
 // trim from both ends
 std::string &trim(std::string &s);
+
 std::string tolower(std::string str);
+
 std::string toupper(std::string str);
+
+std::string &lowertrim(std::string &s);
+
+constexpr inline char ctoupper(const char c)
+{
+    return (c >= 'a' && c <= 'z') ? (c - 'a' + 'A') : c;
+}
+
+template<size_t N> constexpr auto ctoupper(const char (&input)[N])
+{
+    std::string result(N - 1, '\0');
+#pragma unroll N - 1
+    for (size_t i = 0; i < result.size(); ++i) result[i] = ctoupper(input[i]);
+    return result;
+}
 
 template<typename T> std::string
 to_binary_string(const std::set<T> &values)
@@ -380,6 +400,7 @@ operator<<(std::basic_ostream<C, Ca> &s, const std::deque<T> &v)
 {
     return s << svr::common::to_string(v);
 }
+
 #if 0
 template<typename Tx, typename Ty, typename C, typename Ca> std::basic_ostream<C, Ca> &
 operator<<(std::basic_ostream<C, Ca> &s, const std::pair<Tx, Ty> &p)

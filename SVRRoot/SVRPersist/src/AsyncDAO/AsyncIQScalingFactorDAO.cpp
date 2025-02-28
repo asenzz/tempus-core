@@ -1,8 +1,8 @@
 #include "AsyncIQScalingFactorDAO.hpp"
 #include "AsyncImplBase.hpp"
-#include <model/IQScalingFactor.hpp>
-#include <DAO/DataSource.hpp>
-#include <DAO/IQScalingFactorRowMapper.hpp>
+#include "model/IQScalingFactor.hpp"
+#include "DAO/DataSource.hpp"
+#include "DAO/IQScalingFactorRowMapper.hpp"
 #include "../PgDAO/PgIQScalingFactorDAO.hpp"
 
 namespace svr {
@@ -23,12 +23,12 @@ static const auto cmp_whole_value = [](datamodel::IQScalingFactor_ptr const &lhs
 struct AsyncIQScalingFactorDAO::AsyncImpl
         : AsyncImplBase<datamodel::IQScalingFactor_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgIQScalingFactorDAO>
 {
-    AsyncImpl(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source)
+    AsyncImpl(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
-AsyncIQScalingFactorDAO::AsyncIQScalingFactorDAO(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source)
+AsyncIQScalingFactorDAO::AsyncIQScalingFactorDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
         : IQScalingFactorDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 

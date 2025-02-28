@@ -31,6 +31,11 @@ using Dataset_ptr = std::shared_ptr<Dataset>;
 class SVRParameters;
 
 using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
+
+class DeconQueue;
+
+using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
+
 }
 
 namespace business {
@@ -94,9 +99,15 @@ public:
     arma::mat &get_K(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
 
     std::tuple<mat_ptr, vec_ptr, data_row_container_ptr>
-    get_labels(const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
-                      const uint16_t level, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
-                      const bpt::time_duration &main_queue_resolution, const uint16_t multistep, const uint16_t lag);
+    get_labels(
+            const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
+            const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
+            const bpt::time_duration &main_queue_resolution, const uint16_t lag);
+
+    mat_ptr
+    get_features(
+            const arma::mat &labels, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &params, const bpt::time_duration &aux_resolution,
+            const bpt::time_duration &main_resolution, const bpt::time_duration &max_lookback_time_gap, const data_row_container &label_times);
 
     mat_ptr get_weights(
             const bigint dataset_id, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,

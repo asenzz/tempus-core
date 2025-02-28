@@ -1,13 +1,13 @@
 #include "PgAutotuneTaskDAO.hpp"
 
-#include <DAO/AutotuneTaskRowMapper.hpp>
-#include <DAO/DataSource.hpp>
+#include "DAO/AutotuneTaskRowMapper.hpp"
+#include "DAO/DataSource.hpp"
 
 namespace svr {
 namespace dao {
 
-PgAutotuneTaskDAO::PgAutotuneTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-: AutotuneTaskDAO(tempus_config, data_source)
+PgAutotuneTaskDAO::PgAutotuneTaskDAO(svr::common::PropertiesReader &tempus_config, svr::dao::DataSource &data_source)
+        : AutotuneTaskDAO(tempus_config, data_source)
 {}
 
 bigint PgAutotuneTaskDAO::get_next_id()
@@ -17,14 +17,13 @@ bigint PgAutotuneTaskDAO::get_next_id()
 
 bool PgAutotuneTaskDAO::exists(const bigint id)
 {
-    return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"),
-                                           id) == 1;
+    return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"), id) == 1;
 }
 
 int PgAutotuneTaskDAO::save(const AutotuneTask_ptr &autotune_task)
 {
 
-    if(!exists(autotune_task->get_id()))
+    if (!exists(autotune_task->get_id()))
         return data_source.update(AbstractDAO::get_sql("save"),
                                   autotune_task->get_id(),
                                   autotune_task->get_dataset_id(),
@@ -75,9 +74,7 @@ int PgAutotuneTaskDAO::save(const AutotuneTask_ptr &autotune_task)
 
 int PgAutotuneTaskDAO::remove(const AutotuneTask_ptr &autotuneTask)
 {
-    if (autotuneTask->get_id() == 0) {
-        return 0;
-    }
+    if (autotuneTask->get_id() == 0) return 0;
     return data_source.update(AbstractDAO::get_sql("remove"), autotuneTask->get_id());
 }
 

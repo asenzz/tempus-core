@@ -10,7 +10,7 @@
 namespace svr {
 namespace dao {
 
-PgInputQueueDAO::PgInputQueueDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source)
+PgInputQueueDAO::PgInputQueueDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source) // TODO Use a special SQLPropertiesReader insted of PropertiesReader
         : InputQueueDAO(sql_properties, data_source)
 {
 }
@@ -19,7 +19,7 @@ datamodel::InputQueue_ptr PgInputQueueDAO::get_queue_metadata(const std::string 
 {
 
     InputQueueRowMapper row_mapper;
-    std::string sql = AbstractDAO::get_sql("get_queue_metadata");
+    const auto sql = AbstractDAO::get_sql("get_queue_metadata");
     return data_source.query_for_object(&row_mapper, sql, user_name, logical_name, resolution);
 }
 
@@ -38,7 +38,7 @@ std::deque<datamodel::DataRow_ptr> PgInputQueueDAO::get_queue_data_by_table_name
     LOG4_DEBUG("Reading data from queue " << table_name << ", from " << time_from << ", to " << time_to << ", limit " << limit);
     DataRowRowMapper row_mapper;
 
-    std::string sql = (boost::format(AbstractDAO::get_sql("get_queue_data_by_table_name")) % table_name).str();
+    auto sql = (boost::format(AbstractDAO::get_sql("get_queue_data_by_table_name")) % table_name).str();
 
     if (limit) sql += " LIMIT " + pqxx::to_string(limit);
 

@@ -1,14 +1,14 @@
 #ifndef ASYNCAUTOTUNEDAO_HPP
 #define ASYNCAUTOTUNEDAO_HPP
 
-#include <DAO/AutotuneTaskDAO.hpp>
+#include "DAO/AutotuneTaskDAO.hpp"
 
 namespace svr { namespace dao {
 
 class AsyncAutotuneTaskDAO: public AutotuneTaskDAO
 {
 public:
-    explicit AsyncAutotuneTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit AsyncAutotuneTaskDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
     ~AsyncAutotuneTaskDAO();
 
     bigint get_next_id();

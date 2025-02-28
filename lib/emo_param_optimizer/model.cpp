@@ -101,7 +101,6 @@ int do_gpu_mmul(const arma::mat &A, const arma::mat &B, arma::mat &C)
     return 0;
 }
 
-
 extern arma::mat call_gpu_mmul(const arma::mat &A, const arma::mat &B);
 
 arma::mat solve_irwls(double epsilon, const arma::mat &Z, const arma::mat &rhs)

@@ -55,7 +55,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
         for (size_t c = 0; c < columns_ct; ++c)
             iq_values(r, c) = (**(iter_start + r))[c];
 
-    if (common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) {
+    if (common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::trace) {
         OMP_FOR_i(columns_ct) LOG4_TRACE("Column " << i << " " << common::present(iq_values.col(i)));
     }
     arma::rowvec dc_offset(iq_values.n_cols, arma::fill::none), scaling_factors(iq_values.n_cols, arma::fill::none);
@@ -65,9 +65,9 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
         result[i] = ptr<svr::datamodel::IQScalingFactor>(
                     0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
     }
-    LOG4_DEBUG("Calculated scaling factors for input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id << " scaling factors on last " <<
-                row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors <<
-                ", starting " << (**iter_start).get_value_time() << ", until " << input_queue.back()->get_value_time());
+    LOG4_DEBUG("Calculated input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id <<
+        " on last " << row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors <<
+        ", starting " << (**iter_start).get_value_time() << ", until " << input_queue.back()->get_value_time());
     return result;
 }
 

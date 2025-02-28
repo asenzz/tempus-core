@@ -24,12 +24,12 @@ class InputQueueDAO : public AbstractDAO
 {
 public:
     static InputQueueDAO *build(
-            svr::common::PropertiesFileReader &sql_properties,
-            svr::dao::DataSource &data_source,
-            svr::common::ConcreteDaoType dao_type,
-            bool use_threadsafe_dao);
+            common::PropertiesReader &sql_properties,
+            dao::DataSource &data_source,
+            const common::ConcreteDaoType dao_type,
+            const bool use_threadsafe_dao);
 
-    explicit InputQueueDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source);
+    explicit InputQueueDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
 
     virtual std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name) = 0;
 
@@ -93,7 +93,7 @@ public:
     virtual void purge_missing_hours(datamodel::InputQueue_ptr const &queue) = 0;
 };
 
+using InputQueueDAO_ptr = std::shared_ptr<dao::InputQueueDAO>;
+
 } /* namespace dao */
 } /* namespace svr */
-
-using InputQueueDAO_ptr = std::shared_ptr<svr::dao::InputQueueDAO>;

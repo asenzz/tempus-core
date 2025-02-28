@@ -21,12 +21,12 @@ static const auto cmp_whole_value = [](datamodel::WScalingFactor_ptr const &lhs,
 struct AsyncWScalingFactorDAO::AsyncImpl
         : AsyncImplBase<datamodel::WScalingFactor_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgWScalingFactorDAO>
 {
-    AsyncImpl(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source)
+    AsyncImpl(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
-AsyncWScalingFactorDAO::AsyncWScalingFactorDAO(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source)
+AsyncWScalingFactorDAO::AsyncWScalingFactorDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
         : WScalingFactorDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 
@@ -68,4 +68,3 @@ std::deque<datamodel::WScalingFactor_ptr> AsyncWScalingFactorDAO::find_all_by_da
 
 }
 }
-

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DAO/IQScalingFactorDAO.hpp>
+#include "DAO/IQScalingFactorDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -8,7 +8,7 @@ namespace dao {
 class PgIQScalingFactorDAO : public IQScalingFactorDAO
 {
 public:
-    explicit PgIQScalingFactorDAO(common::PropertiesFileReader &tempus_config, DataSource &data_source);
+    explicit PgIQScalingFactorDAO(common::PropertiesReader &tempus_config, DataSource &data_source);
 
     virtual bigint get_next_id();
 

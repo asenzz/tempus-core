@@ -7,8 +7,6 @@
 #include "AsyncImplBase.hpp"
 #include "InputQueueService.hpp"
 
-using svr::datamodel::InputQueue;
-
 namespace svr {
 namespace dao {
 
@@ -27,13 +25,13 @@ static const auto cmp_whole_value = [](datamodel::InputQueue_ptr const &lhs, dat
 struct AsyncInputQueueDAO::AsyncImpl
         : AsyncImplBase<datamodel::InputQueue_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgInputQueueDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+    AsyncImpl(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 100)
     {}
 
 };
 
-AsyncInputQueueDAO::AsyncInputQueueDAO(svr::common::PropertiesFileReader &properties, svr::dao::DataSource &source)
+AsyncInputQueueDAO::AsyncInputQueueDAO(common::PropertiesReader &properties, dao::DataSource &source)
         : InputQueueDAO(properties, source), pImpl(*new AsyncImpl(properties, source))
 {}
 
@@ -50,11 +48,10 @@ datamodel::InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::stri
 
 datamodel::InputQueue_ptr AsyncInputQueueDAO::get_queue_metadata(const std::string &table_name)
 {
-    datamodel::InputQueue_ptr queue(new InputQueue());
+    auto queue = otr<datamodel::InputQueue>();
     queue->set_table_name(table_name);
 
-    if (pImpl.cached(queue))
-        return datamodel::InputQueue_ptr(new InputQueue(queue->get_copy_metadata()));
+    if (pImpl.cached(queue)) return otr(queue->get_copy_metadata());
 
     const std::scoped_lock lg(pImpl.pgMutex);
     queue = pImpl.pgDao.get_queue_metadata(table_name);
@@ -124,7 +121,7 @@ size_t AsyncInputQueueDAO::save(const datamodel::InputQueue_ptr &p_input_queue, 
 
 size_t AsyncInputQueueDAO::save_metadata(const datamodel::InputQueue_ptr &queue)
 {
-    datamodel::InputQueue_ptr md(new InputQueue(queue->get_copy_metadata()));
+    auto md = otr(queue->get_copy_metadata());
     pImpl.cache(md);
     return 1;
 }
@@ -142,17 +139,15 @@ size_t AsyncInputQueueDAO::update_metadata(const datamodel::InputQueue_ptr &queu
 
 bool AsyncInputQueueDAO::exists(const std::string &table_name)
 {
-    datamodel::InputQueue_ptr queue(new InputQueue());
+    auto queue = otr<datamodel::InputQueue>();
     queue->set_table_name(table_name);
 
-    if (pImpl.cached(queue))
-        return true;
+    if (pImpl.cached(queue)) return true;
     const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.exists(table_name);
 }
 
-bool AsyncInputQueueDAO::exists(const std::string &user_name, const std::string &logical_name,
-                                const bpt::time_duration &resolution)
+bool AsyncInputQueueDAO::exists(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
 {
     return exists(business::InputQueueService::make_queue_table_name(user_name, logical_name, resolution));
 }

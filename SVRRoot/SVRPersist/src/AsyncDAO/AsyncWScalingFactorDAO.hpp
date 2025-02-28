@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DAO/WScalingFactorDAO.hpp>
+#include "DAO/WScalingFactorDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -8,7 +8,7 @@ namespace dao {
 class AsyncWScalingFactorDAO : public WScalingFactorDAO
 {
 public:
-    explicit AsyncWScalingFactorDAO(common::PropertiesFileReader &tempus_config, dao::DataSource &data_source);
+    explicit AsyncWScalingFactorDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source);
 
     ~AsyncWScalingFactorDAO();
 

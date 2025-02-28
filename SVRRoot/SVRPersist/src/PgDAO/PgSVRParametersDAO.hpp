@@ -1,7 +1,7 @@
 #ifndef PGSVRPARAMETERSDAO_HPP
 #define PGSVRPARAMETERSDAO_HPP
 
-#include <DAO/SVRParametersDAO.hpp>
+#include "DAO/SVRParametersDAO.hpp"
 
 namespace svr{
 namespace dao{
@@ -9,12 +9,12 @@ namespace dao{
 class PgSVRParametersDAO: public SVRParametersDAO
 {
 public:
-    explicit PgSVRParametersDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgSVRParametersDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual bigint get_next_id();
     virtual bool exists(const bigint id);
     virtual int save(const datamodel::SVRParameters_ptr &p_svr_parameters);
-    virtual int remove(const datamodel::SVRParameters_ptr& svr_parameters);
+    virtual int remove(const datamodel::SVRParameters_ptr& p_svr_parameters);
     virtual int remove_by_dataset_id(const bigint ensemble_id);
 
     virtual std::deque<datamodel::SVRParameters_ptr> get_all_svrparams_by_dataset_id(const bigint dataset_id);

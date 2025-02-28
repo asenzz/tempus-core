@@ -5,6 +5,11 @@
 #ifndef SVR_SERIALIZATION_HPP
 #define SVR_SERIALIZATION_HPP
 
+#include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/date_time/posix_time/time_formatters.hpp>
+#include <boost/date_time/posix_time/time_parsers.hpp>
+#include <boost/throw_exception.hpp>
+#include <boost/serialization/throw_exception.hpp>
 #include <boost/serialization/collection_size_type.hpp>
 #include <boost/serialization/nvp.hpp>
 #include <boost/serialization/item_version_type.hpp>
@@ -35,43 +40,51 @@
 namespace boost {
 namespace serialization {
 
-
-template<class Archive>
-void save(Archive & ar, const arma::mat &a, const unsigned version)
+template<typename Archive, typename T> void save(Archive & ar, const arma::Mat<T> &a, const unsigned version)
 {
     std::ostringstream oss;
     a.save(oss, arma::file_type::arma_binary);
-    std::cout << "Saving " << oss.str().size() << std::endl;
+    std::cout << "Saving matrix " << oss.str().size() << std::endl;
     ar & oss.str();
 }
 
-template<class Archive>
-void load(Archive & ar, arma::mat &a, const unsigned version)
+template<typename Archive, typename T> void load(Archive & ar, arma::Mat<T> &a, const unsigned version)
 {
     std::string os;
     ar & BOOST_SERIALIZATION_NVP(os);
-    std::cout << "Loading " << os.size() << std::endl;
+    std::cout << "Loading matrix " << os.size() << std::endl;
     std::stringstream oss(os);
     a.load(oss, arma::file_type::arma_binary);
 }
 
-template<class Archive>
-void save(Archive & ar, const arma::uvec &a, const unsigned version)
+template <typename Ar, typename T> inline void serialize(Ar& ar, arma::Mat<T>& t, const unsigned version)
+{
+    split_free(ar, t, version);
+}
+
+template <typename Ar, typename T> inline void serialize(Ar& ar, arma::Col<T>& t, const unsigned version)
+{
+    split_free(ar, t, version);
+}
+
+template<typename Archive> void save(Archive & ar, const boost::posix_time::ptime &a, const unsigned version)
 {
     std::ostringstream oss;
-    a.save(oss, arma::file_type::arma_binary);
-    std::cout << "Saving " << oss.str().size() << std::endl;
+    oss << boost::posix_time::to_iso_extended_string(a);
     ar & oss.str();
 }
 
-template<class Archive>
-void load(Archive & ar, arma::uvec &a, const unsigned version)
+template<typename Archive> void load(Archive & ar, boost::posix_time::ptime &a, const unsigned version)
 {
     std::string os;
     ar & BOOST_SERIALIZATION_NVP(os);
-    std::cout << "Loading " << os.size() << std::endl;
     std::stringstream oss(os);
-    a.load(oss, arma::file_type::arma_binary);
+    a = boost::posix_time::from_iso_extended_string(oss.str());
+}
+
+template <typename Ar> inline void serialize(Ar& ar, boost::posix_time::ptime &t, const unsigned version)
+{
+    split_free(ar, t, version);
 }
 
 template <typename Ar, typename... Ts>
@@ -155,7 +168,7 @@ inline void serialize(Ar& ar, std::pair<Ts...> &t, unsigned version)
 template <typename Ar, typename... Ts>
 inline void serialize(Ar& ar, std::tuple<Ts...> &t, unsigned version)
 {
-    for (size_t i = 0; std::tuple_size<std::tuple<Ts...>>{}; ++i) ar & std::get<i>(t);
+    for (size_t i = 0; i < std::tuple_size<std::tuple<Ts...>>{}; ++i) ar & std::get<i>(t);
 }
 
 } // namespace serialization

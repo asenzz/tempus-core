@@ -18,10 +18,10 @@ View definition:
     xauusd_avg_bid
    FROM q_svrwave_xauusd_avg_1
   ORDER BY value_time DESC
- LIMIT (10000 * 3600);
+ LIMIT (10000 * MAIN_QUEUE_RES);
 
- \d+ q_svrwave_test_xauusd_avg_3600
-                             View "public.q_svrwave_test_xauusd_avg_3600"
+ \d+ q_svrwave_test_xauusd_avg_MAIN_QUEUE_RES
+                             View "public.q_svrwave_test_xauusd_avg_MAIN_QUEUE_RES"
      Column     |            Type             | Collation | Nullable | Default | Storage | Description
 ----------------+-----------------------------+-----------+----------+---------+---------+-------------
  value_time     | timestamp without time zone |           |          |         | plain   |
@@ -33,7 +33,7 @@ View definition:
     update_time,
     tick_volume,
     xauusd_avg_bid
-   FROM q_svrwave_xauusd_avg_3600
+   FROM q_svrwave_xauusd_avg_MAIN_QUEUE_RES
   ORDER BY value_time DESC
  LIMIT 10000;
 
@@ -82,7 +82,7 @@ const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_v
 const std::string C_test_input_name = "q_svrwave_test_xauusd_avg_";
 const std::string C_test_input_table_name = C_test_input_name + STR_MAIN_QUEUE_RES;
 const std::string C_test_aux_input_table_name = C_test_input_name + "1";
-constexpr uint16_t C_test_levels = 6;
+constexpr uint16_t C_test_levels = 1;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
 constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
 const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
@@ -145,7 +145,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             const auto &column = p_ensemble->get_column_name();
 //            const bool is_ask = column.find("_ask") != std::string::npos;
             prepare_test_queue(*p_dataset, *p_dataset->get_input_queue(), *p_ensemble->get_decon_queue());
-            OMP_TASKLOOP_1()
+//            OMP_TASKLOOP_1()
             for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
@@ -210,6 +210,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             recon_actual = arma::mean(recon_actual, 1);
 
             const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
+            LOG4_TRACE("Got scaling factor " << *p_iqsf);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_predicted);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_last_knowns);
             business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);

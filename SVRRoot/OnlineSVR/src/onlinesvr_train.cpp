@@ -46,27 +46,44 @@ OnlineMIMOSVR::batch_train(
         }
     }
 
+    ixs = generate_indexes();
+    const uint16_t num_chunks = ixs.size();
+    train_feature_chunks_t.resize(num_chunks);
+    train_label_chunks.resize(num_chunks);
+    t_omp_lock param_set_l;
+    bool calculate_sf = false;
+    OMP_FOR_i(num_chunks) {
+        SVRParameters_ptr p = get_params_ptr(i);
+        if (!p) {
+            p = otr(get_params());
+            p->set_chunk_index(i);
+            param_set_l.set();
+            param_set.emplace(p);
+            param_set_l.unset();
+        }
+        train_feature_chunks_t[i] = feature_chunk_t(ixs[i]);
+        train_label_chunks[i] = p_labels->rows(ixs[i]);
+        auto p_labels_sf = business::DQScalingFactorService::find(scaling_factors, model_id, i, gradient, step, level, false, true);
+        auto features_sf = business::DQScalingFactorService::slice(scaling_factors, i, gradient, step);
+        const auto lag = p->get_lag_count();
+        if (!p_labels_sf || features_sf.size() != train_feature_chunks_t[i].n_rows / lag) {
+            param_set_l.set();
+            calculate_sf = true;
+            param_set_l.unset();
+        } else {
+            business::DQScalingFactorService::scale_features(i, gradient, step, lag, features_sf, train_feature_chunks_t[i]);
+            business::DQScalingFactorService::scale_labels(*p_labels_sf, train_label_chunks[i]);
+        }
+    }
+
     bool tuned = false;
-    if (needs_tuning() && !is_manifold()) {
+    if ((needs_tuning() || calculate_sf) && !is_manifold()) {
         if (precalc_kernel_matrices && precalc_kernel_matrices->size())
             LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
         PROFILE_EXEC_TIME(tune_fast(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
-        if (model_id) {
-            for (const auto &p: param_set) {
-                if (APP.svr_parameters_service.exists(p))
-                    APP.svr_parameters_service.remove(p);
-                APP.svr_parameters_service.save(p);
-            }
-            for (const auto &sf: scaling_factors) {
-                if (APP.dq_scaling_factor_service.exists(sf))
-                    APP.dq_scaling_factor_service.remove(sf);
-                APP.dq_scaling_factor_service.save(sf);
-            }
-        }
         tuned = true;
     }
 
-    const uint16_t num_chunks = ixs.size();
     if (!tuned && precalc_kernel_matrices && precalc_kernel_matrices->size() == num_chunks) {
         p_kernel_matrices = precalc_kernel_matrices;
         LOG4_DEBUG("Using " << num_chunks << " precalculated matrices.");
@@ -126,8 +143,8 @@ void OnlineMIMOSVR::learn(
     if (is_manifold()) {
         if (!p_manifold) LOG4_THROW("Manifold not initialized.");
         auto gen = common::reproducibly_seeded_64<xso::rng64>();
-        std::uniform_int_distribution<unsigned> rand_int(0, C_interlace_manifold_factor);
-        const auto new_manifold_rows_ct = new_x.n_rows * p_features->n_rows / C_interlace_manifold_factor;
+        common::threadsafe_uniform_int_distribution<uint32_t> rand_int(0, C_manifold_interleave);
+        const auto new_manifold_rows_ct = new_x.n_rows * p_features->n_rows / C_manifold_interleave;
         arma::mat new_x_manifold(new_manifold_rows_ct, new_x.n_cols + p_features->n_cols);
         arma::mat new_y_manifold(new_manifold_rows_ct, new_y.n_cols);
         arma::mat new_ylk_manifold(new_manifold_rows_ct, 1);
@@ -135,10 +152,11 @@ void OnlineMIMOSVR::learn(
         for (unsigned i = 0; i < p_features->n_rows; ++i)
             for (unsigned j = 0; j < new_x.n_rows; ++j) {
                 const auto r = i * new_x.n_rows + j;
-                if (r % C_interlace_manifold_factor == 0) {
-                    const auto r_i = common::bounce<unsigned>(new_x.n_rows - 1, i + rand_int(gen));
-                    const auto r_j = common::bounce<unsigned>(p_features->n_rows - 1, j + rand_int(gen));
-                    MANIFOLD_SET(new_x_manifold.row(r / C_interlace_manifold_factor), new_y_manifold.row(r / C_interlace_manifold_factor),
+                if (r % C_manifold_interleave == 0) {
+                    const auto rand_int_g = rand_int(gen);
+                    const auto r_i = common::bounce<unsigned>(new_x.n_rows - 1, i + rand_int_g);
+                    const auto r_j = common::bounce<unsigned>(p_features->n_rows - 1, j + rand_int_g);
+                    MANIFOLD_SET(new_x_manifold.row(r / C_manifold_interleave), new_y_manifold.row(r / C_manifold_interleave),
                                  new_x.row(r_j), new_y.row(r_j), p_features->row(r_i), p_labels->row(r_i));
                 }
             }
@@ -294,7 +312,7 @@ void OnlineMIMOSVR::learn(
 }
 
 
-arma::mat OnlineMIMOSVR::weight_matrix(const arma::uvec &ixs, const arma::mat &weights)
+arma::mat OnlineMIMOSVR::instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights)
 {
     arma::mat w(ixs.n_rows, ixs.n_rows, arma::fill::none);
     const arma::vec Wv = arma::mean(weights.rows(ixs), 1);
@@ -302,44 +320,54 @@ arma::mat OnlineMIMOSVR::weight_matrix(const arma::uvec &ixs, const arma::mat &w
     return arma::sqrt(w);
 }
 
+#ifdef INSTANCE_WEIGHTS
 
 arma::mat OnlineMIMOSVR::calc_weights(
-        arma::mat K, const arma::mat &labels, const arma::mat &instance_weights_matrix, const double epsco, const uint16_t iters_irwls, const uint16_t iters_opt)
+        arma::mat K, const arma::mat &labels, const arma::mat &instance_weights_matrix, const double epsco, const uint16_t iters_irwls, const uint16_t iters_opt,
+        t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk)
 {
     arma::mat K_epsco = K;
     K_epsco *= instance_weights_matrix;
     K *= instance_weights_matrix;
     K_epsco.diag().fill(epsco);
     arma::mat w;
-    if (iters_irwls) PROFILE_EXEC_TIME(solve_irwls(K_epsco, K, labels * C_diff_coef, w, iters_irwls),
-                                       "Solve weights IRWLS for K " << arma::size(K) << ", iterations " << iters_irwls);
-    if (iters_opt) PROFILE_EXEC_TIME(solve_opt(K, labels * C_diff_coef, w, iters_opt),
-                                     "Solve weights PPrune for K " << arma::size(K) << ", iterations " << iters_opt);
+    if (iters_irwls) PROFILE_EXEC_TIME(
+            solvers::solve_irwls(K_epsco, K, labels * C_diff_coef, w, iters_irwls, PROPS.get_stabilize_iterations_count(), C_rbt_iter, C_rbt_threshold, PROPS.get_weight_columns(),
+                                 weight_scaling_factors, chunk),
+            "Solve weights IRWLS for K " << arma::size(K) << ", iterations " << iters_irwls);
+    if (iters_opt) PROFILE_EXEC_TIME(
+            solve_opt(K, labels * C_diff_coef, w, iters_opt, weight_scaling_factors, chunk), "Solve weights PPrune for K " << arma::size(K) << ", iterations " << iters_opt);
     return w;
 }
 
-arma::mat OnlineMIMOSVR::calc_weights(const arma::mat &K, const arma::mat &labels, const double epsco, const uint16_t iters_irwls, const uint16_t iters_opt)
+#else
+
+arma::mat OnlineMIMOSVR::calc_weights(const arma::mat &K, const arma::mat &labels, const double epsco, const uint16_t iters_irwls, const uint32_t iters_opt, t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk)
 {
     arma::mat K_epsco = K;
     K_epsco.diag().fill(epsco);
     arma::mat w;
-    if (iters_irwls) PROFILE_EXEC_TIME(solve_irwls(K_epsco, K, labels * C_diff_coef, w, iters_irwls),
+    if (iters_irwls) PROFILE_EXEC_TIME(solvers::solve_irwls(K_epsco, K, labels * C_diff_coef, w, iters_irwls, PROPS.get_stabilize_iterations_count(), C_rbt_iter, C_rbt_threshold,
+                                                            PROPS.get_weight_columns(), weight_scaling_factors, chunk),
                                        "Solve weights IRWLS for K " << arma::size(K) << ", iterations " << iters_irwls);
-    if (iters_opt) PROFILE_EXEC_TIME(solve_opt(K, labels * C_diff_coef, w, iters_opt), "Solve weights PPrune for K " << arma::size(K) << ", iterations " << iters_opt);
+    if (iters_opt) PROFILE_EXEC_TIME(solve_opt(K, labels * C_diff_coef, w, iters_opt, weight_scaling_factors, chunk),
+                                     "Solve weights PPrune for K " << arma::size(K) << ", iterations " << iters_opt);
     return w;
 }
 
-void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint16_t iters_irwls, const uint16_t iters_opt) // TODO Remove
+#endif
+
+void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint16_t iters_irwls, const uint32_t iters_opt) // TODO Remove
 {
     const auto &params = get_params(chunk_ix);
 #ifdef INSTANCE_WEIGHTS
-    PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], weight_matrix(ixs[chunk_ix], *p_input_weights),
-                                                             1. / params.get_svr_C(), iters_irwls, iters_opt),
+    PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], instance_weight_matrix(ixs[chunk_ix], *p_input_weights),
+                                                             params.get_svr_epsco(), iters_irwls, iters_opt),
           "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
                 ", w " << common::present(weight_chunks[chunk_ix]));
 #else
     PROFILE_EXEC_TIME(weight_chunks[chunk_ix] = calc_weights(
-            p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], 1. / params.get_svr_C(), iters_irwls, iters_opt),
+            p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], params.get_svr_epsco(), iters_irwls, iters_opt, weight_scaling_factors, chunk_ix),
                       "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", w " << common::present(weight_chunks[chunk_ix]));
 #endif
 }
@@ -347,6 +375,7 @@ void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint16_t iters_i
 
 void OnlineMIMOSVR::update_all_weights()
 {
+    /*
     if (arma::size(all_weights) != arma::size(*p_labels)) all_weights.set_size(arma::size(*p_labels));
     all_weights.zeros();
     all_weights.rows(ixs.front()) = weight_chunks.front();
@@ -359,6 +388,8 @@ void OnlineMIMOSVR::update_all_weights()
         all_weights /= divisors;
     }
     LOG4_TRACE("Total weights for level " << level << " " << arma::size(all_weights));
+     */
+    LOG4_WARN("Method deprecated.");
 }
 
 } // datamodel

@@ -2,21 +2,22 @@
 
 #include <DAO/AbstractDAO.hpp>
 
-namespace svr { namespace datamodel {
+namespace svr {
+
+namespace datamodel {
     class DeconQueue;
     class DataRow;
     using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
     using DataRow_ptr = std::shared_ptr<DataRow>;
-} }
+}
 
-namespace svr {
 namespace dao {
 
 class DeconQueueDAO : public AbstractDAO {
 public:
-    static DeconQueueDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static DeconQueueDAO *build(common::PropertiesReader& sql_properties, dao::DataSource& data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit DeconQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit DeconQueueDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual datamodel::DeconQueue_ptr get_decon_queue_by_table_name(const std::string &table_name) = 0;
 
@@ -35,6 +36,7 @@ public:
     virtual long count(const datamodel::DeconQueue_ptr& deconQueue) = 0;
 };
 
-} }
+using DeconQueueDAO_ptr = std::shared_ptr <dao::DeconQueueDAO>;
 
-using DeconQueueDAO_ptr = std::shared_ptr <svr::dao::DeconQueueDAO>;
+}
+}

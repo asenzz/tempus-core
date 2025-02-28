@@ -40,7 +40,7 @@ cuvalidate::cuvalidate(
    m(tune_cuml.n_cols), mm(m * m), mm_size(mm * sizeof(double)), n(tune_label_chunk.n_cols), train_len(train_cuml.n_cols),
    K_train_len(train_len * train_len), K_train_size(K_train_len * sizeof(double)), train_len_n(train_len * n), train_n_size(train_len_n * sizeof(double)),
    tune_len(train_len - train_clamp), tune_len_n(tune_len * n), tune_n_size(tune_len_n * sizeof(double)), K_tune_len(tune_len * tune_len),
-   calc_start(0 /* train_len - C_test_len */), calc_len(train_len - calc_start), dim(tune_cuml.n_rows / lag), lag_tile_width(CDIV(lag, common::C_cu_tile_width)),
+   calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), dim(tune_cuml.n_rows / lag), lag_tile_width(CDIV(lag, common::C_cu_tile_width)),
    weighted(train_W.n_elem), labels_sf(labels_sf), train_L_m(train_L_m), iters_mul(common::C_itersolve_range / irwls_iters), train_F_rows(train_features_t.n_rows),
    train_F_cols(train_features_t.n_cols), train_cuml_rows(train_cuml.n_rows), lag(lag), tune_F_rows(tune_features_t.n_rows), tune_F_cols(tune_features_t.n_cols),
    tune_cuml_rows(tune_cuml.n_rows)
@@ -48,7 +48,7 @@ cuvalidate::cuvalidate(
     assert(tune_label_chunk.n_rows == m);
     assert(train_cuml.n_rows == tune_cuml.n_rows);
     assert(m - C_test_len - train_len == 0);
-    LOG4_TRACE("Train len " << train_len << ", tune len " << m << ", test len " << C_test_len << ", streams per GPU " << unsigned(streams_per_gpu));
+    LOG4_TRACE("Train len " << train_len << ", tune len " << m << ", test len " << C_test_len << ", streams per GPU " << unsigned(streams_per_gpu) << ", calc len " << calc_len);
     dx.resize(n_gpus);
     OMP_FOR_i(n_gpus) {
         {
@@ -125,7 +125,7 @@ cuvalidate::~cuvalidate()
 
 // TODO Fix Bug in debug build getting zero valued kernel matrices inside this function
 std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
-cuvalidate::operator()(const double lambda, const double gamma_bias, const double tau)
+cuvalidate::operator()(const double lambda, const double gamma_bias_base, const double tau) const
 {
     const common::gpu_context_<streams_per_gpu> ctx;
     const auto gpu_id = ctx.phy_id();
@@ -133,89 +133,110 @@ cuvalidate::operator()(const double lambda, const double gamma_bias, const doubl
     const auto stream_id = ctx.stream_id();
     const auto &dx_ = dx[gpu_id];
     const auto &dxsx = dx_.sx[stream_id];
-
+    double best_total_score = std::numeric_limits<double>::max();
+    double best_epsco, best_gamma;
+    t_param_preds::t_predictions_ptr p_best_predictions;
+    constexpr std::array gamma_coefs = {1.};
+#ifdef PRODUCTION_BUILD
+    constexpr auto gamma_coefs_size = gamma_coefs.size();
+    UNROLL(gamma_coefs_size)
+#endif
+    for (const auto gamma_transpose: gamma_coefs) {
+        const auto gamma_bias = gamma_bias_base * gamma_transpose; // .5 is no bias
 #ifdef NEW_PATH
-    auto const d_K_train = kernel::cu_compute_path_distances(
-            dx_.d_train_features_t, dx_.d_train_features_t, train_F_rows, train_F_rows, train_F_cols, train_F_cols, lag, lambda, 0, custream);
+        auto const d_K_train = kernel::cu_compute_path_distances(
+                dx_.d_train_features_t, dx_.d_train_features_t, train_F_rows, train_F_rows, train_F_cols, train_F_cols, lag, lambda, 0, custream);
 #else
-    kernel::path::cu_distances_xy(train_len, train_len, train_cuml_rows, lag, dim, lag_tile_width, lambda, tau, dx_.d_train_cuml, dx_.d_train_cuml, dxsx.d_K_train, dxsx.custream);
+        kernel::path::cu_distances_xy(train_len, train_len, train_cuml_rows, lag, dim, lag_tile_width, lambda, tau, dx_.d_train_cuml, dx_.d_train_cuml, dxsx.d_K_train,
+                                      dxsx.custream);
 #endif
 
-    const auto gamma = solvers::cu_calc_gamma(dxsx.K_train_off, train_len, dx_.train_label_off, calc_len, n, gamma_bias, dxsx.custream);
-    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, dxsx.custream>>>(dxsx.d_K_train, K_train_len, gamma);
-    if (weighted) thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.d_K_train, dxsx.d_K_train + K_train_len, dx_.d_train_W, dxsx.d_K_train, thrust::multiplies<double>());
-    const auto epsco = solvers::cu_calc_epsco(dxsx.K_train_off, dx_.train_label_off, calc_len, n, train_len, dxsx.custream);
-    t_param_preds::t_predictions_ptr p_predictions;
-    if (PROPS.get_recombine_parameters()) {
-        p_predictions = new t_param_preds::t_predictions;
-        p_predictions->fill(nullptr);
-    } else p_predictions = nullptr;
-
-#ifdef NEW_PATH
-    d_Kz_tune = kernel::cu_compute_path_distances(dw.d_tune_features_t, dw.d_tune_features_t, tune_F_rows, tune_F_rows, tune_F_cols, tune_F_cols, lag, lambda, 0, custream);
-#else
-    kernel::path::cu_kernel_xy(m, m, tune_cuml_rows, lag, dim, lag_tile_width, lambda, tau, gamma, dx_.d_tune_cuml, dx_.d_tune_cuml, dxsx.d_Kz_tune, dxsx.custream);
-#endif
-    magma_int_t info;
-    double total_score = 0;
-    cu_errchk(cudaMemcpyAsync(dxsx.d_K_epsco, dxsx.d_Kz_tune, mm_size, cudaMemcpyDeviceToDevice, dxsx.custream));
-#ifdef INSTANCE_WEIGHTS
-    if (d_tune_W)
-        solvers::G_augment_K<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(d_K_epsco, d_tune_W, epsco, m);
-    else
-#endif
-    solvers::G_set_diag<<<CU_BLOCKS_THREADS(m), 0, dxsx.custream>>>(dxsx.d_K_epsco, epsco, m);
-
-    UNROLL(C_max_j)
-    for (DTYPE(C_max_j) j = 0; j < C_max_j; ++j) {
-        const auto train_start = train_clamp + j * C_slide_skip;
-        const auto train_end = train_start + tune_len;
-        const auto test_start = train_end;
-        const auto test_len = m - test_start;
-        const auto test_len_n = test_len * n;
-        const auto test_n_size = test_len_n * sizeof(double);
-        assert(test_len <= train_len);
-#ifndef NDEBUG
-        LOG4_TRACE("Try " << j << ", train start " << train_start << ", train final " << train_end << ", test start " <<
-                          test_start << ", test len " << test_len << ", train len " << train_len << ", current score " << total_score);
-#endif
-        const auto best_solve_score = solvers::solve_hybrid(
-                dxsx.d_K_epsco + train_start + train_start * m, n, tune_len, dxsx.j_solved, magma_iters, OnlineMIMOSVR::C_rbt_threshold, dxsx.ma_queue, irwls_iters,
-                dx_.d_tune_label_chunk + train_start,
-                tune_n_size, dxsx.j_work, dxsx.custream, dxsx.cublas_H, dxsx.d_Kz_tune + train_start + train_start * m, labels_sf, tune_len_n, dxsx.d_best_weights, K_tune_len,
-                dxsx.j_K_work, info, iters_mul, m);
-        if (best_solve_score == common::C_bad_validation) {
-            LOG4_ERROR("Bad validation at slide " << j);
-            total_score = common::C_bad_validation;
-            break;
-        }
-        double predict_score;
+        const auto gamma = solvers::cu_calc_gamma(dxsx.K_train_off, train_len, dx_.train_label_off, calc_len, n, gamma_bias, dxsx.custream);
+        solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, dxsx.custream>>>(dxsx.d_K_train, K_train_len, gamma);
+        if (weighted)
+            thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.d_K_train, dxsx.d_K_train + K_train_len, dx_.d_train_W, dxsx.d_K_train, thrust::multiplies<double>());
+        const auto epsco = solvers::cu_calc_epsco(dxsx.K_train_off, dx_.train_label_off, calc_len, n, train_len, dxsx.custream);
+        t_param_preds::t_predictions_ptr p_predictions;
         if (PROPS.get_recombine_parameters()) {
-            cb_errchk(cublasDgemm(dxsx.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len, n, train_len, &one, dxsx.d_Kz_tune + test_start + train_start * m, m, dxsx.d_best_weights, train_len, &zero, dxsx.j_work, train_len));
-            predict_score = solvers::unscaled_distance(dx_.d_tune_label_chunk + test_start, dxsx.j_work, labels_sf, test_len, n, m, dxsx.custream);
-            if (!p_predictions->at(j)) p_predictions->at(j) = new arma::mat(test_len, n);
-            cu_errchk(cudaMemcpyAsync(p_predictions->at(j)->memptr(), dxsx.j_work, test_n_size, cudaMemcpyDeviceToHost, dxsx.custream));
-            cu_errchk(cudaStreamSynchronize(dxsx.custream));
-            *p_predictions->at(j) *= labels_sf;
-        } else {
-            copy_submat(dx_.d_tune_label_chunk, dxsx.j_work, m, test_start, 0, m, n, tune_len, cudaMemcpyDeviceToDevice, dxsx.custream);
-            cb_errchk(cublasDgemm(dxsx.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len, n, tune_len, &one, dxsx.d_Kz_tune + test_start + train_start * m, m, dxsx.d_best_weights, tune_len, &oneneg, dxsx.j_work, tune_len));
-#if 0 // Started crashing for no reason
-            cu_errchk(cudaStreamSynchronize(custream));
-            cb_errchk(cublasDasum(cublas_H, test_len_n, j_work, 1, &predict_score));
-            predict_score *= labels_sf / double(test_len_n);
+            p_predictions = new t_param_preds::t_predictions;
+            p_predictions->fill(nullptr);
+        } else p_predictions = nullptr;
+
+#ifdef NEW_PATH
+        d_Kz_tune = kernel::cu_compute_path_distances(dw.d_tune_features_t, dw.d_tune_features_t, tune_F_rows, tune_F_rows, tune_F_cols, tune_F_cols, lag, lambda, 0, custream);
 #else
-            // predict_score = labels_sf * solvers::swscore(dxsx.j_work, train_len, dw_.d_tune_label_chunk + test_start, m, test_len, n, dxsx.custream);
-            predict_score = labels_sf * solvers::meanabs(dxsx.j_work, test_len_n, dxsx.custream); // TODO Implement LD for j_work
+        kernel::path::cu_kernel_xy(m, m, tune_cuml_rows, lag, dim, lag_tile_width, lambda, tau, gamma, dx_.d_tune_cuml, dx_.d_tune_cuml, dxsx.d_Kz_tune, dxsx.custream);
 #endif
+        magma_int_t info;
+        double total_score = 0;
+        cu_errchk(cudaMemcpyAsync(dxsx.d_K_epsco, dxsx.d_Kz_tune, mm_size, cudaMemcpyDeviceToDevice, dxsx.custream));
+#ifdef INSTANCE_WEIGHTS
+        if (d_tune_W)
+            solvers::G_augment_K<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(d_K_epsco, d_tune_W, epsco, m);
+        else
+#endif
+        solvers::G_set_diag<<<CU_BLOCKS_THREADS(m), 0, dxsx.custream>>>(dxsx.d_K_epsco, epsco, m);
+
+        UNROLL(C_max_j)
+        for (DTYPE(C_max_j) j = 0; j < C_max_j; ++j) {
+            const auto train_start = train_clamp + j * C_slide_skip;
+            const auto train_end = train_start + tune_len;
+            const auto test_start = train_end;
+            const auto test_len = m - test_start;
+            const auto test_len_n = test_len * n;
+            const auto test_n_size = test_len_n * sizeof(double);
+            assert(test_len <= train_len);
+#ifndef NDEBUG
+            LOG4_TRACE("Try " << j << ", train start " << train_start << ", train final " << train_end << ", test start " <<
+                              test_start << ", test len " << test_len << ", train len " << train_len << ", current score " << total_score);
+#endif
+            const auto best_solve_score = solvers::solve_hybrid(
+                    dxsx.d_K_epsco + train_start + train_start * m, n, tune_len, dxsx.j_solved, magma_iters, OnlineMIMOSVR::C_rbt_threshold, dxsx.ma_queue, irwls_iters,
+                    dx_.d_tune_label_chunk + train_start,
+                    tune_n_size, dxsx.j_work, dxsx.custream, dxsx.cublas_H, dxsx.d_Kz_tune + train_start + train_start * m, labels_sf, tune_len_n, dxsx.d_best_weights, K_tune_len,
+                    dxsx.j_K_work, info, iters_mul, m);
+            if (best_solve_score == common::C_bad_validation) {
+                LOG4_ERROR("Bad validation at slide " << j);
+                total_score = common::C_bad_validation;
+                break;
+            }
+            double predict_score;
+            if (PROPS.get_recombine_parameters()) {
+                cb_errchk(cublasDgemm(dxsx.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
+                                      test_len, n, train_len, &one, dxsx.d_Kz_tune + test_start + train_start * m, m, dxsx.d_best_weights, train_len, &zero, dxsx.j_work,
+                                      train_len));
+                predict_score = solvers::unscaled_distance(dx_.d_tune_label_chunk + test_start, dxsx.j_work, labels_sf, test_len, n, m, dxsx.custream);
+                if (!p_predictions->at(j)) p_predictions->at(j) = new arma::mat(test_len, n);
+                cu_errchk(cudaMemcpyAsync(p_predictions->at(j)->memptr(), dxsx.j_work, test_n_size, cudaMemcpyDeviceToHost, dxsx.custream));
+                cu_errchk(cudaStreamSynchronize(dxsx.custream));
+                *p_predictions->at(j) *= labels_sf;
+            } else {
+                copy_submat(dx_.d_tune_label_chunk, dxsx.j_work, m, test_start, 0, m, n, tune_len, cudaMemcpyDeviceToDevice, dxsx.custream);
+                cb_errchk(cublasDgemm(dxsx.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
+                                      test_len, n, tune_len, &one, dxsx.d_Kz_tune + test_start + train_start * m, m, dxsx.d_best_weights, tune_len, &oneneg, dxsx.j_work,
+                                      tune_len));
+#if 0 // Started crashing for no reason
+                cu_errchk(cudaStreamSynchronize(custream));
+                cb_errchk(cublasDasum(cublas_H, test_len_n, j_work, 1, &predict_score));
+                predict_score *= labels_sf / double(test_len_n);
+#else
+                // predict_score = labels_sf * solvers::swscore(dxsx.j_work, train_len, dw_.d_tune_label_chunk + test_start, m, test_len, n, dxsx.custream);
+                predict_score = labels_sf * solvers::meanabs(dxsx.j_work, test_len_n, dxsx.custream); // TODO Implement LD for j_work
+#endif
+            }
+            LOG4_TRACE(
+                    "Try " << j << " kernel dimensions " << train_len << "x" << train_len << ", delta " << common::C_itersolve_delta << ", range " << common::C_itersolve_range <<
+                           ", solution " << train_len << "x" << n << ", test " << test_len << "x" << n << ", score " << best_solve_score << ", former total score " << total_score);
+            total_score += predict_score;
         }
-        LOG4_TRACE("Try " << j << " kernel dimensions " << train_len << "x" << train_len << ", delta " << common::C_itersolve_delta << ", range " << common::C_itersolve_range <<
-                          ", solution " << train_len << "x" << n << ", test " << test_len << "x" << n << ", score " << best_solve_score << ", former total score " << total_score);
-        total_score += predict_score;
+        if (total_score < best_total_score) {
+            best_total_score = total_score;
+            best_gamma = gamma;
+            best_epsco = epsco;
+            p_best_predictions = p_predictions;
+        }
     }
-    return {total_score / C_max_j, gamma, epsco, p_predictions};
+    return {best_total_score / C_max_j, best_gamma, best_epsco, p_best_predictions};
 }
 
 #if 0

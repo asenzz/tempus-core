@@ -1,25 +1,22 @@
 #pragma once
 
 #include <set>
-
-#include <DAO/AbstractDAO.hpp>
-#include <model/DQScalingFactor.hpp>
+#include "DAO/AbstractDAO.hpp"
+#include "model/DQScalingFactor.hpp"
 
 namespace svr {
 namespace dao {
-
 
 class DQScalingFactorDAO : public AbstractDAO
 {
 public:
     static DQScalingFactorDAO *build(
-            svr::common::PropertiesFileReader &sql_properties,
-            svr::dao::DataSource &data_source,
-            svr::common::ConcreteDaoType dao_type,
-            bool use_threadsafe_dao);
+            common::PropertiesReader &sql_properties,
+            dao::DataSource &data_source,
+            const common::ConcreteDaoType dao_type,
+            const bool use_threadsafe_dao);
 
-    explicit DQScalingFactorDAO(svr::common::PropertiesFileReader &sql_properties,
-                                svr::dao::DataSource &data_source);
+    explicit DQScalingFactorDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
 
     virtual bigint get_next_id() = 0;
 
@@ -29,10 +26,10 @@ public:
 
     virtual int remove(const datamodel::DQScalingFactor_ptr &dq_scaling_factor) = 0;
 
-    virtual svr::datamodel::dq_scaling_factor_container_t find_all_by_model_id(const bigint model_id) = 0;
+    virtual datamodel::dq_scaling_factor_container_t find_all_by_model_id(const bigint model_id) = 0;
 };
+
+using ScalingFactorDAO_ptr = std::shared_ptr<dao::DQScalingFactorDAO>;
 
 } // namespace dao
 } // namespace svr
-
-using ScalingFactorDAO_ptr = std::shared_ptr<svr::dao::DQScalingFactorDAO>;

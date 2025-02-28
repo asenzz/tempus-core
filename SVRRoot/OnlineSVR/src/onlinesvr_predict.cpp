@@ -17,6 +17,7 @@
 #include "cuqrsolve.cuh"
 #include "DQScalingFactorService.hpp"
 #include "align_features.cuh"
+#include "appcontext.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -47,29 +48,27 @@ arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uve
 arma::mat OnlineMIMOSVR::feature_chunk_t(const arma::uvec &ixs_i)
 {
     const auto &fm = front(param_set)->get_feature_mechanics();
-    if (fm.needs_tuning()) {
-        LOG4_WARN("Feature alignment parameters not present.");
-        return p_features->rows(ixs_i).t();
-    }
+    if (fm.needs_tuning()) LOG4_THROW("Feature alignment parameters not present.");
     return sst(*p_features, fm, ixs_i);
 }
 
 arma::mat OnlineMIMOSVR::predict_chunk_t(const arma::mat &x_predict)
 {
     const auto &fm = front(param_set)->get_feature_mechanics();
-    if (fm.needs_tuning()) {
-        LOG4_WARN("Feature alignment parameters not present.");
-        return x_predict.t();
-    }
+    if (fm.needs_tuning()) LOG4_WARN("Feature alignment parameters not present.");
     return sst(arma::join_cols(*p_features, x_predict), fm, arma::regspace<arma::uvec>(p_features->n_rows, p_features->n_rows + x_predict.n_rows - 1));
 }
 
 arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
 {
     if (is_manifold()) return manifold_predict(x_predict);
+
+    const auto dev_ct = common::gpu_handler<>::get().get_gpu_devices_count();
+
     const auto x_predict_t = predict_chunk_t(x_predict);
     arma::mat prediction;
     t_omp_lock predict_l;
+    const auto weight_cols = PROPS.get_weight_columns();
 #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict.n_cols * weight_chunks.front().n_cols)
 #pragma omp single
     {
@@ -79,29 +78,40 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
             arma::mat scaled_x_predict_t = x_predict_t;
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
             business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
-#ifdef SINGLE_CHUNK_LEVEL // TODO Remove and properly distribute GPU load
-            static const auto n_gpu = common::gpu_handler<>::get().get_gpu_devices_count();
-            const auto chunk_predict_K = true /* time == bpt::not_a_date_time */ ?
-                                         prepare_Ky(*p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t) :
-                                         prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time, n_gpu);
-#else
             const auto chunk_predict_K = time == bpt::not_a_date_time ?
                                          prepare_Ky(*p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t) :
-                                         prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time);
-#endif
+                                         prepare_Ky(ccache(), *p_params, train_feature_chunks_t[chunk_ix], scaled_x_predict_t, time, last_trained_time, dev_ct);
+            const uint16_t display_sample = common::C_integration_test_validation_window ? 12 : x_predict.n_rows - 1;
             LOG4_TRACE(
-                    "Predicting " << time << ", predict features " << common::present(x_predict) << ", indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) << ", size " << arma::size(ixs[chunk_ix]) <<
-                                  ", parameters " << *p_params << ", K " << common::present(*chunk_predict_K) << ", w " << common::present(weight_chunks[chunk_ix]) <<
-                                  ", scaled predict " << common::present(scaled_x_predict_t) << ", chunk sf " << chunk_sf << "train features "
-                                  << common::present(train_feature_chunks_t[chunk_ix]) << ", last trained time " << last_trained_time);
+                    "Predicting " << time << ", predict features " << common::present(x_predict.row(display_sample)) << ", indexes " << common::present_chunk(ixs[chunk_ix], C_chunk_header) <<
+                    ", size " << arma::size(ixs[chunk_ix]) << ", parameters " << *p_params << ", chunk sf " << chunk_sf << ", last trained time " << last_trained_time <<
+                    ", K " << common::present(arma::mat(chunk_predict_K->row(display_sample))) <<
+                    ", w " << common::present(weight_chunks[chunk_ix]) <<
+                    ", transposed predict " << common::present(x_predict_t.col(display_sample)) <<
+                    ", scaled predict " << common::present(scaled_x_predict_t.col(display_sample)) <<
+                    ", train features " << common::present(train_feature_chunks_t[chunk_ix]) <<
+                    ", params trims " << common::present(p_params->get_feature_mechanics().trims.front()) <<
+                    ", params shifts " << common::present(p_params->get_feature_mechanics().shifts) <<
+                    ", params stretches " << common::present(p_params->get_feature_mechanics().stretches));
+            if (false) { // time == time_to_watch) {
+                x_predict.save("x_predict.csv", arma::csv_ascii);
+                x_predict_t.save("x_predict_t.csv", arma::csv_ascii);
+                scaled_x_predict_t.save("scaled_x_predict_t.csv", arma::csv_ascii);
+                train_feature_chunks_t[chunk_ix].save("train_feature_chunks_t.csv", arma::csv_ascii);
+            }
             // LOG4_TRACE("K predict is " << *chunk_predict_K);
-            arma::mat multiplicated(chunk_predict_K->n_rows, weight_chunks[chunk_ix].n_cols);
-            OMP_TASKLOOP_(chunk_predict_K->n_rows * weight_chunks[chunk_ix].n_cols, collapse(2))
+            arma::mat multiplicated(chunk_predict_K->n_rows, p_labels->n_cols, arma::fill::zeros);
+            OMP_TASKLOOP_(chunk_predict_K->n_rows * weight_chunks[chunk_ix].n_cols, SSIMD collapse(3))
             for (uint32_t r = 0; r < chunk_predict_K->n_rows; ++r)
-                for (uint32_t c = 0; c < weight_chunks[chunk_ix].n_cols; ++c)
-                    multiplicated(r, c) = arma::as_scalar(chunk_predict_K->row(r) * weight_chunks[chunk_ix].col(c));// - p_params->get_svr_epsilon();
+                for (uint32_t cc = 0; cc < weight_cols; ++cc)
+                    for (uint32_t c = 0; c < weight_chunks[chunk_ix].n_cols / weight_cols; ++c) {
+                        const auto &wsf = weight_scaling_factors.scaling_factors[std::make_pair(chunk_ix, cc)];
+                        multiplicated(r, c) += common::unscale(
+                                arma::as_scalar(chunk_predict_K->row(r) * weight_chunks[chunk_ix].col(weight_cols * c + cc).eval()), wsf.first, wsf.second); // - p_params->get_svr_epsilon();
+                    }
             business::DQScalingFactorService::unscale_labels(
-                    *business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true), multiplicated);
+                    *business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true),
+                    multiplicated);
             predict_l.set();
             if (prediction.empty())
                 prediction = multiplicated;
@@ -110,7 +120,9 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
             predict_l.unset();
         }
     }
-    return prediction / ixs.size();
+    const arma::mat res = prediction / ixs.size();
+    LOG4_TRACE("Returning " << common::to_string(res, res.n_elem));
+    return res;
 }
 
 // TODO Review and test

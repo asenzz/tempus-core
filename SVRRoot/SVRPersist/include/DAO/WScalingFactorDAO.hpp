@@ -2,17 +2,18 @@
 
 #include "DAO/AbstractDAO.hpp"
 
-namespace svr { namespace datamodel { class WScalingFactor; using WScalingFactor_ptr = std::shared_ptr<WScalingFactor>; }}
-
 namespace svr {
+
+namespace datamodel { class WScalingFactor; using WScalingFactor_ptr = std::shared_ptr<WScalingFactor>; }
+
 namespace dao {
 
 class WScalingFactorDAO : public AbstractDAO
 {
 public:
-    static WScalingFactorDAO *build(common::PropertiesFileReader &tempus_config, DataSource &data_source, common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static WScalingFactorDAO *build(common::PropertiesReader &tempus_config, DataSource &data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit WScalingFactorDAO(common::PropertiesFileReader &tempus_config, DataSource &data_source);
+    explicit WScalingFactorDAO(common::PropertiesReader &tempus_config, DataSource &data_source);
 
     virtual bigint get_next_id() = 0;
 

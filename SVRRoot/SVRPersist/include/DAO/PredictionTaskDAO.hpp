@@ -2,28 +2,29 @@
 
 #include <DAO/AbstractDAO.hpp>
 
-namespace svr { namespace datamodel { class PredictionTask; } }
-using PredictionTask_ptr = std::shared_ptr<svr::datamodel::PredictionTask>;
+namespace svr {
 
-namespace svr{
-namespace dao{
+namespace datamodel { class PredictionTask; }
+
+using PredictionTask_ptr = std::shared_ptr<datamodel::PredictionTask>;
+
+namespace dao {
 
 class PredictionTaskDAO: public AbstractDAO
 {
 public:
-    static PredictionTaskDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static PredictionTaskDAO *build(common::PropertiesReader &sql_properties, dao::DataSource& data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit PredictionTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PredictionTaskDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual bigint get_next_id() = 0;
     virtual bool exists(const bigint id) = 0;
     virtual int save(const PredictionTask_ptr& predictionTask) = 0;
     virtual int remove(const PredictionTask_ptr& predictionTask) = 0;
     virtual PredictionTask_ptr get_by_id(const bigint id) = 0;
-
 };
+
+using PredictionTaskDAO_ptr = std::shared_ptr<dao::PredictionTaskDAO>;
 
 } /* namespace dao */
 } /* namespace svr */
-
-using PredictionTaskDAO_ptr = std::shared_ptr<svr::dao::PredictionTaskDAO>;

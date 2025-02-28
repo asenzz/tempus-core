@@ -3,16 +3,14 @@
 #include "DAO/AbstractDAO.hpp"
 #include "model/Dataset.hpp"
 
-
 namespace svr {
 namespace dao {
 
-
 class DatasetDAO : public AbstractDAO{
 public:
-    static DatasetDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static DatasetDAO *build(common::PropertiesReader& sql_properties, dao::DataSource& data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit DatasetDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit DatasetDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual bigint get_next_id() = 0;
 
@@ -38,7 +36,7 @@ public:
     virtual UserDatasetPairs get_active_datasets() = 0;
 };
 
-}
-}
+using DatasetDAO_ptr = std::shared_ptr<dao::DatasetDAO>;
 
-using DatasetDAO_ptr = std::shared_ptr<svr::dao::DatasetDAO>;
+}
+}

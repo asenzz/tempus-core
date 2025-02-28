@@ -9,8 +9,7 @@ namespace dao {
 
 std::recursive_mutex &common_mutex_instance();
 
-template<class ConcreteDao>
-class TsDaoBase {
+template<class ConcreteDao> class TsDaoBase {
 protected:
     std::recursive_mutex &mutex;
     std::unique_ptr<ConcreteDao> dao;
@@ -33,8 +32,8 @@ public:
 
 #define THREADSAFE_DAO_CLASS_DECLARATION_HEADER(TS_DAO, BASIC_DAO) class TS_DAO : public BASIC_DAO, public TsDaoBase<BASIC_DAO> { \
 public: \
-    TS_DAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, std::unique_ptr<BASIC_DAO> dao);
+    TS_DAO(svr::common::PropertiesReader& sql_properties, svr::dao::DataSource& data_source, std::unique_ptr<BASIC_DAO> dao);
 
-#define DEFINE_THREADSAFE_DAO_CONSTRUCTOR(TS_DAO, BASIC_DAO) TS_DAO::TS_DAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, std::unique_ptr<BASIC_DAO> dao) \
+#define DEFINE_THREADSAFE_DAO_CONSTRUCTOR(TS_DAO, BASIC_DAO) TS_DAO::TS_DAO(svr::common::PropertiesReader& sql_properties, svr::dao::DataSource& data_source, std::unique_ptr<BASIC_DAO> dao) \
 : BASIC_DAO(sql_properties, data_source) \
 , TsDaoBase<BASIC_DAO>(std::move(dao))

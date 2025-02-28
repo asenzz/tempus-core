@@ -1,13 +1,12 @@
+#include "DAO/DataSource.hpp"
+#include "DAO/ScalingFactorsTaskRowMapper.hpp"
 #include "PgScalingFactorsTaskDAO.hpp"
-
-#include <DAO/DataSource.hpp>
-#include <DAO/ScalingFactorsTaskRowMapper.hpp>
 
 namespace svr {
 namespace dao {
 
-PgScalingFactorsTaskDAO::PgScalingFactorsTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-: ScalingFactorsTaskDAO(tempus_config, data_source)
+PgScalingFactorsTaskDAO::PgScalingFactorsTaskDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
+        : ScalingFactorsTaskDAO(tempus_config, data_source)
 {}
 
 
@@ -18,14 +17,12 @@ bigint PgScalingFactorsTaskDAO::get_next_id()
 
 bool PgScalingFactorsTaskDAO::exists(const bigint id)
 {
-    return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"),
-                                           id) == 1;
+    return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"), id) == 1;
 }
 
 int PgScalingFactorsTaskDAO::save(const ScalingFactorsTask_ptr &scalingFactorsTask)
 {
-    if(!scalingFactorsTask->get_id())
-    {
+    if (!scalingFactorsTask->get_id()) {
         scalingFactorsTask->set_id(get_next_id());
 
         return data_source.update(AbstractDAO::get_sql("save"),
@@ -43,13 +40,11 @@ int PgScalingFactorsTaskDAO::save(const ScalingFactorsTask_ptr &scalingFactorsTa
 
 int PgScalingFactorsTaskDAO::remove(const ScalingFactorsTask_ptr &scalingFactorsTask)
 {
-    if (scalingFactorsTask->get_id() == 0) {
-        return 0;
-    }
+    if (scalingFactorsTask->get_id() == 0) return 0;
     return data_source.update(AbstractDAO::get_sql("remove"), scalingFactorsTask->get_id());
 }
 
-    ScalingFactorsTask_ptr PgScalingFactorsTaskDAO::get_by_id(const bigint id)
+ScalingFactorsTask_ptr PgScalingFactorsTaskDAO::get_by_id(const bigint id)
 {
     ScalingFactorsTaskRowMapper row_mapper;
     return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_id"), id);

@@ -1,0 +1,1 @@
+Copy this folder's contents and all subfolders into your Meta Trader 5 installation's MQL5 subdirectory overwritting any files there.

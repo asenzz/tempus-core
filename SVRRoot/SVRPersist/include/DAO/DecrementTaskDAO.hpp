@@ -2,18 +2,20 @@
 
 #include <DAO/AbstractDAO.hpp>
 
-namespace svr { namespace datamodel { class DecrementTask; } }
-using DecrementTask_ptr = std::shared_ptr<svr::datamodel::DecrementTask>;
-
 namespace svr {
+
+namespace datamodel { class DecrementTask; }
+
 namespace dao {
+
+using DecrementTask_ptr = std::shared_ptr<datamodel::DecrementTask>;
 
 class DecrementTaskDAO : public AbstractDAO
 {
 public:
-    static DecrementTaskDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static DecrementTaskDAO * build(common::PropertiesReader& sql_properties, dao::DataSource& data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit DecrementTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit DecrementTaskDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual bigint get_next_id() = 0;
     virtual bool exists(const bigint id) = 0;
@@ -22,7 +24,7 @@ public:
     virtual DecrementTask_ptr get_by_id(const bigint id) = 0;
 };
 
+using DecrementTaskDAO_ptr = std::shared_ptr<dao::DecrementTaskDAO>;
+
 } // namespace dao
 } // namespace svr
-
-using DecrementTaskDAO_ptr = std::shared_ptr<svr::dao::DecrementTaskDAO>;

@@ -5,6 +5,7 @@
 #ifndef SVR_SCALINGFACTORSERVICE_HPP
 #define SVR_SCALINGFACTORSERVICE_HPP
 
+#include <cublas_v2.h>
 #include <armadillo>
 #include "util/math_utils.hpp"
 
@@ -25,9 +26,17 @@ public:
 
     template<typename T> inline static T &scale_I(T &v)
     {
-        const auto [dc, sf] = calc(v);
+        double sf, dc;
+        return scale_calc_I(v, sf, dc);
+    }
+
+    template<typename T> inline static T &scale_calc_I(T &v, double &sf, double &dc)
+    {
+        std::tie(dc, sf) = calc(v);
         return common::scale_I(v, sf, dc);
     }
+
+    static void cu_scale_calc_I(RPTR(double) v, const size_t n, double &sf, double &dc, const cudaStream_t custream, const cublasHandle_t cublas_H);
 
     template<typename T> inline static T scale(const T &v, const double sf, const double dc)
     {

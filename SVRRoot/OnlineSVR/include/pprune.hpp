@@ -42,22 +42,22 @@ public:
     };
     static constexpr e_algo_type C_default_algo = e_algo_type::e_biteopt;
 
-    pprune(const e_algo_type algo_type, const unsigned n_particles, const arma::mat &bounds,
+    pprune(const e_algo_type algo_type, const uint32_t n_particles, const arma::mat &bounds,
            const t_pprune_cost_fun &cost_f,
-           const unsigned maxfun = 50,
+           const uint32_t maxfun = 50,
            double rhobeg = 0,
            double rhoend = 0,
            arma::mat x0 = {}, const arma::vec &pows = {},
-           const unsigned depth = C_biteopt_depth);
+           const uint16_t depth = C_biteopt_depth);
 
-    void pprune_biteopt(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0, const unsigned depth);
+    void pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0, const uint16_t depth);
 
-    void pprune_knitro(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+    void pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0);
 
-    void pprune_prima(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+    void pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0);
 
     void pprune_petsc(
-            const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+            const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0);
 
     static void calfun(CPTRd x, double *const f, t_calfun_data_ptr const calfun_data);
 

@@ -10,9 +10,8 @@
 
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
-#define REMOVE_OUTLIERS
 // #define INSTANCE_WEIGHTS
-#define KERNEL_PARAM_3
+#define TUNE_TAU
 
 // #define VMD_ONLY
 #define EMD_ONLY

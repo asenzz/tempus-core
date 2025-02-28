@@ -365,7 +365,7 @@ template<> float sumabs(const arma::Mat<float> &m)
 
 template<> double meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
 {
-    return cblas_dasum(m.n_elem, m.mem, 1) / double(m.n_elem);
+    return cblas_dasum(m.n_elem, m.mem, 1) / m.n_elem;
 }
 
 template<> double meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
@@ -485,7 +485,7 @@ template<> arma::mat &unscale_I(arma::mat &m, const double sf, const double dc)
 
 std::atomic<double> pseudo_random_dev::state = .54321;
 
-constexpr unsigned max_D = 42;
+constexpr uint32_t max_D = 64;
 
 // #define INIT_SOBOL
 
@@ -493,36 +493,33 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
 {
 #ifdef INIT_SOBOL
     if (!sobol_ctr) sobol_ctr = init_sobol_ctr();
-#else
-    auto gen = reproducibly_seeded_64<xso::rng64>();
-    std::uniform_real_distribution<double> dis(0., 1.);
 #endif
-    const unsigned n = x0.n_cols;
-    const unsigned D = x0.n_rows;
+    const uint32_t n = x0.n_cols;
+    const uint32_t D = x0.n_rows;
     if (bounds.n_cols != 2 || bounds.n_rows != D) THROW_EX_FS(std::invalid_argument, "n " << n << ", D " << D << ", bounds " << arma::size(bounds));
     const arma::vec range = bounds.col(1) - bounds.col(0);
     bool init_random = n < 2;
     const double n_1 = n - 1;
-    OMP_FOR_(n * D, simd collapse(2) firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
-    for (unsigned i = 0; i < n; ++i) {
-        for (unsigned j = 0; j < D; ++j) {
+    auto gen = reproducibly_seeded_64<xso::rng64>();
+    std::uniform_real_distribution<double> dis(0., 1.);
+    OMP_FOR_(n, ordered collapse(2) firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
+    for (uint32_t i = 0; i < n; ++i) {
+        const auto i_n_1 = double(i) / n_1;
+        for (uint32_t j = 0; j < D; ++j) {
             const auto pow_j = pows.empty() ? 1. : pows[j];
-            if (init_random || j >= max_D) { // Use a pseudo-random number
+            if (init_random || j >= max_D) // Use a pseudo-random number
 #ifdef INIT_SOBOL
-                x0(j, i) = range[j] * std::pow(sobolnum(j, sobol_ctr + i), pow_j) + bounds(j, 0);
+                x0(j, i) = sobolnum(j, sobol_ctr + i);
 #else
-                x0(j, i) = std::pow(dis(gen), pow_j);
+#pragma omp ordered
+                x0(j, i) = dis(gen);
 #endif
+            else  // Produce equidistant grid of parameter combinations
+                x0(j, i) = std::fmod<long double>(std::pow<long double>(2, j) * i_n_1, 1);
 #ifndef NDEBUG
-                LOG4_TRACE("Random particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow "
-                                              << pow_j);
+            LOG4_TRACE("Particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow " << pow_j);
 #endif
-            } else { // Produce equispaced grid
-                x0(j, i) = range[j] * std::pow(std::fmod(std::pow<double>(2, j) * (i / n_1), 1.), pow_j) + bounds(j, 0);
-#ifndef NDEBUG
-                LOG4_TRACE("Equispaced particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0));
-#endif
-            }
+            x0(j, i) = std::pow(range[j], pow_j) * x0(j, i) + bounds(j, 0);
         }
     }
     if (x0.has_nonfinite()) LOG4_THROW("Illegal init values in " << arma::size(x0));

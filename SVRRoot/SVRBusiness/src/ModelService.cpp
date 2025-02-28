@@ -165,8 +165,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     const auto stepping = model.get_gradient()->get_dataset()->get_multistep();
     arma::vec predicted_batch(num_preds), predicted_online(num_preds), actual = arma::mean(labels.rows(start_ix, ix_fini), 1), lastknown = last_knowns.rows(start_ix, ix_fini);
 #ifdef EMO_DIFF
-    OMP_FOR(actual.n_cols)
-    for (DTYPE(actual.n_cols) i = 0; i < actual.n_cols; ++i) actual.col(i) = actual.col(i) + lastknown; // common::sexp<double>(actual.col(i)) + lastknown;
+    OMP_FOR_i(actual.n_cols) actual.col(i) += lastknown; // common::sexp<double>(actual.col(i)) + lastknown;
 #endif
     double sum_absdiff_batch = 0, sum_absdiff_lk = 0, sum_abs_labels = 0, sum_absdiff_online = 0;
     double batch_correct_directions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions = 0;
@@ -210,7 +209,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
                                     ", step " << model.get_step() << " at " << times[ix_future]);
             predicted_online[ix] = stepping * cont_predicted_online.front()->at(level);
 #ifdef EMO_DIFF
-            predicted_online[ix] = predicted_online[ix] + lastknown[ix]; // common::sexp(predicted_online[ix]) + lastknown[ix];
+            predicted_online[ix] += lastknown[ix]; // TODO Test common::sexp(predicted_online[ix]) + lastknown[ix];
 #endif
             const double cur_absdiff_online = std::abs(predicted_online[ix] - actual[ix]);
             const double cur_alpha_pct_online = common::alpha(cur_absdiff_lk, cur_absdiff_online);
@@ -512,7 +511,7 @@ ModelService::prepare_labels(arma::mat &all_labels, arma::vec &all_last_knowns, 
 #ifdef EMO_DIFF
     const auto coef_lag_ = coef_lag + 1;
 #else
-    const auto coef_lag_ = coef_lag;
+#define coef_lag_ coef_lag
 #endif
     // LOG4_TRACE("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data.front()->get_value_time() <<
     //                              " until " << main_data.back()->get_value_time() << ", main to aux period ratio " << main_to_aux_period_ratio);
@@ -633,8 +632,6 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
     const auto coef_lag = datamodel::OnlineMIMOSVR::C_features_superset_coef * lag;
 #ifdef EMO_DIFF
     const auto coef_lag_ = coef_lag + 1;
-#else
-    const auto coef_lag_ = coef_lag;
 #endif
     const uint16_t levels = adjacent_levels.size();
     const uint16_t n_queues = feat_queues.size();
@@ -762,6 +759,9 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
     LOG4_END();
 }
 
+#ifdef coef_lag_
+#undef coef_lag_
+#endif
 
 void ModelService::do_features(
         arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels,
@@ -830,7 +830,7 @@ ModelService::prepare_features(arma::mat &out_features, const data_row_container
 #ifdef EMO_DIFF
     const auto coef_lag_ = coef_lag + 1;
 #else
-    const auto coef_lag_ = coef_lag;
+#define coef_lag_ coef_lag
 #endif
     const uint16_t levels = adjacent_levels.size();
     const uint16_t n_queues = feat_queues.size();
@@ -1009,10 +1009,10 @@ ModelService::predict(
     }
 #ifdef EMO_DIFF
     const auto lk = get_last_knowns(ensemble, model.get_decon_level(), predict_features.times, resolution);
-    OMP_FOR_i(prediction.n_cols) prediction.col(i) = prediction.col(i) + lk; // common::sexp<double>(prediction.col(i)) + lk;
+    OMP_FOR_i(prediction.n_cols) prediction.col(i) += lk; // common::sexp<double>(prediction.col(i)) + lk;
 #endif
-    if (model.get_gradients().front()->get_dataset()->get_multistep())
-        prediction /= model.get_gradients().front()->get_dataset()->get_multistep();
+    const auto multistep = model.get_gradients().front()->get_dataset()->get_multistep();
+    if (multistep > 1) prediction /= multistep;
     const tbb::mutex::scoped_lock l(insemx);
     datamodel::DataRow::insert_rows(out, prediction, predict_features.times, model.get_decon_level(), ensemble.get_level_ct(), true);
     LOG4_TRACE("Predicted " << common::present(prediction) << " for " << predict_features.times.size() << " times, container " << common::to_string(out));

@@ -1,8 +1,14 @@
-#include <unordered_set>
-#include <unordered_map>
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <regex>
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+
+#include <unordered_set>
 #include <cppcms/json.h>
-#include <cppcms/session_interface.h>
 #include "controller/RequestController.hpp"
 #include "controller/MainController.hpp"
 #include "appcontext.hpp"
@@ -138,7 +144,7 @@ void RequestView::getMultivalResults(json::object data)
         }
         it_jsonarray->set(aresponse->value_column, common::to_string(aresponse->value));
 
-        if (svr::common::PropertiesFileReader::S_log_threshold > boost::log::trivial::severity_level::trace) continue;
+        if (common::AppConfig::S_log_threshold > boost::log::trivial::severity_level::trace) continue;
         std::stringstream s;
         it_jsonarray->save(s, json::compact);
         LOG4_TRACE("Added column " << aresponse->value_column << ", value " << aresponse->value << " to row " << s.str());

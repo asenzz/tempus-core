@@ -244,10 +244,9 @@ arma::mat &OnlineMIMOSVR::get_labels()
 bool OnlineMIMOSVR::needs_tuning(const t_param_set &param_set)
 {
     if (PROPS.get_tune_parameters()) return true;
-
-    bool res = false;
-    for (const auto &p: param_set) res |= p->get_svr_kernel_param() == 0;
-    return res;
+    for (const auto &p: param_set)
+        if (p->get_svr_kernel_param() == 0) return true;
+    return false;
 }
 
 
@@ -328,52 +327,6 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m,
 #endif
 }
 
-#if 0 // Bandicoot
-coot::mat OnlineMIMOSVR::solve_irwls(const coot::mat &K_epsco, const coot::mat &K, const coot::mat &rhs, const size_t iters, const size_t gpu_id)
-{
-    magma_queue_t magma_queue = nullptr;
-    magma_init(); // initialize Magma
-    magma_queue_create(gpu_id, &magma_queue);
-    if (!magma_queue) LOG4_THROW("Failed creating MAGMA queue.");
-    const auto m = K.n_rows;
-    const auto b_n = rhs.n_cols;
-    coot::mat solved = rhs;
-    coot::get_rt().synchronise();
-    magma_int_t err, info;
-    if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, K.get_dev_mem(false).cuda_mem_ptr, m, solved.get_dev_mem(false).cuda_mem_ptr, m, &info)) < MAGMA_SUCCESS)
-        LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
-
-    auto best_sae = std::numeric_limits<double>::infinity();
-    coot::mat best_solution = solved;
-    size_t best_iter = 0;
-UNROLL()
-    for (size_t i = 1; i < iters; ++i) {
-        const coot::mat error_mat = coot::abs(K * solved - rhs);
-        const double this_sae = coot::accu(error_mat);
-        if (this_sae < best_sae) {
-            LOG4_TRACE("IRWLS iteration " << i << ", SAE " << this_sae << ", kernel dimensions " << coot::size(K) << ", best SAE " << best_sae);
-            best_sae = this_sae;
-            best_solution = solved;
-            best_iter = i;
-        }
-        const coot::mat mult = coot::sqrt(error_mat + common::C_itersolve_delta / (double(i) * common::C_itersolve_range / double(iters)));
-        const coot::mat left = (mult * coot::ones<coot::mat>(mult.n_cols, K.n_cols)) % K_epsco;
-        solved = rhs % mult;
-        coot::coot_synchronise();
-        if ((err = magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, left.get_dev_mem(false).cuda_mem_ptr, m, solved.get_dev_mem(false).cuda_mem_ptr, m, &info)) < MAGMA_SUCCESS)
-            LOG4_THROW("Failed calling magma_dgesv_rbt with error code " << err << ", info " << info);
-        //magma_queue_sync(queue);
-    }
-
-    magma_queue_destroy(magma_queue);
-
-    if ((err = magma_finalize()) < MAGMA_SUCCESS)
-        LOG4_THROW("Failed calling magma_finalize with error code " << err);
-    LOG4_DEBUG("IRWLS best iteration " << best_iter << ", MAE " << best_sae / double(solved.n_elem) << ", kernel dimensions " << coot::size(K) <<
-                                       ", delta " << common::C_itersolve_delta << ", range " << common::C_itersolve_range << ", solution " << coot::size(solved));
-    return best_solution;
-}
-#endif
 
 arma::mat OnlineMIMOSVR::self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs)
 {
@@ -405,34 +358,51 @@ PetscErrorCode FormFunction(SNES snes, Vec x, Vec f, void *ctx)
 }
 
 
-void OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters)
+void OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint32_t iters, t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk)
 {
-    if (arma::size(rhs) != arma::size(solved)) solved.set_size(arma::size(rhs));
-    const auto lim = std::abs(common::mean(rhs) / common::mean(K) / K.n_cols);
+    if (solved.n_cols != rhs.n_cols * PROPS.get_weight_columns() || solved.n_rows != rhs.n_rows) solved.set_size(rhs.n_rows, rhs.n_cols * PROPS.get_weight_columns());
+
+    const auto lim = 1e-2 * common::meanabs(rhs) / common::meanabs(K);
     const auto rhs_size = rhs.n_elem * sizeof(double);
 
 #if 1
-
-    solvers::score_weights sw(K, rhs, K.n_rows, rhs.n_cols, rhs.n_elem, K.n_elem);
-    constexpr uint16_t C_hybrid_solve_threshold = 16000; // CUDA score seems to shave off 2% of alpha
+    arma::mat residuals = rhs;
+    const solvers::score_weights sw(K, rhs, K.n_rows, rhs.n_cols, rhs.n_elem, K.n_elem);
+    constexpr uint16_t C_hybrid_solve_threshold = 1; // 2e4; // CUDA scoring seems to shave off 2% of alpha
+    const uint32_t n_rows = K.n_rows;
+    const uint32_t n_cols = rhs.n_cols;
+    const auto K_epsco_ptr = K.mem;
+    const auto residuals_ptr = residuals.mem;
+    const auto n_residuals = residuals.n_elem;
     const auto loss_fun =
-            K.n_rows < C_hybrid_solve_threshold ?
-            (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size](CPTRd x, RPTR(double) f) {
+            n_rows < C_hybrid_solve_threshold ?
+            (optimizer::t_pprune_cost_fun) [K_epsco_ptr, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
                 auto tmp = (double *) alloca(rhs_size);
-                self_predict(K.n_rows, rhs.n_cols, K.mem, x, rhs.mem, tmp);
-                *f = cblas_dasum(rhs.n_elem, tmp, 1);
-            } : (optimizer::t_pprune_cost_fun) [&K, &rhs, rhs_size, &sw](CPTRd x, RPTR(double) f) {
+                self_predict(n_rows, n_cols, K_epsco_ptr, x, residuals_ptr, tmp);
+                *f = cblas_dasum(n_residuals, tmp, 1);
+            } : (optimizer::t_pprune_cost_fun) [&sw](CPTRd x, RPTR(double) f) {
                 *f = sw(x);
-                if (std::isnormal(*f)) return;
-                auto tmp = (double *) alloca(rhs_size);
-                self_predict(K.n_rows, rhs.n_cols, K.mem, x, rhs.mem, tmp);
-                *f = cblas_dasum(rhs.n_elem, tmp, 1);
             };
-    arma::mat bounds(rhs.n_elem, 2);
+    arma::mat bounds(n_residuals, 2);
     bounds.col(0).fill(-lim);
     bounds.col(1).fill(lim);
-    const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, C_solve_opt_particles, bounds, loss_fun, iters, 0, 0, solved);
-    memcpy(solved.memptr(), res.best_parameters.mem, rhs_size);
+
+    UNROLL()
+    for (uint16_t i = 0; i < PROPS.get_weight_columns(); ++i) {
+        {
+            const tbb::mutex::scoped_lock l(weight_scaling_factors.mx);
+            const auto &sf = weight_scaling_factors.scaling_factors[std::pair{chunk, i}];
+            if (i) (void) business::ScalingFactorService::scale_I(residuals, sf.first, sf.second);
+        }
+        const auto start_col = i * rhs.n_cols;
+        const auto end_col = std::min(solved.n_cols - 1, start_col + rhs.n_cols - 1);
+        const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, C_solve_opt_particles, bounds, loss_fun, iters, 0, 0, solved.cols(start_col, end_col));
+        solved.cols(start_col, end_col) = res.best_parameters;
+        LOG4_TRACE("Solved column " << i << " with score " << res.best_score << ", limit " << lim << ", residuals " << common::present(residuals) << ", parameters " <<
+            common::present(res.best_parameters) << ", K " << common::present(K));
+        residuals -= K * solved.cols(start_col, end_col);
+    }
+
 #else // Solve using PETSc
 
     Vec x, xl, xu, b;                       // Solution and RHS vectors
@@ -527,60 +497,10 @@ void OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::ma
 #endif
 }
 
-
-void OnlineMIMOSVR::solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters)
-{
-    double *d_K_epsco, *d_K, *d_labels, *d_solved, *d_rwork, *d_lwork;
-    const size_t K_size = K.n_elem * sizeof(double);
-    const size_t rhs_size = rhs.n_elem * sizeof(double);
-    common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-/*    
-    cu_errchk(cudaHostRegister((void *) K_epsco.memptr(), K_size, cudaHostRegisterReadOnly));
-    cu_errchk(cudaHostRegister((void *) K.memptr(), K_size, cudaHostRegisterReadOnly));
-    cu_errchk(cudaHostRegister((void *) rhs.memptr(), rhs_size, cudaHostRegisterReadOnly)); 
-    */
-    magma_queue_t maqueue;
-    magma_queue_create(ctx.phy_id(), &maqueue);
-    const cudaStream_t custream = magma_queue_get_cuda_stream(maqueue);
-    const cublasHandle_t cublas_H = magma_queue_get_cublas_handle(maqueue);
-    cu_errchk(cudaMallocAsync((void **) &d_K_epsco, K_size, custream));
-    cu_errchk(cudaMemcpyAsync(d_K_epsco, K_epsco.mem, K_size, cudaMemcpyHostToDevice, custream));
-    cu_errchk(cudaMallocAsync((void **) &d_K, K_size, custream));
-    cu_errchk(cudaMemcpyAsync(d_K, K.mem, K_size, cudaMemcpyHostToDevice, custream));
-    cu_errchk(cudaMallocAsync(&d_labels, rhs_size, custream));
-    cu_errchk(cudaMemcpyAsync(d_labels, rhs.mem, rhs_size, cudaMemcpyHostToDevice, custream));
-    cu_errchk(cudaMallocAsync(&d_solved, rhs_size, custream));
-    cu_errchk(cudaMallocAsync(&d_rwork, rhs_size, custream));
-    cu_errchk(cudaMallocAsync(&d_lwork, 2 * K_size, custream));
-    const auto iters_mul = common::C_itersolve_range / double(iters);
-    if (rhs.n_rows != solved.n_rows && rhs.n_cols * C_weight_cols != solved.n_cols) solved.set_size(rhs.n_rows, C_weight_cols);
-    magma_int_t info;
-    (void) solvers::solve_hybrid(
-            d_K_epsco, rhs.n_cols, K.n_rows, d_solved, C_rbt_iter, C_rbt_threshold, maqueue, PROPS.get_stabilize_iterations_count(), d_labels, rhs_size,
-            d_rwork, custream, cublas_H, d_K, 1, rhs.n_elem, d_solved, K.n_elem, d_lwork, info, iters_mul, K.n_rows);
-    cu_errchk(cudaFreeAsync(d_K_epsco, custream));
-    cu_errchk(cudaFreeAsync(d_K, custream));
-    cu_errchk(cudaFreeAsync(d_labels, custream));
-    cu_errchk(cudaFreeAsync(d_rwork, custream));
-    cu_errchk(cudaFreeAsync(d_lwork, custream));
-//    cu_errchk(cudaHostRegister((void *) solved.memptr(), rhs_size, cudaHostRegisterDefault));
-    cu_errchk(cudaMemcpyAsync(solved.memptr(), d_solved, rhs_size, cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_solved, custream));
-    /*
-    cu_errchk(cudaHostUnregister((void *) K_epsco.memptr()));
-    cu_errchk(cudaHostUnregister((void *) K.memptr()));
-    cu_errchk(cudaHostUnregister((void *) rhs.memptr()));
-    cu_errchk(cudaHostUnregister((void *) solved.memptr()));
-    */
-    cu_errchk(cudaStreamSynchronize(custream));
-    magma_queue_destroy(maqueue);
-}
-
 // Buggy rewrite and test
 std::deque<arma::mat> OnlineMIMOSVR::solve_batched_irwls(
-        const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
-        const magma_queue_t &magma_queue, const size_t gpu_phy_id)
+        const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters, const magma_queue_t &magma_queue,
+        const size_t gpu_phy_id)
 {
     auto solved = rhs;
     const auto batch_size = K.size();
@@ -588,8 +508,7 @@ std::deque<arma::mat> OnlineMIMOSVR::solve_batched_irwls(
 
     if (K.size() != K_epsco.size() || K_epsco.size() != rhs.size()) LOG4_THROW("Sizes not correct " << K.size() << ", " << K_epsco.size() << ", " << rhs.size());
     LOG4_TRACE("Batch size " << K.size() << ", m " << m << ", n " << n << ", K front " << arma::size(K.front()) << ", K back " << arma::size(K.back()) << ", rhs front "
-                             << arma::size(rhs.front()) <<
-                             ", rhs back " << arma::size(rhs.back()) << ", solved front " << arma::size(solved.front()) << ", solved back " << arma::size(solved.back()));
+         << arma::size(rhs.front()) << ", rhs back " << arma::size(rhs.back()) << ", solved front " << arma::size(solved.front()) << ", solved back " << arma::size(solved.back()));
     cu_errchk(cudaSetDevice(gpu_phy_id));
     auto [d_K, d_rhs] = solvers::init_magma_batch_solver(batch_size, m, n);
 
@@ -639,9 +558,9 @@ arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
     return solved;
 }
 
-unsigned OnlineMIMOSVR::get_full_train_len(const unsigned n_rows, const unsigned decrement)
+uint32_t OnlineMIMOSVR::get_full_train_len(const uint32_t n_rows, const uint32_t decrement)
 {
-    return n_rows && n_rows < decrement ? n_rows - C_test_len : decrement;
+    return n_rows > common::C_test_shift ? std::min<uint32_t>(n_rows - common::C_test_shift, decrement) : decrement;
 }
 
 uint16_t OnlineMIMOSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_)
@@ -663,64 +582,46 @@ uint16_t OnlineMIMOSVR::get_num_chunks() const
                 max_chunk_size);
 }
 
+
 std::deque<arma::uvec>
-generate_chunk_indexes(const uint32_t n_rows_dataset, const uint32_t decrement, const uint32_t max_chunk_size)
+OnlineMIMOSVR::generate_indexes(const bool projection, const uint32_t n_rows_dataset, const uint32_t decrement, const uint32_t max_chunk_size)
 {
     // Make sure we train on the latest data
-    const auto n_rows_train = OnlineMIMOSVR::get_full_train_len(n_rows_dataset, decrement);
+    const auto n_rows_train = get_full_train_len(n_rows_dataset, decrement);
+    if (!projection) return {arma::regspace<arma::uvec>(n_rows_dataset - n_rows_train, n_rows_dataset - 1)};
+    assert(projection && C_chunk_overlap == 0); // Overlap not allowed for manifolds
     const auto start_offset = n_rows_dataset - n_rows_train;
-    const auto num_chunks = OnlineMIMOSVR::get_num_chunks(n_rows_train, max_chunk_size);
+    const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     assert(num_chunks);
     std::deque<arma::uvec> indexes(num_chunks);
     if (num_chunks == 1) {
-        indexes[0] = start_offset + arma::regspace<arma::uvec>(0, n_rows_train - 1);
-        LOG4_DEBUG("Linear single chunk indexes size " << arma::size(indexes[0]));
+        indexes[0] = arma::regspace<arma::uvec>(start_offset, n_rows_dataset - 1);
+        LOG4_TRACE("Linear single chunk, start offset " << start_offset << ", n rows " << n_rows_dataset << ", chunk indexes " << common::present(indexes[0]));
         return indexes;
     }
-    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1. / OnlineMIMOSVR::C_chunk_offlap - OnlineMIMOSVR::C_end_chunks) * OnlineMIMOSVR::C_chunk_offlap);
-    const uint32_t last_part_size = this_chunk_size * OnlineMIMOSVR::C_chunk_tail;
-    const uint32_t first_part_chunk_size = this_chunk_size - last_part_size;
-    const arma::uvec first_part = arma::regspace<arma::uvec>(0, n_rows_train - last_part_size - 1);
-    const arma::uvec last_part = arma::regspace<arma::uvec>(n_rows_train - last_part_size, n_rows_train - 1);
-    LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks <<
-                              ", max chunk size " << max_chunk_size << ", chunk size " << this_chunk_size << ", chunk first part size " << first_part_chunk_size
-                              << ", last part size " << last_part_size << ", start offset " << start_offset << ", first part " << arma::size(first_part) <<
-                              ", last part " << arma::size(last_part) << ", chunk offlap " << OnlineMIMOSVR::C_chunk_offlap);
-    OMP_FOR(num_chunks)
-    for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
-        const uint32_t start_row = i * this_chunk_size * OnlineMIMOSVR::C_chunk_offlap;
-        arma::uvec first_part_rows = arma::regspace<arma::uvec>(start_row, start_row + first_part_chunk_size - 1);
-        // first_part_rows.rows(arma::find(first_part_rows >= first_part.n_rows)) -= first_part.n_rows;
-        first_part_rows.shed_rows(arma::find(first_part_rows >= first_part.n_rows));
-        indexes[i] = start_offset + arma::join_cols(first_part.rows(first_part_rows), last_part);
+    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1. / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
+    LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks << ", max chunk size " <<
+        max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << C_chunk_offlap);
+
+    OMP_FOR_i(num_chunks) {
+        const uint32_t start_row = start_offset + i * this_chunk_size * C_chunk_offlap;
+        const uint32_t end_row = std::min<uint32_t>(start_row + this_chunk_size + common::C_outlier_slack, n_rows_dataset);
+        indexes[i] = arma::regspace<arma::uvec>(start_row, end_row - 1);
         if (!i || i == DTYPE(i)(num_chunks - 1))
-            LOG4_DEBUG("Chunk " << i << " first part " << first_part_rows.front() << ".." << first_part_rows.back() << ", last part " << last_part.front() << ".." <<
-                                last_part.back() << ", start row " << start_row);
+            LOG4_DEBUG("Chunk " << i << ", start row " << start_row << ", end row " << end_row << ", indexes " << common::present(indexes[i]));
     }
     return indexes;
 }
 
-std::deque<arma::uvec>
-OnlineMIMOSVR::generate_indexes(const unsigned n_rows_dataset, const unsigned decrement, const unsigned max_chunk_size)
-{
-    return generate_chunk_indexes(n_rows_dataset, decrement, max_chunk_size);
-}
-
 std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
 {
-    return projection ?
-           generate_indexes(p_labels->n_rows, (**param_set.cbegin()).get_svr_decremental_distance(), max_chunk_size) :
-#ifdef REMOVE_OUTLIERS
-            std::deque<arma::uvec>{arma::regspace<arma::uvec>(C_shift_lim + C_test_len, p_labels->n_rows - 1)};
-#else
-            std::deque<arma::uvec>{arma::regspace<arma::uvec>(p_labels->n_rows - max_chunk_size, p_labels->n_rows - 1)};
-#endif
+    return generate_indexes(projection, p_labels->n_rows, (**param_set.cbegin()).get_svr_decremental_distance(), max_chunk_size);
 }
 
 arma::uvec
-OnlineMIMOSVR::get_other_ixs(const unsigned i) const
+OnlineMIMOSVR::get_other_ixs(const uint16_t i) const
 {
-    return ixs[i](arma::find(ixs[i] != arma::linspace<arma::uvec>(0, p_features->n_rows - 1, p_features->n_rows))); // what is this supposed to do?
+    return ixs[i](arma::find(ixs[i] != arma::linspace<arma::uvec>(0, p_features->n_rows - 1, p_features->n_rows)));
 }
 
 

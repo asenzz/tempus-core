@@ -1,16 +1,23 @@
 #pragma once
 
+#include <oneapi/tbb/mutex.h>
 #include <deque>
 #include <npp.h>
 #include <cublas_v2.h>
 #include <magma_types.h>
 #include <cusolverDn.h>
 
+namespace svr {
 
-namespace svr::solvers {
+struct t_weight_scaling_factors {
+    std::unordered_map<std::pair<uint16_t, uint16_t>, std::pair<double /* first sf */, double /* first dc */>> scaling_factors;
+    tbb::mutex mx;
+};
+
+namespace solvers {
 
 class score_weights {
-    static constexpr uint16_t streams_gpu = 4;
+    static constexpr uint16_t streams_gpu = 8;
     static const uint16_t n_gpus;
     const uint32_t m, n, mn, mm;
     const uint64_t L_size;
@@ -32,7 +39,7 @@ public:
 
     ~score_weights();
 
-    double operator()(CPTRd weights);
+    double operator()(CPTRd weights) const;
 };
 
 struct mmm_t {
@@ -124,19 +131,23 @@ __global__ void G_irwls_op2(
         const uint32_t mn,
         const uint32_t mm);
 
-double meanabs(CPTRd d_in, const uint32_t n, const cudaStream_t stm);
+double median(CPTRd d_in, const size_t n, const cudaStream_t stm);
 
-double sumabs(CPTRd d_in, const uint32_t n, const cudaStream_t stm);
+double medianabs(CPTRd d_in, const size_t n, const cudaStream_t stm);
 
-double sum(CPTRd d_data, const uint32_t n, const cudaStream_t strm);
+double meanabs(CPTRd d_in, const size_t n, const cudaStream_t stm);
 
-double sum(CPTRd d_in, const uint32_t n, const NppStreamContext &npp_ctx);
+double sumabs(CPTRd d_in, const size_t n, const cudaStream_t stm);
 
-double mean(CPTRd d_in, const uint32_t n, const cudaStream_t strm);
+double sum(CPTRd d_data, const size_t n, const cudaStream_t strm);
 
-double max(CPTRd d_in, const uint32_t n, const cudaStream_t strm);
+double sum(CPTRd d_in, const size_t n, const NppStreamContext &npp_ctx);
 
-double min(CPTRd d_in, const uint32_t n, const cudaStream_t strm);
+double mean(CPTRd d_in, const size_t n, const cudaStream_t strm);
+
+double max(CPTRd d_in, const size_t n, const cudaStream_t strm);
+
+double min(CPTRd d_in, const size_t n, const cudaStream_t strm);
 
 double unscaled_distance(
         CPTRd d_labels, CPTRd d_predictions, const double scale, const uint32_t m, const uint32_t n, const uint32_t ldl, const cudaStream_t stm);
@@ -147,6 +158,10 @@ double autocorrelation_n(CPTRd d_in, const uint32_t n, const std::vector<uint32_
 
 
 // Solvers
+
+void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters,
+                 const uint16_t super_iters, const uint16_t rbt_iter, const double rbt_threshold,
+                 const uint16_t weight_cols, t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk);
 
 double solve_hybrid(const double *const j_K_epsco, const uint32_t n, const uint32_t train_len, double *j_solved, const uint32_t magma_iters, const double magma_threshold,
                     const magma_queue_t ma_queue, const uint16_t irwls_iters, const double *const j_train_labels, const size_t train_n_size, double *j_work,
@@ -206,5 +221,7 @@ double solve_validate_host(
 
 // Sign-weighted score
 double swscore(CPTRd d_in, const uint32_t ld_in, CPTRd d_ref, const uint32_t ld_ref, const uint32_t m, const uint32_t n, const cudaStream_t custream);
+
+}
 
 }

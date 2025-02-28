@@ -13,7 +13,7 @@ TEST_F(DaoTestFixture, ModelWorkflow)
     size_t decon_level = 2;
     auto paramset = std::make_shared<datamodel::t_param_set>();
     paramset->emplace(std::make_shared<datamodel::SVRParameters>(
-            0, 100, "q_svrwave_xauusd_60", "open", 3, decon_level, 0, 0, 0, 0.1, 0.5, 1, 10, 1, 0.5, kernel_type::RBF, 35));
+            0, 100, "q_svrwave_xauusd_60", "open", 3, decon_level, 0, 0, 0, 0.1, 0.5, .75, 1, 10, 1, 0.5, kernel_type::RBF, 35));
     datamodel::OnlineMIMOSVR_ptr svr_model = otr<datamodel::OnlineMIMOSVR>(0, 0, *paramset);
     bpt::ptime last_modified = bpt::time_from_string("2015-05-20 10:45:00");
     bpt::ptime last_modeled_value_time = bpt::time_from_string("2015-05-20 10:47:00");

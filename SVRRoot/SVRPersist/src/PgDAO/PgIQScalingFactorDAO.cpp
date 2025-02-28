@@ -1,11 +1,11 @@
 #include "PgIQScalingFactorDAO.hpp"
-#include <DAO/DataSource.hpp>
-#include <DAO/IQScalingFactorRowMapper.hpp>
+#include "DAO/DataSource.hpp"
+#include "DAO/IQScalingFactorRowMapper.hpp"
 
 namespace svr {
 namespace dao {
 
-PgIQScalingFactorDAO::PgIQScalingFactorDAO(common::PropertiesFileReader &tempus_config, DataSource &data_source) :
+PgIQScalingFactorDAO::PgIQScalingFactorDAO(common::PropertiesReader &tempus_config, DataSource &data_source) :
         IQScalingFactorDAO(tempus_config, data_source)
 {}
 
@@ -43,7 +43,7 @@ int PgIQScalingFactorDAO::save(const datamodel::IQScalingFactor_ptr &p_iq_scalin
 
 int PgIQScalingFactorDAO::remove(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor)
 {
-    if (!p_iq_scaling_factor->get_id())  return 0;
+    if (!p_iq_scaling_factor->get_id()) return 0;
     return data_source.update(AbstractDAO::get_sql("remove"), p_iq_scaling_factor->get_id());
 }
 

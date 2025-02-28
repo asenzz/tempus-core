@@ -27,10 +27,7 @@ void DQScalingFactorService::add(datamodel::dq_scaling_factor_container_t &sf, c
 
 void DQScalingFactorService::add(datamodel::dq_scaling_factor_container_t &sf, const datamodel::dq_scaling_factor_container_t &new_sf, const bool overwrite)
 {
-    //std::for_each(C_default_exec_policy, new_sf.cbegin(), new_sf.cend(), [&sf, overwrite](const auto &nf)
-    //                    { if (!match_n_set(sf, *nf, overwrite)) sf.emplace(nf); });
-     std::copy_if(C_default_exec_policy, new_sf.cbegin(), new_sf.cend(), std::inserter(sf, sf.end()), [&sf, overwrite](const auto &nf)
-                        { return !match_n_set(sf, *nf, overwrite); });
+     std::copy_if(new_sf.cbegin(), new_sf.cend(), std::inserter(sf, sf.end()), [&sf, overwrite](const auto &nf){ return !match_n_set(sf, *nf, overwrite); });
 }
 
 bool DQScalingFactorService::exists(const datamodel::DQScalingFactor_ptr &dq_scaling_factor)
@@ -116,7 +113,7 @@ DQScalingFactorService::calculate(const unsigned chunk_ix, const datamodel::Onli
         const auto [dc_offset, scaling_factor] = calc(level_feats);
         if (!std::isnormal(scaling_factor) || !common::isnormalz(dc_offset))
             LOG4_THROW("Scaling factors not sane, level " << i << ", lag " << lag << ", chunk " << chunk_ix << ", gradient " << svr_model.get_gradient_level() <<
-                                                          ", step " << svr_model.get_step() << ", scaling factor " << scaling_factor << ", DC offset " << dc_offset << ", data " << common::present(level_feats));
+                  ", step " << svr_model.get_step() << ", scaling factor " << scaling_factor << ", DC offset " << dc_offset << ", data " << common::present(arma::mat(level_feats)));
         const auto p_sf = otr<datamodel::DQScalingFactor>(
                 dataset_id, svr_model.get_model_id(), i, labels_step, svr_model.get_gradient_level(), chunk_ix, scaling_factor, std::numeric_limits<double>::quiet_NaN(), dc_offset);
         add_sf_l.set();
@@ -168,13 +165,13 @@ void DQScalingFactorService::scale_labels(const unsigned chunk_ix, const datamod
 
 void DQScalingFactorService::scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels)
 {
-    (void) common::scale_I<arma::mat>(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
+    (void) scale_I(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
     if (labels.has_nonfinite()) LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", labels " << labels);
 }
 
 double DQScalingFactorService::scale_label(const datamodel::DQScalingFactor &sf, double &label)
 {
-    label = common::scale(label, sf.get_labels_factor(), sf.get_dc_offset_labels());
+    label = scale(label, sf.get_labels_factor(), sf.get_dc_offset_labels());
     if (!common::isnormalz(label)) LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", label " << label);
     return label;
 }
@@ -186,19 +183,19 @@ bool DQScalingFactorService::match_n_set(datamodel::dq_scaling_factor_container_
         if (!(nf ^= *of)) return false;
 
         bool factor_set = false;
-        if (std::isnormal(nf.get_labels_factor()) || overwrite || !std::isnormal(of->get_labels_factor())) {
+        if (std::isnormal(nf.get_labels_factor()) && (overwrite || !std::isnormal(of->get_labels_factor()))) {
             of->set_labels_factor(nf.get_labels_factor());
             factor_set = true;
         }
-        if (std::isnormal(nf.get_features_factor()) || overwrite || !std::isnormal(of->get_features_factor())) {
+        if (std::isnormal(nf.get_features_factor()) && (overwrite || !std::isnormal(of->get_features_factor()))) {
             of->set_features_factor(nf.get_features_factor());
             factor_set = true;
         }
-        if (common::isnormalz(nf.get_dc_offset_labels()) || overwrite || !common::isnormalz(of->get_dc_offset_labels())) {
+        if (common::isnormalz(nf.get_dc_offset_labels()) && (overwrite || !common::isnormalz(of->get_dc_offset_labels()))) {
             of->set_dc_offset_labels(nf.get_dc_offset_labels());
             factor_set = true;
         }
-        if (common::isnormalz(nf.get_dc_offset_features()) || overwrite || !common::isnormalz(of->get_dc_offset_features())) {
+        if (common::isnormalz(nf.get_dc_offset_features()) && (overwrite || !common::isnormalz(of->get_dc_offset_features()))) {
             of->set_dc_offset_features(nf.get_dc_offset_features());
             factor_set = true;
         }

@@ -93,6 +93,7 @@ TEST_F(DaoTestFixture, BasicDeconstructionTest)
             datamodel::C_default_svrparam_svr_epsilon,
             datamodel::C_default_svrparam_kernel_param1,
             datamodel::C_default_svrparam_kernel_param2,
+            datamodel::C_default_svrparam_kernel_param_tau,
             datamodel::C_default_svrparam_decrement_distance,
             adjacent_levels_ratio,
             datamodel::C_default_svrparam_kernel_type,

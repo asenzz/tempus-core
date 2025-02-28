@@ -26,9 +26,9 @@ datamodel::SVRParameters_ptr SVRParametersService::is_manifold(const datamodel::
 
 bool SVRParametersService::exists(const datamodel::SVRParameters_ptr &svr_parameters)
 {
-    if (!svr_parameters) {
-        LOG4_ERROR("Parameters not initialized!");
-        return 0;
+    if (!svr_parameters || !svr_parameters->get_id()) {
+        LOG4_ERROR("Parameters not initialized or id is zero!");
+        return false;
     }
     return exists(svr_parameters->get_id());
 }

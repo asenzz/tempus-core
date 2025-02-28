@@ -21,15 +21,12 @@
 #include "DAO/WScalingFactorDAO.hpp"
 
 
-
-
 namespace svr {
 namespace context {
 
 AppContext *AppContext::p_instance = nullptr;
 
-struct StoreBufferInitializer
-{
+struct StoreBufferInitializer {
     StoreBufferInitializer()
     { dao::StoreBufferController::initInstance(); }
 
@@ -37,9 +34,8 @@ struct StoreBufferInitializer
     { dao::StoreBufferController::destroyInstance(); }
 };
 
-struct AppContext::AppContextImpl : StoreBufferInitializer
-{
-    common::PropertiesFileReader &app_properties;
+struct AppContext::AppContextImpl : StoreBufferInitializer {
+    common::AppConfig &app_properties;
 
     dao::DataSource &data_source;
     dao::UserDAO &user_dao;
@@ -60,39 +56,25 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
 
     bool threadsafe_dao;
 
-    AppContextImpl(const std::string &config_path, bool use_threadsafe_dao)
-            : app_properties(*new common::PropertiesFileReader(config_path)), data_source(
-            *new dao::DataSource(app_properties.get_db_connection_string(), true)),
-              user_dao(*dao::UserDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                 use_threadsafe_dao)), input_queue_dao(
-                    *dao::InputQueueDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                    use_threadsafe_dao)), svr_parameters_dao(
-                    *dao::SVRParametersDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                       use_threadsafe_dao)), dataset_dao(
-                    *dao::DatasetDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                 use_threadsafe_dao)), decon_queue_dao(
-                    *dao::DeconQueueDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                    use_threadsafe_dao)), ensemble_dao(
-                    *dao::EnsembleDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                  use_threadsafe_dao)), model_dao(
-                    *dao::ModelDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                               use_threadsafe_dao)), request_dao(
-                    *dao::RequestDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                 use_threadsafe_dao)), prediction_task_dao(
-                    *dao::PredictionTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                        use_threadsafe_dao)), scaling_factors_task_dao(
-                    *dao::ScalingFactorsTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                            use_threadsafe_dao)), autotune_task_dao(
-                    *dao::AutotuneTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                      use_threadsafe_dao)), decrement_task_dao(
-                    *dao::DecrementTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                       use_threadsafe_dao)), iq_scaling_factor_dao(
-                    *dao::IQScalingFactorDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                         use_threadsafe_dao)), w_scaling_factor_dao(
-                    *dao::WScalingFactorDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                         use_threadsafe_dao)), dq_scaling_factor_dao(
-                    *dao::DQScalingFactorDAO::build(app_properties, data_source, app_properties.get_dao_type(),
-                                                         use_threadsafe_dao)), threadsafe_dao(use_threadsafe_dao)
+    AppContextImpl(const std::string &config_path, const bool use_threadsafe_dao)
+            : app_properties(*new common::AppConfig(config_path)),
+              data_source(*new dao::DataSource(app_properties.get_db_connection_string(), true)),
+              user_dao(*dao::UserDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              input_queue_dao(*dao::InputQueueDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              svr_parameters_dao(*dao::SVRParametersDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              dataset_dao(*dao::DatasetDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              decon_queue_dao(*dao::DeconQueueDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              ensemble_dao(*dao::EnsembleDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              model_dao(*dao::ModelDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              request_dao(*dao::RequestDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              prediction_task_dao(*dao::PredictionTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              scaling_factors_task_dao(*dao::ScalingFactorsTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              autotune_task_dao(*dao::AutotuneTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              decrement_task_dao(*dao::DecrementTaskDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              iq_scaling_factor_dao(*dao::IQScalingFactorDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              w_scaling_factor_dao(*dao::WScalingFactorDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              dq_scaling_factor_dao(*dao::DQScalingFactorDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+              threadsafe_dao(use_threadsafe_dao)
     {
         common::memory_manager::get();
         // common::ThreadPoolAsio::instance();
@@ -139,22 +121,13 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
 
 AppContext::AppContext(const std::string &config_path, const bool use_threadsafe_dao)
         : p_impl(*new AppContextImpl(config_path, use_threadsafe_dao)), app_properties(p_impl.app_properties),
-          user_service(
-                  *new business::UserService(p_impl.user_dao)),
-          input_queue_service(
-                  *new business::InputQueueService(p_impl.input_queue_dao)),
-          svr_parameters_service(
-                  *new business::SVRParametersService(p_impl.svr_parameters_dao)),
-          model_service(
-                  *new business::ModelService(p_impl.model_dao)),
-          decon_queue_service(
-                  *new business::DeconQueueService(p_impl.decon_queue_dao)),
-          ensemble_service(
-                  *new business::EnsembleService(
-                          p_impl.ensemble_dao, model_service, decon_queue_service)),
-          dataset_service(
-                  *new business::DatasetService(
-                          p_impl.dataset_dao, ensemble_service, svr_parameters_service)),
+          user_service(*new business::UserService(p_impl.user_dao)),
+          input_queue_service(*new business::InputQueueService(p_impl.input_queue_dao)),
+          svr_parameters_service(*new business::SVRParametersService(p_impl.svr_parameters_dao)),
+          model_service(*new business::ModelService(p_impl.model_dao)),
+          decon_queue_service(*new business::DeconQueueService(p_impl.decon_queue_dao)),
+          ensemble_service(*new business::EnsembleService(p_impl.ensemble_dao, model_service, decon_queue_service)),
+          dataset_service(*new business::DatasetService(p_impl.dataset_dao, ensemble_service, svr_parameters_service)),
           request_service(*new business::RequestService(p_impl.request_dao)),
           authentication_provider(*new business::LocalAuthenticationProvider(user_service)),
           prediction_task_service(*new business::PredictionTaskService(p_impl.prediction_task_dao)),

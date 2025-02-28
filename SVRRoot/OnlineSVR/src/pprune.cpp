@@ -69,7 +69,7 @@ int kn_callback(KN_context_ptr kc,
     kn_errchk(KN_get_number_vars(kc, &D));
     PROFILE_EXEC_TIME((*p_cost_cb)(eval_request->x, eval_result->obj),
                       "Cost, score " << *eval_result->obj << ", index " << eval_request->threadID << ", iterations " << num_iters << ", parameters " <<
-                                     common::to_string(eval_request->x, std::min<unsigned>(4, D)));
+                                     common::to_string(eval_request->x, std::min<uint32_t>(4, D)));
     return 0;
 }
 
@@ -117,7 +117,7 @@ void pprune::calfun(CPTRd x, double *const f, t_calfun_data_ptr const calfun_dat
     ++calfun_data->nf;
     if (!calfun_data->zombie) {
         PROFILE_EXEC_TIME(calfun_data->cost_fun(x, f), "Cost, score " << *f << ", call count " << calfun_data->nf << ", index " << calfun_data->particle_index
-                                                                      << ", parameters " << common::to_string(x, std::min<unsigned>(4, calfun_data->D)));
+                                                                      << ", parameters " << common::to_string(x, std::min<uint32_t>(4, calfun_data->D)));
         if (*f < calfun_data->best_f) {
             LOG4_TRACE("New best score " << *f << ", previous " << calfun_data->best_f << ", improvement " << common::imprv(*f, calfun_data->best_f) <<
                                          "pc, at particle " << calfun_data->particle_index << ", calls " << calfun_data->nf);
@@ -128,20 +128,20 @@ void pprune::calfun(CPTRd x, double *const f, t_calfun_data_ptr const calfun_dat
     UNROLL()
     for (
         const auto drop_coef: C_maxfun_drop_coefs) {
-        if (calfun_data->nf != unsigned(drop_coef * calfun_data->maxfun))
+        if (calfun_data->nf != uint32_t(drop_coef * calfun_data->maxfun))
             continue;
         calfun_data->zombie = calfun_data->drop((1. - drop_coef) * calfun_data->p_particles->size());
         break;
     }
 }
 
-bool t_calfun_data::drop(const unsigned keep_particles)
+bool t_calfun_data::drop(const uint32_t keep_particles)
 {
-    std::deque<unsigned> ixs(p_particles->size());
+    std::deque<uint32_t> ixs(p_particles->size());
     std::iota(ixs.begin(), ixs.end(), 0);
 
     __do_wait:
-    const unsigned ct = std::count_if(C_default_exec_policy, p_particles->cbegin(), p_particles->cend(), [this](const auto v) { return v && v->nf >= nf; });
+    const uint32_t ct = std::count_if(C_default_exec_policy, p_particles->cbegin(), p_particles->cend(), [this](const auto v) { return v && v->nf >= nf; });
     if (ct != p_particles->size()) {
         task_yield_wait__;
         goto __do_wait;
@@ -169,7 +169,7 @@ void prima_progress_callback(
 arma::vec pprune::ensure_bounds(CPTRd x, const arma::mat &bounds)
 {
     arma::vec xx(bounds.n_rows);
-    for (unsigned i = 0; i < xx.size(); ++i)
+    for (uint32_t i = 0; i < xx.size(); ++i)
         if (x[i] < bounds(i, 0)) xx[i] = bounds(i, 0);
         else if (x[i] > bounds(i, 1)) xx[i] = bounds(i, 1);
         else xx[i] = x[i];
@@ -177,10 +177,10 @@ arma::vec pprune::ensure_bounds(CPTRd x, const arma::mat &bounds)
 }
 
 
-pprune::pprune(const e_algo_type algo_type, const unsigned n_particles, const arma::mat &bounds,
+pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const arma::mat &bounds,
                const t_pprune_cost_fun &cost_f,
-               const unsigned maxfun, double rhobeg, double rhoend,
-               arma::mat x0, const arma::vec &pows, const unsigned depth) : // TODO Implement depth
+               const uint32_t maxfun, double rhobeg, double rhoend,
+               arma::mat x0, const arma::vec &pows, const uint16_t depth) : // TODO Implement depth
         n(n_particles), D(bounds.n_rows), bounds(bounds), pows(pows), ranges(bounds.col(1) - bounds.col(0))
 {
     if (x0.n_rows != D || x0.n_cols != n) {
@@ -221,7 +221,7 @@ pprune::pprune(const e_algo_type algo_type, const unsigned n_particles, const ar
 
 typedef struct KN_init_userparams {
     const arma::mat &x0;
-    const unsigned D;
+    const uint32_t D;
 } t_KN_init_userparams, *t_KN_init_userparams_ptr;
 
 int KN_ms_initpt_callback(KN_context_ptr kc, const KNINT nSolveNumber, double *const x, double *const lambda, void *const userParams)
@@ -238,7 +238,7 @@ int KN_ms_initpt_callback(KN_context_ptr kc, const KNINT nSolveNumber, double *c
 
 #endif
 
-void pprune::pprune_knitro(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0)
+void pprune::pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0)
 {
 
 #ifdef USE_KNITRO
@@ -329,7 +329,7 @@ void pprune::pprune_knitro(const unsigned n_particles, const t_pprune_cost_fun &
     kn_errchk(KN_get_solution(kc, &n_status, &result.best_score, result.best_parameters.memptr(), lambda));
     LOG4_DEBUG("Optimal objective value " << result.best_score << ", status " << n_status <<
                                           ", optimal solution (with corresponding multiplier): " << common::present(result.best_parameters) <<
-                                          ", lambda " << common::to_string(lambda + D, std::min<unsigned>(D, 4)));
+                                          ", lambda " << common::to_string(lambda + D, std::min<uint32_t>(D, 4)));
     double feas_error, opt_error;
     kn_errchk(KN_get_abs_feas_error(kc, &feas_error));
     LOG4_DEBUG("Feasibility violation " << feas_error);
@@ -354,7 +354,7 @@ void pprune::pprune_knitro(const unsigned n_particles, const t_pprune_cost_fun &
 
 // TODO Implement depth
 void
-pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0, const uint32_t depth)
+pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0, const uint16_t depth)
 {
     const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
     auto p_particles = ptr<std::deque<t_calfun_data_ptr>>(n_particles);
@@ -403,7 +403,7 @@ pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost
 }
 
 
-void pprune::pprune_prima(const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0)
+void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0)
 {
     prima_problem_t all_problem;
     prima_init_problem(&all_problem, D);
@@ -427,7 +427,7 @@ void pprune::pprune_prima(const unsigned n_particles, const t_pprune_cost_fun &c
 #pragma omp single
     {
 #pragma omp taskloop simd mergeable default(shared) grainsize(1) untied firstprivate(n_particles, maxfun, no_elect, C_rand_disperse)
-        for (unsigned i = 0; i < n_particles; ++i) {
+        for (uint32_t i = 0; i < n_particles; ++i) {
             all_prima_options.data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun, D};
 
             auto problem = all_problem;
@@ -459,14 +459,14 @@ void pprune::pprune_prima(const unsigned n_particles, const t_pprune_cost_fun &c
     for (auto &f: *p_particles) delete f; // Keep this out of the for loop above
     if (result.best_parameters.has_nonfinite()) LOG4_THROW("Best parameters contain non-finite values " << common::present(result.best_parameters));
     LOG4_DEBUG(
-            "PPrune BiteOpt, score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n << ", parameters " << D <<
+            "PPrune Prima, score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n << ", parameters " << D <<
                                      ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", best parameters "
                                      << common::present(result.best_parameters));
 }
 
 
 void pprune::pprune_petsc(
-        const unsigned n_particles, const t_pprune_cost_fun &cost_f, const unsigned maxfun, double rhobeg, double rhoend, const arma::mat &x0)
+        const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0)
 {
 #if 0
     const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
@@ -477,7 +477,7 @@ void pprune::pprune_petsc(
 #pragma omp single
     {
 #pragma omp taskloop simd mergeable default(shared) grainsize(1) firstprivate(maxfun, no_elect) untied // Untied task is a must if election is used
-        for (unsigned i = 0; i < n_particles; ++i) {
+        for (uint32_t i = 0; i < n_particles; ++i) {
             auto const calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, maxfun, D};
 
 
@@ -496,8 +496,8 @@ void pprune::pprune_petsc(
                 o->init(rnd, x0.colptr(i));
             }
             UNROLL()
-            for (unsigned j = 0; j < maxfun / biteopt.size(); ++j) {
-                for (unsigned d = 0; d < biteopt.size(); ++d)
+            for (uint32_t j = 0; j < maxfun / biteopt.size(); ++j) {
+                for (uint32_t d = 0; d < biteopt.size(); ++d)
                     biteopt[d]->optimize(rnd, d + 1 >= biteopt.size() ? nullptr : biteopt[d + 1].get());
                 if (calfun_data->zombie) {
                     calfun_data->nf = maxfun;

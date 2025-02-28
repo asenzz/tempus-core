@@ -481,7 +481,7 @@ oemd_coefficients_search::create_random_mask(
 }
 
 
-__global__ void compute_power_spectrum(CRPTR(cufftDoubleComplex) d_freq, double *const d_psd, double *const d_psd_sum, const uint32_t N, const uint32_t N_2_1)
+__global__ void compute_power_spectrum(CRPTR(cufftDoubleComplex) d_freq, RPTR(double) d_psd, RPTR(double) d_psd_sum, const uint32_t N, const uint32_t N_2_1)
 {
     CU_STRIDED_FOR_i(N_2_1) {
         d_psd[i] = fabs(d_freq[i].x) + fabs(d_freq[i].y);
@@ -501,19 +501,12 @@ __global__ void compute_spectral_entropy(CRPTRd d_psd, double *const d_entropy, 
 
 double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal, uint32_t N, const cudaStream_t custream)
 {
-    if (N > C_cufft_input_limit) {
-        d_signal += N - C_cufft_input_limit;
-        N = C_cufft_input_limit;
-    } else if (N % 2) {
-        ++d_signal;
-        --N;
-    }
-    cufftDoubleComplex *d_freq;
+    if (N > C_cufft_input_limit) N = C_cufft_input_limit;
+    else if (N % 2) --N;
     double *d_psd;
     const auto N_2_1 = common::fft_len(N);
 
     // Allocate memory on the device
-    cu_errchk(cudaMallocAsync((void **) &d_freq, N_2_1 * sizeof(cufftDoubleComplex), custream));
     cu_errchk(cudaMallocAsync((void **) &d_psd, N_2_1 * sizeof(double), custream));
     auto d_psd_sum = cucalloc<double>(custream);
     auto d_entropy = cucalloc<double>(custream);
@@ -521,9 +514,17 @@ double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal
     // Create a CUFFT plan
     cufftHandle plan;
     cf_errchk(cufftPlan1d(&plan, N, CUFFT_D2Z, 1));
+
+    size_t cufft_bufsiz;
+    cf_errchk(cufftGetSize1d(plan, N, CUFFT_D2Z, 1, &cufft_bufsiz));
+
+    cufftDoubleComplex *d_freq;
+    cu_errchk(cudaMallocAsync((void **) &d_freq, cufft_bufsiz, custream));
+
     cf_errchk(cufftSetStream(plan, custream));
+
     // Execute the FFT
-    cf_errchk(cufftExecD2Z(plan, (double *) d_signal, d_freq));
+    cf_errchk(cufftExecD2Z(plan, d_signal, d_freq));
 
     // Compute the Power Spectral Density (PSD)
     compute_power_spectrum<<<CU_BLOCKS_THREADS(N_2_1), 0, custream>>>(d_freq, d_psd, d_psd_sum, N, N_2_1);
@@ -709,7 +710,7 @@ oemd_coefficients_search::evaluate_mask(
     double *d_features, *d_scores;
     auto feat_params_it = feat_params.cbegin();
     while (feat_params_it != feat_params.cend() && feat_params_it->ix_end <= max_row_len + mask_offset) ++feat_params_it;
-    if (feat_params.cend() - feat_params_it < C_align_validate) LOG4_THROW("Align validate " << C_align_validate << " to large for " << feat_params.cend() - feat_params_it);
+    if (feat_params.cend() - feat_params_it < PROPS.get_align_window()) LOG4_THROW("Align validate " << PROPS.get_align_window() << " to large for " << feat_params.cend() - feat_params_it);
     const std::span feat_params_trimmed(feat_params_it, feat_params.cend());
     const uint32_t validate_rows = feat_params_trimmed.size();
     auto d_labels = cucalloc<double>(custream, validate_rows);
@@ -749,7 +750,7 @@ oemd_coefficients_search::evaluate_mask(
                 d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
         G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, C_stretch_multiplier);
+                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, C_stretch_multiplier, PROPS.get_align_window());
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
             thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
@@ -764,12 +765,12 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaFreeAsync(d_labels, custream));
 
     // Spectral entropy
-    constexpr auto inv_entropy = 1.; // Disabled TODO test compute_spectral_entropy_cufft(d_imf, workspace.size(), custream);
+    constexpr auto inv_entropy = 1.; // compute_spectral_entropy_cufft(d_imf, d_imf_len, custream);
     cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is part of d_workspace
     cu_errchk(cudaStreamDestroy(custream));
 
     // Weights and final score
-    constexpr double autocor_w = 2;
+    constexpr double autocor_w = .2;
     constexpr double rel_pow_w = 1;
     constexpr double inv_entropy_w = 0;
     const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(autocor, autocor_w) * std::pow(inv_entropy, inv_entropy_w);

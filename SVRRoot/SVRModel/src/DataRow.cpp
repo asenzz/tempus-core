@@ -562,19 +562,7 @@ lower_bound_back(data_row_container &data, const data_row_container::iterator &h
 }
 
 data_row_container::const_iterator
-lower_bound_back(const data_row_container &data, const bpt::ptime &time_key)
-{
-    return lower_bound_back(data, data.cend(), time_key);
-}
-
-data_row_container::iterator
-lower_bound_back(data_row_container &data, const bpt::ptime &time_key)
-{
-    return lower_bound_back(data, data.end(), time_key);
-}
-
-data_row_container::const_iterator
-lower_bound_or_before_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
+lower_bound_or_before(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
 {
     if (data.empty()) {
         LOG4_ERROR("Data is empty!");
@@ -623,8 +611,7 @@ lower_bound_back_before(const data_row_container &data, const data_row_container
         --row_iter;
     }
     while (row_iter != data.cbegin() && (**row_iter).get_value_time() >= time_key) --row_iter;
-    if ((**row_iter).get_value_time() >= time_key) LOG4_ERROR(
-            "Couldn't find before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
+    if ((**row_iter).get_value_time() >= time_key) LOG4_ERROR("Couldn't find before to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
     return row_iter;
 }
 
@@ -647,7 +634,26 @@ lower_bound_back_before(data_row_container &data, const data_row_container::iter
 }
 
 data_row_container::const_iterator
-lower_bound_back_before(const data_row_container &data, const bpt::ptime &time_key)
+lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key)
+{
+    if (cbegin == cend) {
+        LOG4_ERROR("Data is empty!");
+        return cend;
+    }
+    auto row_iter = lower_bound(cbegin, cend, time_key);
+    if (row_iter == cend) {
+        if (row_iter == cbegin) return row_iter;
+        --row_iter;
+    }
+    while (row_iter != cbegin && (**row_iter).get_value_time() >= time_key) --row_iter;
+    if ((**row_iter).get_value_time() > time_key)
+        LOG4_ERROR("Couldn't find before or equal to " << time_key << ", but found nearest match " << (**row_iter).get_value_time());
+
+    return row_iter;
+}
+
+data_row_container::const_iterator
+lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
 {
     return lower_bound_back_before(data, data.cend(), time_key);
 }
@@ -660,13 +666,13 @@ lower_bound_back_before(data_row_container &data, const bpt::ptime &time_key)
 
 // Find equal or before
 data_row_container::const_iterator
-lower_bound_before(const data_row_container &data, const bpt::ptime &time_key)
+lower_bound_or_before(const data_row_container &data, const bpt::ptime &time_key)
 {
-    return lower_bound_before(data.cbegin(), data.cend(), time_key);
+    return lower_bound_or_before(data.cbegin(), data.cend(), time_key);
 }
 
 data_row_container::const_iterator
-lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key)
+lower_bound_or_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key)
 {
     auto found = lower_bound(cbegin, cend, time_key);
     if (found == cend || (**found).get_value_time() == time_key) return found;
@@ -681,29 +687,16 @@ lower_bound_before(const data_row_container::const_iterator &cbegin, const data_
 }
 
 data_row_container::iterator
-upper_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
+upper_bound(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key)
 {
     return std::upper_bound(data.begin(), hint_end, time_key, comp_ub);
 }
 
 data_row_container::const_iterator
-upper_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
+upper_bound(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key)
 {
     return std::upper_bound(data.cbegin(), hint_end, time_key, comp_ub);
 }
-
-data_row_container::iterator
-upper_bound_back(data_row_container &data, const bpt::ptime &time_key)
-{
-    return upper_bound_back(data, data.end(), time_key);
-}
-
-data_row_container::const_iterator
-upper_bound_back(const data_row_container &data, const bpt::ptime &time_key)
-{
-    return upper_bound_back(data, data.cend(), time_key);
-}
-
 
 datamodel::DataRow::container::const_iterator
 upper_bound(const datamodel::DataRow::container &c, const bpt::ptime &t)
@@ -800,7 +793,7 @@ datamodel::DataRow::insert_rows(
     if (rows_container.size() && (data.n_cols != (**rows_container.cbegin()).size() || (**rows_container.cbegin()).size() != level_ct))
         LOG4_WARN("Data columns " << data.n_cols << " does not equal existing data columns " << (**rows_container.cbegin()).size() << " or level count " << level_ct);
 
-    if (!merge) rows_container.erase(lower_bound_back(rows_container, *times.cbegin()), rows_container.end());
+    if (!merge) rows_container.erase(lower_bound(rows_container, *times.cbegin()), rows_container.end());
 
     LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << *times.cbegin());
 
@@ -829,17 +822,20 @@ void datamodel::DataRow::insert_rows(
     if (rows_container.size() && (data.n_cols != (**rows_container.cbegin()).size() || (**rows_container.cbegin()).size() != level_ct))
         LOG4_WARN("Data columns " << data.n_cols << " does not equal existing data columns " << (**rows_container.cbegin()).size() << " or level count " << level_ct);
 
-    if (!merge) rows_container.erase(lower_bound_back(rows_container, times.front()->get_value_time()), rows_container.end());
+    if (!merge) rows_container.erase(lower_bound(rows_container, times.front()->get_value_time()), rows_container.end());
 
     LOG4_DEBUG("Inserting " << arma::size(data) << " rows, starting at " << (**times.cbegin()).get_value_time());
 
     const auto time_now = bpt::second_clock::local_time();
     const auto prev_size = rows_container.size();
     rows_container.resize(prev_size + data.n_rows);
+    const auto it_begin = rows_container.begin() + prev_size;
     OMP_FOR_i(data.n_rows) {
-        auto row_iter = rows_container.begin() + prev_size + i;
+        auto row_iter = it_begin + i;
         if (!*row_iter) *row_iter = ptr<datamodel::DataRow>(times[i]->get_value_time(), time_now, common::C_default_value_tick_volume, level_ct, 0.);
         (**row_iter)[level] += arma::mean(data.row(i));
+        LOG4_TRACE("Row " << i << ", level " << level << ", value " << (**row_iter)[level] <<
+            ", input row " << common::present(data.row(i)) << ", mean " << arma::mean(data.row(i))); // TODO Remove after testing
     }
     LOG4_END();
 }

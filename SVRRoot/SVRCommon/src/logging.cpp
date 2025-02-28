@@ -24,7 +24,7 @@ logging::logging()
 
     auto p_log_core = boost::log::core::get();
     p_log_core->remove_all_sinks();
-    p_log_core->set_filter(boost::log::trivial::severity >= boost::log::trivial::severity_level(svr::common::PropertiesFileReader::S_log_threshold));
+    p_log_core->set_filter(boost::log::trivial::severity >= boost::log::trivial::severity_level(svr::common::AppConfig::S_log_threshold));
 #ifdef NDEBUG
     auto p_sink = boost::make_shared<boost::log::sinks::asynchronous_sink<boost::log::sinks::text_ostream_backend>>();
 #else

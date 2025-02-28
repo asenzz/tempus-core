@@ -74,41 +74,41 @@ extern const logging l__;
 #else
 
 #define LOG4_BEGIN() \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::trace) \
                 BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "Begin."; )
 
 #define LOG4_END() \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::trace) \
         BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "End."; )
 
 #endif
 
 #define LOG4_TRACE(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::trace) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::trace) \
         BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % msg; )
 
 #define LOG4_DEBUG(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::debug) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::debug) \
         BOOST_LOG_TRIVIAL(debug) << BOOST_CODE_LOCATION % msg; )
 
 #define LOG4_INFO(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::info) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::info) \
         BOOST_LOG_TRIVIAL(info) << BOOST_CODE_LOCATION % msg; )
 
 #define LOG4_WARN(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::warning) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::warning) \
         BOOST_LOG_TRIVIAL(warning) << BOOST_CODE_LOCATION % msg; )
 
 #define LOG4_ERROR(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::error) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::error) \
         BOOST_LOG_TRIVIAL(error) << BOOST_CODE_LOCATION % msg; )
 
 #define LOG4_FATAL(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::fatal) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::fatal) \
         BOOST_LOG_TRIVIAL(fatal) << BOOST_CODE_LOCATION % msg; )
 
 #define LOG4_THROW(msg) \
-    CMD_WRAP( if (svr::common::PropertiesFileReader::S_log_threshold <= boost::log::trivial::severity_level::error) \
+    CMD_WRAP( if (svr::common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::error) \
         BOOST_LOG_TRIVIAL(error) << BOOST_CODE_LOCATION % msg; THROW_EX_FS(std::runtime_error, msg); )
 
 //#define LOG4_ASSERT(cond, failmsg) { if (!(cond)) LOG4_THROW((failmsg)); } // TODO Fix!

@@ -1,7 +1,7 @@
 #ifndef PGDECONQUEUEDAO_H
 #define PGDECONQUEUEDAO_H
 
-#include <DAO/DeconQueueDAO.hpp>
+#include "DAO/DeconQueueDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -9,7 +9,7 @@ namespace dao {
 class PgDeconQueueDAO : public DeconQueueDAO
 {
 public:
-    explicit PgDeconQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgDeconQueueDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     datamodel::DeconQueue_ptr          get_decon_queue_by_table_name(const std::string &table_name);
 

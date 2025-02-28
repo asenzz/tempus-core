@@ -2,6 +2,7 @@
 // Created by zarko on 2/12/24.
 //
 
+#include "common/serialization.hpp"
 #include "onlinesvr_persist.tpp"
 
 namespace svr {
@@ -18,11 +19,11 @@ OnlineMIMOSVR::OnlineMIMOSVR(const bigint id, const bigint model_id, std::string
     ia >> *this;
 }
 
-std::string OnlineMIMOSVR::save() const
+std::stringstream OnlineMIMOSVR::save() const
 {
     std::stringstream res;
     save(*this, res);
-    return res.str();
+    return res;
 }
 
 void OnlineMIMOSVR::set_model_id(const size_t new_model_id)

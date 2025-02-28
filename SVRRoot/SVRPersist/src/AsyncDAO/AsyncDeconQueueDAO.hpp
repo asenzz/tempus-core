@@ -1,7 +1,7 @@
 #ifndef ASYNCDECONQUEUEDAO_HPP
 #define ASYNCDECONQUEUEDAO_HPP
 
-#include <DAO/DeconQueueDAO.hpp>
+#include "DAO/DeconQueueDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -9,7 +9,7 @@ namespace dao {
 class AsyncDeconQueueDAO : public DeconQueueDAO
 {
 public:
-    explicit AsyncDeconQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit AsyncDeconQueueDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
     ~AsyncDeconQueueDAO();
 
     datamodel::DeconQueue_ptr          get_decon_queue_by_table_name(const std::string &table_name);

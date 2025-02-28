@@ -1,16 +1,16 @@
 */SVRWeb/template/SVRWebSkin.cpp
-libs/gtest-1.7.0/*Makefile
+lib/gtest-1.7.0/*Makefile
 cmake-build-debug/
 SVRRoot/OnlineSVR/test/test_data/online_svr_*_test.txt
-libs/oemd_fir_masks_xauusd_1s_backtest/*
-libs/oemd_fir_masks_xauusd_1s/*
-libs/mql5.tar.bz2
+lib/oemd_fir_masks_xauusd_1s_backtest/*
+lib/oemd_fir_masks_xauusd_1s/*
+lib/mql5.tar.bz2
 
 # Left over backups
 *.orig
 
-libs/zlib/Makefile
-libs/zlib/zconf.h
+lib/zlib/Makefile
+lib/zlib/zconf.h
 
 config/CLI_options.txt
 
@@ -18,6 +18,8 @@ config/CLI_options.txt
 *.slo
 *.lo
 *.o
+*.ex5
+*.ex4
 
 # Compiled Dynamic libraries
 *.so
@@ -243,12 +245,12 @@ CMakeFiles
 CMakeCache.txt
 
 # cppcms files
-libs/cppcms-1.0.5/tests/*
-libs/wavelib/DartConfiguration.tcl
-libs/wavelib/Makefile
-libs/wavelib/src/Makefile
-libs/wavelib/unitTests/Makefile
-libs/wavelib/unitTests/wavelibBoostTests/Makefile
+lib/cppcms-1.0.5/tests/*
+lib/wavelib/DartConfiguration.tcl
+lib/wavelib/Makefile
+lib/wavelib/src/Makefile
+lib/wavelib/unitTests/Makefile
+lib/wavelib/unitTests/wavelibBoostTests/Makefile
 
 venv/
 
@@ -258,3 +260,9 @@ venv/
 SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_1_test_data.sql
 SVRRoot/OnlineSVR/test/online_emd_test_data/transform_input_eurusd_avg_1_cvmd_level_0
 SVRRoot/OnlineSVR/test/online_emd_test_data/transform_input
+
+# Scratch files
+scratch_*
+
+# Masks
+lib/oemd_fir_masks_xauusd_1s/mask_*.csv

@@ -618,16 +618,13 @@ template<typename T> inline T unscale(const T &v, const double sf, const double 
     return v * sf + dc;
 }
 
-template<> arma::mat unscale(const arma::mat &m, const double sf, const double dc);
-
-
 template<typename T> inline T &unscale_I(T &v, const double sf, const double dc)
 {
     return v = v * sf + dc;
 }
 
+template<> arma::mat unscale(const arma::mat &m, const double sf, const double dc);
 template<> arma::mat &unscale_I(arma::mat &m, const double sf, const double dc);
-
 
 template<typename T> inline T constrain(T v, const T min, const T max)
 {

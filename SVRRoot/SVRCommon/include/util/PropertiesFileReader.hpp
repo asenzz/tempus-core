@@ -3,16 +3,78 @@
 #include <chrono>
 #include <string>
 #include <boost/log/trivial.hpp>
+#include <oneapi/tbb/mutex.h>
 #include "common/types.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 namespace common {
 
-enum class ConcreteDaoType { PgDao, AsyncDao };
+enum class ConcreteDaoType : uint8_t {
+    PgDao,
+    AsyncDao
+};
 
-class PropertiesFileReader
-{
-    static constexpr char MAX_LOOP_COUNT[] = "MAX_LOOP_COUNT";
+#define CONFPROP(T, x, D)                                               \
+private:                                                                \
+    static constexpr auto x = common::ctoupper(#x);                     \
+    T x##_;                                                             \
+    bool x##_set_ = false;                                              \
+public:                                                                 \
+    inline T get_##x() {                                                \
+        if (x##_set_ == false) {                                        \
+           const tbb::mutex::scoped_lock l(set_mx);                     \
+           if (x##_set_ == false) {                                     \
+                x##_ = get_property<T>(config_file, x, #D);             \
+                x##_set_ = true;                                        \
+           }                                                            \
+        }                                                               \
+        return x##_;                                                    \
+    }
+
+class PropertiesReader {
+    static constexpr char SQL_PROPERTIES_DIR_KEY[] = "SQL_PROPERTIES_DIR";
+    static constexpr char COMMENT_CHARS[] = "#";
+
+    tbb::mutex load_mx;
+    MessageProperties property_files;
+    const char delimiter;
+    std::string property_files_location;
+
+    size_t read_property_file(std::string property_file_name);
+
+    bool is_comment(const std::string &line);
+
+    bool is_multiline(const std::string &line);
+
+    const std::string &get_property_value(const std::string &property_file, const std::string &key, const std::string &default_value);
+
+
+protected:
+    tbb::mutex set_mx;
+    const std::string config_file;
+
+
+public:
+    PropertiesReader(const char delimiter, const std::string &config_file);
+
+    const MessageProperties::mapped_type &read_properties(const std::string &property_file);
+
+    template<typename T> inline T get_property(const std::string &property_file, const std::string &key, const std::string &default_value = "")
+    {
+        return boost::lexical_cast<T>(get_property_value(property_file, key, default_value));
+    }
+};
+
+class AppConfig : public PropertiesReader {
+
+CONFPROP(uint32_t, tune_skip, 7500)
+
+CONFPROP(uint32_t, align_window, 1000)
+
+CONFPROP(int32_t, max_loop_count, -1)
+
+private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
     static constexpr char STREAM_LOOP_INTERVAL[] = "STREAM_LOOP_INTERVAL_MS";
     static constexpr char DAEMONIZE[] = "DAEMONIZE";
@@ -20,16 +82,13 @@ class PropertiesFileReader
     static constexpr char PREDICTION_HORIZON[] = "PREDICTION_HORIZON";
     static constexpr char TUNE_PARAMETERS[] = "TUNE_PARAMETERS";
     static constexpr char RECOMBINE_PARAMETERS[] = "RECOMBINE_PARAMETERS";
-    static constexpr char SQL_PROPERTIES_DIR_KEY[] = "SQL_PROPERTIES_DIR";
     static constexpr char LOG_LEVEL_KEY[] = "LOG_LEVEL";
     static constexpr char DAO_TYPE_KEY[] = "DAO_TYPE";
-    static constexpr char COMMENT_CHARS[] = "#";
     static constexpr char SET_THREAD_AFFINITY[] = "SET_THREAD_AFFINITY";
     static constexpr char MULTISTEP_LEN[] = "MULTISTEP_LEN";
     static constexpr char MULTIOUT[] = "MULTIOUT";
     static constexpr char ONLINE_LEARN_ITER_LIMIT[] = "ONLINE_LEARN_ITER_LIMIT";
     static constexpr char STABILIZE_ITERATIONS_COUNT[] = "STABILIZE_ITERATIONS_COUNT";
-    static constexpr char ERROR_TOLERANCE[] = "ERROR_TOLERANCE";
     static constexpr char SCALING_ALPHA[] = "SCALING_ALPHA";
     static constexpr char CONNECTION_STRING[] = "CONNECTION_STRING";
     static constexpr char SLIDE_COUNT[] = "SLIDE_COUNT";
@@ -44,10 +103,8 @@ class PropertiesFileReader
     static constexpr char TUNE_PARTICLES[] = "TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
     static constexpr char TUNE_ITERATIONS[] = "TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
+    static constexpr char WEIGHT_COLUMNS[] = "WEIGHT_COLUMNS"; // Number of columns to use for weights in OEMD
 
-    MessageProperties property_files;
-    char delimiter;
-    std::string property_files_location;
     ConcreteDaoType dao_type;
     size_t feature_quantization_;
     double prediction_horizon_;
@@ -59,68 +116,84 @@ class PropertiesFileReader
     std::string db_connection_string_;
     boost::log::trivial::severity_level log_level_;
     bool self_request_;
-    long max_loop_count_;
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     bool daemonize_;
     uint16_t num_quantisations_, quantisation_divisor_, tune_particles_, tune_iterations_;
-    uint16_t oemd_column_interleave_, oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
+    uint16_t oemd_column_interleave_, oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_, weight_columns_;
     float solve_iterations_coefficient_;
 
-    size_t read_property_file(std::string property_file_name);
-    bool is_comment(const std::string &line);
-    bool is_multiline(const std::string &line);
-
-    const std::string &get_property_value(const std::string &property_file, const std::string &key, const std::string &default_value);
-
 public:
-    virtual ~PropertiesFileReader() {}
+    virtual ~AppConfig()
+    {}
 
-    explicit PropertiesFileReader(const std::string& app_config_file, char delimiter = '=');
-    const MessageProperties::mapped_type& read_properties(const std::string &property_file);
-
-    template<typename T> T get_property(const std::string &property_file, const std::string &key, const std::string &default_value = "")
-    {
-        return boost::lexical_cast<T>(get_property_value(property_file, key, default_value));
-    }
+    explicit AppConfig(const std::string &app_config_file, const char delimiter = '=');
 
     static uint8_t S_log_threshold;
 
     ConcreteDaoType get_dao_type() const noexcept;
+
     size_t get_default_feature_quantization() const noexcept;
+
     double get_prediction_horizon() const noexcept;
+
     const std::string &get_db_connection_string() const noexcept;
+
     bool get_set_thread_affinity() const noexcept;
+
     size_t get_multistep_len() const noexcept;
+
     size_t get_multiout() const noexcept;
+
     size_t get_online_learn_iter_limit() const noexcept;
+
     size_t get_stabilize_iterations_count() const noexcept;
-    double get_error_tolerance() const noexcept;
+
     double get_scaling_alpha() const noexcept;
+
     bool get_tune_parameters() const noexcept;
+
     bool get_recombine_parameters() const noexcept;
+
     size_t get_slide_count() const noexcept;
+
     size_t get_slide_skip() const noexcept;
+
     size_t get_validation_window() const noexcept;
+
     size_t get_tune_run_limit() const noexcept;
+
     boost::log::trivial::severity_level get_log_level() const noexcept;
+
     bool get_self_request() const noexcept;
-    long get_max_loop_count() const noexcept;
+
     std::chrono::milliseconds get_loop_interval() const noexcept;
+
     std::chrono::milliseconds get_stream_loop_interval() const noexcept;
+
     bool get_daemonize() const noexcept;
+
     uint16_t get_num_quantisations() const noexcept;
+
     uint16_t get_quantisation_divisor() const noexcept;
+
     uint16_t get_oemd_column_interleave() const noexcept;
+
     uint16_t get_oemd_quantisation_skipdiv() const noexcept;
+
     uint16_t get_oemd_tune_particles() const noexcept;
+
     uint16_t get_oemd_tune_iterations() const noexcept;
+
     uint16_t get_tune_particles() const noexcept;
+
     uint16_t get_tune_iterations() const noexcept;
+
+    uint16_t get_weight_columns() const noexcept;
+
     float get_solve_iterations_coefficient() const noexcept;
 };
 
+using MessageSource_ptr = std::shared_ptr<common::AppConfig>;
 
 } /* namespace common */
 } /* namespace svr */
-
-using MessageSource_ptr = std::shared_ptr<svr::common::PropertiesFileReader>;

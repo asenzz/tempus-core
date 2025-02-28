@@ -1,7 +1,7 @@
 #ifndef PGDECREMENTTASKDAO_HPP
 #define PGDECREMENTTASKDAO_HPP
 
-#include <DAO/DecrementTaskDAO.hpp>
+#include "DAO/DecrementTaskDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -9,7 +9,7 @@ namespace dao {
 class PgDecrementTaskDAO : public DecrementTaskDAO
 {
 public:
-    explicit PgDecrementTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgDecrementTaskDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual bigint get_next_id();
     virtual bool exists(const bigint id);

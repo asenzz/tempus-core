@@ -25,7 +25,7 @@ oemd_coefficients_search::oemd_coefficients_search(const uint16_t levels, const 
         levels(levels),
         max_row_len(business::ModelService::get_max_row_len()), // Not a constexpr because business::ModelService::t_quantisations::get_max_quantisation() is initialized after this class
         label_len(label_len),
-        fir_validation_window(levels * .5 * C_sifted_fir_max_len + C_align_window_oemd * label_len + max_row_len)
+        fir_validation_window(levels * .5 * C_sifted_fir_max_len + PROPS.get_align_window() * label_len + max_row_len)
 {
 }
 
