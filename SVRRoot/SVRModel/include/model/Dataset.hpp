@@ -46,7 +46,7 @@ class Dataset : public Entity
     Priority priority_ = Priority::Normal;
     std::string description_; // Textual description of the dataset
     uint16_t gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
-    uint32_t max_chunk_size_ = common::C_default_kernel_max_chunk_len; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
+    uint32_t max_chunk_size_; // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
     uint16_t multistep_ = common::C_default_multistep_len; // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multistep of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<svr::oemd::online_emd> p_oemd_transformer_fat;
@@ -75,7 +75,7 @@ public:
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
             const uint16_t gradients = common::C_default_gradient_count,
-            const uint32_t chunk_size = common::C_default_kernel_max_chunk_len,
+            const uint32_t chunk_size = common::AppConfig::C_default_kernel_length,
             const uint16_t multistep = common::C_default_multistep_len,
             const uint16_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",
@@ -93,7 +93,7 @@ public:
             const Priority &priority = Priority::Normal,
             const std::string &description = "",
             const uint16_t gradients = common::C_default_gradient_count,
-            const uint32_t chunk_size = common::C_default_kernel_max_chunk_len,
+            const uint32_t chunk_size = common::AppConfig::C_default_kernel_length,
             const uint16_t multistep = common::C_default_multistep_len,
             const uint16_t transformation_levels = common::C_default_level_count,
             const std::string &transformation_name = "cvmd",

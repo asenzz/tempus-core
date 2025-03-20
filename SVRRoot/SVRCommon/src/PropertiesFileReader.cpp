@@ -123,9 +123,6 @@ uint16_t AppConfig::get_oemd_tune_particles() const noexcept
 uint16_t AppConfig::get_oemd_tune_iterations() const noexcept
 { return oemd_tune_iterations_; }
 
-uint16_t AppConfig::get_weight_columns() const noexcept
-{ return weight_columns_; }
-
 size_t PropertiesReader::read_property_file(std::string property_file_name)
 {
     const tbb::mutex::scoped_lock lk(load_mx);
@@ -222,7 +219,6 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     tune_particles_ = get_property<DTYPE(tune_particles_) >(app_config_file, TUNE_PARTICLES, C_default_tune_particles);
     tune_iterations_ = get_property<DTYPE(tune_iterations_) >(app_config_file, TUNE_ITERATIONS, C_default_tune_iterations);
     solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);
-    weight_columns_ = get_property<DTYPE(weight_columns_) >(app_config_file, WEIGHT_COLUMNS, C_default_weight_columns);
 }
 
 ConcreteDaoType AppConfig::get_dao_type() const noexcept

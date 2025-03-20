@@ -13,14 +13,78 @@
 namespace svr {
 namespace datamodel {
 
+e_kernel_type fromstring(const std::string &kernel_type_str)
+{
+    e_kernel_type kernel_type = e_kernel_type::begin;
+
+    if (kernel_type_str == "LINEAR")
+        kernel_type = e_kernel_type::LINEAR;
+    else if (kernel_type_str == "POLYNOMIAL")
+        kernel_type = e_kernel_type::POLYNOMIAL;
+    else if (kernel_type_str == "RBF")
+        kernel_type = e_kernel_type::RBF;
+    else if (kernel_type_str == "RBF_GAUSSIAN")
+        kernel_type = e_kernel_type::RBF_GAUSSIAN;
+    else if (kernel_type_str == "RBF_EXPONENTIAL")
+        kernel_type = e_kernel_type::RBF_EXPONENTIAL;
+    else if (kernel_type_str == "MLP")
+        kernel_type = e_kernel_type::MLP;
+    else if (kernel_type_str == "GA")
+        kernel_type = e_kernel_type::GA;
+    else if (kernel_type_str == "PATH")
+        kernel_type = e_kernel_type::PATH;
+    else if (kernel_type_str == "DEEP_PATH")
+        kernel_type = e_kernel_type::DEEP_PATH;
+    else if (kernel_type_str == "DTW")
+        kernel_type = e_kernel_type::DTW;
+    else
+        THROW_EX_FS(std::invalid_argument, "Incorrect kernel type.");
+
+    return kernel_type;
+}
+
+std::string tostring(const e_kernel_type kt)
+{
+    switch (kt) {
+        case e_kernel_type::begin:
+            return "begin";
+        case e_kernel_type::LINEAR:
+            return "LINEAR";
+        case e_kernel_type::POLYNOMIAL:
+            return "POLYNOMIAL";
+        case e_kernel_type::RBF:
+            return "RBF";
+        case e_kernel_type::RBF_GAUSSIAN:
+            return "RBF_GAUSSIAN";
+        case e_kernel_type::RBF_EXPONENTIAL:
+            return "RBF_EXPONENTIAL";
+        case e_kernel_type::GA:
+            return "GA";
+        case e_kernel_type::PATH:
+            return "PATH";
+        case e_kernel_type::DEEP_PATH:
+            return "DEEP_PATH";
+        case e_kernel_type::DTW:
+            return "DTW";
+        case e_kernel_type::end:
+            return "end";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+std::ostream &operator<<(std::ostream &os, const e_kernel_type &kt)
+{
+    return os << tostring(kt);
+}
+
 std::ostream &operator<<(std::ostream &s, const t_feature_mechanics &fm)
 {
-    s << "quantization " << common::present(fm.quantization)
+    return s << "quantization " << common::present(fm.quantization)
       << ", stretches " << common::present(fm.stretches)
       << ", shifts " << common::present(fm.shifts)
       << ", skips " << common::present(fm.skips)
       << ", trims front " << (fm.trims.empty() ? std::string("empty") : common::present(fm.trims.front()));
-    return s;
 }
 
 e_kernel_type operator++(e_kernel_type &k_type)
@@ -37,25 +101,9 @@ e_kernel_type operator++(e_kernel_type &k_type, int)
     return tmp;
 }
 
-bool less_SVRParameters_ptr::operator()(const datamodel::SVRParameters_ptr &lhs, const datamodel::SVRParameters_ptr &rhs) const
+bool less_SVRParameters_ptr::operator()(const SVRParameters_ptr &lhs, const SVRParameters_ptr &rhs) const
 {
     return lhs->operator<(*rhs);
-}
-
-void t_param_preds::free_predictions(const t_predictions_ptr &p_predictions_)
-{
-    if (!p_predictions_) return;
-    UNROLL(C_max_j)
-    for (DTYPE(C_max_j) j = 0; j < C_max_j; ++j)
-        if (p_predictions_->at(j))
-            delete p_predictions_->at(j);
-    delete p_predictions_;
-    // p_predictions_ = nullptr;
-}
-
-void t_param_preds::free()
-{
-    free_predictions(p_predictions);
 }
 
 SVRParameters::SVRParameters(
@@ -413,7 +461,7 @@ bool SVRParameters::is_manifold() const
 
 void SVRParameters::set_kernel_type(const e_kernel_type _kernel_type) noexcept
 {
-    if (_kernel_type < e_kernel_type::number_of_kernel_types)
+    if (_kernel_type < e_kernel_type::end)
         kernel_type = _kernel_type;
     else
         THROW_EX_FS(std::invalid_argument, "Wrong kernel type " << (ssize_t) _kernel_type);
@@ -537,6 +585,11 @@ bool SVRParameters::from_sql_string(const std::string &sql_string)
     LOG4_DEBUG("Successfully loaded parameters " << to_sql_string());
 
     return true;
+}
+
+std::ostream &operator<<(std::ostream &os, const SVRParameters &e)
+{
+    return os << e.to_string();
 }
 
 bool t_feature_mechanics::needs_tuning() const noexcept

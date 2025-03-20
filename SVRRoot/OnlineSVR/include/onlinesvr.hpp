@@ -31,7 +31,7 @@ namespace datamodel {
 
 /*
  * Kernel matrix is set like this:
-    auto kernel = IKernel<double>::get_kernel(svr_parameters.get_kernel_type(),svr_parameters);
+    auto kernel = IKernel<double>::get_kernel(template_parameters.get_kernel_type(),template_parameters);
     for (ssize_t i = 0; i < samples_trained_number; ++i) {
         for (ssize_t j = 0; j <= i; ++j) {
             const auto value = (*kernel)(X->get_row_ref(i), X->get_row_ref(j));
@@ -62,11 +62,7 @@ class OnlineMIMOSVR final : public Entity
     friend class boost::serialization::access;
 
     constexpr static unsigned C_epscos_len = 1;
-    static constexpr uint32_t C_manifold_interleave = 20; // Every Nth row is used from a manifold dataset to train the produced model
-    static constexpr float C_tune_range_min_lambda = 0;
-    static constexpr float C_tune_range_max_lambda = 10;
-    static constexpr uint16_t C_predict_chunks = 100;
-    static constexpr uint16_t C_solve_opt_particles = 80;
+    static constexpr uint16_t C_solve_opt_particles = 100;
     static constexpr double C_diff_coef = 1;
 
     t_weight_scaling_factors weight_scaling_factors;
@@ -88,11 +84,11 @@ class OnlineMIMOSVR final : public Entity
     std::deque<std::pair<double, double>> chunks_score;
     arma::mat all_weights;
     uint16_t multiout = common::C_default_multiout;
-    uint32_t max_chunk_size = common::C_default_kernel_max_chunk_len;
+    uint32_t max_chunk_size;
     uint16_t gradient = C_default_svrparam_grad_level;
     uint16_t level = C_default_svrparam_decon_level;
     uint16_t step = C_default_svrparam_step;
-    uint16_t projection = 0;
+    uint16_t active_chunks, start_predict_chunk, projection = 0;
 
     virtual void init_id() override;
 
@@ -109,10 +105,9 @@ class OnlineMIMOSVR final : public Entity
     arma::mat predict_chunk_t(const arma::mat &x_predict);
 
 public:
-    static constexpr magma_int_t C_rbt_iter = 40; // default 30
+    static constexpr magma_int_t C_rbt_iter = 40;
     static constexpr float C_rbt_threshold = 0; // [0..1] default 1
-    static constexpr uint16_t C_features_superset_coef = 100; // [1..+inf)
-    static constexpr float C_chunk_overlap = 0; // Do not use with manifolds 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
+    static constexpr float C_chunk_overlap = 0; // TODO Consider removing overlap logic, Do not use with manifolds 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
     static constexpr float C_chunk_offlap = 1. - C_chunk_overlap;
     static constexpr float C_chunk_tail = .1;
     static constexpr float C_chunk_header = 1. - C_chunk_tail;
@@ -215,6 +210,8 @@ public:
 
     void tune_fast();
 
+    void tune_sys();
+
     void recombine_params(const unsigned chunkix, const unsigned stepix);
 
 #if defined(TUNE_HYBRID)
@@ -239,7 +236,7 @@ public:
 
     arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
 
-    arma::mat manifold_predict(const arma::mat &x_predict) const;
+    arma::mat manifold_predict(const arma::mat &x_predict, const boost::posix_time::ptime &time) const;
 
     t_gradient_data produce_residuals();
 
@@ -253,36 +250,9 @@ public:
 
     arma::mat &get_labels();
 
-    static mat_ptr prepare_Ky(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t,
-                              const bpt::ptime &predict_time, const bpt::ptime &trained_time);
+    static std::tuple<double, double> calc_gamma(const arma::mat &Z, const arma::mat &L);
 
-    static mat_ptr prepare_Ky(const SVRParameters &svr_parameters, const arma::mat &x_train_t, const arma::mat &x_predict_t);
-
-    static mat_ptr prepare_Ky(business::calc_cache &ccache, const datamodel::SVRParameters &params, const arma::mat &x_train_t, const arma::mat &x_predict_t,
-                                      const bpt::ptime &predict_time, const bpt::ptime &trained_time, const uint8_t devices);
-
-    static mat_ptr prepare_K(business::calc_cache &ccache, SVRParameters &params, const arma::mat &x_t, const bpt::ptime &time);
-
-    static mat_ptr prepare_K(SVRParameters &params, const arma::mat &x_t);
-
-    static mat_ptr prepare_Z(business::calc_cache &ccache, SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
-
-    static mat_ptr prepare_Z(SVRParameters &params, const arma::mat &features_t);
-
-    static mat_ptr prepare_Zy(business::calc_cache &ccache, const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t,
-                              const bpt::ptime &predict_time, const bpt::ptime &trained_time);
-
-    static mat_ptr prepare_Zy(const SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t);
-
-    static std::shared_ptr<std::deque<arma::mat>> prepare_cumulatives(const SVRParameters &params, const arma::mat &features_t);
-
-    static mat_ptr all_cumulatives(const SVRParameters &p, const arma::mat &features_t);
-
-    static double calc_gamma(const arma::mat &Z, const arma::mat &L);
-
-    static double calc_gamma(const arma::mat &Z, const arma::mat &L, const double bias);
-
-    static arma::vec calc_gammas(const arma::mat &Z, const arma::mat &L, const double bias);
+    static arma::vec calc_gammas(const arma::mat &Z, const arma::mat &L);
 
     static double calc_epsco(const arma::mat &K, const arma::mat &labels);
 
@@ -312,6 +282,12 @@ public:
     static void self_predict(const unsigned m, const unsigned n, CRPTRd K, CRPTRd w, CRPTRd rhs, RPTR(double) diff);
 
     static arma::mat self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs);
+
+    template<typename T> static inline arma::Mat<T> prepare_labels(const arma::Mat<T> &labels)
+    {
+        return labels * labels.n_elem - arma::sum(arma::vectorise(labels));
+    }
+
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
@@ -323,49 +299,45 @@ constexpr uint8_t get_streams_per_gpu(const uint32_t n_rows)
     return boost::math::ccmath::fmax(1, boost::math::ccmath::round(.04 * C_max_alloc_gpu / (n_rows * n_rows)));
 }
 
-class cuvalidate {
-    static constexpr auto streams_per_gpu = get_streams_per_gpu(common::C_default_kernel_max_chunk_len);
+class cusys {
+    static constexpr auto streams_per_gpu = 6;
     static const uint16_t n_gpus;
 
-    static constexpr uint8_t irwls_iters = 4, magma_iters = 4;
-    static constexpr double one = 1, oneneg = -1, zero = 0;
-    static constexpr uint32_t train_clamp = 0; // C_test_len
-    const solvers::mmm_t &train_L_m;
-    const double labels_sf, iters_mul;
+    static constexpr uint32_t train_clamp = 0;
+    SVRParameters template_parameters;
+    const solvers::mmm_t &L3m;
     const bool weighted;
     const uint16_t dim, lag_tile_width, lag;
-    const uint32_t m, n, train_len, tune_len, calc_start, calc_len, train_F_rows, train_F_cols, train_cuml_rows, tune_F_rows, tune_F_cols, tune_cuml_rows; // calc len of 3000 seems to work best
-    const uint64_t mm, mm_size, K_train_len, K_train_size, train_len_n, train_n_size, tune_len_n, tune_n_size, K_tune_len;
+    const uint32_t n, train_len, tune_len, tune_len_n, calc_start, calc_len, train_F_rows, train_F_cols; // calc len of 3000 seems to work best
+    const uint64_t K_train_len, K_train_size, train_len_n, train_n_size, tune_n_size, K_tune_len;
+    const arma::mat ref_K;
+    const double ref_K_mean, ref_K_meanabs;
 
     struct dev_ctx {
         struct stream_ctx {
             cudaStream_t custream;
             cublasHandle_t cublas_H;
             magma_queue_t ma_queue;
-            double *d_K_train, *K_train_off, *d_K_epsco, *j_solved, *j_work, *j_K_work, *d_best_weights, *d_Kz_tune;
+            double *d_K_train, *K_train_off, *j_work, *j_K_work, *d_best_weights;
         };
-        double *d_train_label_chunk, *d_tune_label_chunk, *train_label_off, *d_train_features_t, *d_train_cuml, *d_train_W, *d_tune_W, *d_tune_features_t, *d_tune_cuml;
+        double *d_train_label_chunk, *train_label_off, *d_train_cuml, *d_train_W, *d_K_train_l, *d_ref_K;
         std::deque<stream_ctx> sx;
     };
     std::deque<dev_ctx> dx;
 
 public:
-    cuvalidate(
-            const uint16_t lag,
-            const arma::mat &tune_cuml, const arma::mat &train_cuml,
-            const arma::mat &tune_features_t, const arma::mat &train_features_t,
-            const arma::mat &tune_label_chunk, const arma::mat &train_label_chunk,
-            const arma::mat &tune_W, const arma::mat &train_W, const solvers::mmm_t &train_L_m, const double labels_sf);
-    ~cuvalidate();
+    static SVRParameters make_tuning_template(const SVRParameters &sample_parameters);
 
-    std::tuple<double, double, double, t_param_preds::t_predictions_ptr> operator()(const double lambda, const double gamma_bias, const double tau) const;
+    cusys(const uint16_t lag, const arma::mat &train_cuml, const arma::mat &train_label_chunk, const arma::mat &train_W, const solvers::mmm_t &L3m, const SVRParameters &parameters);
+    ~cusys();
+    std::tuple<double, double, double> operator()(const double lambda, const double tau) const;
 };
 
 } // datamodel
 } // svr
 
 #define MANIFOLD_SET(_MX_, _MY_, _NX_, _NY_, _OX_, _OY_) {  \
-    (_MX_) = arma::join_rows((_NX_), (_OY_));               \
+    (_MX_) = arma::join_rows((_NX_), (_OX_));               \
     (_MY_) = (_NY_) - (_OY_); }
 
 #include "onlinesvr_persist.tpp"

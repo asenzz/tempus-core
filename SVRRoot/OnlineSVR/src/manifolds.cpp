@@ -2,7 +2,6 @@
 // Created by zarko on 11/11/21.
 //
 
-#include "common/compatibility.hpp"
 #include <armadillo>
 #include <cmath>
 #include <cstddef>
@@ -10,6 +9,8 @@
 #include <random>
 #include <vector>
 #include <xoshiro.h>
+#include "common/compatibility.hpp"
+#include "appcontext.hpp"
 
 #ifdef EXPERIMENTAL_FEATURES
 #pragma GCC diagnostic push
@@ -161,68 +162,67 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
             p_manifold_parameters->set_kernel_type(datamodel::e_kernel_type::PATH);
             break;
         default:
-            LOG4_ERROR("Kernel type " << int(p->get_kernel_type()) << " not handled.");
+            LOG4_ERROR("Kernel type " << p->get_kernel_type() << " not handled.");
             return;
     }
-    const uint32_t n_rows = p_features->n_rows;
+    assert(ixs.size() == 1);
+    const arma::mat prepared_features = feature_chunk_t(ixs[0]).t(); // TODO Remove dual transpose
+    const uint32_t n_rows = prepared_features.n_rows;
     const auto n_learning_rows = std::min<uint32_t>(n_rows, p->get_svr_decremental_distance());
-    const auto n_manifold_samples = n_rows * n_rows / C_manifold_interleave;
-    p_manifold_parameters->set_svr_decremental_distance(n_learning_rows * n_learning_rows / C_manifold_interleave);
+    const uint32_t n_manifold_samples = n_rows * n_rows / PROPS.get_interleave();
+    p_manifold_parameters->set_svr_decremental_distance(n_learning_rows * n_learning_rows / PROPS.get_interleave());
     p_manifold_parameters->set_chunk_index(0);
     {
         auto &fm = p_manifold_parameters->get_feature_mechanics();
-        fm.stretches.insert_cols(fm.stretches.n_cols, fm.stretches);
-        fm.shifts.insert_cols(fm.shifts.n_cols, fm.shifts);
-        // fm.skips.insert_cols(fm.skips.n_cols, fm.skips);
+        fm.stretches = arma::fvec(prepared_features.n_cols * 2, arma::fill::ones); // arma::join_cols(fm.stretches, fm.stretches);
+        fm.shifts = arma::u32_vec(prepared_features.n_cols * 2, arma::fill::zeros); // arma::join_cols(fm.shifts, fm.shifts);
+        // fm.skips = arma::join_cols(fm.skips, fm.skips);
     }
     p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
-    p_manifold->projection = projection + 1;
+    p_manifold->projection += 1;
 
-    auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, p_features->n_cols * 2, arma::fill::none);
+    auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, prepared_features.n_cols * 2, arma::fill::none);
     auto p_manifold_labels = ptr<arma::mat>(p_manifold_features->n_rows, p_labels->n_cols, arma::fill::none);
     auto p_manifold_lastknowns = ptr<arma::vec>(p_manifold_features->n_rows, arma::fill::none);
     auto p_manifold_weights = ptr<arma::mat>(arma::size(*p_manifold_labels), arma::fill::none);
 
-    arma::cube L_diff(n_rows, n_rows, p_labels->n_cols), L_weights(n_rows, n_rows, p_labels->n_cols);
-    {
-        /* L diff matrix:
-         * L0 - L0, L0 - L1, L0 - L2, ..., L0 - Lm
-         * L1 - L0, L1 - L1, L1 - L2, ..., L1 - Lm
-         * ...
-         * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
-         */
-        const arma::mat L_t = p_labels->t();
-        const arma::mat weights_t = p_input_weights->t();
-        OMP_FOR_(n_rows * p_labels->n_cols, SSIMD collapse(2))
-        for (uint32_t r = 0; r < n_rows; ++r)
-            for (uint32_t c = 0; c < p_labels->n_cols; ++c) {
-                L_diff.slice(c).row(r) = p_labels->at(r, c) - L_t.row(c); // Asymmetric distances cube
-                L_weights.slice(c).row(r) = p_input_weights->at(r, c) - weights_t.row(c); // Weights cube TODO Verify
-            }
-    }
-    common::threadsafe_uniform_int_distribution<uint32_t> rand_int(0, C_manifold_interleave - 1);
-    auto gen = common::reproducibly_seeded_64<xso::rng64>();
-    t_omp_lock lk;
+    /* L diff matrix:
+     * L0 - L0, L0 - L1, L0 - L2, ..., L0 - Lm
+     * L1 - L0, L1 - L1, L1 - L2, ..., L1 - Lm
+     * ...
+     * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
+     */
+    std::uniform_int_distribution<uint32_t> rand_int(0, PROPS.get_interleave() - 1);
+    // auto gen = common::reproducibly_seeded_64<xso::rng64>(); // TODO Freezes on operator() fix
+    // auto gen = std::mt19937_64((uint_fast64_t) common::pseudo_random_dev::max(PROPS.get_interleave()));
+    t_omp_lock r_lock;
+    const auto manifold_interleave = PROPS.get_interleave();
     OMP_FOR_(n_rows * n_rows * p_labels->n_cols, SSIMD collapse(3))
     for (uint32_t i = 0; i < n_rows; ++i)
         for (uint32_t j = 0; j < n_rows; ++j)
             for (uint32_t k = 0; k < p_labels->n_cols; ++k) {
                 const auto r = i + j * n_rows; // Column by column ordering
-                if (r % C_manifold_interleave == 0) {
-                    const auto r_out = r / C_manifold_interleave;
+                if (r % manifold_interleave == 0) {
+                    const auto r_out = r / manifold_interleave;
                     if (r_out < n_manifold_samples) {
+                        /*
+                        r_lock.set();
                         const auto rand_int_g = rand_int(gen);
+                        r_lock.unset();
+                        */
+                        const auto rand_int_g = 0;
                         const auto r_i = common::bounce<uint32_t>(i + rand_int_g, n_rows - 1);
                         const auto r_j = common::bounce<uint32_t>(j + rand_int_g, n_rows - 1);
-                        p_manifold_labels->at(r_out, k) = L_diff(r_i, r_j, k);
-                        p_manifold_features->row(r_out) = arma::join_rows(p_features->row(r_i), p_features->row(r_j));
+                        MANIFOLD_SET(
+                                p_manifold_features->row(r_out), p_manifold_labels->at(r_out, k),
+                                prepared_features.row(r_j), p_labels->at(r_j, k),
+                                prepared_features.row(r_i), p_labels->at(r_i, k))
                     }
                 }
             }
 
-    L_diff.clear();
     LOG4_DEBUG("Generated " << arma::size(*p_manifold_labels) << " manifold label matrix and " << arma::size(*p_manifold_features) <<
-                " manifold feature matrix from " << arma::size(*p_features) << " feature matrix and " << arma::size(*p_labels) << " label matrix.");
+                            " manifold feature matrix from " << arma::size(prepared_features) << " feature matrix and " << arma::size(*p_labels) << " label matrix.");
     p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_lastknowns, p_manifold_weights, last_value_time);
 }
 
@@ -231,21 +231,29 @@ datamodel::SVRParameters_ptr OnlineMIMOSVR::is_manifold() const
     return business::SVRParametersService::is_manifold(param_set);
 }
 
-arma::mat OnlineMIMOSVR::manifold_predict(const arma::mat &x_predict) const
+arma::mat OnlineMIMOSVR::manifold_predict(const arma::mat &x_predict, const boost::posix_time::ptime &time) const
 {
     arma::mat result(x_predict.n_rows, p_labels->n_cols);
-    arma::SizeMat predict_size(p_features->n_rows, x_predict.n_cols + p_features->n_cols);
+    const auto manifold_interleave = PROPS.get_interleave();
+    const arma::SizeMat predict_size(p_features->n_rows / manifold_interleave, x_predict.n_cols + p_features->n_cols);
+    arma::uvec predict_rows(predict_size.n_rows);
+    OMP_TASKLOOP(p_features->n_rows)
+    for (uint32_t i_x = 0; i_x < p_features->n_rows; ++i_x)
+        if (i_x % manifold_interleave)
+            predict_rows[i_x / manifold_interleave] = i_x;
+
+    const auto predict_labels = p_labels->rows(predict_rows);
+
 #pragma omp parallel ADJ_THREADS(x_predict.n_rows * p_features->n_rows)
 #pragma omp single
     {
-        OMP_TASKLOOP_(x_predict.n_rows, SSIMD)
+        OMP_TASKLOOP(x_predict.n_rows)
         for (uint32_t i_p = 0; i_p < x_predict.n_rows; ++i_p) {
             common::memory_manager::get().barrier();
-            arma::mat predict_features(predict_size);
-            OMP_TASKLOOP_(p_features->n_rows, SSIMD)
-            for (uint32_t i_x = 0; i_x < p_features->n_rows; ++i_x)
-                predict_features.row(i_x) = arma::join_rows(x_predict.row(i_p), p_features->row(i_x));
-            result.row(i_p) = arma::mean(*p_labels + p_manifold->predict(predict_features));
+            result.row(i_p) =
+                    arma::mean(arma::vectorise(predict_labels + p_manifold->predict(
+                            arma::join_rows(common::extrude_cols<double>(x_predict.row(i_p), predict_size.n_rows), p_features->rows(predict_rows)),
+                            bpt::not_a_date_time)));
         }
     }
     return result;

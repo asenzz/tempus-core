@@ -54,17 +54,17 @@ __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd feature
 __global__ void G_align_features(
         CRPTRd features, CRPTRd labels,
         RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts, RPTR(float) skips,
-        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate)
+        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate,
+        const uint32_t shift_limit, const float stretch_multiplier)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
         CPTRd features_col = features + n_rows * i;
-        UNROLL(common::C_shift_lim / 10)
-        for (uint32_t sh = 0; sh < common::C_shift_lim; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
+        for (uint32_t sh = 0; sh < shift_limit; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
             CPTRd labels_sh = labels + sh;
             const auto validate_rows = n_rows - sh;
             UNROLL()
-            for (float st = 1; st > stretch_limit; st *= C_stretch_multiplier) {
+            for (float st = 1; st > stretch_limit; st *= stretch_multiplier) {
 // UNROLL()
 //                for (float sk = 1; sk < C_skip_limit; sk *= C_skip_multiplier) {
                 const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1, align_validate);
@@ -85,7 +85,7 @@ void align_features(
         RPTR(uint32_t) p_shifts, float *const p_skips, const uint32_t n_rows, const uint32_t n_cols)
 {
     const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
-    assert(n_rows_integration - common::C_shift_lim >= PROPS.get_align_window());
+    assert(n_rows_integration - PROPS.get_shift_limit() >= PROPS.get_align_window());
 
     LOG4_TRACE("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols);
 
@@ -102,7 +102,8 @@ void align_features(
     cu_errchk(cudaMallocAsync((void **) &d_skips, cols_size_float, custream));
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
-    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols, 0, C_stretch_limit, PROPS.get_align_window());
+    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(),
+                                                                 PROPS.get_align_window(), PROPS.get_shift_limit(), PROPS.get_stretch_coef());
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);

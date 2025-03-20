@@ -80,7 +80,7 @@ protected:
 
     void InitDataset(){
         testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, user_name, testQueue, std::deque<datamodel::InputQueue_ptr>{},
-                                                                priority, "description", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
+                                                                priority, "description", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
                                                                 max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
     }
@@ -95,7 +95,7 @@ protected:
                                                  valueColumns.size(), testDataNumberToGenerate);
 
         // generate some random data
-        //PROFILE_EXEC_TIME( { while ( !dataGenerator.isDone() ); do {
+        //PROFILE_MSG( { while ( !dataGenerator.isDone() ); do {
         //    datamodel::DataRow_ptr row = dataGenerator();
         //    aci.input_queue_service.add_row(testQueue, row);
         //} };, "Generating " << testDataNumberToGenerate << " InputQueue rows");
@@ -171,7 +171,7 @@ TEST_F(EnsembleIntegrationTests, testEnsembleCRUD)
 #if 0
     for (size_t i = 0; i < ensembles.size(); ++i) {
         datamodel::Ensemble_ptr &p_ensemble = ensembles.at(i);
-         PROFILE_EXEC_TIME(
+         PROFILE_MSG(
                 aci.ensemble_service.train(
                     testDataset, p_ensemble, testDataset->get_ensemble_svr_parameters()[p_ensemble->get_key_pair()],
                     testDataset->get_max_lookback_time_gap(), 0),
@@ -183,7 +183,7 @@ TEST_F(EnsembleIntegrationTests, testEnsembleCRUD)
         ASSERT_EQ(p_ensemble->get_models().size(), testDataset->get_spectral_levels() + 1);
     }
 
-    PROFILE_EXEC_TIME(aci.ensemble_service.save_ensembles(ensembles, true), "Persisting ensemble models");
+    PROFILE_MSG(aci.ensemble_service.save_ensembles(ensembles, true), "Persisting ensemble models");
 
     for (const datamodel::Ensemble_ptr &p_ensemble : ensembles)
     {

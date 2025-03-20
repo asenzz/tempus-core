@@ -83,8 +83,8 @@ std::string present_chunk(const arma::uvec &u, const double head_factor)
     const size_t head_n = u.n_rows * head_factor;
     std::stringstream s;
     s << "size " << arma::size(u);
-    if (u.n_rows < 20)
-        s << ", elements " << u;
+    if (u.n_elem < 20)
+        s << ", elements " << to_string(u, u.n_elem);
     else
         s << ", head len " << head_n << ", tail len " << u.n_rows - head_n <<
           ", head " << to_string(u, 0, 5) <<
@@ -216,7 +216,7 @@ size_t next_power_of_two(size_t value)
 double get_uniform_random_value()
 {
     static std::random_device rd;  // Will be used to obtain a seed for the random number engine
-    static std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    static std::mt19937_64 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
     static std::mutex uniform_random_value_mutex;
     std::scoped_lock ml(uniform_random_value_mutex);
     std::uniform_real_distribution<double> dis(0., 1.);

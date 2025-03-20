@@ -46,7 +46,7 @@ OnlineMIMOSVR::batch_train(
             LOG4_ERROR("Kernel matrices provided will be cleared because SVR kernel parameters are not initialized!");
             kernel_matrices->clear();
         }
-//        PROFILE_EXEC_TIME(tune_kernel_params(p_param_set, *p_xtrain, *p_ytrain), "Tune kernel params for model " << p_param_set->get_decon_level());
+//        PROFILE_MSG(tune_kernel_params(p_param_set, *p_xtrain, *p_ytrain), "Tune kernel params for model " << p_param_set->get_decon_level());
     }
     if (p_xtrain->n_rows > p_param_set->get_svr_decremental_distance())
         p_xtrain->shed_rows(0, p_xtrain->n_rows - p_param_set->get_svr_decremental_distance() - 1);
@@ -99,7 +99,7 @@ OnlineMIMOSVR::batch_train(
     update_total_weights();
     samples_trained = p_features->n_rows;
 
-    if (update_r_matrix) PROFILE_EXEC_TIME(init_r_matrix(), "init_r_matrix");
+    if (update_r_matrix) PROFILE_MSG(init_r_matrix(), "init_r_matrix");
 }
 
 arma::mat OnlineMIMOSVR::grad_predict(const arma::mat &x_predict, const bpt::ptime &pred_time)

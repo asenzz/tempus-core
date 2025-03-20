@@ -11,8 +11,6 @@
 
 namespace svr {
 
-constexpr float C_stretch_multiplier = 1 - 1e-3; // (1, 0) Closer to 1, higher precision, slower tuning
-constexpr float C_stretch_limit = .5; // (0..1] Lower is higher precision slower tuning. // Seems like it should be chunk len / decrement offset
 constexpr float C_skip_multiplier = 1. + 1e-3;
 constexpr float C_skip_limit = C_skip_multiplier;
 
@@ -34,7 +32,7 @@ __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { r
 __global__ void G_align_features(
         CRPTRd features, CRPTRd labels,
         RPTR(double) scores, RPTR(float) stretches, RPTR(unsigned) shifts, RPTR(float) skips, const uint32_t n_rows, const uint32_t n_cols,
-        const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate);
+        const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate, const uint32_t shift_limit, const float stretch_multiplier);
 
 __global__ void G_quantise_features(
         RPTR(double) features /* zeroed out before */, CRPTRd d_decon_F, CRPTR(t_feat_params) d_feat_params,

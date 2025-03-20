@@ -64,7 +64,7 @@ TEST(mimo_train_predict, batch_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows),
+    PROFILE_MSG(online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows),
                                               {}, bpt::not_a_date_time), "Batch Train");
 
 //    EXPECT_NEAR(online_svr_.get_mimo_model().get_weights(0)(1,2), mimo_model->get_weights(0)(1,2), TOLERANCE);
@@ -99,7 +99,7 @@ TEST(mimo_train_predict, chunk_train)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(
+    PROFILE_MSG(
             online_svr_.batch_train(std::make_shared<arma::mat>(x_train), std::make_shared<arma::mat>(y_train), std::make_shared<arma::vec>(y_train.n_rows),
                     {}, bpt::not_a_date_time), "Batch Train");
 
@@ -194,7 +194,7 @@ TEST(mimo_train_predict, batch_train_repeated)
         svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(),
                                    mimo_model->get_multistep_len());
 
-        PROFILE_EXEC_TIME(mimo_model_.batch_train(x_train, y_train, false),
+        PROFILE_MSG(mimo_model_.batch_train(x_train, y_train, false),
                           "Batch Train");
         LOG4_DEBUG("weights: " << mimo_model_.get_weights(0)(1,2) << " " << mimo_model_.get_weights(0)(2,3) << " " << mimo_model_.get_weights(0)(100,7));
         EXPECT_NEAR(mimo_model_.get_weights(0)(1, 2),
@@ -233,7 +233,7 @@ TEST(mimo_train_predict, batch_train_gr)
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
-    PROFILE_EXEC_TIME(online_svr_.get_mimo_model().nesterov_train(x_train, y_train, 100),
+    PROFILE_MSG(online_svr_.get_mimo_model().nesterov_train(x_train, y_train, 100),
                       "Batch Train NADAM epoch count 100");
 
     //online_svr_.get_mimo_model().nesterov_train(x_train, y_train, 50);
@@ -466,7 +466,7 @@ TEST(mimo_online_train, batch_train_forget_learn)
     LOG4_DEBUG("Learning data rows " << x_train.n_rows
                                      << ", reference data rows " << y_train.n_rows);
 
-    PROFILE_EXEC_TIME(online_svr_.get_mimo_model().batch_train(x_train, y_train, true),
+    PROFILE_MSG(online_svr_.get_mimo_model().batch_train(x_train, y_train, true),
                       "Batch Train");
 
 //    size_t last_row_ix = x_train.n_rows - 1;
@@ -593,7 +593,7 @@ TEST(mimo_online_train, multiple_forget_learn)
 
 
 
-    PROFILE_EXEC_TIME(
+    PROFILE_MSG(
             mimo_model_.batch_train(x_train, y_train, true),
             "Batch Train");
 

@@ -25,8 +25,12 @@
 
 namespace bpt = boost::posix_time;
 
+#define ARRAYLEN(X) (sizeof(X) / sizeof((X)[0]))
+#define ARMASIZEOF(X) (X).n_elem * sizeof((X)[0])
+
 #define DTYPE(T) std::decay_t<decltype(T)>
 #define CAST2(x) (DTYPE(x))
+#define PCAST(T, X) (*std::launder(reinterpret_cast<T *>(&(X))) )
 #define RELEASE_CONT(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
 #define CPTR(T) const T *const
@@ -553,7 +557,6 @@ template<typename T> arma::Mat<T>
 toarma(const viennacl::matrix<T> &in)
 {
     arma::Mat<T> r(in.internal_size1(), in.internal_size2());
-
     switch (in.memory_domain()) {
         case viennacl::memory_types::OPENCL_MEMORY:
         case viennacl::memory_types::CUDA_MEMORY:
@@ -565,7 +568,7 @@ toarma(const viennacl::matrix<T> &in)
         default:
             throw std::invalid_argument("Unknown memory domain of matrix " + std::to_string(in.memory_domain()));
     }
-
+    // TODO Fix bug, copy using stride1 and stride2 in consideration depending on row major or col major
     if (in.row_major()) r = r.t();
     if (in.size1() != in.internal_size1()) r.shed_rows(in.size1(), in.internal_size1() - 1);
     if (in.size2() != in.internal_size2()) r.shed_cols(in.size2(), in.internal_size2() - 1);
@@ -694,27 +697,26 @@ void remove_if(ContainerT &items, const PredicateT &predicate)
             ++it;
 }
 
-template<typename T>
-class threadsafe_uniform_int_distribution : private std::uniform_int_distribution<T> {
-    omp_lock_t _lock;
+template<typename T> class threadsafe_uniform_int_distribution : public std::uniform_int_distribution<T> {
+    omp_lock_t *const _p_lock;
 public:
-    threadsafe_uniform_int_distribution(const T &a, const T &b)
-            : std::uniform_int_distribution<T>(a, b)
+    threadsafe_uniform_int_distribution(const T &a, const T &b): std::uniform_int_distribution<T>(a, b), _p_lock(new omp_lock_t())
     {
-        omp_init_lock(&_lock);
+        omp_init_lock(_p_lock);
     }
 
     ~threadsafe_uniform_int_distribution()
     {
-        omp_destroy_lock(&_lock);
+        omp_destroy_lock(_p_lock);
+        delete _p_lock;
     }
 
     template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator& __urng)
     {
         T result;
-        omp_set_lock(&_lock);
+        omp_set_lock(_p_lock);
         result = std::uniform_int_distribution<T>::operator()(__urng);
-        omp_unset_lock(&_lock);
+        omp_unset_lock(_p_lock);
         return result;
     }
 };

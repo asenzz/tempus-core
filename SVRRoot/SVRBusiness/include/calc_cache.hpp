@@ -22,6 +22,15 @@
 #include "model/InputQueue.hpp"
 
 namespace svr {
+
+namespace kernel {
+
+template<typename T> class kernel_base;
+
+template<typename T> class kernel_path;
+
+}
+
 namespace datamodel {
 
 class Dataset;
@@ -43,7 +52,6 @@ namespace business {
 struct levels_tune_data
 {
     tbb::concurrent_unordered_map<size_t, ssize_t> started_tuners, completed_tuners;
-    datamodel::t_level_tuned_parameters level_predictions;
     std::shared_ptr<std::condition_variable> p_tuners_done;
     std::shared_ptr<std::mutex> p_mx;
     bool recombining = false;
@@ -85,18 +93,21 @@ class calc_cache
     std::unordered_map<std::tuple<std::string /* ensemble */, uint16_t /* step */, uint16_t /* gradient */, uint16_t /* chunk */>, levels_tune_data> tune_results;
 
 public:
-    explicit calc_cache();
+    explicit calc_cache() = default;
 
-    double get_gamma(const datamodel::SVRParameters &params, const arma::mat &Z, const arma::mat &L);
+    template<typename T> arma::Mat<T> &get_cumulatives(const kernel::kernel_path<T> &kernel_ftor, const arma::Mat<T> &X, const bpt::ptime &time);
 
-    arma::mat &get_cumulatives(const datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    template<typename T> arma::Mat<T> &get_cumulatives(const datamodel::SVRParameters &parameters, const arma::Mat<T> &X, const bpt::ptime &time);
 
-    arma::mat &get_Z(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    template<typename T> arma::Mat<T> &get_Z(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const bpt::ptime &time);
 
-    arma::mat &get_Zy(const datamodel::SVRParameters &params, const arma::mat &features_t, const arma::mat &predict_features_t, const bpt::ptime &predict_time,
-                             const bpt::ptime &trained_time);
+    template<typename T> arma::Mat<T> &get_Zy(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time,
+            const bpt::ptime &Xy_time);
 
-    arma::mat &get_K(datamodel::SVRParameters &params, const arma::mat &features_t, const bpt::ptime &time);
+    template<typename T> arma::Mat<T> &get_K(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &features_t, const bpt::ptime &time);
+
+    template<typename T> arma::Mat<T> &get_Ky(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &time_X,
+            const bpt::ptime &time_Xy);
 
     std::tuple<mat_ptr, vec_ptr, data_row_container_ptr>
     get_labels(
@@ -117,11 +128,6 @@ public:
 
     void clear();
 
-    datamodel::t_parameter_predictions_set &checkin_tuner(const datamodel::OnlineMIMOSVR &svr, const uint16_t chunk_ix);
-
-    void checkout_tuner(const datamodel::OnlineMIMOSVR &svr, const uint16_t chunk_ix);
-
-    datamodel::t_level_tuned_parameters *recombine_go(const datamodel::OnlineMIMOSVR &svr, const uint16_t chunk_ix);
 };
 
 typedef std::shared_ptr<calc_cache> t_calc_cache_ptr;

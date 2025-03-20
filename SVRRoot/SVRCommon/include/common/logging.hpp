@@ -133,7 +133,7 @@ extern const logging l__;
 
 #ifdef NDEBUG
 
-#define PROFILE_EXEC_TIME(X, M_NAME)    \
+#define PROFILE_MSG(X, M_NAME)    \
 {                                       \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
     LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__)); \
@@ -147,19 +147,15 @@ extern const logging l__;
 
 #else
 
-#define PROFILE_EXEC_TIME(X, M_NAME)    \
+#define PROFILE_MSG(X, M_NAME)    \
 {                                       \
-    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); \
+    try { (X); } catch (const std::exception &ex__) { LOG4_ERROR("Caught exception " << ex__.what() << ", while executing "#X); } \
     LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
         svr::common::memory_manager::get_proc_rss() << " MB"); \
 }
 
-#define PROFILE_(X)    \
-{                                       \
-    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
-    LOG4_INFO("Execution time of " #X " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
-    svr::common::memory_manager::get_proc_rss() << " MB"); \
-}
+#define PROFILE_(X) PROFILE_MSG(X, #X)
 
 #endif
 

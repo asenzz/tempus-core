@@ -52,7 +52,7 @@ void online_emd::transform(datamodel::DeconQueue &decon_queue, const uint32_t de
 
 #endif
 
-    PROFILE_EXEC_TIME(transform(
+    PROFILE_MSG(transform(
             in_crange,
             inout_range,
             tail,
@@ -116,7 +116,7 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
         decon_queue.get_data().emplace_back(
                 std::make_shared<datamodel::DataRow>(in_iter->get_value_time(), time_now, in_iter->get_tick_volume() / out_levels, out_levels));
     datamodel::datarow_range out_range(decon_queue.begin() + prev_size, decon_queue.end(), decon_queue.get_data());
-    PROFILE_EXEC_TIME(transform(
+    PROFILE_MSG(transform(
             in_range,
             out_range,
             tail,
@@ -157,7 +157,7 @@ t_oemd_coefficients_ptr online_emd::get_masks(
     if (!coefs) coefs = ptr<oemd_coefficients>();
     oemd::oemd_coefficients_search::prepare_masks(coefs->masks, coefs->siftings, levels);
 
-    PROFILE_EXEC_TIME(
+    PROFILE_MSG(
             oemd_search.run(input, tail, coefs->masks, coefs->siftings, fir_search_input_window_start, full_len, queue_name, in_colix, scaler),
             "OEMD FIR coefficients search");
 

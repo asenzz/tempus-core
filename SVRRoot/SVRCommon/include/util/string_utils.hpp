@@ -86,13 +86,15 @@ constexpr inline char ctoupper(const char c)
     return (c >= 'a' && c <= 'z') ? (c - 'a' + 'A') : c;
 }
 
-template<size_t N> constexpr auto ctoupper(const char (&input)[N])
+template<const size_t N> constexpr auto ctoupper(const char (&input)[N])
 {
     std::string result(N - 1, '\0');
 #pragma unroll N - 1
     for (size_t i = 0; i < result.size(); ++i) result[i] = ctoupper(input[i]);
     return result;
 }
+
+#define CTOUPPER(X) common::ctoupper<ARRAYLEN(X)>(X)
 
 template<typename T> std::string
 to_binary_string(const std::set<T> &values)

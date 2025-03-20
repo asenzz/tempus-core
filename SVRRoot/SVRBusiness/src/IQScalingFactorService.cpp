@@ -61,7 +61,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     arma::rowvec dc_offset(iq_values.n_cols, arma::fill::none), scaling_factors(iq_values.n_cols, arma::fill::none);
     std::deque<datamodel::IQScalingFactor_ptr> result(columns_ct);
     OMP_FOR_i(columns_ct) {
-        std::tie(dc_offset[i], scaling_factors[i]) = calc(iq_values.col(i));
+        std::tie(dc_offset[i], scaling_factors[i]) = calc(iq_values.col(i), common::C_input_obseg_labels);
         result[i] = ptr<svr::datamodel::IQScalingFactor>(
                     0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
     }
@@ -96,19 +96,18 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     const auto p_main_input_queue = dataset.get_input_queue();
     const auto resolution_ratio = p_main_input_queue->get_resolution() / input_queue.get_resolution();
-    const auto calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::get_max_quantisation() *
-            datamodel::OnlineMIMOSVR::C_features_superset_coef + dataset.get_max_decrement() * resolution_ratio;
+    const uint32_t calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::get_max_quantisation() * PROPS.get_lag_multiplier() + dataset.get_max_decrement() * resolution_ratio;
 #ifdef INTEGRATION_TEST
     const auto last_label_time = (**(p_main_input_queue->get_data().rbegin() + common::C_integration_test_validation_window)).get_value_time() + p_main_input_queue->get_resolution();
     const uint32_t test_offset = resolution_ratio > 1 ?
             lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
             input_queue.size() - common::C_integration_test_validation_window;
     auto p_test_input_queue = input_queue.clone(0, test_offset);
-    PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(*p_test_input_queue, dataset.get_id(), calc_len), true),
+    PROFILE_MSG(dataset.set_iq_scaling_factors(calculate(*p_test_input_queue, dataset.get_id(), calc_len), true),
                       "Calculate test input queue scaling factors for " << input_queue.get_table_name() << ", last label time " << last_label_time);
     p_test_input_queue.reset();
 #else
-    PROFILE_EXEC_TIME(dataset.set_iq_scaling_factors(calculate(input_queue, dataset.get_id(), calc_len), true),
+    PROFILE_MSG(dataset.set_iq_scaling_factors(calculate(input_queue, dataset.get_id(), calc_len), true),
                       "Calculate input queue scaling factors for " << input_queue.get_table_name());
 #endif
 

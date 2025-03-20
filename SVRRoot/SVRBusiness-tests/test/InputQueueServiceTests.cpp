@@ -64,13 +64,13 @@ TEST_F(DaoTestFixture, InputQueueSaveQueueTest) {
 
     InputQueueRowDataGenerator dataGenerator(aci.input_queue_service, queue, queue->get_value_columns().size(), testDataNumberToGenerate);
 /*
-    PROFILE_EXEC_TIME(while(!dataGenerator.isDone()) {
+    PROFILE_MSG(while(!dataGenerator.isDone()) {
 
         aci.input_queue_service.add_row(queue, dataGenerator());
 
     }, "Generating " << testDataNumberToGenerate << " InputQueue rows");
 */
-    //PROFILE_EXEC_TIME(EXPECT_TRUE(testDataNumberToGenerate == (ssize_t) aci.input_queue_service.save(queue)), "Saving InputQueue");
+    //PROFILE_MSG(EXPECT_TRUE(testDataNumberToGenerate == (ssize_t) aci.input_queue_service.save(queue)), "Saving InputQueue");
 
     ASSERT_TRUE(aci.input_queue_service.exists(user1->get_user_name(), "simple_queue", bpt::seconds(60)));
 
@@ -78,11 +78,11 @@ TEST_F(DaoTestFixture, InputQueueSaveQueueTest) {
 
     EXPECT_TRUE(0 == long(queueP2->size()));
 
-    PROFILE_EXEC_TIME(queueP2->set_data(aci.input_queue_service.load(queueP2->get_table_name())), "Reading InputQueue data from database");
+    PROFILE_MSG(queueP2->set_data(aci.input_queue_service.load(queueP2->get_table_name())), "Reading InputQueue data from database");
 
     EXPECT_TRUE(queue->size() == queueP2->size());
 
-    //PROFILE_EXEC_TIME(EXPECT_TRUE(1 == aci.input_queue_service.remove(queue)), "Removing InputQueue table with " << testDataNumberToGenerate << " rows");
+    //PROFILE_MSG(EXPECT_TRUE(1 == aci.input_queue_service.remove(queue)), "Removing InputQueue table with " << testDataNumberToGenerate << " rows");
 
     ASSERT_FALSE(aci.input_queue_service.exists(user1->get_user_name(), "simple_queue", bpt::seconds(60)));
 
@@ -116,8 +116,8 @@ TEST_F(DaoTestFixture, GetColumnInFramesTest){
     EXPECT_TRUE(testDataNumberToGenerate == (ssize_t) aci.input_queue_service.save(queue));
 
     datamodel::DataRow_ptr oldestRecord, newestRecord;
-    PROFILE_EXEC_TIME(oldestRecord = aci.input_queue_service.find_oldest_record(queue), "Getting oldest record");
-    PROFILE_EXEC_TIME(newestRecord = aci.input_queue_service.find_newest_record(queue), "Getting newest record");
+    PROFILE_MSG(oldestRecord = aci.input_queue_service.find_oldest_record(queue), "Getting oldest record");
+    PROFILE_MSG(newestRecord = aci.input_queue_service.find_newest_record(queue), "Getting newest record");
 
     LOG4_DEBUG("Oldest record: " << oldestRecord->to_string());
     LOG4_DEBUG("Newest record: " << newestRecord->to_string());

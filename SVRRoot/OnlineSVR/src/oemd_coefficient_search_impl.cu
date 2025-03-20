@@ -54,6 +54,8 @@ void fix_mask(CPTRd h_in, double *const h_out, const uint32_t mask_len, const cu
     cufreecopy(h_out, d_in, custream, mask_len);
 }
 
+#if 0
+
 template<const uint32_t block_size> __global__ void G_autocorrelation_sum(
         RPTR(double) d_sum, CRPTRd x, CRPTRd y, const uint32_t n_min, const uint32_t qt, const uint32_t n_qt)
 {
@@ -112,7 +114,7 @@ template<const uint32_t block_size> __global__ void G_autocorrelation_block(
     d_sum[blockIdx.x] = *sh_dist;
 }
 
-__global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(uint32_t) offsets, RPTR(double) res, const uint32_t n_offsets)
+__global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(uint32_t) offsets, RPTR(double) res, const uint32_t n_offsets, const float stretch_multiplier, const float stretch_limit)
 {
     CU_STRIDED_FOR_i(n_offsets) {
         const auto off = offsets[i];
@@ -120,7 +122,7 @@ __global__ void G_autocorr_driver(CRPTRd in, CRPTRd in_n, CRPTR(uint32_t) offset
         const auto threads = CU_THREADS(off);
         auto res_i = (double *) malloc(blocks * sizeof(double));
         UNROLL()
-        for (float st = 1; st > C_stretch_limit; st *= C_stretch_multiplier) {
+        for (float st = 1; st > stretch_limit; st *= stretch_multiplier) {
             G_autocorrelation_block<common::C_cu_block_size><<<blocks, threads>>>(res_i, in, in_n - off, off, threads, st);
             const auto this_res = thrust::reduce(thrust::seq, res_i, res_i + blocks) / off;
             if (this_res < res[i]) res[i] = this_res;
@@ -135,7 +137,7 @@ double autocorrelation_n(CPTRd d_in, const uint32_t n, const std::vector<uint32_
     const uint32_t n_offsets = offsets.size();
     double *d_res;
     cu_errchk(cudaMallocAsync((void **) &d_res, n_offsets * sizeof(*d_res), stm));
-    G_autocorr_driver<<<CU_BLOCKS_THREADS(n_offsets), 0, stm>>>(d_in, d_in + n, d_offsets, d_res, n_offsets);
+    G_autocorr_driver<<<CU_BLOCKS_THREADS(n_offsets), 0, stm>>>(d_in, d_in + n, d_offsets, d_res, n_offsets, PROPS.get_stretch_coef(), PROPS.get_stretch_limit());
     cu_errchk(cudaFreeAsync(d_offsets, stm));
     thrust::sort(thrust::cuda::par.on(stm), d_res, d_res + n_offsets);
     const auto n_offsets_2 = n_offsets;
@@ -143,6 +145,8 @@ double autocorrelation_n(CPTRd d_in, const uint32_t n, const std::vector<uint32_
     cu_errchk(cudaFreeAsync(d_res, stm));
     return res / n_offsets_2;
 }
+
+#endif
 
 __global__ void
 G_multiply_complex(
@@ -159,6 +163,7 @@ G_multiply_complex(
         output[i].y = new_output.y / input_len_div;
     }
 }
+
 
 __global__ void G_vec_power_I(
         cufftDoubleComplex *__restrict__ x,
@@ -723,9 +728,9 @@ oemd_coefficients_search::evaluate_mask(
             d_imf, d_labels, validate_rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
     cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
     cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
-    constexpr auto full_feat_cols = datamodel::OnlineMIMOSVR::C_features_superset_coef * datamodel::C_default_svrparam_lag_count;
+    const uint32_t full_feat_cols = PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count;
     const auto column_interleave = PROPS.get_oemd_column_interleave();
-    const auto feat_cols_ileave = full_feat_cols / column_interleave;
+    const uint32_t feat_cols_ileave = full_feat_cols / column_interleave;
     auto autocor = common::C_bad_validation;
     const uint32_t cols_rows_q = validate_rows * feat_cols_ileave;
     const auto features_size = cols_rows_q * sizeof(double);
@@ -750,7 +755,8 @@ oemd_coefficients_search::evaluate_mask(
                 d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
         G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, C_stretch_multiplier, PROPS.get_align_window());
+                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, 0,
+                PROPS.get_stretch_coef(), PROPS.get_align_window(), PROPS.get_shift_limit(), PROPS.get_stretch_coef());
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
             thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);

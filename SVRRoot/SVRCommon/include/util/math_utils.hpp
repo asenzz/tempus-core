@@ -25,9 +25,6 @@ template <typename A, typename B> using common_signed_t = std::conditional_t<std
         std::common_type_t<A, B>,
         std::common_type_t<std::make_signed_t<A>, std::make_signed_t<B>>>;
 
-#define ARRAYLEN(X) (sizeof(X) / sizeof((X)[0]))
-#define ARMASIZEOF(X) (X).n_elem * sizeof((X)[0])
-
 #define _ABS(X) ((X) >= 0 ? (X) : (-X))
 #define _ABSDIF(T1, T2) (T1 > T2 ? T1 - T2 : T2 - T1)
 #define _SIGN(X) ((X) > 0. ? 1.: (X) < 0 ? -1. : 0.)
@@ -115,21 +112,24 @@ struct pseudo_random_dev {
 
     double operator()()
     {
-        const double res = state;
         state = std::fmod(state + .123456789, 1.);
-        return res;
+        return state;
+    }
+
+    static double max(const double max)
+    {
+        state = std::fmod(state + .123456789, 1.);
+        return max * state;
     }
 };
 
 /// @brief Returns a reproducibly seeded 64-bit RNG
 template<typename RNG> RNG reproducibly_seeded_64()
 {
-    // Some constants etc.
-    using word_type = typename RNG::word_type;
     constexpr auto n_words = RNG::word_count();
 
     // A seed array we will fill for this RNG.
-    std::array<word_type, n_words> seed_array;
+    std::array<typename RNG::word_type, n_words> seed_array;
     pseudo_random_dev dev;
     std::generate(seed_array.begin(), seed_array.end(), [&dev] { return dev(); });
 
@@ -704,12 +704,23 @@ meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typen
 template<> double
 meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end);
 
-template<typename T> arma::Mat<T>
-extrude_rows(const arma::Mat<T> &m, const size_t ct)
+template<typename T> inline arma::Mat<T> extrude_rows(const arma::Mat<T> &m, const uint32_t ct)
 {
     arma::Mat<T> r = m;
-    while (r.n_cols < ct) r = arma::join_rows(r, m);
+    while (r.n_cols < ct) r = arma::join_horiz(r, m);
     if (r.n_cols > ct) r.shed_cols(ct, r.n_cols - 1);
+    return r;
+}
+
+template<typename T> inline arma::Mat<T> extrude_cols(const arma::Mat<T> &m, const uint32_t ct)
+{
+    assert(m.n_rows > 0);
+    arma::Mat<T> r(ct, m.n_cols);
+    OMP_FOR(ct / m.n_rows)
+    for (uint32_t start_i = 0; start_i < ct; start_i += m.n_rows) {
+        const auto end_i = std::min<uint32_t>(ct, start_i + m.n_rows) - 1;
+        r.rows(start_i, end_i) = m.rows(0, end_i - start_i);
+    }
     return r;
 }
 
@@ -892,7 +903,6 @@ arma::uvec subview_indexes(arma::uvec batch_ixs, arma::uvec ix_tracker);
 struct safe_double_less {
     bool operator()(const double left, const double right) const;
 };
-
 
 }
 }

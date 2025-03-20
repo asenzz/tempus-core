@@ -16,28 +16,12 @@ namespace svr {
 
 constexpr auto C_default_exec_policy = std::execution::par_unseq;
 const auto C_n_cpu = std::thread::hardware_concurrency();
-
-#ifdef VALGRIND_BUILD
-constexpr unsigned C_slide_skip = 1;
-constexpr unsigned C_max_j = 1;
-constexpr unsigned C_test_len = 1;
-#else
-constexpr uint16_t C_slide_skip = 10;
-constexpr uint16_t C_max_j = 10;
-constexpr uint16_t C_test_len = 1000;
-#endif
-constexpr uint16_t C_tune_min_validation_window = C_test_len - C_slide_skip * (C_max_j - 1);
-constexpr double C_slides_len = [] {
-    double r = 0;
-    for (uint16_t j = 0; j < C_max_j; ++j) r += C_test_len - C_slide_skip * (C_max_j - j - 1);
-    return r;
-}();
+const auto C_n_cpu_str = std::to_string(C_n_cpu);
 
 namespace common {
 
 // For Postgres queries
 constexpr uint32_t C_min_cursor_rows = 1e4;
-constexpr uint16_t C_cursors_per_query = 8;
 
 const double C_input_obseg_labels = 1;
 constexpr double C_input_obseg_features = 1;
@@ -114,14 +98,8 @@ constexpr char C_default_oemd_tune_iterations[] = "24";
 constexpr char C_default_tune_particles[] = "16";
 constexpr char C_default_tune_iterations[] = "24";
 constexpr char C_defaut_solve_iterations_coefficient[] = ".1";
-constexpr char C_default_weight_columns[] = "1";
 
 constexpr uint16_t C_max_csv_token_size = 0xFF;
-constexpr uint16_t C_default_kernel_max_chunk_len = 10000; // Matrices larger than 65535x65535 will require MKL ILP64 API and all CUDA kernels modified for 2D+ indexing
-constexpr uint16_t C_shift_lim = 100;
-constexpr uint16_t C_outlier_slack = 0;
-constexpr uint32_t C_best_decrement = C_default_kernel_max_chunk_len + C_test_len + C_shift_lim + C_outlier_slack;
-constexpr uint16_t C_test_shift = C_shift_lim + C_test_len;
 
 const uint16_t C_default_multistep_len = std::stoi(C_default_multistep_len_str);
 const uint16_t C_default_multiout = std::stoi(C_default_multiout_str);

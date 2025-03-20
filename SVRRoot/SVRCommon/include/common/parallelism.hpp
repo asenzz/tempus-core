@@ -36,6 +36,7 @@
 #define SSIMD simd
 #endif
 
+#define OMP_TASKLOOP(__n) PRAGMASTR(omp taskloop SSIMD NGRAIN(__n) default(shared) mergeable)
 #define OMP_TASKLOOP_1(__x) PRAGMASTR(omp taskloop grainsize(1) default(shared) mergeable __x)
 #define OMP_TASKLOOP_(__n, __x) PRAGMASTR(omp taskloop NGRAIN(__n) default(shared) mergeable __x)
 #define OMP_FOR_ITERS_(_n) CDIV((_n), C_n_cpu)

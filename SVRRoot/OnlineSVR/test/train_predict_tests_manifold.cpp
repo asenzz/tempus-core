@@ -63,8 +63,6 @@ const auto init_test = [] {
     return true;
 } ();
 
-// #define TEST_MANIFOLD
-
 namespace {
 
 #ifdef VALGRIND_BUILD
@@ -72,7 +70,7 @@ constexpr unsigned C_test_decrement = 1;
 constexpr unsigned C_test_lag = 1;
 #else
 constexpr auto C_online_validate = false;
-const uint32_t C_test_decrement = common::C_best_decrement; // 14e3 - common::C_integration_test_validation_window;
+const uint32_t C_test_decrement = 1000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif
 #define MAIN_QUEUE_RES 3600
@@ -86,12 +84,17 @@ constexpr uint16_t C_test_levels = 1;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
 constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
 const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
-const uint32_t C_max_features_len = C_test_lag * datamodel::OnlineMIMOSVR::C_features_superset_coef * business::ModelService::get_max_quantisation();
+const uint32_t C_max_features_len = C_test_lag * PROPS.get_lag_multiplier() * business::ModelService::get_max_quantisation();
 const uint32_t C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
 const uint32_t C_dataset_id = 0xDeadBeef;
 const auto C_dataset_id_str = std::to_string(C_dataset_id);
 const auto C_test_features_len_h_str = std::to_string(C_test_features_len_h);
 constexpr char C_last_test_time[] = "2025-01-13 01:00:00";
+#if 1
+constexpr auto C_test_kernel = datamodel::e_kernel_type::DEEP_PATH;
+#else
+constexpr auto C_test_kernel = datamodel::e_kernel_type::PATH;
+#endif
 
 }
 
@@ -100,9 +103,9 @@ void prepare_test_queue(datamodel::Dataset &dataset, datamodel::InputQueue &inpu
     static tbb::mutex m;
     const tbb::mutex::scoped_lock l(m);
     const auto table_name = input_queue.get_table_name();
-    PROFILE_EXEC_TIME(APP.input_queue_service.load(input_queue), "Loading " << table_name);
-    PROFILE_EXEC_TIME(APP.iq_scaling_factor_service.prepare(dataset, input_queue, false), "Prepare input scaling factors for " << table_name);
-    PROFILE_EXEC_TIME(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
+    PROFILE_MSG(APP.input_queue_service.load(input_queue), "Loading " << table_name);
+    PROFILE_MSG(APP.iq_scaling_factor_service.prepare(dataset, input_queue, false), "Prepare input scaling factors for " << table_name);
+    PROFILE_MSG(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
 }
 
 TEST(manifold_tune_train_predict, basic_integration)
@@ -124,7 +127,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 "DELETE FROM w_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
-                "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
+                "DELETE FROM template_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
         w.exec(q).no_rows();
         w.commit();
     } catch (const std::exception &ex) {
@@ -134,7 +137,7 @@ TEST(manifold_tune_train_predict, basic_integration)
 
     auto p_dataset = ptr<datamodel::Dataset>(
             C_dataset_id, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
-            C_test_gradient_count, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
+            C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
 // #pragma omp parallel ADJ_THREADS(std::min<uint16_t>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
@@ -164,9 +167,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                         for (auto &p_gradient: p_model->get_gradients())
                             for (auto &p_params: p_gradient->get_param_set()) {
                                 if (!p_head_params) p_head_params = p_params;
-#ifdef TEST_MANIFOLD
-                                p_params->set_kernel_type(datamodel::e_kernel_type::DEEP_PATH);
-#endif
+                                p_params->set_kernel_type(C_test_kernel);
                                 p_params->set_svr_decremental_distance(C_test_decrement);
                                 p_params->set_lag_count(C_test_lag);
                             }

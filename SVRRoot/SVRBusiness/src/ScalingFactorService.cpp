@@ -17,20 +17,20 @@ double ScalingFactorService::calc_dc_offset(const arma::mat &v)
 }
 
 
-double ScalingFactorService::calc_scaling_factor(const arma::mat &v)
+double ScalingFactorService::calc_scaling_factor(const arma::mat &v, const double obseg)
 {
 #if 0
-    return arma::median(arma::abs(arma::vectorise(v))) / common::C_input_obseg_labels;
+    return arma::median(arma::abs(arma::vectorise(v))) / obseg;
 #else
-    return common::meanabs(v) / common::C_input_obseg_labels;
+    return common::meanabs(v) / obseg;
 #endif
 }
 
 
-std::pair<double, double> ScalingFactorService::calc(const arma::mat &v)
+std::pair<double, double> ScalingFactorService::calc(const arma::mat &v, const double obseg)
 {
     const auto dc = calc_dc_offset(v);
-    const auto sf = calc_scaling_factor(v - dc);
+    const auto sf = calc_scaling_factor(v - dc, obseg);
     LOG4_TRACE("DC offset " << dc << ", scaling factor " << sf << ", values " << common::present(v));
     return {dc, sf};
 }

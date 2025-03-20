@@ -173,13 +173,13 @@ DeconQueueService::deconstruct(
     const auto pre_decon_size = decon_queue.size();
 
 #if defined(VMD_ONLY) && !defined(EMD_ONLY)
-    PROFILE_EXEC_TIME(dataset.get_cvmd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
+    PROFILE_MSG(dataset.get_cvmd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
 #endif
 #ifndef VMD_ONLY
 #if defined(EMD_ONLY)
-    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals, main_resolution), "OEMD transform");
+    PROFILE_MSG(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals, main_resolution), "OEMD transform");
 #else
-    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals, resolution), "OEMD fat transform");
+    PROFILE_MSG(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals, resolution), "OEMD fat transform");
 #endif
 #endif
 
@@ -194,7 +194,7 @@ DeconQueueService::deconstruct(
 
     if (common::AppConfig::S_log_threshold > boost::log::trivial::severity_level::trace) return;
 
-    const auto chunk_len_res = common::C_default_kernel_max_chunk_len * res_ratio;
+    const auto chunk_len_res = PROPS.get_kernel_length() * res_ratio;
     const auto start_rms = decon_queue.size() > chunk_len_res ? decon_queue.size() - chunk_len_res : 0;
     OMP_FOR_i(dataset.get_spectral_levels())
         BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "RMS power for level " << i << " is " << common::meanabs(decon_queue.get_column_values(i, start_rms)) << ", start " << start_rms;

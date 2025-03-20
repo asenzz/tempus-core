@@ -17,10 +17,12 @@ enum class ConcreteDaoType : uint8_t {
 
 #define CONFPROP(T, x, D)                                               \
 private:                                                                \
-    static constexpr auto x = common::ctoupper(#x);                     \
+    static constexpr auto x = CTOUPPER(#x);                             \
     T x##_;                                                             \
     bool x##_set_ = false;                                              \
 public:                                                                 \
+    static constexpr T C_default_##x = D;                               \
+    static constexpr std::string C_default_str_##x = #D;                \
     inline T get_##x() {                                                \
         if (x##_set_ == false) {                                        \
            const tbb::mutex::scoped_lock l(set_mx);                     \
@@ -31,6 +33,8 @@ public:                                                                 \
         }                                                               \
         return x##_;                                                    \
     }
+
+#define CONFPRO_(x, D) CONFPROP(DTYPE(D), x, D)
 
 class PropertiesReader {
     static constexpr char SQL_PROPERTIES_DIR_KEY[] = "SQL_PROPERTIES_DIR";
@@ -62,17 +66,50 @@ public:
 
     template<typename T> inline T get_property(const std::string &property_file, const std::string &key, const std::string &default_value = "")
     {
-        return boost::lexical_cast<T>(get_property_value(property_file, key, default_value));
+        try {
+            return boost::lexical_cast<T>(get_property_value(property_file, key, default_value));
+        } catch (const std::exception &ex) {
+            // LOG4_ERROR("Error getting property " << key << " from file " << property_file << ", " << ex.what() << ", default value " << default_value);
+            return {};
+        };
     }
 };
 
 class AppConfig : public PropertiesReader {
+
+CONFPROP(float, weights_exp, 1)
+
+CONFPROP(float, weights_slope, 10)
+
+CONFPROP(float, stretch_limit, .5)
+
+CONFPROP(float, stretch_coef, .999)
+
+CONFPROP(uint32_t, shift_limit, 100)
+
+CONFPROP(uint32_t, outlier_slack, 0)
+
+CONFPROP(uint32_t, kernel_length, 10000)
+
+CONFPROP(uint16_t, predict_chunks, 100)
+
+CONFPROP(double, lag_multiplier, 100)
+
+CONFPROP(uint32_t, interleave, 10)
+
+CONFPROP(double, tune_max_lambda, 50)
+
+CONFPROP(double, tune_max_tau, 50)
+
+CONFPROP(uint16_t, db_num_threads, 8)
 
 CONFPROP(uint32_t, tune_skip, 7500)
 
 CONFPROP(uint32_t, align_window, 1000)
 
 CONFPROP(int32_t, max_loop_count, -1)
+
+CONFPROP(uint16_t, weight_columns, 1)
 
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
@@ -96,14 +133,13 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char SELF_REQUEST[] = "SELF_REQUEST";
     static constexpr char NUM_QUANTISATIONS[] = "NUM_QUANTISATIONS"; // Higher number of quantisations means more precision (more resource usage)
     static constexpr char QUANTISATION_DIVISOR[] = "QUANTISATION_DIVISOR"; // Lower divisor means fine grained quantisations (more resource usage, 1 quant increment until 2 * divisor)
-    static constexpr char OEMD_COLUMN_INTERLEAVE[] = "OEMD_COLUMN_INTERLEAVE"; // Lower interleave finer OEMD FIR coefficients tuning
+    static constexpr char OEMD_COLUMN_INTERLLOOP_INTERVALEAVE[] = "OEMD_COLUMN_INTERLEAVE"; // Lower interleave finer OEMD FIR coefficients tuning
     static constexpr char OEMD_QUANTISATION_SKIPDIV[] = "OEMD_QUANTISATION_SKIPDIV"; // Higher skipdiv finer OEMD FIR coefficients tuning
     static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
     static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
     static constexpr char TUNE_PARTICLES[] = "TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
     static constexpr char TUNE_ITERATIONS[] = "TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
-    static constexpr char WEIGHT_COLUMNS[] = "WEIGHT_COLUMNS"; // Number of columns to use for weights in OEMD
 
     ConcreteDaoType dao_type;
     size_t feature_quantization_;
@@ -119,7 +155,7 @@ private: // TODO port properties below to use the CONFPROP macro
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     bool daemonize_;
     uint16_t num_quantisations_, quantisation_divisor_, tune_particles_, tune_iterations_;
-    uint16_t oemd_column_interleave_, oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_, weight_columns_;
+    uint16_t oemd_column_interleave_, oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
     float solve_iterations_coefficient_;
 
 public:

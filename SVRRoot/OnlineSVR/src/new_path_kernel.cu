@@ -7,7 +7,7 @@
 #include "new_path_kernel.cuh"
 #include "common/logging.hpp"
 #include "common/cuda_util.cuh"
-#include "cuda_path.cuh"
+#include "cuda_path.hpp"
 #include "model/SVRParameters.hpp"
 
 namespace svr {

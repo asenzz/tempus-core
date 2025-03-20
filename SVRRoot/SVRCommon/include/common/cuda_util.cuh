@@ -316,6 +316,11 @@ __device__ __forceinline__ float atomicMul(float *const address, float val)
     return __int_as_float(old);
 }
 
+
+template <typename T> __host__ __device__ __forceinline__ int8_t signum(const T val)
+{
+    return (T(0) < val) - (val < T(0));
+}
 }
 
 #endif //SVR_CUDA_UTIL_CUH

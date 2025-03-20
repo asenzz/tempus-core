@@ -18,67 +18,62 @@
 #ifndef KERNEL_FACTORY_H
 #define KERNEL_FACTORY_H
 
-
 #include <vector>
 #include <map>
 #include <string>
 #include <exception>
+#include "kernel_base.hpp"
+#include "kernel_linear.hpp"
+#include "kernel_polynomial.hpp"
+#include "kernel_radial_basis.hpp"
+#include "kernel_radial_basis_gaussian.hpp"
+#include "kernel_radial_basis_exponential.hpp"
+#include "kernel_sigmoidal.hpp"
+#include "kernel_global_alignment.hpp"
+#include "kernel_path.hpp"
+#include "kernel_dtw.hpp"
 
+namespace svr {
+namespace kernel {
 
-#include <kernel_base.hpp>
-#include <kernel_linear.hpp>
-#include <kernel_polynomial.hpp>
-#include <kernel_radial_basis.hpp>
-#include <kernel_radial_basis_gaussian.hpp>
-#include <kernel_radial_basis_exponential.hpp>
-#include <kernel_sigmoidal.hpp>
-#include <kernel_global_alignment.hpp>
-#include <kernel_path.hpp>
-
-using svr::datamodel::e_kernel_type;
-
-namespace svr{
-
-
-template<typename scalar_type>
-class kernel_factory {
+template<typename T>
+class kernel_factory final {
 public:
+    std::unique_ptr<kernel_base<T>> create(const datamodel::SVRParameters &params);
 
-    virtual std::unique_ptr<kernel_base<scalar_type>> create(const SVRParameters & params);
+    ~kernel_factory();
 
-
-    virtual ~kernel_factory() {}
-    explicit kernel_factory(e_kernel_type kernel_type): kernel_type_(kernel_type){};
+    explicit kernel_factory(const datamodel::e_kernel_type kernel_type);
 
     class bad_kernel_creation : public std::exception {
         std::string reason;
     public:
-        bad_kernel_creation(const std::string &type) {
-            reason = "Cannot create type " + type;
-        }
-        const char *what() const noexcept override {
-            return reason.c_str();
-        }
+        explicit bad_kernel_creation(const std::string &type);
+
+        const char *what() const noexcept override;
     };
 
-    e_kernel_type kernel_type_;
-
-
+    datamodel::e_kernel_type kernel_type_;
 };
 
-//class IKernal provides access to kernel factory
-template<typename scalar_type>
-class IKernel {
-    static std::unordered_map<e_kernel_type, std::shared_ptr<kernel_factory<scalar_type>>> kernel_factories;
+
+template<typename T> class IKernel final {
+    static std::unordered_map<datamodel::e_kernel_type, std::shared_ptr<kernel_factory<T>>> kernel_factories;
     static std::once_flag kernel_init_flag;
 
 public:
-    //must call this before use IKernel
-    static void IKernelInit();
+    static void init();
+
     IKernel();
+
     ~IKernel() = default;
-    static std::unique_ptr<kernel_base<scalar_type>> get(const SVRParameters &params);
+
+    static std::unique_ptr<kernel_base<T>> get(const datamodel::SVRParameters &params);
+
+    std::unique_ptr<kernel_base<T>> newk(const datamodel::SVRParameters &params);
 };
+
+}
 }
 
 #include "kernel_factory.tpp"

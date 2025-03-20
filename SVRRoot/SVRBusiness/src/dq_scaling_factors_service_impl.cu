@@ -34,7 +34,7 @@ void calc_mean_max(
     double &max)
 {
     mean = thrust::reduce(thrust::device, start_it, end_it);
-    mean /= double(rows);
+    mean /= rows;
 
     thrust::transform(thrust::device, start_it, end_it, start_it, abs_functor());
     thrust::sort(thrust::device, start_it, end_it);

@@ -9,12 +9,40 @@
 #include <stdio.h>
 #include <cmath>
 #include <time.h>
-#include "common/gpu_handler.hpp"
 #include <unordered_map>
 #include <tuple>
-
-#include "kernel_base.hpp"
 #include <mutex>
+#include "kernel_base.hpp"
+#include "common/gpu_handler.hpp"
+
+namespace svr {
+namespace kernel {
+
+template<typename T>
+class kernel_global_alignment : public kernel_base<T> {
+
+public:
+    explicit kernel_global_alignment(const datamodel::SVRParameters &p) : kernel_base<T>(p)
+    {}
+
+    virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const
+    { return {}; }
+
+    virtual arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const
+    { return {}; }
+
+    virtual void d_kernel(CRPTR(T) d_Z, const uint32_t m, RPTR(T) d_K, const cudaStream_t custream) const
+    {}
+
+    virtual void d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR(T) d_Z, const cudaStream_t custream) const
+    {}
+};
+
+}
+}
+
+
+#ifdef DEPRECATED_KERNEL_API
 
 // #define CACHED_GA_KERNEL
 #define TRIAN 0
@@ -28,10 +56,10 @@ namespace svr {
 #define LOGP(x, y) (((x)>(y))?(x)+log1p(exp((y)-(x))):(y)+log1p(exp((x)-(y))))
 
 template<typename scalar_type>
-class kernel_global_alignment : public kernel_base<scalar_type>
-{
+class kernel_global_alignment : public kernel_base<scalar_type> {
 public:
-    kernel_global_alignment(const SVRParameters &p) : kernel_base<scalar_type>(p) {}
+    kernel_global_alignment(const SVRParameters &p) : kernel_base<scalar_type>(p)
+    {}
 
 #if 0 // TODO port to Armadillo
     double logGAK_t(const vektor<scalar_type> &va, const vektor<scalar_type> &vb);
@@ -43,15 +71,16 @@ public:
     scalar_type operator()(const vektor<scalar_type> &va, const vektor<scalar_type> &vb);
 #endif
 
-    void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) { LOG4_THROW("Not implemented!"); }
+    void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix)
+    { LOG4_THROW("Not implemented!"); }
 
 #ifdef ENABLE_OPENCL
     using kernel_base<scalar_type>::operator();
 
 #ifdef CACHED_GA_KERNEL
 
-    #define MAX_KERNEL_CACHE_SIZE 32
-    #define MIN_KERNEL_CACHED_SIZE 1000
+#define MAX_KERNEL_CACHE_SIZE 32
+#define MIN_KERNEL_CACHED_SIZE 1000
 
     typedef std::tuple<
             void * /* features address */,
@@ -85,12 +114,14 @@ public:
             viennacl::ocl::context &ctx,
             const viennacl::matrix<scalar_type> &features,
             viennacl::matrix<scalar_type> &kernel_matrix);
+
     void
     operator()(
             viennacl::ocl::context &ctx,
             const viennacl::matrix<scalar_type> &features,
             const viennacl::matrix<scalar_type> &learning,
             viennacl::matrix<scalar_type> &kernel_matrix);
+
 #endif /* #ifdef ENABLE_OPENCL */
 };
 
@@ -895,10 +926,10 @@ kernel_global_alignment<scalar_type>::operator()(
     const auto size2 = learning.size1();
     const auto size1_sqr = size1 * size2;
     const int cl = nY + 1;                /* length of a column for the dynamic programming */
-    cl::Buffer logM_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * (2 * cl) * (size1+size2), NULL, &err);
+    cl::Buffer logM_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * (2 * cl) * (size1 + size2), NULL, &err);
     CL_CHECK(err);
 
-    cl::Buffer results_diagonal_gpu_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * (size1+size2), NULL, &err);
+    cl::Buffer results_diagonal_gpu_d(context, CL_MEM_READ_WRITE, sizeof(cl_double) * (size1 + size2), NULL, &err);
     CL_CHECK(err);
 
     cl_mem kernel_gpu_ptr;
@@ -926,7 +957,7 @@ kernel_global_alignment<scalar_type>::operator()(
     size_t kernel_matrix_internal_vienna_size2 = kernel_matrix.internal_size2();
 
     size_t flagxxxyyy = 0;
-    std::vector<double> XX_temp(features.size1()+learning.size1());
+    std::vector<double> XX_temp(features.size1() + learning.size1());
     svr::cl12::ocl_kernel forward1(ctx.get_kernel("logGAK_OpenCL", "logGAK_OpenCL_run").handle());
     size_t zero = 0;
     forward1.set_args(
@@ -980,7 +1011,7 @@ kernel_global_alignment<scalar_type>::operator()(
     CL_CHECK(err);
     cq_command_queue.finish();
     err = cq_command_queue.enqueueReadBuffer(
-            results_diagonal_gpu_d, CL_TRUE, 0, sizeof(cl_double) * size2, XX_temp.data()+size1 );
+            results_diagonal_gpu_d, CL_TRUE, 0, sizeof(cl_double) * size2, XX_temp.data() + size1);
     CL_CHECK(err);
     err = cq_command_queue.finish();
     CL_CHECK(err);
@@ -992,7 +1023,7 @@ kernel_global_alignment<scalar_type>::operator()(
     CL_CHECK(err);
     // put results from diagonal compute back into GPU.
     err = cq_command_queue.enqueueWriteBuffer(
-            results_diagonal_gpu_d, CL_TRUE, 0, sizeof(cl_double) * (size1+size2), XX_temp.data() );
+            results_diagonal_gpu_d, CL_TRUE, 0, sizeof(cl_double) * (size1 + size2), XX_temp.data());
     CL_CHECK(err);
     err = cq_command_queue.finish();
     CL_CHECK(err);
@@ -1056,3 +1087,4 @@ kernel_global_alignment<scalar_type>::operator()(
 #endif /* #ifdef ENABLE_OPENCL */
 
 }
+#endif

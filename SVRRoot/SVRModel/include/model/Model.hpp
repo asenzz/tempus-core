@@ -19,7 +19,7 @@ class Model : public Entity
     uint16_t step = C_default_svrparam_step;
     uint16_t multiout = common::C_default_multiout;
     uint16_t gradient_ct = common::C_default_gradient_count;
-    uint32_t max_chunk_size = common::C_default_kernel_max_chunk_len;
+    uint32_t max_chunk_size = common::AppConfig::C_default_kernel_length;
     std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
     bpt::ptime last_modified = bpt::not_a_date_time; // model modified (system) time
     bpt::ptime last_modeled_value_time = bpt::min_date_time; // last input queue modeled value time
