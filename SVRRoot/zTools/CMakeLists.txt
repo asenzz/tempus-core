@@ -6,7 +6,7 @@ SET(DEPENDENCIES SVRBusiness SVRPersist SVRCommon SVRModel OnlineSVR)
 
 INCLUDE(../../cmake/IncludeDependencies.cmake)
 
-FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED)
+FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED CONFIG)
 
 MACRO(SUBDIRLIST result curdir)
   FILE(GLOB children RELATIVE "${curdir}" "${curdir}/*")

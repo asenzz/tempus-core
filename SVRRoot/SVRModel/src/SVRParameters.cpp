@@ -15,11 +15,8 @@ namespace datamodel {
 
 e_kernel_type fromstring(const std::string &kernel_type_str)
 {
-    e_kernel_type kernel_type = e_kernel_type::begin;
-
-    if (kernel_type_str == "LINEAR")
-        kernel_type = e_kernel_type::LINEAR;
-    else if (kernel_type_str == "POLYNOMIAL")
+    e_kernel_type kernel_type = e_kernel_type::LINEAR;
+    if (kernel_type_str == "POLYNOMIAL")
         kernel_type = e_kernel_type::POLYNOMIAL;
     else if (kernel_type_str == "RBF")
         kernel_type = e_kernel_type::RBF;
@@ -46,8 +43,6 @@ e_kernel_type fromstring(const std::string &kernel_type_str)
 std::string tostring(const e_kernel_type kt)
 {
     switch (kt) {
-        case e_kernel_type::begin:
-            return "begin";
         case e_kernel_type::LINEAR:
             return "LINEAR";
         case e_kernel_type::POLYNOMIAL:
@@ -67,7 +62,7 @@ std::string tostring(const e_kernel_type kt)
         case e_kernel_type::DTW:
             return "DTW";
         case e_kernel_type::end:
-            return "end";
+            return "e_kernel_type::end";
         default:
             return "UNKNOWN";
     }

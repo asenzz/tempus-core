@@ -89,7 +89,9 @@ constexpr inline char ctoupper(const char c)
 template<const size_t N> constexpr auto ctoupper(const char (&input)[N])
 {
     std::string result(N - 1, '\0');
+#ifdef __clang__
 #pragma unroll N - 1
+#endif
     for (size_t i = 0; i < result.size(); ++i) result[i] = ctoupper(input[i]);
     return result;
 }

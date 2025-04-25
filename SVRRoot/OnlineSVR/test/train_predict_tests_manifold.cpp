@@ -70,7 +70,7 @@ constexpr unsigned C_test_decrement = 1;
 constexpr unsigned C_test_lag = 1;
 #else
 constexpr auto C_online_validate = false;
-const uint32_t C_test_decrement = 1000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
+const uint32_t C_test_decrement = 2000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif
 #define MAIN_QUEUE_RES 3600
@@ -127,7 +127,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 "DELETE FROM w_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
-                "DELETE FROM template_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
+                "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
         w.exec(q).no_rows();
         w.commit();
     } catch (const std::exception &ex) {
@@ -140,7 +140,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
-// #pragma omp parallel ADJ_THREADS(std::min<uint16_t>(C_parallel_train_models, p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
+// #pragma omp parallel ADJ_THREADS(std::min<uint16_t>(PROPS.get_parallel_models(), p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
 // #pragma omp single
     {
         // OMP_TASKLOOP_1()
@@ -156,7 +156,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_multistep()),
                     recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep());
             arma::vec recon_last_knowns(common::C_integration_test_validation_window);
-            t_omp_lock recon_l;
+            tbb::mutex recon_l;
 //            OMP_TASKLOOP_1(collapse(2))
             for (uint16_t l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
                 for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
@@ -200,12 +200,11 @@ TEST(manifold_tune_train_predict, basic_integration)
                                         p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
                                         *p_model_features, *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
                                         p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
-                        recon_l.set();
+                        const tbb::mutex::scoped_lock lk(recon_l);
                         if (!p_times) p_times = p_model_times;
                         recon_predicted.col(s) += predicted;
                         recon_actual.col(s) += actual;
                         if (!s) recon_last_knowns += last_knowns;
-                        recon_l.unset();
                     }
             recon_predicted = arma::mean(recon_predicted, 1);
             recon_actual = arma::mean(recon_actual, 1);
@@ -291,7 +290,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     ++pos_direct;
                 }
                 if (cur_recon_error > std::numeric_limits<double>::epsilon() || cur_recon_lk_error > std::numeric_limits<double>::epsilon())
-                    LOG4_WARN("Recon differ at " << cur_time << " between actual price " << actual << " and recon price " << \
+                    LOG4_WARN("Reconstruction difference at " << cur_time << " between actual price " << actual << " and recon price " << \
                     recon_actual[i] << ", is " << cur_recon_diff << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i] << \
                     ", last known difference " << last_known - recon_last_knowns[i]);
                 drawdown += this_drawdown;

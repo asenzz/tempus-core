@@ -3,6 +3,7 @@
 /* Global constants and defines */
 
 // #define NO_PARALLEL // Disable parallelisation macros
+
 #define INTEGRATION_TEST
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
 #define NO_ONLINE_TRAINING // Disable online training, buggy and resource-hungry
@@ -10,8 +11,7 @@
 
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
-// #define INSTANCE_WEIGHTS
-#define TUNE_TAU
+// #define INSTANCE_WEIGHTS // TODO Test should it multiply labels too?
 
 // #define VMD_ONLY
 #define EMD_ONLY
@@ -42,3 +42,5 @@
 
 #define __TOSTR(X) #X
 #define TOSTR(X) __TOSTR(X)
+
+#define SANITIZE_THREAD THREAD

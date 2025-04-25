@@ -5,20 +5,18 @@
 #include <vector>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#include "common/cuda_util.cuh"
 #include "model/DeconQueue.hpp"
 #include "common/gpu_handler.hpp"
 #include "online_emd.hpp"
 #include "common/barrier.hpp"
 #include "SVRParametersService.hpp"
 #include "IQScalingFactorService.hpp"
+#include "common/cuda_util.cuh"
 
 #ifdef OEMDFFT
-
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <cufft.h>
-
 #endif
 
 namespace svr {

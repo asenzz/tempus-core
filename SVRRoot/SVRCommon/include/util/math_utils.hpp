@@ -9,8 +9,10 @@
 #include <any>
 #include <cstdarg>
 #include <numeric>
+#ifdef ENABLE_OPENCL
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
+#endif
 #include <boost/math/ccmath/ccmath.hpp>
 #include <mkl_cblas.h>
 #include "common.hpp"
@@ -143,16 +145,14 @@ size_t fft_len(const size_t input_len);
 
 arma::vec add_to_arma(const std::vector<double> &v1, const std::vector<double> &v2);
 
-template<typename T> std::enable_if_t<std::is_integral_v<T>, T>
-bounce(const T v, const T lim)
+template<typename T> std::enable_if_t<std::is_integral_v<T>, T> bounce(const T v, const T lim)
 {
-    return (v > lim) ? (lim - v % lim) : v;
+    return v > lim ? lim - v % lim : v;
 }
 
-template<typename T> std::enable_if_t<not std::is_integral_v<T>, T>
-bounce(const T v, const T lim)
+template<typename T> std::enable_if_t<not std::is_integral_v<T>, T> bounce(const T v, const T lim)
 {
-    return (v > lim) ? (lim - std::fmod(v, lim)) : v;
+    return v > lim ? lim - std::fmod(v, lim) : v;
 }
 
 const size_t C_int_nan = 0xDeadBeef;
@@ -171,7 +171,9 @@ mod(const arma::Mat<T> &a, const T n)
     return a - arma::floor(a / n) * n;
 }
 
+#ifdef ENABLE_OPENCL
 void cholesky_check(viennacl::matrix<double> &A);
+#endif
 
 // Sign-safe natural logarithm of scalar
 template<typename T> inline std::enable_if_t<std::is_scalar_v<T>, T> sln(const T v)
@@ -242,6 +244,8 @@ arma::cx_mat fftshift(const arma::cx_mat &input);
 arma::cx_mat matlab_ifft(const arma::cx_mat &input);
 
 arma::cx_mat ifftshift(const arma::cx_mat &input);
+
+void negate(double *const v, const size_t len);
 
 void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, uint64_t sobol_ctr = 0);
 

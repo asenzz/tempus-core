@@ -6,9 +6,9 @@
 #define ARMA_DONT_USE_LAPACK
 #undef ARMA_USE_LAPACK
 
+#include <mpi.h>
 #include <armadillo>
-#include <petscksp.h>
-#include <petsctao.h>
+#include <ipp/ipp.h>
 #include <cmath>
 #include <deque>
 #include <execution>
@@ -20,6 +20,9 @@
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
 #include "onlinesvr.hpp"
+
+#include <mpi.h>
+
 #include "mat_solve_gpu.hpp"
 #include "cuqrsolve.cuh"
 #include "model/Entity.hpp"
@@ -30,7 +33,6 @@
 #include "calc_cache.hpp"
 #include "kernel_factory.hpp"
 #include "pprune.hpp"
-#include "psolver.hpp"
 
 #ifdef EXPERIMENTAL_FEATURES
 #include <osqp/osqp.h>
@@ -44,10 +46,10 @@ class onlinesvr_lib_init {
 public:
     onlinesvr_lib_init()
     {
-        // mlockall(MCL_CURRENT | MCL_FUTURE);
-        // ip_errchk(ippInit());
+        mlockall(MCL_CURRENT | MCL_FUTURE);
+        ip_errchk(ippInit());
 
-        kernel::IKernel<double>::init();
+#ifndef SOLVE_PRUNE
 
         static int petsc_argc = 1;
         static std::string petsc_arg_name = "tempus";
@@ -55,9 +57,9 @@ public:
         static char **pp = (char **) &p;
         static int zero = 0;
 
-        int provided;
+        int provided = 0;
         MPI_Init_thread(&zero, nullptr, MPI_THREAD_MULTIPLE, &provided);
-        if (provided < MPI_THREAD_MULTIPLE) LOG4_ERROR("The MPI implementation " << provided << " does not fully support MPI_THREAD_MULTIPLE.");
+        if (provided != MPI_THREAD_MULTIPLE) LOG4_ERROR("The MPI implementation " << provided << " does not support MPI_THREAD_MULTIPLE.");
 
         // Get MPI rank and size
         int rank, size;
@@ -66,19 +68,23 @@ public:
 
         if (rank == 0) LOG4_DEBUG("Running with " << size << " MPI processes.");
 
-        PetscCallAbort(PETSC_COMM_SELF, PetscInitialize(&petsc_argc, &pp, nullptr, nullptr));
-        PetscCallAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-omp_num_threads", C_n_cpu_str.c_str()));
-        PetscCallAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-start_in_debugger", nullptr)); // -stop_for_debugger
+        PetscCallCXXAbort(PETSC_COMM_SELF, PetscInitialize(&petsc_argc, &pp, nullptr, nullptr));
+        PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-omp_num_threads", C_n_cpu_str.c_str()));
+        PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-start_in_debugger", nullptr)); // -stop_for_debugger
+
+#endif
 
         ma_errchk(magma_init());
     }
 
     ~onlinesvr_lib_init()
     {
-        // munlockall();
+        munlockall();
 
+#ifndef SOLVE_PRUNE
         PetscFinalize();
         MPI_Finalize();
+#endif
     }
 };
 
@@ -255,15 +261,6 @@ arma::mat &OnlineMIMOSVR::get_labels()
 }
 
 
-bool OnlineMIMOSVR::needs_tuning(const t_param_set &param_set)
-{
-    if (PROPS.get_tune_parameters()) return true;
-    for (const auto &p: param_set)
-        if (p->get_svr_kernel_param() == 0) return true;
-    return false;
-}
-
-
 const dq_scaling_factor_container_t &OnlineMIMOSVR::get_scaling_factors() const
 {
     return scaling_factors;
@@ -279,6 +276,14 @@ void OnlineMIMOSVR::set_scaling_factors(const dq_scaling_factor_container_t &new
     business::DQScalingFactorService::add(scaling_factors, new_scaling_factors);
 }
 
+bool OnlineMIMOSVR::needs_tuning(const t_param_set &param_set)
+{
+    if (PROPS.get_tune_parameters()) return true;
+    for (const auto &p: param_set)
+        if (p->get_svr_kernel_param() == 0) return true;
+    return false;
+}
+
 bool OnlineMIMOSVR::needs_tuning() const
 {
     return needs_tuning(param_set) || ixs.empty();
@@ -288,12 +293,11 @@ void do_mkl_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved);
 
 void do_mkl_over_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved);
 
+#ifdef ENABLE_OPENCL
+
 // Unstable avoid! OpenCL
 arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m, const uint32_t nrhs)
 {
-    LOG4_THROW("Deprecated!");
-    return {};
-#if 0
     if (m * (m + nrhs) * sizeof(double) > common::gpu_handler_1::get().get_max_gpu_data_chunk_size())
         THROW_EX_FS(std::runtime_error,
                 "Not enough memory on GPU, required " << m * nrhs * sizeof(double) << " bytes, available " <<
@@ -338,9 +342,9 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m,
     clReleaseMemObject(device_a);
     clReleaseMemObject(device_b);
     return result;
-#endif
 }
 
+#endif
 
 arma::mat OnlineMIMOSVR::self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs)
 {
@@ -355,90 +359,15 @@ void OnlineMIMOSVR::self_predict(const uint32_t m, const uint32_t n, CRPTRd K, C
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, m, 1., K, m, w, m, -1., diff, m);
 }
 
-arma::mat get_bounds(const arma::mat &A, const arma::mat &b)
+double OnlineMIMOSVR::score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs)
 {
-    const auto meanabs_b = common::meanabs(b);
-    const auto meanabs_A = common::meanabs(A);
-    const auto lim = meanabs_b / meanabs_A / b.n_rows;
-    arma::mat r(b.n_rows, 2);
-    r.col(0).fill(-lim);
-    r.col(1).fill(lim);
-    LOG4_TRACE("Bounds limit " << lim << ", meanabs A " << meanabs_A << ", b " << meanabs_b);
-    return r;
+    auto diff = (double *) malloc(m * n * sizeof(double));
+    self_predict(m, n, K, w, rhs, diff);
+    const auto res =  cblas_dasum(m * n, diff, 1);
+    free(diff);
+    return res;
 }
 
-// #define SOLVE_PRUNE
-
-void
-OnlineMIMOSVR::solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint32_t iters, t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk)
-{
-    const uint32_t n_rows = K.n_rows;
-    const uint32_t n_cols = rhs.n_cols;
-    bool solved_init = true;
-    if (solved.n_cols != n_cols * PROPS.get_weight_columns() || solved.n_rows != n_rows) {
-        solved.set_size(n_rows, n_cols * PROPS.get_weight_columns());
-        solved_init = false;
-    }
-    arma::mat residuals = rhs;
-    const auto residuals_ptr = residuals.mem;
-
-#ifdef SOLVE_PRUNE
-    const auto rhs_size = rhs.n_elem * sizeof(double);
-    const solvers::score_weights sw(K, rhs, n_rows, n_cols, rhs.n_elem, K.n_elem);
-    constexpr uint16_t C_hybrid_solve_threshold = 0; // 2e4; // CUDA scoring seems to shave off 2% of alpha
-    const auto p_K = K.mem;
-    const auto n_residuals = residuals.n_elem;
-    const auto loss_fun = n_rows < C_hybrid_solve_threshold ?
-            (optimizer::t_pprune_cost_fun) [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
-                auto tmp = (double *) alloca(rhs_size);
-                self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
-                *f = cblas_dasum(n_residuals, tmp, 1);
-            } : (optimizer::t_pprune_cost_fun) [&sw](CPTRd x, RPTR(double) f) {
-                *f = sw(x);
-            };
-#else
-    constexpr uint16_t n_particles = 1; // More particles do no good
-    arma::mat x0(n_rows, n_particles);
-#endif
-
-    double best_mae = std::numeric_limits<double>::max();
-    uint16_t best_c = PROPS.get_weight_columns();
-    arma::mat total_residuals = residuals;
-    UNROLL()
-    for (uint16_t c = 0; c < PROPS.get_weight_columns(); ++c) {
-        const auto start_col = c * rhs.n_cols;
-        const auto bounds = get_bounds(K, residuals);
-#ifdef SOLVE_PRUNE
-        const optimizer::t_pprune_res res = optimizer::pprune(
-                optimizer::pprune::C_default_algo, C_solve_opt_particles, bounds, loss_fun, iters, 0, 0, solved_init ? solved.cols(start_col, end_col) : arma::mat{});
-        solved.cols(start_col, end_col) = res.best_parameters;
-#else
-        common::equispaced(x0, bounds, {});
-        t_omp_lock err_l;
-        PetscReal best_err = std::numeric_limits<PetscReal>::max();
-        OMP_FOR_i(x0.n_cols) {
-            antisymmetric_solver solver(n_rows, iters, i || !solved_init ? x0.colptr(i) : solved.colptr(start_col), K.mem, residuals_ptr);
-            const auto err = solver.solve();
-            err_l.set();
-            if (err < best_err) {
-                solver.get_solution(solved.colptr(start_col));
-                best_err = err;
-            }
-            err_l.unset();
-        }
-#endif
-        auto solved_v = solved.cols(start_col, std::min(solved.n_cols, start_col + n_cols) - 1);
-        residuals -= K * solved_v;
-        const auto mae = common::meanabs(residuals);
-        LOG4_DEBUG("Best MAE " << best_mae << ", improvement " << common::imprv(mae, best_mae) << "%, column " << c << ", iteration " << iters << ", residuals "
-                               << common::present(residuals));
-        if (mae < best_mae) {
-            best_mae = mae;
-            best_c = c;
-        }
-    }
-    if (best_c < PROPS.get_weight_columns() - 1) solved.shed_cols((best_c + 1) * n_cols, solved.n_cols - 1);
-}
 
 // TODO Buggy, rewrite and test
 std::deque<arma::mat> OnlineMIMOSVR::solve_batched_irwls(
@@ -534,7 +463,6 @@ OnlineMIMOSVR::generate_indexes(const bool projection, const uint32_t n_rows_dat
     const auto start_offset = n_rows_dataset - n_rows_train;
     if (!projection) return {arma::regspace<arma::uvec>(start_offset, n_rows_dataset - 1)};
 
-    assert(C_chunk_overlap == 0); // Overlap not allowed for a manifold's projection
     const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     assert(num_chunks);
     std::deque<arma::uvec> indexes(num_chunks);

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <thread>
-#include <omp.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #include <oneapi/tbb/parallel_for.h>

@@ -198,7 +198,7 @@ TEST_F(DaoTestFixture, TestFixInputQueueSelection)
 
 namespace {
 
-bpt::ptime operator "" _pt(const char * s, size_t)
+bpt::ptime operator ""_pt(const char * s, size_t)
 {
     return bpt::time_from_string(s);
 }

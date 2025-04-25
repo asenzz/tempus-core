@@ -3,13 +3,11 @@
 //
 
 #include "../include/dq_scaling_factors_service_impl.cuh"
-
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/sort.h>
 #include <thrust/reduce.h>
 #include <thrust/device_ptr.h>
-
 #include <cublas_v2.h>
 
 

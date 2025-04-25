@@ -79,7 +79,7 @@ void Ensemble::set_dataset_id(const bigint dataset_id_)
     dataset_id = dataset_id_;
     if (p_decon_queue)
         p_decon_queue->set_dataset_id(dataset_id_);
-#pragma omp parallel for num_threads(adj_threads(aux_decon_queues.size()))
+// #pragma omp parallel for num_threads(adj_threads(aux_decon_queues.size()))
     for (const auto &p_aux_decon: aux_decon_queues)
         if (p_aux_decon)
             p_aux_decon->set_dataset_id(dataset_id_);

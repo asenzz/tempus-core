@@ -8,9 +8,11 @@
 namespace svr {
 namespace common {
 
+tbb::mutex log_level_mx;
+
 uint8_t AppConfig::S_log_threshold = (uint8_t) boost::log::trivial::severity_level::trace;
 
-boost::log::trivial::severity_level set_global_log_level(const std::string &log_level_value)
+boost::log::trivial::severity_level AppConfig::set_global_log_level(const std::string &log_level_value)
 {
     boost::log::trivial::severity_level log_threshold = boost::log::trivial::severity_level::info;
     if (strcasecmp(log_level_value.c_str(), "ALL") == 0)
@@ -27,14 +29,28 @@ boost::log::trivial::severity_level set_global_log_level(const std::string &log_
         log_threshold = boost::log::trivial::severity_level::error;
     else if (strcasecmp(log_level_value.c_str(), "FATAL") == 0)
         log_threshold = boost::log::trivial::severity_level::fatal;
-
-    boost::log::core::get()->set_filter(boost::log::trivial::severity >= boost::log::trivial::severity_level(log_threshold));
-
-    AppConfig::S_log_threshold = (unsigned char) log_threshold;
-
+    const tbb::mutex::scoped_lock lk(log_level_mx);
+    boost::log::core::get()->set_filter(boost::log::trivial::severity >= log_threshold);
+    AppConfig::S_log_threshold = (uint8_t) log_threshold;
     return log_threshold;
 }
 
+boost::log::trivial::severity_level AppConfig::set_global_log_level(const boost::log::trivial::severity_level log_threshold)
+{
+    const tbb::mutex::scoped_lock lk(log_level_mx);
+    boost::log::core::get()->set_filter(boost::log::trivial::severity >= log_threshold);
+    AppConfig::S_log_threshold = (uint8_t) log_threshold;
+    return log_threshold;
+}
+
+boost::log::trivial::severity_level AppConfig::set_global_log_level(const uint8_t log_value)
+{
+    const tbb::mutex::scoped_lock lk(log_level_mx);
+    const auto log_threshold = static_cast<const boost::log::trivial::severity_level>(log_value);
+    boost::log::core::get()->set_filter(boost::log::trivial::severity >= log_threshold);
+    AppConfig::S_log_threshold = log_value;
+    return log_threshold;
+}
 
 size_t AppConfig::get_default_feature_quantization() const noexcept
 { return feature_quantization_; }
@@ -101,9 +117,6 @@ uint16_t AppConfig::get_num_quantisations() const noexcept
 
 uint16_t AppConfig::get_quantisation_divisor() const noexcept
 { return quantisation_divisor_; }
-
-uint16_t AppConfig::get_oemd_column_interleave() const noexcept
-{ return oemd_column_interleave_; }
 
 uint16_t AppConfig::get_oemd_quantisation_skipdiv() const noexcept
 { return oemd_quantisation_skipdiv_; }
@@ -212,7 +225,6 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     daemonize_ = get_property<DTYPE(daemonize_) >(app_config_file, DAEMONIZE, C_default_daemonize);
     num_quantisations_ = get_property<DTYPE(num_quantisations_) >(app_config_file, NUM_QUANTISATIONS, C_default_num_quantisations);
     quantisation_divisor_ = get_property<DTYPE(quantisation_divisor_) >(app_config_file, QUANTISATION_DIVISOR, C_default_quantisation_divisor);
-    oemd_column_interleave_ = get_property<DTYPE(oemd_column_interleave_) >(app_config_file, OEMD_COLUMN_INTERLEAVE, C_default_oemd_column_interleave);
     oemd_quantisation_skipdiv_ = get_property<DTYPE(oemd_quantisation_skipdiv_) >(app_config_file, OEMD_QUANTISATION_SKIPDIV, C_default_oemd_quantisation_skipdiv);
     oemd_tune_particles_ = get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles);
     oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);

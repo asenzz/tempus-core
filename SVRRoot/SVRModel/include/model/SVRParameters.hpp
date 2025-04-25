@@ -16,18 +16,17 @@ namespace svr {
 namespace datamodel {
 
 typedef enum class kernel_type : int {
-    begin = 0,
-    LINEAR = 1,
-    POLYNOMIAL = 2,
-    RBF = 3,
-    RBF_GAUSSIAN = 4,
-    RBF_EXPONENTIAL = 5,
-    MLP = 6,
-    GA = 7,
-    PATH = 8,
-    DEEP_PATH = 9,
-    DTW = 10,
-    end = 11
+    LINEAR = 0,
+    POLYNOMIAL = 1,
+    RBF = 2,
+    RBF_GAUSSIAN = 3,
+    RBF_EXPONENTIAL = 4,
+    MLP = 5,
+    GA = 6,
+    PATH = 7,
+    DEEP_PATH = 8,
+    DTW = 9,
+    end = 10
 } e_kernel_type;
 
 e_kernel_type operator++(e_kernel_type &k_type);

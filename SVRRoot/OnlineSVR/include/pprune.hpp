@@ -12,7 +12,7 @@
 namespace svr {
 namespace optimizer {
 
-constexpr unsigned C_biteopt_depth = 1;
+constexpr uint16_t C_biteopt_depth = 1;
 
 struct t_pprune_res {
     double best_score = std::numeric_limits<double>::infinity();
@@ -25,9 +25,13 @@ typedef std::function<void(CPTRd x, double *const f)> t_pprune_cost_fun, *t_ppru
 struct t_calfun_data;
 using t_calfun_data_ptr = t_calfun_data *;
 
-class pprune {
+class t_biteopt_cost;
 
-    const unsigned n, D;
+class pprune {
+    friend t_calfun_data;
+    friend t_biteopt_cost;
+
+    const uint32_t n, D, maxfun, depth;
     const arma::mat bounds;
     const arma::vec pows, ranges;
     t_pprune_res result;
@@ -50,14 +54,13 @@ public:
            arma::mat x0 = {}, const arma::vec &pows = {},
            const uint16_t depth = C_biteopt_depth);
 
-    void pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0, const uint16_t depth);
+    void pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0);
 
-    void pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+    void pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0);
 
-    void pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+    void pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0);
 
-    void pprune_petsc(
-            const uint32_t n_particles, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg, double rhoend, const arma::mat &x0);
+    void pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0);
 
     static void calfun(CPTRd x, double *const f, t_calfun_data_ptr const calfun_data);
 

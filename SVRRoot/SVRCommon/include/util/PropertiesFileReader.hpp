@@ -25,7 +25,7 @@ public:                                                                 \
     static constexpr std::string C_default_str_##x = #D;                \
     inline T get_##x() {                                                \
         if (x##_set_ == false) {                                        \
-           const tbb::mutex::scoped_lock l(set_mx);                     \
+           const tbb::mutex::scoped_lock lk(set_mx);                    \
            if (x##_set_ == false) {                                     \
                 x##_ = get_property<T>(config_file, x, #D);             \
                 x##_set_ = true;                                        \
@@ -77,6 +77,18 @@ public:
 
 class AppConfig : public PropertiesReader {
 
+CONFPROP(uint16_t, solve_particles, 80)
+
+CONFPROP(bool, combine_queues, 0)
+
+CONFPROP(uint16_t, paral_ensembles, 1)
+
+CONFPROP(uint16_t, parallel_models, 1)
+
+CONFPROP(uint16_t, parallel_chunks, 2)
+
+CONFPROP(uint32_t, oemd_interleave, 2)
+
 CONFPROP(float, weights_exp, 1)
 
 CONFPROP(float, weights_slope, 10)
@@ -95,11 +107,13 @@ CONFPROP(uint16_t, predict_chunks, 100)
 
 CONFPROP(double, lag_multiplier, 100)
 
-CONFPROP(uint32_t, interleave, 10)
+CONFPROP(uint16_t, interleave, 10)
+
+CONFPROP(uint16_t, predict_ileave, 10)
 
 CONFPROP(double, tune_max_lambda, 50)
 
-CONFPROP(double, tune_max_tau, 50)
+CONFPROP(double, tune_max_tau, 2)
 
 CONFPROP(uint16_t, db_num_threads, 8)
 
@@ -107,7 +121,7 @@ CONFPROP(uint32_t, tune_skip, 7500)
 
 CONFPROP(uint32_t, align_window, 1000)
 
-CONFPROP(int32_t, max_loop_count, -1)
+CONFPRO_(max_loop_count, -1)
 
 CONFPROP(uint16_t, weight_columns, 1)
 
@@ -133,7 +147,6 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char SELF_REQUEST[] = "SELF_REQUEST";
     static constexpr char NUM_QUANTISATIONS[] = "NUM_QUANTISATIONS"; // Higher number of quantisations means more precision (more resource usage)
     static constexpr char QUANTISATION_DIVISOR[] = "QUANTISATION_DIVISOR"; // Lower divisor means fine grained quantisations (more resource usage, 1 quant increment until 2 * divisor)
-    static constexpr char OEMD_COLUMN_INTERLLOOP_INTERVALEAVE[] = "OEMD_COLUMN_INTERLEAVE"; // Lower interleave finer OEMD FIR coefficients tuning
     static constexpr char OEMD_QUANTISATION_SKIPDIV[] = "OEMD_QUANTISATION_SKIPDIV"; // Higher skipdiv finer OEMD FIR coefficients tuning
     static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
     static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
@@ -155,7 +168,7 @@ private: // TODO port properties below to use the CONFPROP macro
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     bool daemonize_;
     uint16_t num_quantisations_, quantisation_divisor_, tune_particles_, tune_iterations_;
-    uint16_t oemd_column_interleave_, oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
+    uint16_t oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
     float solve_iterations_coefficient_;
 
 public:
@@ -212,8 +225,6 @@ public:
 
     uint16_t get_quantisation_divisor() const noexcept;
 
-    uint16_t get_oemd_column_interleave() const noexcept;
-
     uint16_t get_oemd_quantisation_skipdiv() const noexcept;
 
     uint16_t get_oemd_tune_particles() const noexcept;
@@ -227,6 +238,12 @@ public:
     uint16_t get_weight_columns() const noexcept;
 
     float get_solve_iterations_coefficient() const noexcept;
+
+    static boost::log::trivial::severity_level set_global_log_level(const std::string &log_level_value);
+
+    static boost::log::trivial::severity_level set_global_log_level(const boost::log::trivial::severity_level log_threshold);
+
+    static boost::log::trivial::severity_level set_global_log_level(const uint8_t log_value);
 };
 
 using MessageSource_ptr = std::shared_ptr<common::AppConfig>;

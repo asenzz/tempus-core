@@ -21,6 +21,8 @@
 #include "onlinesvr.hpp"
 #include "model/InputQueue.hpp"
 
+#define BYPASS_CALC_CACHE
+
 namespace svr {
 
 namespace kernel {
@@ -57,36 +59,6 @@ struct levels_tune_data
     bool recombining = false;
 };
 
-struct cached_iface
-{
-    virtual void clear() = 0;
-};
-
-struct cached_register
-{
-    static tbb::mutex erase_mx;
-    static tbb::concurrent_unordered_set<cached_iface *> cr;
-};
-
-template<typename kT, typename fT>
-struct cached : cached_iface
-{
-    using rT = typename return_type<fT>::type;
-
-    static cached<kT, fT> &get();
-
-    static std::unordered_map<kT, rT> cache_cont;
-    static tbb::concurrent_unordered_map<kT, tbb::mutex> mx_map;
-
-    cached();
-
-    ~cached();
-
-    void clear() override;
-
-    rT &operator()(const kT &cache_key, const fT &f);
-};
-
 class calc_cache
 {
     tbb::mutex tuners_mx;
@@ -99,12 +71,8 @@ public:
 
     template<typename T> arma::Mat<T> &get_cumulatives(const datamodel::SVRParameters &parameters, const arma::Mat<T> &X, const bpt::ptime &time);
 
-    template<typename T> arma::Mat<T> &get_Z(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const bpt::ptime &time);
-
     template<typename T> arma::Mat<T> &get_Zy(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time,
             const bpt::ptime &Xy_time);
-
-    template<typename T> arma::Mat<T> &get_K(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &features_t, const bpt::ptime &time);
 
     template<typename T> arma::Mat<T> &get_Ky(const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &time_X,
             const bpt::ptime &time_Xy);

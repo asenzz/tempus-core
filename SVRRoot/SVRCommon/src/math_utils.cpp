@@ -1,7 +1,12 @@
 #ifdef USE_IPP
+
 #include <ipp.h>
+
 #endif
+#ifdef ENABLE_OPENCL
 #include <viennacl/vector_proxy.hpp>
+#endif
+
 #include <common.hpp>
 #include <map>
 #include <mkl_vml.h>
@@ -172,6 +177,7 @@ transpose_matrix(const std::vector<std::vector<double>> &vvmat)
     return result;
 }
 
+#ifdef ENABLE_OPENCL
 
 void cholesky_check(viennacl::matrix<double> &A)
 {
@@ -199,6 +205,8 @@ void cholesky_check(viennacl::matrix<double> &A)
         }
     free(L);
 }
+
+#endif
 
 bool is_power_of_two(size_t value)
 {
@@ -483,6 +491,23 @@ template<> arma::mat &unscale_I(arma::mat &m, const double sf, const double dc)
     return m;
 }
 
+void negate(double *const v, const size_t len)
+{
+    DTYPE(len) i = 0;
+#ifdef NDEBUG
+    __m256d neg_factor = _mm256_set1_pd(-1.);
+
+    // Process 4 doubles at a time
+    for (; i + 3 < len; i += 4) {
+        __m256d data = _mm256_loadu_pd(&v[i]);
+        __m256d result = _mm256_mul_pd(data, neg_factor);
+        _mm256_storeu_pd(&v[i], result);
+    }
+#endif
+    // Handle remaining elements
+    for (; i < len; ++i) v[i] = -v[i];
+}
+
 std::atomic<double> pseudo_random_dev::state = .54321;
 
 constexpr uint32_t max_D = 64;
@@ -491,6 +516,8 @@ constexpr uint32_t max_D = 64;
 
 void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, uint64_t sobol_ctr)
 {
+    LOG4_BEGIN();
+
 #ifdef INIT_SOBOL
     if (!sobol_ctr) sobol_ctr = init_sobol_ctr();
 #endif
@@ -498,11 +525,12 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
     const uint32_t D = x0.n_rows;
     if (bounds.n_cols != 2 || bounds.n_rows != D) THROW_EX_FS(std::invalid_argument, "n " << n << ", D " << D << ", bounds " << arma::size(bounds));
     const arma::vec range = bounds.col(1) - bounds.col(0);
-    bool init_random = n < 2;
+    const auto init_random = n < 2;
     const double n_1 = n - 1;
-    auto gen = reproducibly_seeded_64<xso::rng64>();
+    // auto gen = reproducibly_seeded_64<xso::rng64>();
+    auto gen = std::mt19937_64((uint_fast64_t) pseudo_random_dev::max(1.));
     std::uniform_real_distribution<double> dis(0., 1.);
-    OMP_FOR_(n, ordered collapse(2) firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
+    OMP_FOR_(n, ordered firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
     for (uint32_t i = 0; i < n; ++i) {
         const auto i_n_1 = double(i) / n_1;
         for (uint32_t j = 0; j < D; ++j) {
@@ -522,7 +550,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
             x0(j, i) = std::pow(range[j], pow_j) * x0(j, i) + bounds(j, 0);
         }
     }
-    if (x0.has_nonfinite()) LOG4_THROW("Illegal init values in " << arma::size(x0));
+    if (x0.has_nonfinite()) LOG4_THROW("Illegal init values in " << present(x0));
     LOG4_TRACE("Scaled particles, parameters matrix " << to_string(x0, 6) << ", bounds " << to_string(bounds, 6));
 }
 

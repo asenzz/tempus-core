@@ -10,7 +10,9 @@
 #include <functional>
 #include <thread>
 #include <armadillo>
+#ifdef ENABLE_OPENCL
 #include <viennacl/matrix.hpp>
+#endif
 #include <oneapi/tbb/concurrent_map.h>
 #include <oneapi/tbb/concurrent_set.h>
 #include <oneapi/tbb/concurrent_unordered_set.h>
@@ -30,7 +32,7 @@ namespace bpt = boost::posix_time;
 
 #define DTYPE(T) std::decay_t<decltype(T)>
 #define CAST2(x) (DTYPE(x))
-#define PCAST(T, X) (*std::launder(reinterpret_cast<T *>(&(X))) )
+#define PCAST(T, X) (*std::launder((T *) &(X)))
 #define RELEASE_CONT(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
 #define CPTR(T) const T *const
@@ -38,6 +40,9 @@ namespace bpt = boost::posix_time;
 #define CRPTR(T) const T *__restrict__ const
 #define CPTRd CPTR(double)
 #define CRPTRd CRPTR(double)
+
+#define ALIGN_ALLOCA(T, SZ, ALIGN) (T* const)(((uintptr_t)alloca(SZ + (ALIGN - 1)) + (ALIGN - 1)) & ~(uintptr_t)(ALIGN - 1))
+
 
 // General utility macro
 #define PP_CAT(A, B) A ## B
@@ -68,6 +73,23 @@ namespace bpt = boost::posix_time;
 #define PROPERTY_2(T, X) private: T X; PROPERTY_PUBLISHED(T, X)
 #define PROPERTY_3(T, X, D) private: T X = D; PROPERTY_PUBLISHED(T, X)
 
+template <typename Derived, typename Base>
+std::unique_ptr<Derived> dynamic_ptr_cast(std::unique_ptr<Base>&& base) {
+    if (auto derived = dynamic_cast<Derived *>(base.get())) {
+        base.release();
+        return std::unique_ptr<Derived>(derived);
+    }
+    return nullptr;
+}
+
+template <typename Derived, typename Base>
+std::shared_ptr<Derived> dynamic_ptr_cast(std::shared_ptr<Base>&& base) {
+    if (auto derived = dynamic_cast<Derived*>(base.get())) {
+        base.release();
+        return std::shared_ptr<Derived>(derived);
+    }
+    return nullptr;
+}
 
 template<typename T>
 struct return_type : return_type<decltype(&T::operator())> {
@@ -509,6 +531,7 @@ tovec(const arma::Mat<T> &input)
     return output;
 }
 
+#ifdef ENABLE_OPENCL
 viennacl::vector<double> tovcl(const arma::colvec &in);
 
 template<typename T> viennacl::matrix<T>
@@ -532,7 +555,7 @@ tovcl(const arma::Mat<T> &in)
     memcpy(r.handle().ram_handle().get(), in.mem, in.n_elem * sizeof(T));
     return viennacl::trans(r);
 }
-
+#endif
 
 template<typename T> arma::Col<T>
 toarmacol(const tbb::concurrent_vector<T> &v)
@@ -552,7 +575,7 @@ toarmacol(const tbb::concurrent_unordered_set<T> &v)
     return r;
 }
 
-
+#if ENABLE_OPENCL
 template<typename T> arma::Mat<T>
 toarma(const viennacl::matrix<T> &in)
 {
@@ -574,8 +597,9 @@ toarma(const viennacl::matrix<T> &in)
     if (in.size2() != in.internal_size2()) r.shed_cols(in.size2(), in.internal_size2() - 1);
     return r;
 };
+#endif
 
-#if 0
+#ifdef ENABLE_EIGEN
 
 template<typename T> arma::Mat<T> toarma(const Eigen::MatrixX<T> &eigen_A)
 {

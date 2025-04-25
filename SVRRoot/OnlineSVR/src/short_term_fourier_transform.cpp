@@ -1,7 +1,7 @@
 #include <fftw3.h>
+#include "common/logging.hpp"
 #include "short_term_fourier_transform.hpp"
 #include "common/thread_pool.hpp"
-#include "short_term_fourier_transform_ocl_impl.hpp"
 
 namespace svr
 {
@@ -304,11 +304,10 @@ short_term_fourier_transform_opencl::inverse_transform(
 /******************************************************************************/
 
 short_term_fourier_transform::short_term_fourier_transform(const size_t levels)
-        : spectral_transform("stft", levels), levels(levels), cpu_transformer(levels)
+        : spectral_transform("stft", levels), cpu_transformer(levels)
 #ifdef ENABLE_OPENCL
 , gpu_transformer(levels)
 #endif
-
 {}
 
 void
@@ -318,7 +317,7 @@ short_term_fourier_transform::transform(
 {
 #ifdef ENABLE_OPENCL
     if (input.size() < gpu_faster_threshold || levels != short_term_fourier_transform_opencl::can_handle_levels)
-        cpu_transformer.transform(input, decon, padding);
+    cpu_transformer.transform(input, decon, padding);
     else
         gpu_transformer.transform(input, decon, padding);
 #else
@@ -332,7 +331,7 @@ void short_term_fourier_transform::inverse_transform(const std::vector<double> &
 #ifdef ENABLE_OPENCL
     if (decon.size() / levels < gpu_faster_threshold ||
         levels != short_term_fourier_transform_opencl::can_handle_levels)
-        cpu_transformer.inverse_transform(decon, recon, padding);
+    cpu_transformer.inverse_transform(decon, recon, padding);
     else
         gpu_transformer.inverse_transform(decon, recon, padding);
 #else

@@ -16,6 +16,10 @@
 #include "parallelism.hpp"
 #include "semaphore.hpp"
 
+// #define IPC_GPU
+
+#ifdef ENABLE_OPENCL
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
 
@@ -23,17 +27,17 @@
 
 #pragma GCC diagnostic pop
 
-// #define IPC_GPU
 // OpenCL kernel options
 #define KERNEL_DIRECTORY_PATH   "../SVRRoot/opencl-libsvm/libsvm/kernels/"
 #define COMMON_PATH             "../SVRRoot/SVRCommon/include"
 #define OCL_BUILD_OPTIONS       " -I\"" KERNEL_DIRECTORY_PATH "\" -I\"" COMMON_PATH "\""
 
+#endif
+
 #ifdef IPC_GPU
 #include <boost/interprocess/sync/named_semaphore.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
 #include <boost/interprocess/sync/scoped_lock.hpp>
-
 #define SVRWAVE_GPU_SEM         "svrwave_gpu_sem"
 #endif
 
@@ -54,21 +58,28 @@ struct device_info
 #endif
 };
 
-template<const uint16_t ctx_per_gpu = 1>
-class gpu_handler : boost::noncopyable
+template<const uint16_t ctx_per_gpu = 1> class gpu_handler : boost::noncopyable
 {
 #ifdef IPC_GPU
     std::unique_ptr<boost::interprocess::named_semaphore> p_gpu_sem_;
 #endif
-    uint16_t max_running_gpu_threads_number_ = 0;
+    uint16_t max_running_gpu_threads_number_;
+#ifdef ENABLE_OPENCL
     uint32_t m_max_gpu_kernels_ = 0;
-    size_t max_gpu_data_chunk_size_ = 0;
+#endif
+    size_t max_gpu_data_chunk_size_;
 
     std::mutex cv_mx_;
+
     std::condition_variable cv_;
+
     std::deque<device_info> available_devices_;
 
-    void init_devices(const cl_device_type device_type);
+#ifdef ENABLE_OPENCL
+void init_devices(const cl_device_type device_type);
+#else
+    void init_devices();
+#endif
 
 public:
     static constexpr auto C_no_gpu_id = std::numeric_limits<uint16_t>::max();
@@ -82,8 +93,6 @@ public:
     void return_gpu(const uint16_t context_id);
 
     void return_gpus(uint16_t gpu_ct);
-
-    void sort_free_gpus();
 
     uint16_t context_id(const DTYPE(available_devices_)::const_iterator &it) const;
 
@@ -99,12 +108,11 @@ public:
 
     uint16_t get_gpu_devices_count() const;
 
-    uint32_t get_max_gpu_kernels() const;
-
     size_t get_max_gpu_data_chunk_size() const;
 
 #ifdef ENABLE_OPENCL
 
+    uint32_t get_max_gpu_kernels() const;
     const viennacl::ocl::device &device(const uint16_t idx) const;
 
 #endif //ENABLE_OPENCL
@@ -119,13 +127,10 @@ public:
 using gpu_handler_1 = gpu_handler<CTX_PER_GPU>;
 using gpu_handler_4 = gpu_handler<4>;
 
-// TODO  Make CUDA stream context
-#ifdef ENABLE_OPENCL
-
 template<const uint16_t ctx_per_gpu> class gpu_context_
 {
 protected:
-    const uint16_t context_id_, dev_ct;
+    const uint16_t context_id_;
 public:
     __attribute_noinline__ gpu_context_();
 
@@ -141,10 +146,14 @@ public:
 
     uint16_t stream_id() const;
 
+#ifdef ENABLE_OPENCL
     viennacl::ocl::context &ctx() const;
+#endif
 
     operator bool() const;
 };
+
+#ifdef ENABLE_OPENCL
 
 class gpu_kernel : public gpu_context
 {
@@ -172,7 +181,11 @@ public:
     static void enqueue(const viennacl::ocl::kernel &kernel, const size_t local_work_size, const size_t global_work_group_size);
 };
 
-} //namespace common
+#endif
+
+} // namespace common
+
+#ifdef ENABLE_OPENCL
 
 namespace cl12 {
 template<typename cl_class>
@@ -219,8 +232,10 @@ cl::NDRange ndrange(const range_args2_t &range_args);
 #define CL_CHECK(cl_call) { cl_int code = (cl_call); if (code != CL_SUCCESS /* == clblasSuccess */ )                     \
             LOG4_THROW("OpenCL call failed with error " << svr::common::gpu_helper::get_error_string(code)); }
 
+} namespace c12
+
 #endif //ENABLE_OPENCL
-}  //namespace cl12
-}
+
+} // namespace svr
 
 #include "gpu_handler.tpp"

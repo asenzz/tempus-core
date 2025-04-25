@@ -545,31 +545,34 @@ datamodel::IQScalingFactor_ptr Dataset::get_iq_scaling_factor(const std::string 
 void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor_ptr> &new_iq_scaling_factors, const bool overwrite)
 {
     const auto prev_size = iq_scaling_factors_.size();
-    t_omp_lock iq_scaling_factors_l;
-#pragma omp parallel ADJ_THREADS(new_iq_scaling_factors.size() + prev_size)
+    tbb::mutex iq_scaling_factors_l;
+#pragma omp parallel ADJ_THREADS(new_iq_scaling_factors.size() * prev_size)
 #pragma omp single
     {
-	OMP_TASKLOOP_1(untied)
+    	OMP_TASKLOOP_(new_iq_scaling_factors.size(),)
         for (const auto &new_iqsf: new_iq_scaling_factors) {
             std::atomic<bool> found = false;
-            OMP_TASKLOOP_1(firstprivate(prev_size) untied)
             for (DTYPE(prev_size) i = 0; i < prev_size; ++i) {
+                tbb::mutex::scoped_lock lk(iq_scaling_factors_l);
                 auto &old_iqsf = iq_scaling_factors_[i];
+                lk.release();
                 if (new_iqsf->get_input_queue_table_name() == old_iqsf->get_input_queue_table_name() &&
                     new_iqsf->get_input_queue_column_name() == old_iqsf->get_input_queue_column_name()) {
                     if (overwrite || !std::isnormal(old_iqsf->get_scaling_factor())) {
-                        iq_scaling_factors_l.set();
+                        const tbb::mutex::scoped_lock l2(iq_scaling_factors_l);
                         old_iqsf->set_scaling_factor(new_iqsf->get_scaling_factor());
-                        iq_scaling_factors_l.unset();
                     }
-                    found.store(true, std::memory_order_relaxed);
+                    if (overwrite || !common::isnormalz(old_iqsf->get_dc_offset())) {
+                        const tbb::mutex::scoped_lock l2(iq_scaling_factors_l);
+                        old_iqsf->set_dc_offset(new_iqsf->get_dc_offset());
+                    }
+                    found = true;
                 }
             }
             if (!found) {
-                iq_scaling_factors_l.set();
+                const tbb::mutex::scoped_lock l2(iq_scaling_factors_l);
                 iq_scaling_factors_.emplace_back(new_iqsf);
                 iq_scaling_factors_.back()->set_dataset_id(id);
-                iq_scaling_factors_l.unset();
             }
         }
     }
@@ -620,22 +623,21 @@ uint32_t Dataset::get_max_residuals_length() const
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
     uint32_t result = 0;
-    t_omp_lock max_residuals_l;
+    tbb::mutex max_residuals_l;
 #pragma omp parallel ADJ_THREADS(2 * ensembles_.size())
 #pragma omp single
     {
         OMP_TASKLOOP_(ensembles_.size(), untied)
         for (const auto &p_ensemble: ensembles_) {
             const auto res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());
-            max_residuals_l.set();
+            tbb::mutex::scoped_lock lk(max_residuals_l);
             MAXAS(result, res_count);
-            max_residuals_l.unset();
+            lk.release();
             OMP_TASKLOOP_(p_ensemble->get_aux_decon_queues().size(), untied)
             for (const auto &p_decon: p_ensemble->get_aux_decon_queues()) {
                 const auto res_count_aux = get_residuals_length(p_decon->get_table_name());
-                max_residuals_l.set();
+                tbb::mutex::scoped_lock l2(max_residuals_l);
                 MAXAS(result, res_count_aux);
-                max_residuals_l.unset();
             }
         }
     }

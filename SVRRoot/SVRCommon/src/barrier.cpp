@@ -15,7 +15,7 @@ barrier::barrier(const unsigned num) : num_threads(num), wait_count(0), instance
 void barrier::wait() noexcept
 {
     std::unique_lock<std::mutex> lock(mut); // acquire lock
-    unsigned inst = instance; // store current instance for comparison
+    const auto inst = instance; // store current instance for comparison
     // in predicate
 
     if (++wait_count == num_threads) { // all threads reached barrier
@@ -24,7 +24,7 @@ void barrier::wait() noexcept
         // pass condition variable predicate
         cv.notify_all();
     } else { // not all threads have reached barrier
-        cv.wait(lock, [this, &inst]() { return instance != inst; });
+        cv.wait(lock, [this, inst]() { return instance != inst; });
         // NOTE: The predicate lambda here protects against spurious
         //       wakeups of the thread. As long as this->instance is
         //       equal to inst, the thread will not wake.
@@ -40,10 +40,10 @@ omp_task_barrier::omp_task_barrier(const unsigned num_threads) : num_threads(num
 
 void omp_task_barrier::wait() noexcept
 {
-    wait_l.set();
+    tbb::mutex::scoped_lock lk(wait_l);
     const auto current_instance = instance;
     ++wait_count;
-    wait_l.unset();
+    lk.release();
 
     __do_wait:
     if (instance <= current_instance && wait_count < num_threads) { // all threads haven't reached barrier
@@ -51,17 +51,15 @@ void omp_task_barrier::wait() noexcept
         goto __do_wait;
     }
     // all threads reached barrier
-    wait_l.set();
+    lk.acquire(wait_l);
     wait_count = 0; // reset wait_count
     instance = current_instance + 1; // increment instance for next use of barrier
-    wait_l.unset();
 }
 
 void omp_task_barrier::reset() noexcept
 {
-    wait_l.set();
+    const tbb::mutex::scoped_lock lk(wait_l);
     wait_count = 0; // reset wait_count
-    wait_l.unset();
 }
 
 } // namespace svr::common

@@ -1,14 +1,13 @@
 #pragma once
 
 #include <vector>
-#include <common/cuda_util.cuh>
-
 #include "model/DataRow.hpp"
 #include "spectral_transform.hpp"
 #include "oemd_coefficients.hpp"
 #include "common/defines.h"
 #include "model/DeconQueue.hpp"
 #include "model/InputQueue.hpp"
+#include "common/cuda_util.cuh"
 
 // Algorithm to use FIR OEMD is default (slower and higher quality) or FFT OEMD faster but loss of precision on reconstruction
 // #define OEMDFFT

@@ -9,8 +9,8 @@
 #include <cufft.h>
 #include <sstream>
 #include <thrust/device_vector.h>
-#include <nppdefs.h>
 #include <thrust/async/for_each.h>
+#include <nppdefs.h>
 #include "common/logging.hpp"
 #include "common/defines.h"
 #include "common/constants.hpp"
@@ -109,33 +109,59 @@ template<const unsigned block_size, typename T> __device__ __forceinline__ void 
 
 template<typename T> void cu_fill(T *const data, const unsigned n, const T value, const cudaStream_t custream = nullptr)
 {
-    (void) thrust::for_each(thrust::cuda::par.on(custream), data, data + n,[value] __device__(T & d) { d = value; });
+    (void) thrust::for_each(thrust::cuda::par.on(custream), data, data + n,[value]
+            __device__(T & d)
+    { d = value; });
 }
 
 constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set to cudaStreamNonBlocking
 
+#ifdef NDEBUG
+
 #define DEV_CUSTREAM(x)                             \
     cu_errchk(cudaSetDevice((x)));                  \
     cudaStream_t custream;                          \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
 
-#define CTX_CUSTREAM_(x)                            \
-    common::gpu_context_<(x)> ctx;                  \
-    cu_errchk(cudaSetDevice(ctx.phy_id()));         \
+#define CTX_CUSTREAM_(x)                                                                \
+    common::gpu_context_<(x)> ctx;                                                      \
+    cu_errchk(cudaSetDevice(ctx.phy_id()));                                             \
+    cudaStream_t custream;                                                              \
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+
+#else
+
+#define DEV_CUSTREAM(x)                             \
+    cu_errchk(cudaSetDevice((x)));                  \
     cudaStream_t custream;                          \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+    if (!custream) LOG4_THROW("CUDA stream handle not initialized.");                   \
+    int devid, stream_devid;                                                            \
+    cu_errchk(cudaGetDevice(&devid));                                                   \
+    if (devid != (x)) LOG4_THROW("CUDA device id mismatch " << devid << " should be " << (x)); \
+    cu_errchk(cudaStreamGetDevice(custream, &stream_devid));                            \
+    if (stream_devid != (x)) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << (x)); \
+    LOG4_TRACE("CUDA stream device id " << stream_devid << " created on device " << devid);
+
+#define CTX_CUSTREAM_(x)                                                                \
+    const common::gpu_context_<(x)> ctx;                                                      \
+    cu_errchk(cudaSetDevice(ctx.phy_id()));                                             \
+    cudaStream_t custream;                                                              \
+    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+    if (!custream) LOG4_THROW("CUDA stream handle not initialized.");                   \
+    int devid, stream_devid;                                                            \
+    cu_errchk(cudaGetDevice(&devid));                                                   \
+    if (devid != ctx.phy_id()) LOG4_THROW("CUDA device id mismatch " << devid << " should be " << ctx.phy_id()); \
+    cu_errchk(cudaStreamGetDevice(custream, &stream_devid));                            \
+    if (stream_devid != ctx.phy_id()) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << ctx.phy_id()); \
+    LOG4_TRACE("CUDA stream device id " << stream_devid << " created on device " << devid);
+
+#endif
 
 #define CTX_CUSTREAM CTX_CUSTREAM_(CTX_PER_GPU)
-
 #define CTX4_CUSTREAM CTX_CUSTREAM_(4)
 
-#define CTX8_CUSTREAM                               \
-    common::gpu_context_<8> ctx;                    \
-    cudaStream_t custream;                          \
-    cu_errchk(cudaSetDevice(ctx.phy_id()));         \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));
-
-void cusyndestroy(cudaStream_t strm);
+void cusyndestroy(const cudaStream_t strm);
 
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream);
 
@@ -239,7 +265,8 @@ cucopy(const thrust::device_vector<T> &source, const cudaStream_t custream = nul
     return res;
 }
 
-template<typename T> inline void cucopy(RPTR(T) dest, CRPTR(T) src, const size_t length = 1, const cudaStream_t custream = nullptr, const cudaMemcpyKind kind = cudaMemcpyDeviceToDevice, const unsigned stride = 1)
+template<typename T> inline void
+cucopy(RPTR(T) dest, CRPTR(T) src, const size_t length = 1, const cudaStream_t custream = nullptr, const cudaMemcpyKind kind = cudaMemcpyDeviceToDevice, const unsigned stride = 1)
 {
     cu_errchk(cudaMemcpy2DAsync(dest, sizeof(T), src, stride * sizeof(T), sizeof(T), length / stride, kind));
 }
@@ -317,10 +344,14 @@ __device__ __forceinline__ float atomicMul(float *const address, float val)
 }
 
 
-template <typename T> __host__ __device__ __forceinline__ int8_t signum(const T val)
+template<typename T> __host__ __device__ __forceinline__ int8_t signum(const T val)
 {
     return (T(0) < val) - (val < T(0));
 }
+
+// ICPX bug forced to move this out of cuvalidate
+uint8_t get_streams_per_gpu(const uint32_t n_rows);
+
 }
 
 #endif //SVR_CUDA_UTIL_CUH

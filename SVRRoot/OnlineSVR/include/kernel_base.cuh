@@ -15,10 +15,10 @@
 #include <cuda_runtime_api.h>
 #include "common/compatibility.hpp"
 #include "common/gpu_handler.hpp"
-#include "common/cuda_util.cuh"
 #include "common/constants.hpp"
 #include "onlinesvr.hpp"
 #include "cuda_path.hpp"
+#include "common/cuda_util.cuh"
 
 
 namespace svr {
@@ -27,15 +27,6 @@ namespace kernel {
 template<typename T> __global__ void G_kernel_from_distances_I(RPTR(T) Kz, const uint32_t mn, const T divisor, const T mean);
 
 template<typename T> __global__ void G_kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t mn, const T divisor, const T mean);
-
-
-#define T double
-
-template<> __global__ void G_kernel_from_distances_I<double>(RPTR(T) Kz, const uint32_t mn, const T divisor, const T mean);
-
-template<> __global__ void G_kernel_from_distances<double>(RPTR(T) K, CRPTR(T) Z, const uint32_t mn, const T divisor, const T mean);
-
-#undef T
 
 
 // Distances to kernel value

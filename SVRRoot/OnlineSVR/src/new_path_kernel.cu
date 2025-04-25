@@ -6,9 +6,9 @@
 #include <boost/math/special_functions/pow.hpp>
 #include "new_path_kernel.cuh"
 #include "common/logging.hpp"
-#include "common/cuda_util.cuh"
 #include "cuda_path.hpp"
 #include "model/SVRParameters.hpp"
+#include "common/cuda_util.cuh"
 
 namespace svr {
 namespace kernel {

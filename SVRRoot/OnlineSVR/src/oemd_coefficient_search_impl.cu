@@ -20,7 +20,6 @@
 #include "common/compatibility.hpp"
 #include "oemd_coefficient_search.hpp"
 #include "online_emd.hpp"
-#include "../../SVRCommon/include/common/cuda_util.cuh"
 #include "util/time_utils.hpp"
 #include "firefly.hpp"
 #include "common/logging.hpp"
@@ -28,6 +27,7 @@
 #include "align_features.cuh"
 #include "ModelService.hpp"
 #include "appcontext.hpp"
+#include "common/cuda_util.cuh"
 
 // #define USE_FIREFLY // else use BITEOPT
 
@@ -729,7 +729,7 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
     cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
     const uint32_t full_feat_cols = PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count;
-    const auto column_interleave = PROPS.get_oemd_column_interleave();
+    static const auto column_interleave = PROPS.get_oemd_interleave();
     const uint32_t feat_cols_ileave = full_feat_cols / column_interleave;
     auto autocor = common::C_bad_validation;
     const uint32_t cols_rows_q = validate_rows * feat_cols_ileave;
@@ -809,7 +809,7 @@ uint32_t find_nth_peak(const std::vector<double> &data, const double n)
 {
     // LOG4_DEBUG("Input magnitudes " << common::present(arma::vec(data)));
     std::map<double, size_t, common::safe_double_less> peaks;
-    t_omp_lock peak_l;
+    tbb::mutex peak_l;
     // Find all peaks in the vector
     OMP_FOR_i((uint32_t) data.size()) {
         double peak_width = 0;
@@ -835,9 +835,8 @@ uint32_t find_nth_peak(const std::vector<double> &data, const double n)
         }
         // If it is a peak, add to the list
         if (peak_width > 0) {
-            peak_l.set();
+            const tbb::mutex::scoped_lock lk(peak_l);
             peaks.emplace(peak_width + data[i], i);
-            peak_l.unset();
         }
     }
     if (peaks.empty()) LOG4_THROW("No peaks found.");

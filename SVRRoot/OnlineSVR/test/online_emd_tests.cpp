@@ -141,7 +141,7 @@ OMP_FOR_i_(masks_siftings->masks.size(), ordered) {
     bool test_result = true;
     double total_recon_diff = 0, total_recon_diff_off = 0;
     std::deque<double> total_delayed_diff_level(TEST_LEVELS, 0);
-    t_omp_lock res_l;
+    tbb::mutex res_l;
     OMP_FOR(num_t)
     for (size_t t = start_t; t < input->size(); ++t) {
         if (t < DECON_OFFSET) {
@@ -156,9 +156,8 @@ OMP_FOR_i_(masks_siftings->masks.size(), ordered) {
             const auto off_v = delayed_input->at(off_t)->at(2 * l);
             if (!common::isnormalz(v) || !common::isnormalz(off_v)) {
                 LOG4_ERROR("Decon at " << t << "x" << l << " not normal " << v);
-                res_l.set();
+                const tbb::mutex::scoped_lock lk(res_l);
                 test_result = false;
-                res_l.unset();
             }
             decon[l][t - start_t] = v;
             recon += v;
@@ -166,53 +165,42 @@ OMP_FOR_i_(masks_siftings->masks.size(), ordered) {
             const double diff_off = std::abs(v - off_v);
             if (diff_off > TEST_ERROR_THRESHOLD) {
                 LOG4_ERROR("Offset decon difference " << diff_off << " at " << t << ", offset " << off_t << ", level " << l << ", val " << v << ", off val " << off_v);
-                res_l.set();
+                const tbb::mutex::scoped_lock lk(res_l);
                 test_result = false;
-                res_l.unset();
             }
 
-            res_l.set();
+            const tbb::mutex::scoped_lock lk(res_l);
             total_delayed_diff_level[l] += diff_off;
-            res_l.unset();
         }
         invec[t - start_t] = input->at(t)->at(2 * TEST_LEVELS);
         const double recon_diff_off = std::abs(recon - off_recon);
         if (recon_diff_off > TEST_ERROR_THRESHOLD) {
             LOG4_WARN("Offset recon difference " << recon_diff_off << " at " << t << ", offset " << off_t << ", recon " << recon << ", off recon " << off_recon);
-            res_l.set();
+            const tbb::mutex::scoped_lock lk(res_l);
             test_result = false;
-            res_l.unset();
         }
         const auto in_v = input->at(t)->at(TEST_LEVELS * 2);
         if (!common::isnormalz(in_v) || !common::isnormalz(recon) || !common::isnormalz(off_recon)) {
             LOG4_WARN("Not zero-normal, position " << t << ". delayed position " << off_t << ", recon " << recon << ", input " << in_v << ", offset recon " << off_recon);
-            res_l.set();
+            const tbb::mutex::scoped_lock lk(res_l);
             test_result = false;
-            res_l.unset();
         }
         const auto recon_diff = std::abs(recon - in_v);
         if (recon_diff > TEST_ERROR_THRESHOLD) {
             LOG4_ERROR("Different, position " << t << ", delayed position " << off_t << ", recon " << recon << ", input " << in_v << ", recon diff " << recon_diff);
-            res_l.set();
+            const tbb::mutex::scoped_lock lk(res_l);
             test_result = false;
-            res_l.unset();
         }
-        res_l.set();
+        const tbb::mutex::scoped_lock lk(res_l);
         total_recon_diff += recon_diff;
         total_recon_diff_off += recon_diff_off;
-        res_l.unset();
     }
     auto mean_delayed_diff_level = total_delayed_diff_level;
     std::transform(mean_delayed_diff_level.begin(), mean_delayed_diff_level.end(), mean_delayed_diff_level.begin(), [num_t](const double val) { return val / num_t; });
-    LOG4_DEBUG("Power of input " << svr::common::meanabs(invec) <<
-                                 ", validation window " << num_t <<
-                                 ", total recon error " << total_recon_diff <<
-                                 ", mean recon error " << total_recon_diff / num_t <<
-                                 ", total offset recon error " << total_recon_diff_off <<
-        ", mean offset recon error " << total_recon_diff_off / num_t <<
-        ", total delayed recon per-level error " << common::to_string(total_delayed_diff_level) <<
-        ", mean delayed recon per-level error " << common::to_string(mean_delayed_diff_level));
-OMP_FOR_(decon.size(), ordered)
+    LOG4_DEBUG("Power of input " << svr::common::meanabs(invec) << ", validation window " << num_t << ", total recon error " << total_recon_diff << ", mean recon error " <<
+        total_recon_diff / num_t << ", total offset recon error " << total_recon_diff_off << ", mean offset recon error " << total_recon_diff_off / num_t <<
+        ", total delayed recon per-level error " << common::to_string(total_delayed_diff_level) << ", mean delayed recon per-level error " << common::to_string(mean_delayed_diff_level));
+    OMP_FOR_(decon.size(), ordered)
     for (size_t l = 0; l < decon.size(); ++l) {
         const auto mean_abs_l = svr::common::meanabs(decon[l]);
 #pragma omp ordered

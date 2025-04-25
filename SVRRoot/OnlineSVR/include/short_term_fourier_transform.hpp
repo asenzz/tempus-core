@@ -73,6 +73,7 @@ private:
 };
 
 #endif
+
 class short_term_fourier_transform : public spectral_transform
 {
 public:
@@ -103,7 +104,6 @@ public:
 private:
     static auto const gpu_faster_threshold = (size_t) 3e+5;
 
-    const size_t levels;
     short_term_fourier_transform_cpu cpu_transformer;
 #ifdef ENABLE_OPENCL
     short_term_fourier_transform_opencl gpu_transformer;

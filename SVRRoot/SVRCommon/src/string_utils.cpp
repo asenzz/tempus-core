@@ -99,7 +99,7 @@ std::string to_string(const std::vector<uint8_t> &v)
     if (v.empty()) return "";
 
     std::stringstream ss;
-    //ss.precision(std::numeric_limits<double>::max_digits10);
+    // ss.precision(std::numeric_limits<double>::max_digits10);
     for (size_t i = 0; i < v.size() - 1; ++i) ss << i << ":" << int(v[i]) << ", ";
     ss << (v.size() - 1) << ":" << int(v[v.size() - 1]);
 
@@ -184,12 +184,9 @@ std::string sanitize_db_table_name(std::string where, char replace_char)
 {
     std::transform(C_default_exec_policy, where.begin(), where.end(), where.begin(), [replace_char](const char &c)
     {
-        if (isalnum(c)) {
-            return c;
-        }
+        if (isalnum(c)) return c;
         return replace_char;
     });
-
     return where;
 }
 

@@ -27,14 +27,13 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     const auto aux_res = dataset.get_aux_input_queues().empty() ? main_res : dataset.get_aux_input_queue()->get_resolution();
     const auto &aux_decons = ensemble.get_aux_decon_queues();
     datamodel::t_predict_features res;
-    t_omp_lock res_l;
-    OMP_FOR(ensemble.get_models().size())
+    tbb::mutex res_l;
+    // OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
         ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params(), max_gap, aux_res, main_res);
-        res_l.set();
+        const tbb::mutex::scoped_lock lk(res_l);
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
-        res_l.unset();
     }
 
     LOG4_END();
@@ -54,7 +53,7 @@ EnsembleService::EnsembleService(
 
 void EnsembleService::load_decon(const datamodel::Ensemble &ensemble)
 {
-#pragma omp parallel num_threads(adj_threads(1 + ensemble.get_aux_decon_queues().size()))
+#pragma omp parallel ADJ_THREADS(1 + ensemble.get_aux_decon_queues().size())
 #pragma omp single
     {
 #pragma omp task
@@ -81,7 +80,7 @@ void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::E
 
 void EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
 {
-    OMP_FOR(std::min<unsigned>(C_parallel_train_models, ensemble.get_model_ct()))
+    OMP_FOR(std::min<unsigned>(PROPS.get_parallel_models(), ensemble.get_model_ct()))
     for (auto p_model: ensemble.get_models()) ModelService::train(dataset, ensemble, *p_model);
 }
 
@@ -244,50 +243,50 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
     get_decon_queues_from_input_queue(*p_dataset, *p_input_queue, main_decon_queues);
     OMP_FOR(p_dataset->get_aux_input_queues().size())
     for (const auto &p_aux_input_queue: p_dataset->get_aux_input_queues()) {
-        if (load_data) PROFILE_MSG(APP.input_queue_service.load(*p_aux_input_queue), "Loading " << p_aux_input_queue->get_table_name());
+        if (load_data) {
+            PROFILE_BEGIN;
+            APP.input_queue_service.load(*p_aux_input_queue);
+            PROFILE_END("Loading " << p_aux_input_queue->get_table_name());
+        }
         get_decon_queues_from_input_queue(*p_dataset, *p_aux_input_queue, aux_decon_queues);
     }
     if (load_data) {
-#pragma omp parallel num_threads(adj_threads(main_decon_queues.size() + aux_decon_queues.size()))
-#pragma omp single
-        {
-#pragma omp taskloop mergeable untied grainsize(1)
-            for (auto &dq: main_decon_queues)
-                APP.decon_queue_service.load(*dq);
-#pragma omp taskloop mergeable untied grainsize(1)
-            for (auto &dq: aux_decon_queues)
-                APP.decon_queue_service.load(*dq);
-        }
+        OMP_FOR(main_decon_queues.size())
+        for (auto &dq: main_decon_queues) APP.decon_queue_service.load(*dq);
+        OMP_FOR(aux_decon_queues.size())
+        for (auto &dq: aux_decon_queues) APP.decon_queue_service.load(*dq);
     }
     if (p_dataset->get_id() && !check(p_dataset->get_ensembles(), p_dataset->get_input_queue()->get_value_columns()))
         p_dataset->set_ensembles(APP.ensemble_service.get_all_by_dataset_id(p_dataset->get_id()), true);
 
-    t_omp_lock ens_emplace_l;
+    tbb::mutex ens_emplace_l;
     auto &ensembles = p_dataset->get_ensembles();
     OMP_FOR(main_decon_queues.size())
     for (const auto &p_main_decon: main_decon_queues) {
-        ens_emplace_l.set();
+        tbb::mutex::scoped_lock lk(ens_emplace_l);
         auto ens_iter = std::find_if(C_default_exec_policy, ensembles.cbegin(), ensembles.cend(),
                                      [&p_main_decon](const auto &p_ensemble) {
                                          return p_ensemble->get_decon_queue()->get_input_queue_table_name() == p_main_decon->get_input_queue_table_name() &&
                                                 p_ensemble->get_decon_queue()->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
                                      });
-#ifdef INTEGRATION_TEST
-#if 0 // Combine features from different columns, seems to yield worse results
-        const auto &ensemble_aux_queues = aux_decon_queues;
-#else
-        DTYPE(aux_decon_queues) ensemble_aux_queues;
-        std::copy_if(C_default_exec_policy, aux_decon_queues.cbegin(), aux_decon_queues.cend(), std::back_inserter(ensemble_aux_queues),
-                     [&p_main_decon](const auto &dq) {
-                         return dq->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
-                     });
-#endif
+#ifdef INTEGRATION_TEST // Convenience code for train predict unit test manifold, TODO remove
+        DTYPE(aux_decon_queues) *ensemble_aux_queues;
+        if (PROPS.get_combine_queues())
+            ensemble_aux_queues = &aux_decon_queues;
+        else {
+            ensemble_aux_queues = new DTYPE(aux_decon_queues)();
+            std::copy_if(C_default_exec_policy, aux_decon_queues.cbegin(), aux_decon_queues.cend(), std::back_inserter(*ensemble_aux_queues),
+                         [&p_main_decon](const auto &dq) {
+                             return dq->get_input_queue_column_name() == p_main_decon->get_input_queue_column_name();
+                         });
+        }
         auto p_ensemble = ens_iter == ensembles.cend() ?
-                          ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, ensemble_aux_queues)) :
+                          ensembles.emplace_back(ptr<datamodel::Ensemble>(0, p_dataset->get_id(), std::deque<datamodel::Model_ptr>{}, p_main_decon, *ensemble_aux_queues)) :
                           *ens_iter;
-        ens_emplace_l.unset();
+        if (!PROPS.get_combine_queues()) delete ensemble_aux_queues;
+        lk.release();
 #else
-        ens_emplace_l.unset();
+        lk.release();
         if (ens_iter == ensembles.cend()) {
             LOG4_WARN("Ensemble for " << *p_main_decon << " not found in database.");
             continue;
@@ -304,10 +303,10 @@ void EnsembleService::get_decon_queues_from_input_queue(
         const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
 {
     const uint16_t prev_size = decon_queues.size();
-    OMP_FOR_(input_queue.get_value_columns().size(),)
+//    OMP_FOR_(input_queue.get_value_columns().size(),)
     for (const auto &column_name: input_queue.get_value_columns()) {
         bool skip = false;
-UNROLL()
+//        UNROLL()
         for (uint16_t j = 0; j < prev_size; ++j) {
             if (decon_queues[j]->get_input_queue_table_name() != input_queue.get_table_name() || decon_queues[j]->get_input_queue_column_name() != column_name) continue;
             skip = true;
@@ -321,7 +320,7 @@ UNROLL()
             p_decon_queue = dtr<datamodel::DeconQueue>(
                     DeconQueueService::make_queue_table_name(input_queue.get_table_name(), dataset.get_id(), column_name),
                     input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_spectral_levels());
-#pragma omp critical
+//#pragma omp critical
         decon_queues.emplace_back(p_decon_queue);
     }
 }
@@ -335,31 +334,33 @@ EnsembleService::update_ensemble_decon_queues(
     LOG4_BEGIN();
 
     if (ensembles.size() != new_decon_queues.size())
-        LOG4_WARN(
-                "Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
-    OMP_FOR_(ensembles.size(),)
-    for (auto p_ensemble: ensembles) {
-        {
-            const auto p_decon_queue = DeconQueueService::find_decon_queue(
-                    new_decon_queues,
-                    p_ensemble->get_decon_queue()->get_input_queue_table_name(),
-                    p_ensemble->get_decon_queue()->get_input_queue_column_name());
-            if (p_decon_queue) p_ensemble->get_decon_queue()->update_data(p_decon_queue->get_data());
-            else
-                LOG4_WARN("New data for " << *p_ensemble->get_decon_queue() << " not found!");
-        }
-        OMP_FOR(p_ensemble->get_aux_decon_queues().size())
-        for (auto p_ensemble_aux_decon_queue: p_ensemble->get_aux_decon_queues()) {
-            const auto p_decon_queue = DeconQueueService::find_decon_queue(
-                    new_decon_queues,
-                    p_ensemble_aux_decon_queue->get_input_queue_table_name(),
-                    p_ensemble_aux_decon_queue->get_input_queue_column_name());
-            if (p_decon_queue) p_ensemble_aux_decon_queue->update_data(p_decon_queue->get_data());
-            else
-                LOG4_WARN("New data for auxiliary " << *p_ensemble->get_decon_queue() << " not found!");
+        LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
+// #pragma omp parallel ADJ_THREADS(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
+// #pragma omp single
+    {
+//        OMP_TASKLOOP(ensembles.size())
+        for (auto p_ensemble: ensembles) {
+            {
+                const auto p_decon_queue = DeconQueueService::find_decon_queue(
+                        new_decon_queues,
+                        p_ensemble->get_decon_queue()->get_input_queue_table_name(),
+                        p_ensemble->get_decon_queue()->get_input_queue_column_name());
+                if (p_decon_queue) p_ensemble->get_decon_queue()->update_data(p_decon_queue->get_data());
+                else
+                    LOG4_WARN("New data for " << *p_ensemble->get_decon_queue() << " not found!");
+            }
+//            OMP_TASKLOOP(p_ensemble->get_aux_decon_queues().size())
+            for (auto p_ensemble_aux_decon_queue: p_ensemble->get_aux_decon_queues()) {
+                const auto p_decon_queue = DeconQueueService::find_decon_queue(
+                        new_decon_queues,
+                        p_ensemble_aux_decon_queue->get_input_queue_table_name(),
+                        p_ensemble_aux_decon_queue->get_input_queue_column_name());
+                if (p_decon_queue) p_ensemble_aux_decon_queue->update_data(p_decon_queue->get_data());
+                else
+                    LOG4_WARN("New data for auxiliary " << *p_ensemble->get_decon_queue() << " not found!");
+            }
         }
     }
-
     LOG4_END();
 }
 

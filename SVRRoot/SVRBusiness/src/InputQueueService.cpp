@@ -69,7 +69,7 @@ InputQueueService::load(datamodel::InputQueue &input_queue)
 {
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
     LOG4_TRACE("Loading " << input_queue);
-    const tbb::mutex::scoped_lock l(input_queue.get_update_mutex());
+    const tbb::mutex::scoped_lock lk(input_queue.get_update_mutex());
     data_row_container &data = input_queue.get_data();
     if (data.empty()) {
         if (input_queue.get_uses_fix_connection())
@@ -387,7 +387,7 @@ InputQueueService::validate_decon_data(const datamodel::InputQueue &input_queue,
 #ifdef INDEPTH_COMPARE
 
     boost::posix_time::ptime missing_time = boost::posix_time::max_date_time;
-    t_omp_lock missing_time_l;
+    tbb::mutex missing_time_l;
     OMP_FOR_(decon_queue.size(),)
     for (auto range_iter = lower_bound(input_queue.get_data(), decon_queue.front()->get_value_time()); range_iter != input_queue.cend(); ++range_iter) {
         if ((**range_iter).get_value_time() > missing_time) continue;
@@ -396,9 +396,8 @@ InputQueueService::validate_decon_data(const datamodel::InputQueue &input_queue,
             continue;
         LOG4_DEBUG("Input row at " << (**range_iter).get_value_time() << " not found in decon queue " << decon_queue.get_input_queue_table_name() <<
                                    " " << decon_queue.get_input_queue_column_name());
-        missing_time_l.set();
+        const tbb::mutex::scoped_lock lk(missing_time_l);
         if (missing_time > (**range_iter).get_value_time()) missing_time = (**range_iter).get_value_time();
-        missing_time_l.unset();
     }
 
     LOG4_DEBUG("Compared input queue " << input_queue.get_table_name() << " with data from " << input_queue.front()->get_value_time() << " to " <<

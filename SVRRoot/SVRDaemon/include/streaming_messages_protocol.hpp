@@ -53,15 +53,15 @@ public:
 
     template<typename T> T read()
     {
-        return read < T > ();
+        THROW_EX_FS(std::invalid_argument, "Unsupported type " << typeid(T).name());
     }
-
-    template<> std::string read();
-
-    template<> bpt::ptime read();
 
     void reset();
 };
+
+template<> std::string stream_message_queue::read();
+
+template<> bpt::ptime stream_message_queue::read();
 
 class streaming_messages_protocol {
     static constexpr char C_req_file_path[] = "/dev/shm/tempus/req";

@@ -6,30 +6,79 @@ This party libraries are located in the folder "lib". Meta Quotes Language files
  files for the SVRWeb and SVRDaemon services. "scripts" contains various utility scripts for the project.
 The "doc" folder contains the documentation for the project.
 
+I started the project in 2011 as part of my Diploma thesis for Goldsmiths, University of London, UK. For reasons unbeknown to me,
+the stipendship I received from Computer Associates at the time for University of Ottawa, CA, I was unable to use because dean Maggie Copper refused to
+to send a recommendation letter to the postgrad program administration and prevented me from further studying in the field.
+That made me turn this project open source at first, published as SVRwave on Sourceforge and in 2015 into a commercial
+product with the help of many friends and colleagues involved over during the past 14 years. Since 2016 I have been working
+on this project full time. The team that worked in order of appearance:
+Viktor Gjorgjievski
+Taras Maliarchuk
+as. prof. Vladimir Khizanov
+Sergey Kondratiuk
+Andrey Bezrukov
+Evgeniy Marinov
+as. prof. Boyko Perfanov
+Petar Simov
+Guy Tal
+Dimitar Conov
+prof. Emanouil Atanasov
+Stiljan Stojanov
+
+Adminstrators employed by Radioactive and Papakaya:
+Ali Kasmou
+Stanislav Panayotov
+Oleg Gumbar
+Milen Hristov
+
+Other people involved in the project:
+Kristina Eskenazi
+prof. Jihad El-Sana
+Vasil Savulyak
+IP-Alians (IP property protection)
+Stelly Mutafchieva
+
+
+The goal of the project is to provide a high performance, scalable implementation of non-linear support vector regression
+that can improve forecast precision depending on the hardware resources committed to the service, mainly aimed at time-series
+modeling and forecast. It provides multiuser and multiple dataset support, while the data itself is modeled using ensembles
+of models grouped in several possible structures of scaling; spectral and temporal domain, sequential boosting, bootstrapping
+and kernel matrix manifolds. Every SVM model is capable of multioutput regression, may contain many layers of weights
+internally and every model is capable of being trained in parallel on multiple CPU cores or GPU cards. Multiple nodes
+scaling using MPI is worked upon in progress. The phases of tuning, training, updating and prediction are separated in
+order to allow for more efficient use of the available resources according to the presented context. Highly optimized
+and parallelized code ensures optimal hardware use and minimal overhead. The project is using open standards and
+platform independent libraries to ensure maximum portability while maintaining high performance.
+
+
 Dependencies on a Ubuntu or Debian system:
 
-libpq	
-libpqxx		
-postgresql
-libboost	
-cppcms
-quickfix
-jemalloc
-nvidia cuda toolkit
-armadillo
-mkl
-tbb
-openmp
-opencl
-googletest
-viennacl
-prima
-gcc
-icpx
-cmake
-liblz4
-libfftw
-magma
-openssl
-prima (not critical)
-biteopt
+Intel HPC kit
+libPQ
+libPQXX
+Postgresql
+Boost
+CPPCMS
+QuickFix
+Jemalloc
+Nvidia CUDA
+Armadillo
+OpenMP
+GoogleTest
+GCC or ICPX
+Cmake
+libLZ4
+libFFTW
+MAGMA
+OpenSSL
+Prima (optional)
+BiteOpt
+libspqr (SuiteSparse)
+libUMFPack
+libKLU
+libMUMPS
+libOMP5 from CLang
+libMetis
+Intel TBB, MKL, OpenMP, MPI, ICPX, GDB
+OpenCL-Headers 
+libNetCDF

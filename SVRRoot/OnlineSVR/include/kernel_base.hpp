@@ -17,13 +17,9 @@ template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y);
 
 template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean);
 
+template<typename T> void kernel_from_distances(RPTR(T) Kz, const uint32_t m, const uint32_t n, const T gamma, const T mean);
+
 template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const cudaStream_t custream);
-
-#define T double
-template<> void kernel_from_distances<T>(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean);
-
-template<> void d_kernel_from_distances<T>(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const cudaStream_t custream);
-#undef T
 
 template<typename T>
 class kernel_base {
@@ -47,6 +43,8 @@ public:
 
     arma::Mat<T> distances(const arma::Mat<T> &X) const;
 
+    void kernel_from_distances_I(arma::Mat<T> &Kz) const;
+
     arma::Mat<T> kernel_from_distances(const arma::Mat<T> &Z) const;
 
     arma::Mat<T> &kernel(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
@@ -63,8 +61,8 @@ public:
 
     virtual void d_kernel(CRPTR(T) d_X, const uint32_t m, RPTR(T) d_K, const cudaStream_t custream) const = 0;
 
-    virtual void d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR(T) d_Z,
-                             const cudaStream_t custream) const = 0; // m is common rows count (features length), n is the number of columns or samples
+    // m is common rows count (features length), n is the number of columns or samples
+    virtual void d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR(T) d_Z, const cudaStream_t custream) const = 0;
 };
 
 }

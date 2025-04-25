@@ -1,8 +1,5 @@
 #pragma once
 
-// Bagged MIOC-SVR on chunks
-// TODO test gradient boosting, find warm-start online solver, test manifold
-
 #include <boost/date_time/posix_time/ptime.hpp>
 #include <boost/math/ccmath/ccmath.hpp>
 #include <oneapi/tbb/mutex.h>
@@ -25,21 +22,8 @@ class calc_cache;
 
 namespace datamodel {
 
-#define SINGLE_CHUNK_LEVEL
-#define USE_MAGMA
 #define FORGET_MIN_WEIGHT
-
-/*
- * Kernel matrix is set like this:
-    auto kernel = IKernel<double>::get_kernel(template_parameters.get_kernel_type(),template_parameters);
-    for (ssize_t i = 0; i < samples_trained_number; ++i) {
-        for (ssize_t j = 0; j <= i; ++j) {
-            const auto value = (*kernel)(X->get_row_ref(i), X->get_row_ref(j));
-            p_kernel_matrix->set_value(i, j, value);
-            p_kernel_matrix->set_value(j, i, value);
-        }
-    }
-*/
+#define SOLVE_PRUNE // Matrix solver is PPrune instead of PETSc
 
 struct t_gradient_data
 {
@@ -100,17 +84,13 @@ class OnlineMIMOSVR final : public Entity
 
     void clean_chunks();
 
-    arma::mat feature_chunk_t(const arma::uvec &ixs_i);
+    arma::mat feature_chunk_t(const arma::uvec &ixs_i) const;
 
-    arma::mat predict_chunk_t(const arma::mat &x_predict);
+    arma::mat predict_chunk_t(const arma::mat &x_predict) const;
 
 public:
-    static constexpr magma_int_t C_rbt_iter = 40;
-    static constexpr float C_rbt_threshold = 0; // [0..1] default 1
-    static constexpr float C_chunk_overlap = 0; // TODO Consider removing overlap logic, Do not use with manifolds 1. - 1. / 4.; // Chunk rows overlap ratio [0..1], higher generates more chunks
+    static constexpr float C_chunk_overlap = 0; // Chunk rows overlap ratio [0..1], higher generates more chunks
     static constexpr float C_chunk_offlap = 1. - C_chunk_overlap;
-    static constexpr float C_chunk_tail = .1;
-    static constexpr float C_chunk_header = 1. - C_chunk_tail;
     static constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 
     OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
@@ -158,7 +138,7 @@ public:
     void set_dataset(const Dataset_ptr &p_dataset);
 
     // Move to solver module
-    static void solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint32_t iters, t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk);
+    static void solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint32_t iter_petsc, const uint16_t iter_irwls);
 
     static std::deque<arma::mat> solve_batched_irwls(
             const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
@@ -258,22 +238,9 @@ public:
 
     static std::array<double, C_epscos_len> get_epscos(const double K_mean);
 
-#ifdef INSTANCE_WEIGHTS
+    static void calc_weights(const arma::mat &K, const arma::mat &labels, const uint32_t iters_opt, const uint16_t iters_irwls, arma::mat &weights);
 
-    static arma::mat calc_weights(
-            arma::mat K, const arma::mat &labels, const arma::mat &instance_weights_matrix,
-                                  const double epsco, const uint16_t iters_irwls, const uint16_t iters_opt,
-                                  t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk);
-
-#else
-
-    static arma::mat calc_weights(const arma::mat &K, const arma::mat &labels, const double epsco,
-                                  const uint16_t iters_irwls, const uint32_t iters_opt,
-                                  t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk);
-
-#endif
-
-    void calc_weights(const uint16_t chunk_ix, const uint16_t iters_irwls, const uint32_t iters_opt);
+    void calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls);
 
     static arma::mat instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights);
 
@@ -283,33 +250,25 @@ public:
 
     static arma::mat self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs);
 
+    static double score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs);
+
     template<typename T> static inline arma::Mat<T> prepare_labels(const arma::Mat<T> &labels)
     {
         return labels * labels.n_elem - arma::sum(arma::vectorise(labels));
     }
 
+    void prepare_chunk(const uint16_t i);
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
-// ICPX bug forced to move this out of cuvalidate
-constexpr uint8_t get_streams_per_gpu(const uint32_t n_rows)
-{
-    const uint32_t C_max_alloc_gpu = 4232085504; // NVidia V100 16GB has malloc limit of VRAM/4
-    return boost::math::ccmath::fmax(1, boost::math::ccmath::round(.04 * C_max_alloc_gpu / (n_rows * n_rows)));
-}
-
 class cusys {
-    static constexpr auto streams_per_gpu = 6;
+    static constexpr auto streams_per_gpu = 4;
     static const uint16_t n_gpus;
-
-    static constexpr uint32_t train_clamp = 0;
     SVRParameters template_parameters;
-    const solvers::mmm_t &L3m;
     const bool weighted;
-    const uint16_t dim, lag_tile_width, lag;
-    const uint32_t n, train_len, tune_len, tune_len_n, calc_start, calc_len, train_F_rows, train_F_cols; // calc len of 3000 seems to work best
-    const uint64_t K_train_len, K_train_size, train_len_n, train_n_size, tune_n_size, K_tune_len;
+    const uint32_t n, train_len, calc_start, calc_len, train_F_rows, train_F_cols; // calc len of 3000 seems to work best
+    const uint64_t K_train_len, K_train_size, K_calc_len, K_off, train_len_n, train_n_size;
     const arma::mat ref_K;
     const double ref_K_mean, ref_K_meanabs;
 
@@ -318,17 +277,17 @@ class cusys {
             cudaStream_t custream;
             cublasHandle_t cublas_H;
             magma_queue_t ma_queue;
-            double *d_K_train, *K_train_off, *j_work, *j_K_work, *d_best_weights;
+            double *d_K_train, *K_train_off;
         };
-        double *d_train_label_chunk, *train_label_off, *d_train_cuml, *d_train_W, *d_K_train_l, *d_ref_K;
+        double *d_train_cuml, *d_train_W, *d_ref_K;
         std::deque<stream_ctx> sx;
     };
     std::deque<dev_ctx> dx;
 
 public:
-    static SVRParameters make_tuning_template(const SVRParameters &sample_parameters);
+    static SVRParameters make_tuning_template(const SVRParameters &example);
 
-    cusys(const uint16_t lag, const arma::mat &train_cuml, const arma::mat &train_label_chunk, const arma::mat &train_W, const solvers::mmm_t &L3m, const SVRParameters &parameters);
+    cusys(const arma::mat &train_cuml, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters);
     ~cusys();
     std::tuple<double, double, double> operator()(const double lambda, const double tau) const;
 };

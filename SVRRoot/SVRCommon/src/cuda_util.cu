@@ -27,7 +27,7 @@ void copy_submat(CRPTRd in, RPTR(double) out, const uint32_t ldin, const uint32_
 #endif
 }
 
-void cusyndestroy(cudaStream_t strm)
+void cusyndestroy(const cudaStream_t strm)
 {
     cu_errchk(cudaStreamSynchronize(strm));
     cu_errchk(cudaStreamDestroy(strm));
@@ -64,6 +64,13 @@ NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custre
     res.nCudaDeviceId = gpuid;
     cu_errchk(cudaStreamGetFlags(custream, &res.nStreamFlags));
     return res;
+}
+
+
+uint8_t get_streams_per_gpu(const uint32_t n_rows)
+{
+    static const uint32_t C_max_alloc_gpu = common::gpu_handler<1>::get().get_max_gpu_data_chunk_size();
+    return boost::math::ccmath::fmax(1, boost::math::ccmath::round(.04 * C_max_alloc_gpu / (n_rows * n_rows)));
 }
 
 }

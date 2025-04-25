@@ -33,6 +33,7 @@ namespace bpt = boost::posix_time;
 class logging {
 public:
     logging();
+
     void flush() const;
 };
 
@@ -133,31 +134,31 @@ extern const logging l__;
 
 #ifdef NDEBUG
 
-#define PROFILE_MSG(X, M_NAME)    \
-{                                       \
-    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
-    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__)); \
-}
-
-#define PROFILE_(X)    \
-{                                       \
-    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); (X);  \
-    LOG4_INFO("Execution time of " #X " is " << (bpt::microsec_clock::local_time() - START_TIME__)); \
+#define PROFILE_MSG(X, M_NAME)                                              \
+{                                                                           \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time();      \
+    try { (X); } catch (const std::exception &ex__) { LOG4_ERROR("Caught exception " << ex__.what() << ", while executing "#X); throw ex__; } \
+    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__));  \
 }
 
 #else
 
-#define PROFILE_MSG(X, M_NAME)    \
-{                                       \
-    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time(); \
-    try { (X); } catch (const std::exception &ex__) { LOG4_ERROR("Caught exception " << ex__.what() << ", while executing "#X); } \
-    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " << \
+#define PROFILE_MSG(X, M_NAME)                                              \
+{                                                                           \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time();      \
+    try { (X); } catch (const std::exception &ex__) { LOG4_ERROR("Caught exception " << ex__.what() << ", while executing "#X); throw ex__; } \
+    LOG4_INFO("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " <<    \
         svr::common::memory_manager::get_proc_rss() << " MB"); \
 }
 
+#endif
+
+#define PROFILE_BEGIN const bpt::ptime start_time_begin__ = bpt::microsec_clock::local_time();
+#define PROFILE_END(MSG) LOG4_INFO("Execution time of " << MSG << " is " << (bpt::microsec_clock::local_time() - start_time_begin__) << ", process memory RSS " << \
+        svr::common::memory_manager::get_proc_rss() << " MB");
+
 #define PROFILE_(X) PROFILE_MSG(X, #X)
 
-#endif
 
 #include <cufft.h>
 #include <sstream>
@@ -167,6 +168,7 @@ std::string cufft_get_error_string(const cufftResult s);
 #ifdef PRODUCTION_BUILD
 #define cf_errchk(cmd) (cmd)
 #define ma_errchk(cmd) (cmd)
+#define ma_errchki(cmd) (cmd)
 #define cu_errchk(cmd) (cmd)
 #define cb_errchk(cmd) (cmd)
 #define cs_errchk(cmd) (cmd)
@@ -213,6 +215,14 @@ std::string cufft_get_error_string(const cufftResult s);
     }
 #endif
 
+#ifndef ma_errchki
+#define ma_errchki(cmd, INFO) {   \
+        magma_int_t __err; \
+        if ((__err = (cmd)) < MAGMA_SUCCESS || (INFO) != MAGMA_SUCCESS) \
+            LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err) << ", info " << (INFO)); \
+    }
+#endif
+
 #ifndef cu_errchk
 
 constexpr unsigned C_cu_alloc_retries = 1e2;
@@ -245,7 +255,7 @@ constexpr unsigned C_cu_alloc_retries = 1e2;
 #define cs_errchk(cmd) {                                             \
         cusolverStatus_t __err;                                      \
         if ((__err = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
-            LOG4_THROW("Cusolver call " #cmd " failed with " << int(__err));  \
+            LOG4_ERROR("Cusolver call " #cmd " failed with " << int(__err));  \
 }
 #endif
 #endif

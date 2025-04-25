@@ -49,8 +49,6 @@ namespace business {
 
 namespace {
 
-tbb::mutex calc_quantisations_mx;
-
 std::deque<uint32_t> calc_quantisations()
 {
     std::deque<uint32_t> r{1};
@@ -69,20 +67,25 @@ std::deque<uint32_t> G_quantisations;
 
 const std::deque<uint32_t> &ModelService::get_quantisations()
 {
-    if (G_quantisations.empty()) {
-        tbb::mutex::scoped_lock l(calc_quantisations_mx);
-        if (G_quantisations.empty()) G_quantisations = calc_quantisations();
+    static tbb::mutex mx;
+    static std::deque<uint32_t> quantisations;
+    if (quantisations.empty()) {
+        const tbb::mutex::scoped_lock lk(mx);
+        if (quantisations.empty()) quantisations = calc_quantisations();
     }
-    return G_quantisations;
+    return quantisations;
 }
 
 uint32_t ModelService::get_max_quantisation()
 {
+    static tbb::mutex mx;
     static uint32_t max_quantisation = 0;
     if (!max_quantisation) {
-        tbb::mutex::scoped_lock l(calc_quantisations_mx);
-        if (G_quantisations.empty()) G_quantisations = calc_quantisations();
-        if (!max_quantisation) max_quantisation = *std::max_element(C_default_exec_policy, G_quantisations.cbegin(), G_quantisations.cend());
+        const tbb::mutex::scoped_lock lk(mx);
+        if (!max_quantisation) {
+            auto quantisations = calc_quantisations();
+            if (!max_quantisation) max_quantisation = *std::max_element(C_default_exec_policy, quantisations.cbegin(), quantisations.cend());
+        }
     }
     return max_quantisation;
 }
@@ -157,7 +160,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     data_row_container batch_predicted, cont_predicted_online;
     tbb::mutex mx;
     PROFILE_MSG(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, batch_predicted),
-                      "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
+                "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
     if (batch_predicted.size() != num_preds)
         LOG4_THROW("Predicted size " << batch_predicted.size() << " not sane " << arma::size(*predict_features.p_features));
 
@@ -290,15 +293,15 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
                                          paramset.front()->get_adjacent_levels().size();
     datamodel::dq_scaling_factor_container_t all_model_scaling_factors;
     if (model.get_id()) all_model_scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model.get_id());
-#pragma omp parallel num_threads(adj_threads(p_dataset->get_gradient_count() * default_model_num_chunks * p_dataset->get_spectral_levels() * default_adjacent_ct))
+#pragma omp parallel ADJ_THREADS(p_dataset->get_gradient_count() * default_model_num_chunks * p_dataset->get_spectral_levels() * default_adjacent_ct)
 #pragma omp single
     {
-        t_omp_lock gradients_l;
-#pragma omp taskloop grainsize(1) default(shared) mergeable untied firstprivate(default_model_num_chunks)
+        tbb::mutex gradients_l;
+        OMP_TASKLOOP_1(firstprivate(default_model_num_chunks))
         for (uint16_t gix = 0; gix < p_dataset->get_gradient_count(); ++gix) {
-            gradients_l.set();
+            tbb::mutex::scoped_lock l1(gradients_l);
             auto p_svr_model = model.get_gradient(gix);
-            gradients_l.unset();
+            l1.release();
 
             bool set_params = false;
             uint16_t grad_num_chunks = 0;
@@ -312,8 +315,8 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
                 grad_num_chunks = default_model_num_chunks;
             }
 
-            t_omp_lock grad_params_l;
-#pragma omp taskloop simd grainsize(1) default(shared) mergeable untied firstprivate(gix)
+            tbb::mutex grad_params_l;
+            OMP_TASKLOOP_1(SSIMD firstprivate(gix))
             for (uint16_t chix = 0; chix < grad_num_chunks; ++chix)
                 if (SVRParametersService::slice(grad_params, chix, gix).empty()) {
                     const auto level_grad_param_set = SVRParametersService::slice(paramset, chix, gix);
@@ -322,16 +325,14 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
                                           ptr<datamodel::SVRParameters>(
                                                   0, p_dataset->get_id(), p_dataset->get_input_queue()->get_table_name(), ensemble.get_column_name(),
                                                   p_dataset->get_spectral_levels(), model.get_decon_level(), model.get_step(), chix, gix);
-                    grad_params_l.set();
+                    const tbb::mutex::scoped_lock l2(grad_params_l);
                     grad_params.emplace(p_params);
                     set_params = true;
-                    grad_params_l.unset();
                 }
 
             if (!p_svr_model) {
-                gradients_l.set();
+                const tbb::mutex::scoped_lock l2(gradients_l);
                 p_svr_model = model.get_gradients().emplace_back(ptr<datamodel::OnlineMIMOSVR>(0, model.get_id(), grad_params, p_dataset));
-                gradients_l.unset();
             } else {
                 if (set_params) p_svr_model->set_param_set(grad_params);
                 if (!p_svr_model->get_dataset()) p_svr_model->set_dataset(p_dataset);
@@ -339,7 +340,7 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
 
             const auto adjacent_ct = (**grad_params.cbegin()).get_adjacent_levels().size();
             if (p_svr_model->get_scaling_factors().size() != p_svr_model->get_num_chunks()) {
-#pragma omp taskloop grainsize(1) default(shared) mergeable untied firstprivate(grad_num_chunks)
+                OMP_TASKLOOP_1(firstprivate(grad_num_chunks))
                 for (DTYPE(grad_num_chunks) chix = 0; chix < grad_num_chunks; ++chix) {
                     datamodel::DQScalingFactor_ptr p_sf;
                     if (!DQScalingFactorService::find(p_svr_model->get_scaling_factors(), model.get_id(), chix, p_svr_model->get_gradient_level(), model.get_step(),
@@ -347,19 +348,17 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
                         &&
                         (p_sf = DQScalingFactorService::find(all_model_scaling_factors, model.get_id(), chix, p_svr_model->get_gradient_level(), p_svr_model->get_step(),
                                                              model.get_decon_level(), false, true))) {
-                        gradients_l.set();
+                        const tbb::mutex::scoped_lock l2(gradients_l);
                         p_svr_model->set_scaling_factor(p_sf);
-                        gradients_l.unset();
                     }
-#pragma omp taskloop simd grainsize(1) default(shared) mergeable untied firstprivate(adjacent_ct)
+                    OMP_TASKLOOP_1(SSIMD firstprivate(adjacent_ct))
                     for (DTYPE(adjacent_ct) levix = 0; levix < adjacent_ct; ++levix) {
                         if (!DQScalingFactorService::find(p_svr_model->get_scaling_factors(), model.get_id(), chix, p_svr_model->get_gradient_level(),
                                                           p_svr_model->get_step(), levix, true, false)
                             && (p_sf = DQScalingFactorService::find(all_model_scaling_factors, model.get_id(), chix, p_svr_model->get_gradient_level(),
                                                                     p_svr_model->get_step(), levix, true, false))) {
-                            gradients_l.set();
+                            const tbb::mutex::scoped_lock l2(gradients_l);
                             p_svr_model->set_scaling_factor(p_sf);
-                            gradients_l.unset();
                         }
                     }
                 }
@@ -487,12 +486,13 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
             *p_labels, ensemble.get_aux_decon_queues(), *p_params, aux_resolution, main_resolution, dataset.get_max_lookback_time_gap(), *p_label_times);
 
     assert(p_labels->n_rows == p_features->n_rows);
+    const auto p_weights =
 #ifdef INSTANCE_WEIGHTS
-    const auto p_weights = dataset.get_calc_cache().get_weights(
-            dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
-    assert(p_labels->n_rows == p_weights->n_rows);
+            dataset.get_calc_cache().get_weights(
+                    dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
+            assert(p_labels->n_rows == p_weights->n_rows);
 #else
-    const auto p_weights = nullptr;
+            ptr<arma::mat>();
 #endif
 
     return {p_features, p_labels, p_last_knowns, p_weights, p_label_times};
@@ -558,18 +558,17 @@ ModelService::prepare_labels(arma::mat &all_labels, arma::vec &all_last_knowns, 
             continue;
         }
         const uint32_t F_end_ix = F_end_it - aux_data.cbegin();
-
-        t_label_ix *L_ins;
+        t_label_ix this_label_ixs{.n_ixs = label_len};
+        this_label_ixs.special_x = generate_twap_bias(this_label_ixs.label_ixs, askbid, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux,
+                                                      label_len, level);
+        LOG4_TRACE("Adding row at " << L_start_time << " label at " << *this_label_ixs.label_ixs << " with " << F_end_ix << " index, of length " << label_len);
 #pragma omp ordered
         {
-            L_ins = &label_ixs.emplace_back(t_label_ix{.n_ixs = label_len});
             ix_F_end.emplace_back(F_end_ix);
             all_times.emplace_back(*it_main_time);
             last_knowns.emplace_back((**F_end_it)[level]);
+            label_ixs.emplace_back(this_label_ixs);
         };
-        L_ins->special_x = generate_twap_bias(L_ins->label_ixs, askbid, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux, label_len, level);
-        LOG4_TRACE(
-                "Added row " << label_ixs.size() << " for time " << L_start_time << " label at " << *L_ins->label_ixs << " with " << F_end_ix << " index, of length " << label_len);
     }
 
 #ifdef LAST_KNOWN_LABEL // TODO Implement for online learn!
@@ -609,16 +608,13 @@ ModelService::prepare_labels(arma::mat &all_labels, arma::vec &all_last_knowns, 
     memcpy(all_last_knowns.memptr(), last_knowns.data(), req_rows * sizeof(double));
     std::vector<double> labels_aux_in(aux_data.distance());
     OMP_FOR_i(aux_data.distance()) labels_aux_in[i] = aux_data[i]->at(level);
-    quantise_labels(label_len, labels_aux_in, label_ixs, ix_F_end, all_labels.memptr(), multistep);
-
+    PROFILE_(quantise_labels(label_len, labels_aux_in, label_ixs, ix_F_end, all_labels.memptr(), multistep));
     assert(!all_labels.has_nonfinite() && !all_last_knowns.has_nonfinite());
     if (all_labels.empty() or all_last_knowns.empty())
         LOG4_WARN("No new data to prepare for training, labels " << arma::size(all_labels) << ", last-knowns " << arma::size(all_last_knowns));
     else
         LOG4_TRACE("Prepared level " << level << ", labels " << common::present(all_labels) << ", last-knowns " << common::present(all_last_knowns) << ", askbid " << askbid);
 }
-
-uint32_t time_to_watch_ix = 0xDeadBeef; // TODO Remove after testing
 
 void ModelService::tune_features(arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times,
                                  const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const bpt::time_duration &max_gap, const bpt::time_duration &resolution_aux,
@@ -663,12 +659,12 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
     std::deque<arma::mat> decon(n_queues);
     std::deque<std::vector<t_feat_params>> feat_params(n_queues);
 
-#pragma omp parallel default(shared) num_threads(gpu_handler_4.get_max_gpu_threads())
+#pragma omp parallel default(shared) ADJ_THREADS(gpu_handler_4.get_max_gpu_threads())
 #pragma omp single
     {
         OMP_TASKLOOP_1(firstprivate(n_rows, levels))
         for (DTYPE(n_queues) qix = 0; qix < n_queues; ++qix) {
-            const auto &p_queue = feat_queues[qix]; // TODO Multiple queues have different amount of samples, fix the assumption that they are the same!
+            const auto &p_queue = feat_queues[qix]; // TODO Multiple queues may have different amount of samples, fix the assumption here that they are the same!
             const auto last_iter = lower_bound(std::as_const(*p_queue), latest_label_horizon);
             const auto start_iter = lower_bound_before(std::as_const(*p_queue), earliest_label_horizon) - coef_lag_max_q;
             const uint32_t start_offset = start_iter - p_queue->cbegin();
@@ -679,22 +675,18 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
             chunk_len_quantise[qix] = cdiv(n_rows, n_chunks_quantise);
             decon[qix].set_size(in_rows[qix], levels);
             feat_params[qix].resize(n_rows);
-            OMP_TASKLOOP_(in_rows[qix] * levels, firstprivate(levels, start_offset, qix) untied collapse(2))
+            OMP_TASKLOOP_(in_rows[qix] * levels, SSIMD firstprivate(levels, start_offset, qix) collapse(2))
             for (uint32_t r = 0; r < in_rows[qix]; ++r)
                 for (uint16_t l = 0; l < levels; ++l)
                     decon[qix](r, l) = p_queue->at(start_offset + r)->at(adjacent_levels ^ l);
 
-#pragma omp taskloop simd NGRAIN(n_rows) firstprivate(n_rows) default(shared) mergeable untied
-            for (uint32_t r = 0; r < n_rows; ++r) {
-                if (label_times[r]->get_value_time() == time_to_watch) time_to_watch_ix = r; // TODO Remove after testing
+            OMP_TASKLOOP_(n_rows, SSIMD firstprivate(n_rows))
+            for (uint32_t r = 0; r < n_rows; ++r)
                 feat_params[qix][r].ix_end = (lower_bound_before(*p_queue, label_times[r]->get_value_time() - horizon_duration) - p_queue->cbegin()) - start_offset;
-            }
-            LOG4_TRACE("feat params front ix_end " << feat_params[qix].front().ix_end << ", back ix_end " << feat_params[qix].back().ix_end <<
-                                                   ", first offset row " << p_queue->at(start_offset)->to_string() << ", n feature rows " << in_rows[qix]);
 
             OMP_TASKLOOP_1(firstprivate(levels, qix))
             for (DTYPE(levels) adj_ix = 0; adj_ix < levels; ++adj_ix) {
-                t_omp_lock ins_l;
+                tbb::mutex ins_l;
                 const auto adj_ix_q = adj_ix + qix * levels;
                 const auto adj_ix_q_1 = adj_ix_q + 1;
                 const std::deque<uint32_t> &quantisations = get_quantisations();
@@ -702,9 +694,8 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
                 for (const auto quantise: quantisations) {
                     auto feat_params_qix_qt = feat_params[qix];
                     const auto coef_lag_q = coef_lag_ * quantise;
-#pragma omp taskloop SSIMD NGRAIN(n_rows) firstprivate(quantise) default(shared) mergeable untied
-                    for (auto &f: feat_params_qix_qt)
-                        f.ix_start = f.ix_end - coef_lag_q + 1;
+                    OMP_TASKLOOP_(n_rows, SSIMD firstprivate(quantise))
+                    for (auto &f: feat_params_qix_qt) f.ix_start = f.ix_end - coef_lag_q + 1;
 
                     arma::mat features(n_rows, coef_lag, arma::fill::none);
                     OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, quantise, coef_lag_, coef_lag))
@@ -713,9 +704,6 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
                             std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i, n_rows, in_rows[qix], adj_ix,
                             coef_lag_, coef_lag, quantise, features.memptr()), "Quantise features " << chunk_len_quantise[qix] << ", quantise " << quantise);
                     RELEASE_CONT(feat_params_qix_qt);
-                    LOG4_TRACE("Test alignment " << n_rows << "x" << coef_lag << ", quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ", features " <<
-                                                 common::present(arma::mat(features.rows(0, features.n_rows - common::C_integration_test_validation_window - 1))));
-
                     arma::vec scores(coef_lag, arma::fill::none);
                     arma::fvec stretches(coef_lag, arma::fill::none), skips(coef_lag, arma::fill::none);
                     arma::u32_vec shifts(coef_lag, arma::fill::none);
@@ -724,13 +712,10 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
                             features.colptr(i), mean_L.mem, scores.memptr() + i, stretches.memptr() + i, shifts.memptr() + i, skips.memptr() + i,
                             n_rows, std::min<uint32_t>(i + chunk_len_align, coef_lag) - i), "Align features " << n_rows << "x" << chunk_len_align << ", quantize " << quantise);
 
-                    LOG4_TRACE("Post alignment " << n_rows << "x" << coef_lag << ", quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ", scores " <<
-                                                 common::present(scores) << ", stretches " << common::present(stretches) << ", shifts " << common::present(shifts));
-
                     const arma::uvec trims = arma::uvec(arma::stable_sort_index(scores)).tail(coef_lag - lag);
                     scores.shed_rows(trims);
                     const double score = arma::accu(scores);
-                    ins_l.set();
+                    const tbb::mutex::scoped_lock lk(ins_l);
                     if (score < best_score[adj_ix_q]) {
                         LOG4_DEBUG("New best score " << score << ", previous best score " << best_score[adj_ix_q] << ", improvement " << common::imprv(score, best_score[adj_ix_q])
                                                      << "pc, quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ", lag " << lag << ", coef lag "
@@ -747,7 +732,6 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
                         fm.skips.rows(adj_ix_q_lag, adj_ix_q_1_lag) = skips;
                         fm.trims[adj_ix_q] = trims;
                     }
-                    ins_l.unset();
                 }
             }
         }
@@ -796,7 +780,7 @@ void ModelService::do_features(
                 for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix]) PROFILE_MSG(quantise_features(
                         decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i,
                         n_rows, in_rows[qix], adj_ix, coef_lag_, coef_lag, quantise, level_features.memptr()),
-                                                                                                 "Prepare quantised features " << chunk_len_quantise[qix]);
+                                                                                           "Prepare quantised features " << chunk_len_quantise[qix]);
                 level_features.shed_cols(fm.trims[adj_ix_q]);
                 out_features.cols(adj_ix_q_lag, adj_ix_q_lag + lag - 1) = level_features;
                 LOG4_TRACE("Level " << adj_ix << ", queue " << qix << ", features " << common::present(level_features) << ", quantise period " << stripe_period * quantise);
@@ -804,10 +788,6 @@ void ModelService::do_features(
         }
     }
     if (out_features.empty()) LOG4_WARN("No new data to prepare for training, features " << arma::size(out_features));
-    if (time_to_watch_ix != 0xDeadBeef) { // TODO Remove after testing
-        LOG4_TRACE("Test predict features " << time_to_watch << ", " << common::to_string(arma::mat(out_features.row(time_to_watch_ix)), out_features.n_cols));
-        time_to_watch_ix = 0xDeadBeef;
-    }
     LOG4_TRACE("Out features " << common::present(out_features));
 }
 
@@ -870,16 +850,8 @@ ModelService::prepare_features(arma::mat &out_features, const data_row_container
                     decon[qix](r, l) = p_queue->at(start_offset + r)->at(adjacent_levels ^ l);
 
 #pragma omp taskloop simd NGRAIN(n_rows) firstprivate(n_rows) default(shared) mergeable untied
-            for (uint32_t r = 0; r < n_rows; ++r) {
+            for (uint32_t r = 0; r < n_rows; ++r)
                 feat_params[qix][r].ix_end = (lower_bound_before(*p_queue, label_times[r]->get_value_time() - horizon_duration) - p_queue->cbegin()) - start_offset;
-
-                if (label_times[r]->get_value_time() == time_to_watch) { // TODO Remove after testing
-                    const auto f_ix_end = feat_params[qix][r].ix_end;
-                    LOG4_TRACE(
-                            "Time to watch " << time_to_watch << " at index " << r << " horizon duration " << horizon_duration << ", f ix end " << f_ix_end);
-                    time_to_watch_ix = r;
-                }
-            }
         }
     }
 
@@ -961,7 +933,8 @@ ModelService::train_batch(
     for (uint16_t gix = 0; gix < model.get_gradient_count(); ++gix) {
         const auto p_gradient = model.get_gradient(gix);
         if (!p_gradient) LOG4_THROW("SVR model for gradient " << gix << " not initialized " << model);
-        p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, gradient_data.p_last_knowns, p_weights, last_value_time);
+        PROFILE_MSG(p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, gradient_data.p_last_knowns, p_weights, last_value_time),
+            "Train batch, gradient " << gix << ", labels " << arma::size(*gradient_data.p_labels) << ", features " << arma::size(*gradient_data.p_features) << ", last value time " << last_value_time);
 
         if (model.get_gradient_count() < 2 || gix == model.get_gradient_count() - 1) continue;
         gradient_data = model.get_gradient(gix)->produce_residuals();
@@ -998,13 +971,12 @@ ModelService::predict(
         data_row_container &out)
 {
     arma::mat prediction(predict_features.p_features->n_rows, model.get_multiout());
-    t_omp_lock predict_lock;
+    tbb::mutex predict_lock;
     OMP_FOR(model.get_gradient_count())
     for (const auto &p_svr: model.get_gradients()) {
         const auto this_prediction = p_svr->predict(*predict_features.p_features, predict_features.times.front()->get_value_time());
-        predict_lock.set();
+        const tbb::mutex::scoped_lock lk(predict_lock);
         prediction += this_prediction;
-        predict_lock.unset();
     }
 #ifdef EMO_DIFF
     const auto lk = get_last_knowns(ensemble, model.get_decon_level(), predict_features.times, resolution);
@@ -1012,7 +984,7 @@ ModelService::predict(
 #endif
     const auto multistep = model.get_gradients().front()->get_dataset()->get_multistep();
     if (multistep > 1) prediction /= multistep;
-    const tbb::mutex::scoped_lock l(insemx);
+    const tbb::mutex::scoped_lock lck(insemx);
     datamodel::DataRow::insert_rows(out, prediction, predict_features.times, model.get_decon_level(), ensemble.get_level_ct(), true);
     LOG4_TRACE("Predicted " << common::present(prediction) << " for " << predict_features.times.size() << " times, container " << common::to_string(out));
 }
@@ -1055,20 +1027,19 @@ ModelService::init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::En
 {
     if (!check(ensemble.get_models(), p_dataset->get_model_count()) && ensemble.get_id())
         ensemble.set_models(model_dao.get_all_ensemble_models(ensemble.get_id()), false);
-    t_omp_lock init_models_l;
+    tbb::mutex init_models_l;
     OMP_FOR_(p_dataset->get_model_count() * p_dataset->get_multistep(), simd collapse(2))
     for (uint16_t levix = 0; levix < p_dataset->get_spectral_levels(); levix += LEVEL_STEP)
         for (uint16_t stepix = 0; stepix < p_dataset->get_multistep(); ++stepix)
             if (levix != p_dataset->get_trans_levix()) {
-                init_models_l.set();
+                tbb::mutex::scoped_lock lk(init_models_l);
                 auto p_model = ensemble.get_model(levix, stepix);
-                init_models_l.unset();
+                lk.release();
                 if (!p_model) {
                     p_model = ptr<datamodel::Model>(0, ensemble.get_id(), levix, stepix, PROPS.get_multiout(), p_dataset->get_gradient_count(),
                                                     p_dataset->get_max_chunk_size());
-                    init_models_l.set();
+                    const tbb::mutex::scoped_lock lk2(init_models_l);
                     ensemble.get_models().emplace_back(p_model);
-                    init_models_l.unset();
                 }
                 configure(p_dataset, ensemble, *p_model);
             }

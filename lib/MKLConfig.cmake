@@ -594,7 +594,7 @@ if(ENABLE_OMP_OFFLOAD)
     if("Fortran" IN_LIST CURR_LANGS)
       list(APPEND MKL_OFFLOAD_COPT -fiopenmp -fopenmp-targets=spir64)
     else()
-	    # list(APPEND MKL_OFFLOAD_COPT -fiopenmp -fopenmp-targets=spir64 -fopenmp-version=51) # Disabled for compatibility with CUDA using GCC compiler
+	    # list(APPEND MKL_OFFLOAD_COPT -fiopenmp -fopenmp-targets=spir64 -fopenmp-version=51) # TODO Disabled for compatibility with CUDA using GCC compiler
     endif()
     list(APPEND MKL_OFFLOAD_LOPT -fiopenmp -fopenmp-targets=spir64 -fsycl)
     if(APPLE)

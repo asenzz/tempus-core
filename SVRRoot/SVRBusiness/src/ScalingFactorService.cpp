@@ -30,7 +30,11 @@ double ScalingFactorService::calc_scaling_factor(const arma::mat &v, const doubl
 std::pair<double, double> ScalingFactorService::calc(const arma::mat &v, const double obseg)
 {
     const auto dc = calc_dc_offset(v);
-    const auto sf = calc_scaling_factor(v - dc, obseg);
+    auto sf = calc_scaling_factor(v - dc, obseg);
+    if (sf == 0) {
+        sf = 1;
+        LOG4_WARN("Scaling factor is zero, setting to 1");
+    }
     LOG4_TRACE("DC offset " << dc << ", scaling factor " << sf << ", values " << common::present(v));
     return {dc, sf};
 }

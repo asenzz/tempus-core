@@ -58,16 +58,15 @@ void DatasetService::load(datamodel::Dataset_ptr &p_dataset)
 {
     APP.input_queue_service.load(*p_dataset->get_input_queue());
     bpt::time_duration aux_res(boost::date_time::not_a_date_time);
-    t_omp_lock load_l;
+    tbb::mutex mx;
     OMP_FOR(p_dataset->get_aux_input_queues().size())
     for (const auto &p_input_queue: p_dataset->get_aux_input_queues()) {
         APP.input_queue_service.load(*p_input_queue);
-        load_l.set();
+        const tbb::mutex::scoped_lock lk(mx);
         if (aux_res.is_special())
             aux_res = p_input_queue->get_resolution();
         else if (aux_res != p_input_queue->get_resolution())
             LOG4_THROW("Auxiliary input queue " << p_input_queue->get_table_name() << " resolution " << p_input_queue->get_resolution() << " does not equal " << aux_res);
-        load_l.unset();
     }
 
     if (!EnsembleService::check(p_dataset->get_ensembles(), p_dataset->get_input_queue()->get_value_columns()))
@@ -203,22 +202,18 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
     std::for_each(C_default_exec_policy, processed_user_dataset_pairs.begin(), processed_user_dataset_pairs.end(),
                   [](auto &pudp) { pudp.users.clear(); });
 
-    t_omp_lock emplace_dataset_t;
-    t_omp_lock emplace_user_t;
+    tbb::mutex emplace_dataset_mx, emplace_user_mx;
     OMP_FOR(active_datasets.size())
     for (auto &dataset_pair: active_datasets) {
         auto iter = std::find_if(C_default_exec_policy, processed_user_dataset_pairs.begin(), processed_user_dataset_pairs.end(),
                                  [&dataset_pair](const auto &other) { return dataset_pair.second->get_id() == other.p_dataset->get_id(); });
-
         if (iter == processed_user_dataset_pairs.cend()) {
             load(dataset_pair.second);
-            emplace_dataset_t.set();
+            const tbb::mutex::scoped_lock lk(emplace_dataset_mx);
             processed_user_dataset_pairs.emplace_back(dataset_pair.second, std::deque{APP.user_service.get_user_by_user_name(dataset_pair.first)});
-            emplace_dataset_t.unset();
         } else {
-            emplace_user_t.set();
+            const tbb::mutex::scoped_lock lk(emplace_user_mx);
             iter->users.emplace_back(APP.user_service.get_user_by_user_name(dataset_pair.first));
-            emplace_user_t.unset();
         }
     }
 
@@ -256,7 +251,7 @@ void DatasetService::process(datamodel::Dataset &dataset)
         && dataset.get_ensemble()->get_model(0, 0)->get_last_modeled_value_time() > bpt::min_date_time) return;
 #endif
 
-#pragma omp parallel for schedule(static, 1) ADJ_THREADS_MIN(C_parallel_train_ensembles, dataset.get_ensembles().size())
+#pragma omp parallel for schedule(static, 1) ADJ_THREADS_MIN(PROPS.get_paral_ensembles(), dataset.get_ensembles().size())
     for (auto &p_ensemble: dataset.get_ensembles())
         PROFILE_MSG(EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
     LOG4_END();
@@ -271,10 +266,10 @@ void DatasetService::process_requests(
     tbb::mutex stream_results_mx;
     const auto timenow = bpt::second_clock::local_time();
 
-// #pragma omp parallel ADJ_THREADS(2 * requests.size())
-// #pragma omp single
+#pragma omp parallel ADJ_THREADS(2 * requests.size())
+#pragma omp single
     {
-        // OMP_TASKLOOP_(requests.size(),)
+        OMP_TASKLOOP_(requests.size(),)
         for (const auto &p_request: requests) {
             std::atomic<bool> request_answered = true;
 
@@ -295,7 +290,7 @@ void DatasetService::process_requests(
 
             // Do actual predictions
             const auto &columns = p_request->get_value_columns();
-            // OMP_TASKLOOP_(columns.size(),)
+            OMP_TASKLOOP_(columns.size(),)
             for (const auto &column: columns)
                 if (request_answered) {
                     const auto p_ensemble = dataset.get_ensemble(column);
@@ -313,14 +308,14 @@ void DatasetService::process_requests(
 
                     LOG4_DEBUG("Saving reconstructed predictions from " << (**predicted_recon.cbegin()).get_value_time()
                                                                         << " until " << (**predicted_recon.crbegin()).get_value_time());
-//                    OMP_TASKLOOP_(predicted_recon.size(),)
+                    OMP_TASKLOOP_(predicted_recon.size(),)
                     for (const auto &p_result_row: predicted_recon) {
                         if (p_result_row->get_value_time() < p_request->value_time_start || p_result_row->get_value_time() >= p_request->value_time_end
                             || !std::isnormal(p_result_row->get_value(0)))
                             LOG4_WARN("Skipping save of invalid response " << *p_result_row);
                         else
                             if (p_stream_results) {
-                                tbb::mutex::scoped_lock l(stream_results_mx);
+                                const tbb::mutex::scoped_lock lk(stream_results_mx);
                                 auto it_stream_results = p_stream_results->find(column);
                                 if (it_stream_results == p_stream_results->cend())
                                     p_stream_results->emplace(column, std::deque{p_result_row});

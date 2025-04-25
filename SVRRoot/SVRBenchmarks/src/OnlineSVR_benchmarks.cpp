@@ -1,15 +1,13 @@
+#ifdef ENABLE_OPENCL
+
 #include <cassert>
 #include <benchmark/benchmark.h>
-
 #include <onlinesvr.hpp>
-
 #include "deprecated/r_matrix.h"
 
 static void BM_update_r_matrix_cpu(benchmark::State& state)
 {
     const size_t w = state.range(0);
-
-    viennacl::matrix<double> qm(w, w, viennacl::context(viennacl::MAIN_MEMORY));
 
     for (size_t i = 0; i < w; i++)
         for (size_t j = 0; j < w; j++)
@@ -60,3 +58,4 @@ static void BM_update_r_matrix_gpu(benchmark::State& state)
 
 BENCHMARK(BM_update_r_matrix_gpu)->Range(1<<5, 1<<14);
 
+#endif

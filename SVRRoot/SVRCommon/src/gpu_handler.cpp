@@ -1,11 +1,13 @@
 #include <cuda_runtime_api.h>
+#include <mutex>
 #include "common/semaphore.hpp"
 #include "common/gpu_handler.hpp"
-#include <mutex>
 
 namespace svr {
-namespace common {
 
+#ifdef ENABLE_OPENCL
+
+namespace common {
 
 namespace {
 std::unordered_map<std::string, std::stringstream> kernel_file_cache;
@@ -18,7 +20,7 @@ gpu_kernel::add_ctx_kernel(
         const std::string &kernel_name,
         const std::stringstream &kernel_program)
 {
-//    ctx.build_options(OCL_BUILD_OPTIONS);
+    ctx.build_options(OCL_BUILD_OPTIONS);
     ctx.add_program(kernel_program.str(), kernel_name);
     LOG4_DEBUG("Kernel " << kernel_name << " loaded successfully.");
 }
@@ -35,7 +37,7 @@ gpu_kernel::gpu_kernel(const std::string &kernel_name) : kernel_name_(kernel_nam
         return;
     }
 
-    std::string kernels_path("../SVRRoot/opencl-libsvm/libsvm/kernels/" + kernel_name + ".cl");
+    const std::string kernels_path("../SVRRoot/opencl-libsvm/libsvm/kernels/" + kernel_name + ".cl");
     std::ifstream file_kernels(kernels_path);
     std::stringstream ss_kernels;
     ss_kernels << file_kernels.rdbuf();
@@ -73,7 +75,7 @@ void gpu_kernel::ensure_compiled_kernel(viennacl::ocl::context &ctx, const std::
     std::ifstream file_kernel(kernel_file_path);
     std::stringstream ss_kernel;
     ss_kernel << file_kernel.rdbuf();
-//        ctx.build_options(OCL_BUILD_OPTIONS);
+    ctx.build_options(OCL_BUILD_OPTIONS);
     ctx.add_program(ss_kernel.str(), kernel_file_name);
 
     LOG4_END();
@@ -127,4 +129,8 @@ cl::NDRange ndrange(const range_args2_t &range_args)
 
 }
 
+#endif
+
 } //namespace svr
+
+

@@ -10,11 +10,10 @@
 #include <deque>
 #include "defines.h"
 
-const boost::posix_time::ptime time_to_watch = boost::posix_time::time_from_string("2025-01-06 13:00:00"); // xauusd_avg_ask |  2647.354229504221
-
 namespace svr {
 
 constexpr auto C_default_exec_policy = std::execution::par_unseq;
+
 const auto C_n_cpu = std::thread::hardware_concurrency();
 const auto C_n_cpu_str = std::to_string(C_n_cpu);
 
@@ -42,7 +41,7 @@ constexpr char C_mql_date_time_format[] = "%Y.%m.%d %H:%M:%S";
 #ifdef INTEGRATION_TEST
 
 const auto C_integration_test_validation_window = [] {
-    constexpr uint16_t test_offset_default = 345;
+    constexpr uint16_t test_offset_default = 460;
     const auto p = getenv("SVRWAVE_TEST_WINDOW");
     if (!p) {
         std::cout << "Environment variable SVRWAVE_TEST_WINDOW not set, using default " << test_offset_default << std::endl;
@@ -63,7 +62,13 @@ constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
 
 constexpr double C_bad_validation = 1e9;
-constexpr uint16_t C_cu_tile_width = 32; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
+
+#ifdef NDEBUG
+constexpr uint16_t C_cu_tile_width = 32;
+#else
+constexpr uint16_t C_cu_tile_width = 16; // For Path kernel must be 32x32 == 1024 == Nx_local or 16 x 16 = 256, careful!
+#endif
+
 constexpr uint32_t C_cu_block_size = C_cu_tile_width * C_cu_tile_width;
 constexpr uint32_t C_cu_clamp_n = C_cu_block_size * C_cu_block_size;
 
@@ -91,7 +96,6 @@ constexpr char C_default_stream_loop_interval_ms[] = "10";
 constexpr char C_default_daemonize[] = "1";
 constexpr char C_default_num_quantisations[] = "10";
 constexpr char C_default_quantisation_divisor[] = "3";
-constexpr char C_default_oemd_column_interleave[] = "3";
 constexpr char C_default_oemd_quantisation_skipdiv[] = "20";
 constexpr char C_default_oemd_tune_particles[] = "16";
 constexpr char C_default_oemd_tune_iterations[] = "24";

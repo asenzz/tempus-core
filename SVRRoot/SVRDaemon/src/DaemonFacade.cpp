@@ -83,7 +83,7 @@ void DaemonFacade::save_queues_callback()
         std::this_thread::sleep_for(loop_interval);
         if (modified_queues.empty()) continue;
 
-        const tbb::mutex::scoped_lock l(save_queues_mx);
+        const tbb::mutex::scoped_lock lk(save_queues_mx);
         if (modified_queues.empty()) continue;
 
         std::for_each(C_default_exec_policy, modified_queues.cbegin(), modified_queues.cend(), [](const auto &p_queue) {
@@ -99,7 +99,7 @@ void DaemonFacade::process_streams()
 {
     const auto timenau = bpt::second_clock::local_time();
     const auto tables = streaming_messages_protocol::get().receive_queues_data(timenau);
-    const tbb::mutex::scoped_lock l(update_datasets_mx);
+    const tbb::mutex::scoped_lock lk(update_datasets_mx);
     // TODO Parallelize
     for (auto &du: datasets) {
         const auto p_dataset = du.p_dataset;
@@ -164,7 +164,7 @@ void DaemonFacade::start_loop()
     // Run normal daemon cycle
     while (continue_loop()) {
         if (++ctr == 0) {
-            const tbb::mutex::scoped_lock l(update_datasets_mx);
+            const tbb::mutex::scoped_lock lk(update_datasets_mx);
             PROFILE_MSG(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
         }
         for (business::DatasetService::DatasetUsers &dsu: datasets) {

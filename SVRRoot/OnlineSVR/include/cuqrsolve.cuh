@@ -7,6 +7,8 @@
 #include <magma_types.h>
 #include <cusolverDn.h>
 
+#define USE_MAGMA
+
 namespace svr {
 
 struct t_weight_scaling_factors {
@@ -17,7 +19,7 @@ struct t_weight_scaling_factors {
 namespace solvers {
 
 class score_weights {
-    static constexpr uint16_t streams_gpu = 8;
+    static constexpr uint16_t streams_gpu = 4;
     static const uint16_t n_gpus;
     const uint32_t m, n, mn, mm;
     const uint64_t L_size;
@@ -160,14 +162,13 @@ __global__ void G_prepare_labels(RPTR(double) d_labels, const double L_sum, cons
 
 // Solvers
 
-void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters,
-                 const uint16_t super_iters, const uint16_t rbt_iter, const double rbt_threshold,
-                 const uint16_t weight_cols, t_weight_scaling_factors &weight_scaling_factors, const uint16_t chunk);
+void solve_irwls(const arma::mat &K_epsco, const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters);
 
-double solve_hybrid(const double *const j_K_epsco, const uint32_t n, const uint32_t train_len, double *j_solved, const uint32_t magma_iters, const double magma_threshold,
-                    const magma_queue_t ma_queue, const uint16_t irwls_iters, const double *const j_train_labels, const size_t train_n_size, double *j_work,
-                    const cudaStream_t custream, const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t train_len_n,
-                    double *d_best_weights, const uint32_t K_train_len, double *j_K_epsco_reweighted, magma_int_t &info, const double iters_mul, const uint32_t m);
+double solve_hybrid(
+        const double *const j_K_epsco, const uint32_t n, const uint32_t train_len, double *const j_solved, const magma_queue_t ma_queue,
+        const uint16_t irwls_iters, const double *const j_train_labels, const size_t train_n_size, double *const j_work, const cudaStream_t custream,
+        const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t train_len_n, double *const d_best_weights,
+        const uint32_t K_train_len, double *j_K_epsco_reweighted, const double iters_mul);
 
 /* CuSolver */
 
@@ -222,6 +223,10 @@ double solve_validate_host(
 
 // Sign-weighted score
 double swscore(CPTRd d_in, const uint32_t ld_in, CPTRd d_ref, const uint32_t ld_ref, const uint32_t m, const uint32_t n, const cudaStream_t custream);
+
+void cs_gels_iter(CPTR(double) A, double *const x, CPTR(double) b, const uint32_t m, const uint32_t n, const uint32_t iter);
+
+void cs_gesv_iter(CPTR(double) A, double *const x, CPTR(double) b, const uint32_t m, const uint32_t n, const uint32_t iter);
 
 }
 

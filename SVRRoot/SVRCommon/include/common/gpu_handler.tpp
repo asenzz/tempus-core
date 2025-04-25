@@ -13,20 +13,19 @@ namespace common {
 
 // GPU Context, set the worker as blocked during its lifetime.
 template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_() :
-        context_id_(gpu_handler<ctx_per_gpu>::get().get_free_gpu()), dev_ct(gpu_handler<ctx_per_gpu>::get().get_gpu_devices_count())
+        context_id_(gpu_handler<ctx_per_gpu>::get().get_free_gpu())
 {
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
 template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_(const bool try_init) :
-        context_id_(try_init ? gpu_handler<ctx_per_gpu>::get().try_free_gpu() : gpu_handler<ctx_per_gpu>::get().get_free_gpu()),
-        dev_ct(gpu_handler<ctx_per_gpu>::get().get_gpu_devices_count())
+        context_id_(try_init ? gpu_handler<ctx_per_gpu>::get().try_free_gpu() : gpu_handler<ctx_per_gpu>::get().get_free_gpu())
 {
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
 template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_(const gpu_context &context) :
-        context_id_(context.context_id_), dev_ct(gpu_handler<ctx_per_gpu>::get().get_gpu_devices_count())
+        context_id_(context.context_id_)
 {};
 
 template<const uint16_t ctx_per_gpu> uint16_t gpu_context_<ctx_per_gpu>::id() const
@@ -48,11 +47,14 @@ template<const uint16_t ctx_per_gpu> uint16_t gpu_context_<ctx_per_gpu>::stream_
     return stream_id;
 }
 
+#ifdef ENABLE_OPENCL
 
 template<const uint16_t ctx_per_gpu> viennacl::ocl::context &gpu_context_<ctx_per_gpu>::ctx() const
 {
     return viennacl::ocl::get_context(context_id_);
 }
+
+#endif
 
 template<const uint16_t ctx_per_gpu> gpu_context_<ctx_per_gpu>::operator bool() const
 {
@@ -70,31 +72,23 @@ template<const uint16_t ctx_per_gpu> gpu_context_<ctx_per_gpu>::~gpu_context_()
 template<const uint16_t ctx_per_gpu>
 gpu_handler<ctx_per_gpu>::gpu_handler()
 {
+    try {
 #ifdef ENABLE_OPENCL
-    bool try_ocl_cpu = false;
-    try {
         init_devices(CL_DEVICE_TYPE_GPU);
+#else
+        init_devices();
+#endif
     } catch (...) {
-        try_ocl_cpu = true;
-        LOG4_WARN("No GPU device could be found. Using CPUs instead.");
+        LOG4_WARN("No GPU device could be found.");
+#ifdef ENABLE_OPENCL
+        init_devices(CL_DEVICE_TYPE_CPU);
+#endif
     }
-    try {
-        if (try_ocl_cpu) init_devices(CL_DEVICE_TYPE_CPU);
-    } catch (const std::exception &ex) {
-        LOG4_ERROR("Failed initializing OpenCL, " << ex.what());
-        throw;
-    }
-#endif // ENABLE_OPENCL
-
-    max_running_gpu_threads_number_ = available_devices_.size() * ctx_per_gpu;
-    LOG4_DEBUG("Max running GPU threads " << max_running_gpu_threads_number_);
-
 #ifdef IPC_GPU
     p_gpu_sem_ = std::make_unique<typename DTYPE(p_gpu_sem_)::element_type>(
             boost::interprocess::open_or_create_t(), SVRWAVE_GPU_SEM, max_running_gpu_threads_number_, boost::interprocess::permissions(0x1FF));
     std::shared_ptr<FILE> pipe_gpu(popen("chmod a+rw /dev/shm/sem." SVRWAVE_GPU_SEM, "r"), pclose); // This hack is needed as the semaphore created with sudo privileges, does not have W rights.
 #endif
-
 }
 
 template<const uint16_t ctx_per_gpu>
@@ -114,9 +108,11 @@ gpu_handler<ctx_per_gpu>::~gpu_handler()
 
 template<const uint16_t ctx_per_gpu> gpu_handler<ctx_per_gpu> &gpu_handler<ctx_per_gpu>::get()
 {
-    static gpu_handler handler;
+    static gpu_handler<ctx_per_gpu> handler;
     return handler;
 }
+
+#ifdef ENABLE_OPENCL
 
 template<const uint16_t ctx_per_gpu>
 void gpu_handler<ctx_per_gpu>::init_devices(const cl_device_type device_type)
@@ -125,7 +121,6 @@ void gpu_handler<ctx_per_gpu>::init_devices(const cl_device_type device_type)
     max_running_gpu_threads_number_ = 0;
     max_gpu_data_chunk_size_ = std::numeric_limits<uint32_t>::max();
     m_max_gpu_kernels_ = std::numeric_limits<uint32_t>::max();
-#ifdef ENABLE_OPENCL
     auto ocl_platforms = viennacl::ocl::get_platforms();
     LOG4_INFO("Found " << ocl_platforms.size() << " platforms.");
     for (auto &pf: ocl_platforms) {
@@ -154,38 +149,44 @@ void gpu_handler<ctx_per_gpu>::init_devices(const cl_device_type device_type)
             LOG4_ERROR("Failed enumerating platform " << pf.info() << " for devices, error " << ex.what());
         }
     }
-#else
-    max_running_gpu_threads_number_ = DEFAULT_GPU_NUM;
-    m_max_gpu_kernels = 1;
-    max_gpu_data_chunk_size_ = std::numeric_limits<uint32_t>::max();
-#endif //ENABLE_OPENCL
+}
+
+#endif
+
+inline size_t get_max_allocatable_memory(const int device)
+{
+    cu_errchk(cudaSetDevice(device));
+    size_t free_mem = 0, total_mem = 0;
+    cu_errchk(cudaMemGetInfo(&free_mem, &total_mem));
+    return total_mem * .8;
 }
 
 template<const uint16_t ctx_per_gpu>
-void gpu_handler<ctx_per_gpu>::sort_free_gpus()
+void gpu_handler<ctx_per_gpu>::init_devices()
 {
-#if 0
-    std::sort(C_default_exec_policy, free_gpus_.begin(), free_gpus_.end(), [&](const auto lhs, const auto rhs) {
-        uint32_t lhs_free, lhs_total, rhs_free, rhs_total;
-#pragma omp parallel num_threads(2)
-#pragma omp single
-        {
-#pragma omp task
-            {
-                cu_errchk(cudaSetDevice(lhs));
-                cu_errchk(cudaMemGetInfo(&lhs_free, &lhs_total));
-            }
-#pragma omp task
-            {
-                cu_errchk(cudaSetDevice(rhs));
-                cu_errchk(cudaMemGetInfo(&rhs_free, &rhs_total));
-            }
-        }
-        if (lhs_free < rhs_free) return true;
-        return double(lhs_free) / double(lhs_total) < double(rhs_free) / double(rhs_total);
-    });
-#endif
+    if (available_devices_.size()) {
+        LOG4_DEBUG("GPU devices already initialized, skipping.");
+        return;
+    }
+    const std::scoped_lock lk(cv_mx_);
+
+    int runtime_version;
+    cudaRuntimeGetVersion(&runtime_version);
+    LOG4_DEBUG("CUDA Runtime Version: " << runtime_version);
+    available_devices_.clear();
+    max_running_gpu_threads_number_ = 0;
+    max_gpu_data_chunk_size_ = std::numeric_limits<DTYPE(max_gpu_data_chunk_size_)>::max();
+    int gpu_devices_count;
+    cu_errchk(cudaGetDeviceCount(&gpu_devices_count));
+    for (int i = 0; i < gpu_devices_count; ++i) {
+        available_devices_.emplace_back(device_info{.id = (uint16_t) available_devices_.size(), .p_mx = std::make_shared<tbb::mutex>()});
+        const auto dev_mem = get_max_allocatable_memory(i);
+        if (dev_mem < max_gpu_data_chunk_size_) max_gpu_data_chunk_size_ = dev_mem;
+    }
+    max_running_gpu_threads_number_ = available_devices_.size() * ctx_per_gpu;
+    LOG4_INFO("Max running GPU threads " << max_running_gpu_threads_number_ << ", device max allocate size is " << max_gpu_data_chunk_size_ / ctx_per_gpu << " bytes");
 }
+
 
 template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::context_id(const DTYPE(available_devices_)::const_iterator &it) const
 {
@@ -197,17 +198,23 @@ template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::context_
 
 template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::dev_id(const uint16_t context_id)
 {
+    assert(context_id != C_no_gpu_id);
     return context_id / ctx_per_gpu;
 }
 
 template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::stream_id(const uint16_t context_id)
 {
+    assert(context_id != C_no_gpu_id);
     return context_id % ctx_per_gpu;
 }
 
 // Use it to sort GPUs by fitness
 constexpr auto comp_cuda_dev = [](const device_info &lhs, const device_info &rhs) -> bool {
+
+#ifdef ENABLE_OPENCL
     if (!lhs.p_ocl_info->available()) return false;
+#endif
+
     if (lhs.running_threads < rhs.running_threads) return true;
     if (lhs.running_threads > rhs.running_threads) return false;
 
@@ -226,8 +233,10 @@ constexpr auto comp_cuda_dev = [](const device_info &lhs, const device_info &rhs
     if (lhs_total_mem > rhs_total_mem) return true;
     if (lhs_total_mem < rhs_total_mem) return false;
 
+#ifdef ENABLE_OPENCL
     if (lhs.p_ocl_info->max_mem_alloc_size() > rhs.p_ocl_info->max_mem_alloc_size()) return true;
     if (lhs.p_ocl_info->max_mem_alloc_size() < rhs.p_ocl_info->max_mem_alloc_size()) return false;
+#endif
 
     return lhs.id < rhs.id;
 };
@@ -245,7 +254,7 @@ template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::get_free
         if (it_gpus == available_devices_.cend()) return false;
         return it_gpus->running_threads < ctx_per_gpu;
     });
-    ++it_gpus->running_threads;
+    ++(it_gpus->running_threads);
     return context_id(it_gpus);
 }
 
@@ -259,7 +268,7 @@ uint16_t gpu_handler<ctx_per_gpu>::try_free_gpu()
                                                         ", it found " << (it_gpus == available_devices_.cend() ? "end" : "no end"));
         return C_no_gpu_id;
     }
-    ++it_gpus->running_threads;
+    ++(it_gpus->running_threads);
     return context_id(it_gpus);
 }
 
@@ -291,12 +300,12 @@ void gpu_handler<ctx_per_gpu>::return_gpu(const uint16_t context_id)
 #endif
 
     auto &dev_ctx = available_devices_[dev_id(context_id)];
-    const tbb::mutex::scoped_lock lck(*dev_ctx.p_mx);
+    const tbb::mutex::scoped_lock lk(*dev_ctx.p_mx);
     if (dev_ctx.running_threads) {
         --dev_ctx.running_threads;
         cv_.notify_one();
     } else
-        LOG4_WARN("GPU " << context_id << " is already free.");
+        LOG4_ERROR("GPU " << context_id << " is already free.");
 }
 
 
@@ -323,21 +332,13 @@ uint16_t gpu_handler<ctx_per_gpu>::get_gpu_devices_count() const
     return available_devices_.size();
 }
 
+#ifdef ENABLE_OPENCL
 
 template<const uint16_t ctx_per_gpu>
 uint32_t gpu_handler<ctx_per_gpu>::get_max_gpu_kernels() const
 {
     return m_max_gpu_kernels_ / ctx_per_gpu;
 }
-
-
-template<const uint16_t ctx_per_gpu>
-size_t gpu_handler<ctx_per_gpu>::get_max_gpu_data_chunk_size() const
-{
-    return max_gpu_data_chunk_size_ / ctx_per_gpu;
-}
-
-#ifdef ENABLE_OPENCL
 
 template<const uint16_t ctx_per_gpu>
 const viennacl::ocl::device &gpu_handler<ctx_per_gpu>::device(const uint16_t idx) const
@@ -348,8 +349,15 @@ const viennacl::ocl::device &gpu_handler<ctx_per_gpu>::device(const uint16_t idx
 
 #endif
 
+template<const uint16_t ctx_per_gpu>
+size_t gpu_handler<ctx_per_gpu>::get_max_gpu_data_chunk_size() const
+{
+    return max_gpu_data_chunk_size_ / ctx_per_gpu;
 }
 
+}
+
+#ifdef ENABLE_OPENCL
 
 namespace cl12 {
 
@@ -382,6 +390,6 @@ template<class T> void kernel_helper::set_args(const size_t args_sz, T t)
     if (code != CL_SUCCESS) LOG4_THROW("OpenCL adding argument failed. Error: " << svr::common::gpu_helper::get_error_string(code));
 }
 
-}
+#endif
 
 }

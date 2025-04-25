@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-export ASAN_OPTIONS=verify_asan_link_order=0
 export NICENESS=19
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_trial_knitro_97-65-2f-5a-81.txt
@@ -22,20 +21,22 @@ killwait() {
 }
 
 export UBSAN_OPTIONS=print_stacktrace=1:print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.ubsan.log
-# export LSAN_OPTIONS=suppressions=print_suppressions=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.lsan.log
-export ASAN_OPTIONS=detect_container_overflow=true:protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=1:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=0:log_threads=1
-# export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
+export LSAN_OPTIONS=log_threads=1:use_unaligned=1:report_objects=1:log_path=/tmp/${BIN}.lsan.log # print_suppressions=1:suppressions=
+export ASAN_OPTIONS=detect_container_overflow=true:protect_shadow_gap=0:detect_invalid_pointer_pairs=1:replace_intrin=1:detect_leaks=1:debug=true:check_initialization_order=true:detect_stack_use_after_return=true:strict_string_checks=true:use_odr_indicator=true:log_path=/tmp/${BIN}.asan.log:verbosity=0:log_threads=1:verify_asan_link_order=0,detect_odr_violation=0,alloc_dealloc_mismatch=0
+export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 
 # export LD_PRELOAD="${LD_PRELOAD}:libduma.so"
 # export DUMA_OPTIONS=debug=1,log=/tmp/${BIN}.duma.log
+
+export LD_PRELOAD="${LD_PRELOAD}:${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so"
 
 export VGRIND=/usr/local/bin/valgrind
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib"
 
 # Debugger
-export DBG=/usr/bin/gdb # GNU debugger for GCC builds
+# export DBG=/usr/bin/gdb # GNU debugger for GCC builds
 # export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
-# export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
+export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
 
 # export PERF=/opt/intel/oneapi/vtune/2024.1/bin64/amplxe-perf
 export PERF=/usr/bin/perf
@@ -69,7 +70,7 @@ NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Default thread pool size is ${NUM_THREADS} threads.${NC}\n\n"
 
 # export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/mkl/latest/lib/intel64:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8"
-export LD_PRELOAD=`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`
+export LD_PRELOAD="${LD_PRELOAD}:`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`"
 # export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 
 export OMP_NESTED=true
@@ -112,10 +113,15 @@ then
   echo -1 > /proc/sys/kernel/perf_event_paranoid
   #echo 1 > /sys/bus/pci/devices/0000:82:00.0/remove
   #echo 1 > /sys/bus/pci/devices/0000:04:00.0/remove
+  echo "performance" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+
   /usr/bin/nvidia-smi -pl 100
-  /usr/bin/nvidia-smi -pm 1 
+  /usr/bin/nvidia-smi -pm 1
   /usr/bin/nvidia-smi -c 0
-  echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+  /usr/bin/nvidia-smi -am 0
+  /usr/bin/nvidia-smi -mig 0
+  # /usr/bin/nvidia-smi --auto-boost-default=1
+  /usr/bin/nvidia-smi -den 0
 fi
 
 /usr/sbin/sysctl --system > /dev/null

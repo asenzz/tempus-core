@@ -9,7 +9,11 @@
 namespace svr {
 namespace kernel {
 
-template<typename T> std::unordered_map<datamodel::e_kernel_type, std::shared_ptr<kernel_factory<T>>> IKernel<T>::kernel_factories;
+template<typename T> std::unordered_map<datamodel::e_kernel_type, std::shared_ptr<kernel_factory<T>>> IKernel<T>::kernel_factories = [] {
+    DTYPE(IKernel<T>::kernel_factories) r;
+    for (auto k_type = datamodel::e_kernel_type(0); k_type < datamodel::e_kernel_type::end; ++k_type) r.emplace(k_type, ptr<kernel_factory<T>>(k_type));
+    return r;
+} ();
 
 template<typename T> std::once_flag IKernel<T>::kernel_init_flag;
 
@@ -29,22 +33,8 @@ template<typename T> const char *kernel_factory<T>::bad_kernel_creation::what() 
     return reason.c_str();
 }
 
-
-template<typename T> void IKernel<T>::init()
-{
-    std::call_once(IKernel<T>::kernel_init_flag, [] {
-        try {
-            for (auto k_type = datamodel::e_kernel_type::begin; k_type < datamodel::e_kernel_type::end; ++k_type)
-                IKernel<T>::kernel_factories.emplace(k_type, ptr<kernel_factory<T>>(k_type));
-        } catch (const std::exception &ex) {
-            LOG4_ERROR("Factory init failed, " << ex.what());
-        }
-    });
-}
-
 template<typename T> IKernel<T>::IKernel()
 {
-    IKernel<T>::init();
 }
 
 template<typename T> std::unique_ptr<kernel_base<T>> IKernel<T>::get(const datamodel::SVRParameters &params)
@@ -54,7 +44,12 @@ template<typename T> std::unique_ptr<kernel_base<T>> IKernel<T>::get(const datam
     return search->second->create(params);
 }
 
-template<typename T> std::unique_ptr<kernel_base<T>> IKernel<T>::newk(const datamodel::SVRParameters &params)
+template<typename T> template<ckernel_base<T> K> std::unique_ptr<K> IKernel<T>::get(const datamodel::SVRParameters &params)
+{
+    return dynamic_ptr_cast<K>(get(params));
+}
+
+template<typename T> std::unique_ptr<kernel_base<T>> IKernel<T>::new_f(const datamodel::SVRParameters &params)
 {
     kernel_factory<T> kf;
     return kf.create(params);

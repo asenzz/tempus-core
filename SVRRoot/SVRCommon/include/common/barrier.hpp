@@ -10,6 +10,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <tbb/mutex.h>
 #include "parallelism.hpp"
 
 
@@ -43,7 +44,7 @@ private:
 
 class omp_task_barrier
 {
-    t_omp_lock wait_l; // lock to protect wait_count
+    tbb::mutex wait_l; // lock to protect wait_count
     const unsigned num_threads; // number of threads using barrier
     unsigned wait_count = 0; // counter to keep track of waiting threads
     unsigned instance = 0; // counter to keep track of barrier use count

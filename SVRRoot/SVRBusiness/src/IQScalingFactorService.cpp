@@ -50,7 +50,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     const size_t row_ct = std::distance(iter_start, input_queue.cend());
 
     arma::mat iq_values(row_ct, columns_ct);
-    OMP_FOR_(row_ct * columns_ct, simd collapse(2))
+    OMP_FOR_(row_ct * columns_ct, SSIMD collapse(2))
     for (size_t r = 0; r < row_ct; ++r)
         for (size_t c = 0; c < columns_ct; ++c)
             iq_values(r, c) = (**(iter_start + r))[c];
@@ -62,8 +62,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     std::deque<datamodel::IQScalingFactor_ptr> result(columns_ct);
     OMP_FOR_i(columns_ct) {
         std::tie(dc_offset[i], scaling_factors[i]) = calc(iq_values.col(i), common::C_input_obseg_labels);
-        result[i] = ptr<svr::datamodel::IQScalingFactor>(
-                    0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
+        result[i] = ptr<svr::datamodel::IQScalingFactor>(0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
     }
     LOG4_DEBUG("Calculated input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id <<
         " on last " << row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors <<
@@ -75,7 +74,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
 bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns)
 {
     tbb::concurrent_vector<bool> present(value_columns.size(), false);
-#pragma omp parallel for num_threads(adj_threads(value_columns.size() * iqsf.size())) collapse(2)
+    OMP_FOR_(value_columns.size() * iqsf.size(), SSIMD collapse(2))
     for (const auto &sf: iqsf)
         for (size_t i = 0; i < value_columns.size(); ++i)
             if (sf->get_input_queue_column_name() == value_columns[i]
@@ -99,8 +98,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     const uint32_t calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::get_max_quantisation() * PROPS.get_lag_multiplier() + dataset.get_max_decrement() * resolution_ratio;
 #ifdef INTEGRATION_TEST
     const auto last_label_time = (**(p_main_input_queue->get_data().rbegin() + common::C_integration_test_validation_window)).get_value_time() + p_main_input_queue->get_resolution();
-    const uint32_t test_offset = resolution_ratio > 1 ?
-            lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
+    const uint32_t test_offset = resolution_ratio > 1 ? lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
             input_queue.size() - common::C_integration_test_validation_window;
     auto p_test_input_queue = input_queue.clone(0, test_offset);
     PROFILE_MSG(dataset.set_iq_scaling_factors(calculate(*p_test_input_queue, dataset.get_id(), calc_len), true),

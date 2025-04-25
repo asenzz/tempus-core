@@ -71,13 +71,14 @@ t_drand48_data seedme(const size_t thread_id)
     return buffer;
 }
 
+#ifdef ENABLE_OPENCL
 viennacl::vector<double> tovcl(const arma::colvec &in)
 {
     viennacl::vector<double> res(in.size());
     viennacl::fast_copy(in.mem, in.mem + in.n_elem, res.begin());
     return res;
 }
-
+#endif
 
 ptimes_set_t
 to_multistep_times(

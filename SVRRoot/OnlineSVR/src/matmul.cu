@@ -5,8 +5,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "matmul.cuh"
-#include "common/cuda_util.cuh"
 #include "common/constants.hpp"
+#include "common/cuda_util.cuh"
 
 namespace svr {
 /*

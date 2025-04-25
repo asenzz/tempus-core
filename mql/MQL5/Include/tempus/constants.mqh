@@ -35,3 +35,4 @@ const uint C_max_retries = C_backtesting ? 2 : 10; // for HTTP calls
 const string C_streams_root = "Z:\\dev\\shm\\tempus";
 const uint C_print_progress_every = 10000;
 const string C_queue_prefix = "q_svrwave_";
+const int C_send_wait = 5; // Wait seconds to confirm sent order

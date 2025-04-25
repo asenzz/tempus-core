@@ -94,8 +94,8 @@ SVRParametersService::slice(const std::deque<datamodel::SVRParameters_ptr> &para
 {
     datamodel::t_param_set r;
     for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<uint16_t>::max() || p->get_chunk_index() == chunk_ix)
-            && (grad_ix == std::numeric_limits<uint16_t>::max() || p->get_grad_level() == grad_ix))
+        if ((chunk_ix == std::numeric_limits<DTYPE(chunk_ix)>::max() || p->get_chunk_index() == chunk_ix)
+            && (grad_ix == std::numeric_limits<DTYPE(grad_ix)>::max() || p->get_grad_level() == grad_ix))
             r.emplace(p);
     return r;
 }
@@ -105,8 +105,8 @@ SVRParametersService::slice(const datamodel::t_param_set &params, const uint16_t
 {
     datamodel::t_param_set r;
     for (const auto &p: params)
-        if ((chunk_ix == std::numeric_limits<uint16_t>::max() || p->get_chunk_index() == chunk_ix)
-            && (grad_ix == std::numeric_limits<uint16_t>::max() || p->get_grad_level() == grad_ix))
+        if ((chunk_ix == std::numeric_limits<DTYPE(chunk_ix)>::max() || p->get_chunk_index() == chunk_ix)
+            && (grad_ix == std::numeric_limits<DTYPE(grad_ix)>::max() || p->get_grad_level() == grad_ix))
             r.emplace(p);
     return r;
 }
@@ -115,23 +115,23 @@ SVRParametersService::slice(const datamodel::t_param_set &params, const uint16_t
 datamodel::t_param_set::iterator SVRParametersService::find(datamodel::t_param_set &params, const uint16_t chunk_ix, const uint16_t grad_ix)
 {
     return std::find_if(C_default_exec_policy, params.begin(), params.end(), [chunk_ix, grad_ix](const auto &p) {
-        return (chunk_ix == std::numeric_limits<uint16_t>::max() || p->get_chunk_index() == chunk_ix)
-               && (grad_ix == std::numeric_limits<uint16_t>::max() || p->get_grad_level() == grad_ix);
+        return (chunk_ix == std::numeric_limits<DTYPE(chunk_ix)>::max() || p->get_chunk_index() == chunk_ix)
+               && (grad_ix == std::numeric_limits<DTYPE(grad_ix)>::max() || p->get_grad_level() == grad_ix);
     });
 }
 
 datamodel::t_param_set::const_iterator SVRParametersService::find(const datamodel::t_param_set &params, const uint16_t chunk_ix, const uint16_t grad_ix)
 {
     return std::find_if(C_default_exec_policy, params.cbegin(), params.cend(), [chunk_ix, grad_ix](const auto &p) {
-        return (chunk_ix == std::numeric_limits<uint16_t>::max() || p->get_chunk_index() == chunk_ix)
-               && (grad_ix == std::numeric_limits<uint16_t>::max() || p->get_grad_level() == grad_ix);
+        return (chunk_ix == std::numeric_limits<DTYPE(chunk_ix)>::max() || p->get_chunk_index() == chunk_ix)
+               && (grad_ix == std::numeric_limits<DTYPE(grad_ix)>::max() || p->get_grad_level() == grad_ix);
     });
 }
 
 datamodel::SVRParameters_ptr SVRParametersService::find_ptr(const datamodel::t_param_set &params, const uint16_t chunk_ix, const uint16_t grad_ix)
 {
     const auto res = find(params, chunk_ix, grad_ix);
-    return res == params.end() ? nullptr : *res;
+    return res == params.cend() ? nullptr : *res;
 }
 
 bool SVRParametersService::check(const datamodel::t_param_set &params, const uint16_t num_chunks)
@@ -174,7 +174,7 @@ std::set<uint16_t> SVRParametersService::get_adjacent_indexes(const uint16_t lev
     }
 
     std::set<uint16_t> res;
-    t_omp_lock level_indexes_l;
+    tbb::mutex level_indexes_l;
     const auto n_indexes = 1 + max_index - min_index;
     LOG4_DEBUG("Getting adjacent indexes for level " << level << " with ratio " << ratio << " and level count " << level_count << " min " << min_index << " max " << max_index <<
         ", n_indexes " << n_indexes);
@@ -192,9 +192,8 @@ std::set<uint16_t> SVRParametersService::get_adjacent_indexes(const uint16_t lev
             && (level_count < MIN_LEVEL_COUNT || (i != trans_levix && i % 2 == 0) /* || level > trans_levix */ )
 #endif
             ) {
-            level_indexes_l.set();
+            const tbb::mutex::scoped_lock lk(level_indexes_l);
             res.emplace(i);
-            level_indexes_l.unset();
         } else
             LOG4_TRACE("Skipping level " << i << " adjacent ratio " << ratio << " for level " << level);
     }

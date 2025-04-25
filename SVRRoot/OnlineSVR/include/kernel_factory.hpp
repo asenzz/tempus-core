@@ -56,21 +56,21 @@ public:
     datamodel::e_kernel_type kernel_type_;
 };
 
+template<typename Derived, typename T> concept ckernel_base = std::derived_from<Derived, kernel::kernel_base<T>>;
 
 template<typename T> class IKernel final {
     static std::unordered_map<datamodel::e_kernel_type, std::shared_ptr<kernel_factory<T>>> kernel_factories;
     static std::once_flag kernel_init_flag;
 
 public:
-    static void init();
-
     IKernel();
 
     ~IKernel() = default;
 
+    template<ckernel_base<T> K> static std::unique_ptr<K> get(const datamodel::SVRParameters &params);
     static std::unique_ptr<kernel_base<T>> get(const datamodel::SVRParameters &params);
 
-    std::unique_ptr<kernel_base<T>> newk(const datamodel::SVRParameters &params);
+    std::unique_ptr<kernel_base<T>> new_f(const datamodel::SVRParameters &params);
 };
 
 }

@@ -12,9 +12,6 @@
 #include "model/Model.hpp"
 #include "model/User.hpp"
 
-constexpr uint16_t C_parallel_train_models = 1; // Adjust with RAM size
-constexpr uint16_t C_parallel_train_ensembles = 1;
-
 namespace svr {
 namespace dao { class EnsembleDAO; }
 
@@ -38,8 +35,7 @@ class ModelService;
 
 class DeconQueueService;
 
-class EnsembleService
-{
+class EnsembleService {
     svr::dao::EnsembleDAO &ensemble_dao_;
     svr::business::ModelService &model_service_;
     svr::business::DeconQueueService &decon_queue_service_;
@@ -75,27 +71,17 @@ public:
 
     static bool check(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<std::string> &value_columns);
 
-
-    static void get_decon_queues_from_input_queue(
-            const datamodel::Dataset &dataset,
-            const datamodel::InputQueue &input_queue,
-            std::deque<datamodel::DeconQueue_ptr> &decon_queues);
+    static void get_decon_queues_from_input_queue(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues);
 
     static void train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
 
-    static datamodel::DeconQueue_ptr predict(
-            const datamodel::Dataset &dataset,
-            const datamodel::Ensemble &ensemble,
-            const datamodel::t_predict_features &features);
+    static datamodel::DeconQueue_ptr predict(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::t_predict_features &features);
 
-    static datamodel::DeconQueue_ptr
-    predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times) noexcept;
+    static datamodel::DeconQueue_ptr predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times) noexcept;
 
-    static bool
-    is_ensemble_input_queue(const datamodel::Ensemble &ensemble, const datamodel::InputQueue &input_queue);
+    static bool is_ensemble_input_queue(const datamodel::Ensemble &ensemble, const datamodel::InputQueue &input_queue);
 
-    static void
-    update_ensemble_decon_queues(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<datamodel::DeconQueue_ptr> &new_decon_queues);
+    static void update_ensemble_decon_queues(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<datamodel::DeconQueue_ptr> &new_decon_queues);
 
     static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times);
 };

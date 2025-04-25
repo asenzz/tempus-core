@@ -48,6 +48,7 @@ template<> std::string stream_message_queue::read()
     const auto len = read < uint8_t > ();
     std::string value(len, '\0');
     read(value.data(), len);
+    LOG4_TRACE("Read string of len " << len << ", " << value);;
     return value;
 }
 
@@ -55,6 +56,7 @@ template<> bpt::ptime stream_message_queue::read()
 {
     uint32_t value;
     read(reinterpret_cast<char *>(&value), sizeof(uint32_t));
+    LOG4_TRACE("Reading time from " << value);
     return bpt::from_time_t(std::time_t(value));
 }
 
