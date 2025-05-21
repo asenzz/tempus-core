@@ -23,7 +23,6 @@
 namespace svr {
 namespace optimizer {
 constexpr std::array<double, 1> C_maxfun_drop_coefs{.5};
-constexpr uint32_t C_max_population = 3000;
 constexpr double C_default_rhoend = 5e-10;
 constexpr double C_default_rhobeg = .25;
 constexpr uint32_t C_elect_threshold = 10;
@@ -77,12 +76,12 @@ class t_biteopt_cost : public CBiteOpt
     const arma::mat bounds;
 
 public:
-    t_biteopt_cost(t_calfun_data_ptr const calfun_data, const arma::mat &bounds) : calfun_data(calfun_data), bounds(bounds)
+    t_biteopt_cost(t_calfun_data_ptr const calfun_data, const arma::mat &bounds, const uint32_t max_population) : calfun_data(calfun_data), bounds(bounds)
     {
-        constexpr auto max_population_3 = C_max_population / 3;
+        const auto max_population_3 = max_population / 3;
         const auto D = bounds.n_rows;
         const auto depth = calfun_data->p_pprune->depth;
-        updateDims(D, D > max_population_3 / depth ? C_max_population / depth : 20 + D * 3);
+        updateDims(D, D > max_population_3 / depth ? max_population / depth : 20 + D * 3);
     }
 
     void getMinValues(double *const p) const override
@@ -184,8 +183,9 @@ arma::vec pprune::ensure_bounds(CPTRd x, const arma::mat &bounds)
 
 
 pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const arma::mat &bounds, const t_pprune_cost_fun &cost_f, const uint32_t maxfun, double rhobeg,
-               double rhoend, arma::mat x0, const arma::vec &pows, const uint16_t depth) : n(n_particles), D(bounds.n_rows), maxfun(maxfun), depth(depth), bounds(bounds), pows(pows),
-                                                                                           ranges(bounds.col(1) - bounds.col(0))
+               double rhoend, arma::mat x0, const arma::vec &pows, const uint16_t depth, const bool force_no_elect, const uint32_t max_population) :
+    n(n_particles), D(bounds.n_rows), maxfun(maxfun), depth(depth), max_population(max_population), bounds(bounds),
+    pows(pows), ranges(bounds.col(1) - bounds.col(0)), no_elect(n < C_elect_threshold || maxfun < C_elect_threshold || force_no_elect)
 {
     LOG4_BEGIN();
 
@@ -369,12 +369,10 @@ void pprune::pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &
 }
 
 
-void
-pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
+void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
     LOG4_BEGIN();
 
-    const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
     auto p_particles = ptr<std::deque<t_calfun_data_ptr> >(n_particles);
 
     typedef std::deque<std::pair<std::shared_ptr<CBiteRnd>, std::shared_ptr<t_biteopt_cost> > > t_deep_particle;
@@ -388,7 +386,7 @@ pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost
         for (DTYPE(depth) d = 0; d < depth; ++d) {
             auto &rnd_biteopt_d = rnd_biteopt[d];
             rnd_biteopt_d.first = ptr<CBiteRnd>(std::pow(C_rand_disperse * i, C_rand_disperse));
-            rnd_biteopt_d.second = otr<t_biteopt_cost>(calfun_data, bounds);
+            rnd_biteopt_d.second = otr<t_biteopt_cost>(calfun_data, bounds, max_population);
             rnd_biteopt_d.second->init(*rnd_biteopt_d.first, x0.colptr(i));
         }
     }
@@ -444,7 +442,6 @@ void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &c
     all_prima_options.maxfun = maxfun;
     all_prima_options.callback = prima_progress_callback;
 
-    const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
     auto p_particles = ptr<std::deque<t_calfun_data_ptr> >(n_particles);
     tbb::mutex res_l;
 #pragma omp parallel for SSIMD num_threads(n_particles) schedule(static, 1) firstprivate(n_particles, maxfun, no_elect) default(shared)
@@ -489,7 +486,6 @@ void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &c
 void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
 #if 0
-    const auto no_elect = n < C_elect_threshold || maxfun < C_elect_threshold;
     auto p_particles = ptr<std::deque<t_calfun_data_ptr>>(n_particles);
 
     tbb::mutex res_l;
@@ -512,7 +508,7 @@ void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &c
             std::deque<std::shared_ptr<t_biteopt_cost>> biteopt(depth);
             UNROLL()
             for (auto &o: biteopt) {
-                o = std::make_shared<t_biteopt_cost>(calfun_data, bounds);
+                o = std::make_shared<t_biteopt_cost>(calfun_data, bounds, max_population);
                 o->init(rnd, x0.colptr(i));
             }
             UNROLL()

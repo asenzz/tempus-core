@@ -70,7 +70,7 @@ constexpr unsigned C_test_decrement = 1;
 constexpr unsigned C_test_lag = 1;
 #else
 constexpr auto C_online_validate = false;
-const uint32_t C_test_decrement = 2000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
+const uint32_t C_test_decrement = 1000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif
 #define MAIN_QUEUE_RES 3600
@@ -216,6 +216,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);
             LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual - recon_predicted) << ", last known to actual difference " <<
                                                               common::present<double>(recon_actual - recon_last_knowns));
+
             double mae = 0, mae_lk = 0, recon_mae = 0, recon_lk_mae = 0, pips_won = 0, pips_lost = 0, drawdown = 0, max_drawdown = 0;
             uint16_t positive_mae_ct = 0, pos_direct = 0, price_hits = 0;
             const auto validated_ct = recon_actual.size();
@@ -223,18 +224,17 @@ TEST(manifold_tune_train_predict, basic_integration)
             const auto horizon_duration = resolution * PROPS.get_prediction_horizon();
             const auto validate_start = p_times->size() - validated_ct;
             const auto column_ix = p_dataset->get_input_queue()->get_value_column_index(column);
-            UNROLL()
             for (uint16_t i = 0; i < validated_ct; ++i) {
                 const auto i_div = i + 1.;
                 const auto cur_time = p_times->at(validate_start + i)->get_value_time();
                 const auto actual = (**lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
                 const auto last_known_iter = lower_bound_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
                 const auto last_known = (**last_known_iter)[column_ix];
-                const auto diff_actual_last_known = actual - last_known;
-                const auto diff_recon_actual_last_known = recon_actual[i] - recon_last_knowns[i];
+                const auto actual_move = actual - last_known;
+                const auto recon_actual_move = recon_actual[i] - recon_last_knowns[i];
                 const auto predicted_move = recon_predicted[i] - recon_last_knowns[i];
                 const auto cur_mae = std::abs(recon_predicted[i] - recon_actual[i]);
-                const auto cur_mae_lk = std::abs(diff_recon_actual_last_known);
+                const auto cur_mae_lk = std::abs(recon_actual_move);
                 const auto cur_alpha_pct = common::alpha(cur_mae_lk, cur_mae);
                 mae += cur_mae;
                 mae_lk += cur_mae_lk;
@@ -285,7 +285,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     this_drawdown = std::max(0., placement_price - min_price);
                     LOG4_TRACE("Buy min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
                 }
-                if (sign_predicted_move == std::signbit(diff_recon_actual_last_known)) {
+                if (sign_predicted_move == std::signbit(recon_actual_move)) {
                     LOG4_DEBUG("Direction correct at " << i);
                     ++pos_direct;
                 }
@@ -301,7 +301,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto leverage = drawdown_pos > 0 ? std::max(0., pips_pos / drawdown_pos) : pips_pos;
                 const auto abs_leverage = max_drawdown > 0 ? std::max(0., net_pips / max_drawdown) : net_pips;
                 const auto positive_preds_pc = 100. * positive_mae_ct / i_div;
-                LOG4_DEBUG("Position " << i << ", column " << column << " " << column_ix << \
+                LOG4_INFO("Position " << i << ", column " << column << " " << column_ix << \
                        ", price time " << cur_time << \
                        ", actual price " << actual << \
                        ", recon actual price " << recon_actual[i] << \
@@ -315,8 +315,8 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", current MAE " << cur_mae << \
                        ", current MAE last known " << cur_mae_lk << \
                        ", predicted movement " << predicted_move << \
-                       ", actual movement " << diff_actual_last_known << \
-                       ", recon actual movement " << diff_recon_actual_last_known << \
+                       ", actual movement " << actual_move << \
+                       ", recon actual movement " << recon_actual_move << \
                        ", current alpha " << cur_alpha_pct << "pc" \
                        ", cumulative alpha " << cml_alpha_pct << "pc" \
                        ", recon error " << cur_recon_error << \
@@ -346,6 +346,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             LOG4_INFO("Total MAE of " << validated_ct << " compared values for ensemble " << column << " is " << mae << "," " MAPE is " << mape << "pc," " last-known MAE " << \
                 mae_lk << ", last-known MAPE " << mape_lk << "pc," " alpha " << alpha_pct << "pc," " positive direction " << 100. * double(pos_direct) / double(validated_ct) << \
                 "pc, positive error " << 100. * double(positive_mae_ct) / double(validated_ct) << "pc");
+
         }
     }
 }

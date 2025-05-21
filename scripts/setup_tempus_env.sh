@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 
+if [[ -z "${ONEAPI_ROOT}" ]]; then
+  export ONEAPI_ROOT=/opt/intel/oneapi
+fi
+
+if [[ -z "${SETVARS_COMPLETED}" ]]; then
+  source ${ONEAPI_ROOT}/setvars.sh --include-intel-llvm intel64 lp64
+fi
+
 export NICENESS=19
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_trial_knitro_97-65-2f-5a-81.txt
 # export CUBLAS_LOGINFO_DBG=1 CUBLAS_LOGDEST_DBG=cublas.log
 # export CUBLASLT_LOG_LEVEL=5 CUBLASLT_LOG_FILE=cublasLt.log
-
-if [[ -z "${SETVARS_COMPLETED}" ]]; then
-  source /opt/intel/oneapi/setvars.sh --include-intel-llvm intel64 lp64
-fi
+export PETSC_MATH_LIB_PRECISION=double
+export MPIEXEC=${ONEAPI_ROOT}/mpi/latest/bin/mpiexec
 
 export scriptname="$(basename $0)"
 
@@ -35,12 +41,12 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/
 
 # Debugger
 # export DBG=/usr/bin/gdb # GNU debugger for GCC builds
-# export DBG=/opt/intel/oneapi/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
+# export DBG=${ONEAPI_ROOT}/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
 export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
 
-# export PERF=/opt/intel/oneapi/vtune/2024.1/bin64/amplxe-perf
+# export PERF=${ONEAPI_ROOT}/vtune/2024.1/bin64/amplxe-perf
 export PERF=/usr/bin/perf
-export PROFGEN=/opt/intel/oneapi/compiler/latest/bin/compiler/llvm-profgen
+export PROFGEN=${ONEAPI_ROOT}/compiler/latest/bin/compiler/llvm-profgen
 
 export DAEMON_DIR=${PWD} # /mnt/faststore/repo/tempus-core/build
 export DAEMON_CONFIG=$DAEMON_DIR/../config/daemon.config
@@ -69,7 +75,7 @@ if [ ! -d "../lib/oemd_fir_masks_xauusd_1s/" ]; then mkdir "../lib/oemd_fir_mask
 NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Default thread pool size is ${NUM_THREADS} threads.${NC}\n\n"
 
-# export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/mkl/latest/lib/intel64:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8"
+# export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}${ONEAPI_ROOT}/compiler/latest/lib:${ONEAPI_ROOT}/mkl/latest/lib/intel64:${ONEAPI_ROOT}/compiler/latest/linux/compiler/lib/intel64_lin/:${ONEAPI_ROOT}/tbb/latest/lib/intel64/gcc4.8"
 export LD_PRELOAD="${LD_PRELOAD}:`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`"
 # export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 

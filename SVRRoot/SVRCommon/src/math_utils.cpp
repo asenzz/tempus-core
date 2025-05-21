@@ -14,8 +14,6 @@
 #include <xoshiro.h>
 
 namespace svr {
-
-
 std::vector<double> operator*(const std::vector<double> &v1, const double &m)
 {
     std::vector<double> ret(v1.size());
@@ -82,7 +80,6 @@ std::vector<double> operator^(const double a, const std::vector<double> &v)
 }
 
 namespace common {
-
 std::string present_chunk(const arma::uvec &u, const double head_factor)
 {
     const size_t head_n = u.n_rows * head_factor;
@@ -92,9 +89,9 @@ std::string present_chunk(const arma::uvec &u, const double head_factor)
         s << ", elements " << to_string(u, u.n_elem);
     else
         s << ", head len " << head_n << ", tail len " << u.n_rows - head_n <<
-          ", head " << to_string(u, 0, 5) <<
-          ", cross-over " << to_string(u, head_n - 2, 5) <<
-          ", tail " << to_string(u, u.n_elem - 5, 5);
+                ", head " << to_string(u, 0, 5) <<
+                ", cross-over " << to_string(u, head_n - 2, 5) <<
+                ", tail " << to_string(u, u.n_elem - 5, 5);
     return s.str();
 }
 
@@ -163,15 +160,15 @@ ifftshift(const arma::cx_mat &input)
 }
 
 
-std::vector<std::vector<double>>
-transpose_matrix(const std::vector<std::vector<double>> &vvmat)
+std::vector<std::vector<double> >
+transpose_matrix(const std::vector<std::vector<double> > &vvmat)
 {
     if (vvmat.empty()) return {};
 
-    std::vector<std::vector<double>> result(vvmat[0].size(), std::vector<double>(vvmat.size()));
+    std::vector<std::vector<double> > result(vvmat[0].size(), std::vector<double>(vvmat.size()));
     omp_pfor__(j, 0, vvmat[0].size(),
                for (size_t i = 0; i < vvmat.size(); ++i)
-                   result[j][i] = vvmat[i][j];
+               result[j][i] = vvmat[i][j];
     )
 
     return result;
@@ -223,7 +220,7 @@ size_t next_power_of_two(size_t value)
 
 double get_uniform_random_value()
 {
-    static std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    static std::random_device rd; // Will be used to obtain a seed for the random number engine
     static std::mt19937_64 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
     static std::mutex uniform_random_value_mutex;
     std::scoped_lock ml(uniform_random_value_mutex);
@@ -326,10 +323,10 @@ arma::uvec subview_indexes(const arma::uvec &batch_ixs, const arma::uvec &ix_tra
 
 
 void shuffle_matrix(
-        const arma::mat &x,
-        const arma::mat &y,
-        arma::uvec &shuffled_rows,
-        arma::uvec &shuffled_cols)
+    const arma::mat &x,
+    const arma::mat &y,
+    arma::uvec &shuffled_rows,
+    arma::uvec &shuffled_cols)
 {
     static std::mutex shuffle_mutex;
     arma::uvec cols = arma::linspace<arma::uvec>(0, x.n_cols - 1, x.n_rows);
@@ -351,49 +348,58 @@ arma::mat pdist(const arma::mat &input)
     return foo;
 }
 
-template<> double sumabs(const std::vector<double> &v) // TODO Unify *ASUM usage and MAT and Vector iterator usage
+template<>
+double sumabs(const std::vector<double> &v) // TODO Unify *ASUM usage and MAT and Vector iterator usage
 {
     return cblas_dasum(v.size(), v.data(), 1);
 }
 
-template<> float sumabs(const std::vector<float> &v)
+template<>
+float sumabs(const std::vector<float> &v)
 {
     return cblas_sasum(v.size(), v.data(), 1);
 }
 
-template<> double sumabs(const arma::Mat<double> &m)
+template<>
+double sumabs(const arma::Mat<double> &m)
 {
     return cblas_dasum(m.n_elem, m.mem, 1);
 }
 
-template<> float sumabs(const arma::Mat<float> &m)
+template<>
+float sumabs(const arma::Mat<float> &m)
 {
     return cblas_sasum(m.n_elem, m.mem, 1);
 }
 
-template<> double meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
+template<>
+double meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
 {
     return cblas_dasum(m.n_elem, m.mem, 1) / m.n_elem;
 }
 
-template<> double meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
+template<>
+double meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
 {
     const auto n = end - begin;
     return cblas_dasum(n, &*begin, 1) / n;
 }
 
-template<> float meanabs(const typename std::vector<float>::const_iterator &begin, const typename std::vector<float>::const_iterator &end)
+template<>
+float meanabs(const typename std::vector<float>::const_iterator &begin, const typename std::vector<float>::const_iterator &end)
 {
     const auto n = end - begin;
     return cblas_sasum(n, &*begin, 1) / n;
 }
 
-template<> double meanabs<double>(const std::span<double> &v)
+template<>
+double meanabs<double>(const std::span<double> &v)
 {
     return cblas_dasum(v.size(), v.data(), 1) / v.size();
 }
 
-template<> float meanabs(const std::span<float> &v)
+template<>
+float meanabs(const std::span<float> &v)
 {
     return cblas_sasum(v.size(), v.data(), 1) / v.size();
 }
@@ -439,6 +445,90 @@ double mean(const arma::mat &input)
 #endif
 }
 
+double stdscore(const double *const v, const size_t len)
+{
+    const auto meanabs = cblas_dasum(len, v, 1) / len;
+    double stddev;
+    ip_errchk(ippsStdDev_64f(v, len, &stddev));
+    return meanabs * std::pow(stddev, .1);
+}
+
+double medianabs(double *const v, const size_t len)
+{
+    ip_errchk(ippsAbs_64f_I(v, len));
+    ip_errchk(ippsSortAscend_64f_I(v, len));
+    const auto div_r = std::ldiv(len, 2);
+    if (div_r.rem) return (v[div_r.quot] + v[div_r.quot + 1]) / 2.;
+    else return v[div_r.quot];
+}
+
+
+inline double *const abssort(const double *const v, const size_t len)
+{
+    assert(v && q <= 1. && q > 0.);
+    auto tmp = (double *const) aligned_alloc(32, len * sizeof(double));
+    memcpy(tmp, v, len * sizeof(double));
+    ip_errchk(ippsAbs_64f_I(tmp, len));
+    ip_errchk(ippsSortAscend_64f_I(tmp, len));
+    return tmp;
+}
+
+double meanabs_hiquant(const double *const v, const size_t len, const double q)
+{
+    const auto tmp = common::abssort(v, len);
+    double r;
+    ip_errchk(ippsMean_64f(tmp + ptrdiff_t(len * (1 - q)), len * q, &r));
+    free(tmp);
+    return r;
+}
+
+double meanabs_loquant(const double *const v, const size_t len, const double q)
+{
+    const auto tmp = common::abssort(v, len);
+    double r;
+    ip_errchk(ippsMean_64f(tmp, len * q, &r));
+    free(tmp);
+    return r;
+}
+
+double meanabs_quant(const double *const v, const size_t len, const double q)
+{
+    const auto tmp = common::abssort(v, len);
+    double r;
+    ip_errchk(ippsMean_64f(tmp + ptrdiff_t((1. - q) * len / 2.), len * q, &r));
+    free(tmp);
+    return r;
+}
+
+
+inline double *const sort(const double *const v, const size_t len)
+{
+    assert(v && q <= 1. && q > 0.);
+    auto tmp = (double *const) aligned_alloc(32, len * sizeof(double));
+    memcpy(tmp, v, len * sizeof(double));
+    ip_errchk(ippsAbs_64f_I(tmp, len));
+    ip_errchk(ippsSortAscend_64f_I(tmp, len));
+    return tmp;
+}
+
+double mean_hiquant(const double *const v, const size_t len, const double q)
+{
+    const auto tmp = common::sort(v, len);
+    double r;
+    ip_errchk(ippsMean_64f(tmp + ptrdiff_t(len * (1 - q)), len * q, &r));
+    free(tmp);
+    return r;
+}
+
+double mean_loquant(const double *const v, const size_t len, const double q)
+{
+    const auto tmp = common::sort(v, len);
+    double r;
+    ip_errchk(ippsMean_64f(tmp, len * q, &r));
+    free(tmp);
+    return r;
+}
+
 arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level)
 {
     constexpr int value = 9879871;
@@ -457,7 +547,8 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle)
     return result;
 }
 
-template<> arma::mat scale(const arma::mat &m, const double sf, const double dc)
+template<>
+arma::mat scale(const arma::mat &m, const double sf, const double dc)
 {
     arma::mat r(arma::size(m), arma::fill::none);
 #ifdef USE_IPP
@@ -468,7 +559,8 @@ template<> arma::mat scale(const arma::mat &m, const double sf, const double dc)
     return r;
 }
 
-template<> arma::mat &scale_I(arma::mat &m, const double sf, const double dc)
+template<>
+arma::mat &scale_I(arma::mat &m, const double sf, const double dc)
 {
 #ifdef USE_IPP
     ip_errchk(ippsNormalize_64f_I(m.memptr(), m.n_elem, dc, sf));
@@ -478,14 +570,16 @@ template<> arma::mat &scale_I(arma::mat &m, const double sf, const double dc)
     return m;
 }
 
-template<> arma::mat unscale(const arma::mat &m, const double sf, const double dc)
+template<>
+arma::mat unscale(const arma::mat &m, const double sf, const double dc)
 {
     arma::mat r(arma::size(m), arma::fill::none);
     vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, r.memptr());
     return r;
 }
 
-template<> arma::mat &unscale_I(arma::mat &m, const double sf, const double dc)
+template<>
+arma::mat &unscale_I(arma::mat &m, const double sf, const double dc)
 {
     vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, m.memptr());
     return m;
@@ -523,12 +617,14 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
 #endif
     const uint32_t n = x0.n_cols;
     const uint32_t D = x0.n_rows;
-    if (bounds.n_cols != 2 || bounds.n_rows != D) THROW_EX_FS(std::invalid_argument, "n " << n << ", D " << D << ", bounds " << arma::size(bounds));
+    if (bounds.n_cols != 2 || bounds.n_rows != D)
+        THROW_EX_FS(std::invalid_argument, "n " << n << ", D " << D << ", bounds " << arma::size(bounds));
     const arma::vec range = bounds.col(1) - bounds.col(0);
     const auto init_random = n < 2;
     const double n_1 = n - 1;
+    const auto seed_pseud_rand = (uint_fast64_t) pseudo_random_dev::max(1.);
     // auto gen = reproducibly_seeded_64<xso::rng64>();
-    auto gen = std::mt19937_64((uint_fast64_t) pseudo_random_dev::max(1.));
+    auto gen = std::mt19937_64(seed_pseud_rand);
     std::uniform_real_distribution<double> dis(0., 1.);
     OMP_FOR_(n, ordered firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
     for (uint32_t i = 0; i < n; ++i) {
@@ -542,7 +638,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
 #pragma omp ordered
                 x0(j, i) = dis(gen);
 #endif
-            else  // Produce equidistant grid of parameter combinations
+            else // Produce equidistant grid of parameter combinations
                 x0(j, i) = std::fmod<long double>(std::pow<long double>(2, j) * i_n_1, 1);
 #ifndef NDEBUG
             LOG4_TRACE("Particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow " << pow_j);
@@ -550,7 +646,8 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
             x0(j, i) = std::pow(range[j], pow_j) * x0(j, i) + bounds(j, 0);
         }
     }
-    if (x0.has_nonfinite()) LOG4_THROW("Illegal init values in " << present(x0));
+    if (x0.has_nonfinite())
+        LOG4_THROW("Illegal init values in " << present(x0));
     LOG4_TRACE("Scaled particles, parameters matrix " << to_string(x0, 6) << ", bounds " << to_string(bounds, 6));
 }
 
@@ -576,6 +673,5 @@ bool safe_double_less::operator()(const double left, const double right) const
     const auto rightNaN = std::isnan(right);
     return leftNaN != rightNaN ? leftNaN < rightNaN : left < right;
 }
-
 } //namespace common
 } //namespace svr

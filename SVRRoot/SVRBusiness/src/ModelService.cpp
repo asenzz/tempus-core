@@ -161,8 +161,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     tbb::mutex mx;
     PROFILE_MSG(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, batch_predicted),
                 "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
-    if (batch_predicted.size() != num_preds)
-        LOG4_THROW("Predicted size " << batch_predicted.size() << " not sane " << arma::size(*predict_features.p_features));
+    if (batch_predicted.size() != num_preds) LOG4_THROW("Predicted size " << batch_predicted.size() << " not sane " << arma::size(*predict_features.p_features));
 
     LOG4_DEBUG("Batch predicted " << batch_predicted.size() << " values, parameters " << *params);
     const auto stepping = model.get_gradient()->get_dataset()->get_multistep();
@@ -304,7 +303,7 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
             l1.release();
 
             bool set_params = false;
-            uint16_t grad_num_chunks = 0;
+            uint32_t grad_num_chunks = 0;
             // Prepare this gradient parameters
             datamodel::t_param_set grad_params;
             if (p_svr_model) {

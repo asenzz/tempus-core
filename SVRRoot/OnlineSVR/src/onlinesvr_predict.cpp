@@ -64,12 +64,13 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
     arma::mat prediction;
     tbb::mutex predict_l;
     const auto l_cols = p_labels->n_cols;
-    const double chunk_divisor = 1. / active_chunks;
+    const auto active_chunks = get_predict_chunks();
+    const double chunk_divisor = 1. / active_chunks.size();
 #pragma omp parallel ADJ_THREADS(ixs.size() * p_x_predict_t->n_cols * PROPS.get_weight_columns())
 #pragma omp single
     {
         OMP_TASKLOOP_1()
-        for (uint16_t chunk_ix = start_predict_chunk; chunk_ix < CAST2(chunk_ix) ixs.size(); ++chunk_ix) {
+        for (const auto chunk_ix: active_chunks) {
             const auto p_params = get_params_ptr(chunk_ix);
             auto scaled_x_predict_t = *p_x_predict_t;
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
@@ -93,7 +94,7 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
             }
             const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
             business::DQScalingFactorService::unscale_labels_I(*p_labels_sf, multiplicated);
-            if (active_chunks > 1) multiplicated *= chunk_divisor;
+            multiplicated *= chunk_divisor * chunks_score[chunk_ix];
             LOG4_TRACE("Chunk " << chunk_ix << " predicted " << common::present(multiplicated) << " from " << common::present(chunk_predict_K) << " with " <<
                 common::present(weight_chunks[chunk_ix]) << ", scaling factor " << *p_labels_sf << ", labels " << common::present(train_label_chunks[chunk_ix]) <<
                 ", chunk divisor " << chunk_divisor);
@@ -102,7 +103,7 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
         }
     }
     if (!projection) delete p_x_predict_t;
-    LOG4_TRACE("Predicted " << common::present(prediction));
+    LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }
 

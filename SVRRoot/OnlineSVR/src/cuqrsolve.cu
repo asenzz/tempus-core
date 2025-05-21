@@ -1847,7 +1847,7 @@ double solve_hybrid(
 #endif
         if (!std::isnormal(score)) {
             LOG4_WARN("Bailing, score not normal " << score << ", iteration " << i << ", train len " << train_len << ", best score " << best_score);
-	        if (i == 1) thrust::fill(thrust::cuda::par.on(custream), d_best_weights, d_best_weights + train_len_n, 1.);
+	        if (i == 1) cu_errchk(cudaMemsetAsync(d_best_weights, 0, train_len * sizeof(double), custream)); // thrust::fill(thrust::cuda::par.on(custream), d_best_weights, d_best_weights + train_len_n, 0.);
             goto __bail;
         } else if (score < best_score) {
             LOG4_TRACE("IRWLS iteration " << i << ", kernel dimensions " << train_len << "x" << train_len << ", former best score " << best_score <<
@@ -1863,6 +1863,7 @@ double solve_hybrid(
         ma_errchki(magma_dgesv_rbt(MagmaTrue, train_len, n, j_K_work, train_len, j_solved, train_len, &info), info);
     }
     __bail:
+    cu_errchk(cudaStreamSynchronize(custream));
     LOG4_END();
     return best_score;
 }

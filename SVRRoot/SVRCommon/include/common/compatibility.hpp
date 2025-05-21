@@ -375,6 +375,10 @@ template<typename T> inline bool operator==(const std::deque<T> &lhs, const std:
 
 namespace common {
 
+void init_petsc();
+
+void uninit_petsc();
+
 void print_stacktrace();
 
 template<typename C, typename T = typename C::value_type> auto

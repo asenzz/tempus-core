@@ -4,9 +4,8 @@
 #include <cstdlib>
 #include <execinfo.h>
 #include <cxxabi.h>
-
+#include <petsc.h>
 #include "common/parallelism.hpp"
-
 #include "util/validation_utils.hpp"
 
 namespace svr {
@@ -45,6 +44,20 @@ bool operator != (const std::deque<std::string> &lhs, const std::deque<std::stri
 }
 
 namespace common {
+
+void init_petsc()
+{
+    PetscCallCXXAbort(PETSC_COMM_SELF, PetscInitializeNoArguments());
+    PetscCallCXXAbort(PETSC_COMM_SELF, PetscBLASSetNumThreads(C_n_cpu));
+    // PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-start_in_debugger", nullptr)); // -stop_for_debugger
+    PetscCallCXXAbort(PETSC_COMM_SELF, PetscRandomInitializePackage());
+}
+
+
+void uninit_petsc()
+{
+    PetscCallCXXAbort(PETSC_COMM_SELF, PetscFinalize());
+}
 
 // TODO Do a GPU handler and ctx from a queue
 bool file_exists(const std::string &filename)

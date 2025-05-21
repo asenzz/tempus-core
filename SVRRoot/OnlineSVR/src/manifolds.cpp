@@ -262,33 +262,32 @@ arma::mat OnlineMIMOSVR::manifold_predict(const arma::mat &x_predict, const boos
     tbb::mutex r_lock;
 #endif
 
-#pragma omp parallel ADJ_THREADS(x_predict_t.n_cols * predict_size.n_cols)
+    OMP_FOR_i_(features_t.n_cols, SSIMD firstprivate(manifold_interleave)) if (i % manifold_interleave) {
+#ifdef RANDOMIZE_MANIFOLD_INDEXES
+        tbb::mutex::scoped_lock lk(r_lock);
+        const auto rand_int_g = rand_int(gen);
+        lk.release();
+        predict_ixs[i / manifold_interleave] = common::bounce<uint32_t>(i + rand_int_g, features_t.n_cols - 1);
+#else
+        predict_ixs[i / manifold_interleave] = i;
+#endif
+    }
+
+    const auto predict_labels = train_label_chunks.front().rows(predict_ixs);
+    const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
+#pragma omp parallel ADJ_THREADS(std::max<int32_t>(1, common::gpu_handler<4>::get().get_max_gpu_threads() - int32_t(p_manifold->get_num_chunks())))
 #pragma omp single
     {
-        OMP_TASKLOOP_(features_t.n_cols, firstprivate(manifold_interleave))
-        for (uint32_t i_x = 0; i_x < features_t.n_cols; ++i_x)
-            if (i_x % manifold_interleave) {
-#ifdef RANDOMIZE_MANIFOLD_INDEXES
-                tbb::mutex::scoped_lock lk(r_lock);
-                const auto rand_int_g = rand_int(gen);
-                lk.release();
-                predict_ixs[i_x / manifold_interleave] = common::bounce<uint32_t>(i_x + rand_int_g, features_t.n_cols - 1);
-#else
-                predict_ixs[i_x / manifold_interleave] = i_x;
-#endif
-            }
-        const auto predict_labels = train_label_chunks.front().rows(predict_ixs);
-        const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
-        OMP_TASKLOOP_1()
+        OMP_TASKLOOP_(x_predict_t.n_cols,)
         for (uint32_t i_p = 0; i_p < x_predict_t.n_cols; ++i_p) {
-            common::memory_manager::get().barrier();
+            // common::memory_manager::get().barrier();
             arma::mat pred_features_t(predict_size, arma::fill::none);
             OMP_TASKLOOP_(pred_features_t.n_cols, firstprivate(i_p))
             for (uint32_t i_r = 0; i_r < pred_features_t.n_cols; ++i_r)
                 pred_features_t.col(i_r) = arma::join_cols(x_predict_t.col(i_p), features_t.col(predict_ixs[i_r]));
             result[i_p] = arma::mean(arma::vectorise(predict_labels + p_manifold->predict(pred_features_t, bpt::not_a_date_time))); // TODO Figure out multioutput
             business::DQScalingFactorService::unscale_labels_I(*p_labels_sf, result[i_p]);
-        }
+        }        
     }
     return result;
 }

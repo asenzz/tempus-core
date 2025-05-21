@@ -5,34 +5,52 @@
 #ifndef SVR_MATRIX_SOLVER_HPP
 #define SVR_MATRIX_SOLVER_HPP
 
+#define USE_PETSC_SOLVER
+
 #include <mpi.h>
+#ifdef USE_PETSC_SOLVER
 #include <petsc.h>
-#include <petscksp.h>
+#else
+#include <ginkgo/ginkgo.hpp>
+#endif
 
 namespace svr {
 namespace solvers {
 
 class antisymmetric_solver {
-    Mat A;
-    Vec b, x;
-    KSP ksp;
-    PC pc;
-    PetscInt m;
-//    const double *const p_b, *const p_A;
-    std::vector<PetscInt> indices;
+public:
+
+#ifdef USE_PETSC_SOLVER
+
+    using Tv = PetscScalar;
+    using Ti = PetscInt;
+
+#else
+
+    using Tv = double;
+    using Ti = uint32_t;
+
+#endif
+
+    static constexpr Ti C_gpu_solve_threshold = 3e3;
+
+private:
+    const bool direct_solve;
+    const Tv *const x0_, *const A_, *const b_;
+
+    const Ti iter;
+    const uint16_t irwls_iter;
+    Ti m, n;
+    std::vector<Ti> indices;
+
 
 public:
-    antisymmetric_solver(const PetscInt m, const PetscInt iter, const PetscScalar *const x0_, const PetscScalar *const A_,
-                         const PetscScalar *const b_, const bool direct_solve, const uint16_t irwls_iter);
+
+    antisymmetric_solver(const Ti m, const Ti n, const Ti iter, const Tv *const x0_, const Tv *const A_, const Tv *const b_, const bool direct_solve, const uint16_t irwls_iter);
 
     ~antisymmetric_solver();
 
-    PetscReal solve();
-
-    // Retrieve solution vector
-    Vec get_solution();
-
-    void get_solution(double *const sol);
+    Tv operator()(Tv *const sol) const;
 };
 
 }

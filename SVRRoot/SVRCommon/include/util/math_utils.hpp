@@ -568,15 +568,29 @@ max(const C &container)
     return max;
 }
 
+double stdscore(const double *const v, const size_t len);
+
+double meanabs_hiquant(const double *const v, const size_t len, const double q);
+
+double meanabs_loquant(const double *const v, const size_t len, const double q);
+
+double meanabs_quant(const double *const v, const size_t len, const double q);
+
+double mean_hiquant(const double *const v, const size_t len, const double q);
+
+double mean_loquant(const double *const v, const size_t len, const double q);
+
+double medianabs(double *const v, const size_t len);
 
 // Use for deque and vector containers
-template<typename T>
-void keep_indices(T &d, const std::deque<size_t> &indices)
+template<typename T, typename U, typename E = typename T::value_type, typename F = typename U::value_type>
+void keep_indices(T &d, const U &indices)
 {
-    if (d.size() <= indices.size() || d.size() <= max(indices) || d.empty()) return;
-    size_t last = 0;
+    if (d.size() <= indices.size() || d.size() <= common::max(indices) || d.empty()) return;
+    using size_T = typename T::size_type;
+    size_T last = 0;
 UNROLL()
-    for (size_t i = 0; i < d.size(); ++i, ++last) {
+    for (size_T i = 0; i < d.size(); ++i, ++last) {
         while (std::find(indices.cbegin(), indices.cend(), i) == indices.cend() && i < d.size()) ++i;
         if (i >= d.size()) break;
         d[last] = d[i];

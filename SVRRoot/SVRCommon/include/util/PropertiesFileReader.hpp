@@ -77,6 +77,8 @@ public:
 
 class AppConfig : public PropertiesReader {
 
+CONFPROP(float, weight_inertia, 0)
+
 CONFPROP(uint16_t, solve_particles, 80)
 
 CONFPROP(bool, combine_queues, 0)
@@ -103,7 +105,7 @@ CONFPROP(uint32_t, outlier_slack, 0)
 
 CONFPROP(uint32_t, kernel_length, 10000)
 
-CONFPROP(uint16_t, predict_chunks, 100)
+CONFPROP(uint32_t, predict_chunks, 100)
 
 CONFPROP(double, lag_multiplier, 100)
 

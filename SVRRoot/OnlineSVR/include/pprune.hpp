@@ -31,9 +31,12 @@ class pprune {
     friend t_calfun_data;
     friend t_biteopt_cost;
 
-    const uint32_t n, D, maxfun, depth;
+    static constexpr uint32_t C_max_population = 3000;
+
+    const uint32_t n, D, maxfun, depth, max_population;
     const arma::mat bounds;
     const arma::vec pows, ranges;
+    const bool no_elect;
     t_pprune_res result;
 
 public:
@@ -44,6 +47,7 @@ public:
         e_prima = 2,
         e_petsc = 3
     };
+
     static constexpr e_algo_type C_default_algo = e_algo_type::e_biteopt;
 
     pprune(const e_algo_type algo_type, const uint32_t n_particles, const arma::mat &bounds,
@@ -51,8 +55,11 @@ public:
            const uint32_t maxfun = 50,
            double rhobeg = 0,
            double rhoend = 0,
-           arma::mat x0 = {}, const arma::vec &pows = {},
-           const uint16_t depth = C_biteopt_depth);
+           arma::mat x0 = {}, // x0 should have at most n_particles columns, and rows equal to bounds.n_rows
+           const arma::vec &pows = {},
+           const uint16_t depth = C_biteopt_depth,
+           const bool force_no_elect = false,
+           const uint32_t max_population = C_max_population);
 
     void pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0);
 

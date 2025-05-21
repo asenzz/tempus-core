@@ -23,7 +23,7 @@ class calc_cache;
 namespace datamodel {
 
 #define FORGET_MIN_WEIGHT
-#define SOLVE_PRUNE // Matrix solver is PPrune instead of PETSc
+// #define SOLVE_PRUNE // Matrix solver is PPrune instead of PETSc
 
 struct t_gradient_data
 {
@@ -45,10 +45,6 @@ class OnlineMIMOSVR final : public Entity
 {
     friend class boost::serialization::access;
 
-    constexpr static unsigned C_epscos_len = 1;
-    static constexpr uint16_t C_solve_opt_particles = 100;
-    static constexpr double C_diff_coef = 1;
-
     t_weight_scaling_factors weight_scaling_factors;
 
     bigint model_id = 0;
@@ -65,14 +61,14 @@ class OnlineMIMOSVR final : public Entity
     datamodel::dq_scaling_factor_container_t scaling_factors;
     std::deque<arma::mat> weight_chunks, train_feature_chunks_t, train_label_chunks;
     std::deque<arma::uvec> ixs;
-    std::deque<std::pair<double, double>> chunks_score;
+    arma::vec chunks_score;
     arma::mat all_weights;
     uint16_t multiout = common::C_default_multiout;
     uint32_t max_chunk_size;
     uint16_t gradient = C_default_svrparam_grad_level;
     uint16_t level = C_default_svrparam_decon_level;
     uint16_t step = C_default_svrparam_step;
-    uint16_t active_chunks, start_predict_chunk, projection = 0;
+    uint16_t projection = 0;
 
     virtual void init_id() override;
 
@@ -80,7 +76,7 @@ class OnlineMIMOSVR final : public Entity
 
     void parse_params();
 
-    static std::deque<size_t> get_predict_chunks(const std::deque<std::pair<double, double>> &chunks_score);
+    arma::u32_vec get_predict_chunks() const;
 
     void clean_chunks();
 
@@ -202,9 +198,9 @@ public:
 
     static uint32_t get_full_train_len(const uint32_t n_rows, const uint32_t decrement);
 
-    uint16_t get_num_chunks() const;
+    uint32_t get_num_chunks() const;
 
-    static uint16_t get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_);
+    static uint32_t get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_);
 
     static std::deque<arma::uvec> generate_indexes(const bool projection, const uint32_t n_rows_dataset, const uint32_t decrement, const uint32_t max_chunk_size);
 
@@ -236,9 +232,7 @@ public:
 
     static double calc_epsco(const arma::mat &K, const arma::mat &labels);
 
-    static std::array<double, C_epscos_len> get_epscos(const double K_mean);
-
-    static void calc_weights(const arma::mat &K, const arma::mat &labels, const uint32_t iters_opt, const uint16_t iters_irwls, arma::mat &weights);
+    static double calc_weights(const arma::mat &K, const arma::mat &labels, const uint32_t iters_opt, const uint16_t iters_irwls, arma::mat &weights);
 
     void calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls);
 
@@ -257,7 +251,7 @@ public:
         return labels * labels.n_elem - arma::sum(arma::vectorise(labels));
     }
 
-    void prepare_chunk(const uint16_t i);
+    void prepare_chunk(uint32_t i);
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
@@ -291,6 +285,10 @@ public:
     ~cusys();
     std::tuple<double, double, double> operator()(const double lambda, const double tau) const;
 };
+
+void init_petsc();
+
+void uninit_petsc();
 
 } // datamodel
 } // svr

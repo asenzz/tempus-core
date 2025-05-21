@@ -84,7 +84,7 @@ void OnlineMIMOSVR::tune_sys()
                                   << PROPS.get_tune_max_lambda() << ", gamma variance " << solvers::C_gamma_variance << ", particles " << opt_particles << ", iterations "
                                   << opt_iters);
 
-#pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<unsigned>(num_chunks, PROPS.get_parallel_chunks())) default(shared) firstprivate(num_chunks, opt_particles, opt_iters)
+#pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_parallel_chunks())) default(shared) firstprivate(num_chunks, opt_particles, opt_iters)
     for (DTYPE(num_chunks) chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_chunk_params = get_params_ptr(chunk_ix);
         if (!p_chunk_params) LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
@@ -183,8 +183,7 @@ void OnlineMIMOSVR::tune_sys()
                     }
                 }
             };
-            const optimizer::t_pprune_res res = optimizer::pprune(
-                    optimizer::pprune::C_default_algo, opt_particles, bounds, costF, chunk_ix >= start_predict_chunk ? opt_iters : 1, 0, 0, x0, {}, opt_depth);
+            const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, opt_particles, bounds, costF, opt_iters, 0, 0, x0, {}, opt_depth);
         }
         set_params(p_chunk_params, chunk_ix);
         LOG4_INFO("Tuned best score " << chunks_score[chunk_ix] << ", final parameters " << *p_chunk_params);
@@ -196,46 +195,16 @@ void OnlineMIMOSVR::tune_sys()
     clean_chunks();
 }
 
-std::deque<size_t> OnlineMIMOSVR::get_predict_chunks(const std::deque<std::pair<double, double>> &chunks_score)
+arma::u32_vec OnlineMIMOSVR::get_predict_chunks() const
 {
-    if (chunks_score.empty()) LOG4_THROW("Chunk scores empty!");
-    std::deque<size_t> res(chunks_score.size());
-    std::iota(res.begin(), res.end(), 0);
-    double mean_first = 0;
-#ifdef SECOND_SCORE
-    double mean_second = 0;
-#endif
-    if (chunks_score.size() <= PROPS.get_predict_chunks()) goto __bail;
-#define GOOD_SCORE(x) std::isnormal(x) && x != common::C_bad_validation
-#define ADD_NORMAL(x, y) if (GOOD_SCORE(y)) x += y
-    for (const auto &p: chunks_score) {
-        ADD_NORMAL(mean_first, p.first);
-#ifdef SECOND_SCORE
-        ADD_NORMAL(mean_second, p.second);
-#endif
-    }
-    mean_first /= double(chunks_score.size());
-#ifdef SECOND_SCORE
-    mean_second /= double(chunks_score.size());
-#endif
-    std::stable_sort(C_default_exec_policy, res.begin(), res.end(), [&](const size_t i1, const size_t i2) {
-        double score_1 = 0, score_2 = 0;
-#define ADD_PART(x, y, z) \
-        if (GOOD_SCORE(y) && GOOD_SCORE(z)) x += y / z; \
-            else x = common::C_bad_validation;
-
-        ADD_PART(score_1, chunks_score[i1].first, mean_first);
-        ADD_PART(score_2, chunks_score[i2].first, mean_first);
-#ifdef SECOND_SCORE
-        ADD_PART(score_1, chunks_score[i1].second, mean_second);
-        ADD_PART(score_2, chunks_score[i2].second, mean_second);
-#endif
-        return score_1 < score_2;
-    });
-    res.erase(res.begin() + PROPS.get_predict_chunks(), res.end());
-    std::sort(C_default_exec_policy, res.begin(), res.end());
+    LOG4_BEGIN();
+    assert(chunks_score.size());
+    auto res = arma::regspace<arma::u32_vec>(0, chunks_score.size() - 1);
+    if (PROPS.get_predict_chunks() > chunks_score.size()) goto __bail;
+    std::stable_sort(C_default_exec_policy, res.begin(), res.end(), [this](const auto i1, const auto i2) { return chunks_score[i1] < chunks_score[i2]; });
+    res.shed_rows(0, std::min<uint32_t>(res.size(), PROPS.get_predict_chunks()) - 1);
     __bail:
-    LOG4_DEBUG("Using upto " << PROPS.get_predict_chunks() << " chunks " << res << ", of all chunks with scores " << chunks_score);
+    LOG4_TRACE("Using up to " << PROPS.get_predict_chunks() << " chunks with scores " << common::present(chunks_score) << ", selected " << common::present(res));
     return res;
 }
 
@@ -245,7 +214,7 @@ void OnlineMIMOSVR::clean_chunks()
 
     if (chunks_score.size() <= PROPS.get_predict_chunks()) return;
 
-    const auto used_chunks = get_predict_chunks(chunks_score);
+    const auto used_chunks = get_predict_chunks();
 
     for (auto iter = param_set.begin(); iter != param_set.end();) {
         bool chunk_ix_set = false;
@@ -270,7 +239,6 @@ void OnlineMIMOSVR::clean_chunks()
             }
         if (!chunk_ix_set) iter = scaling_factors.erase(iter);
     }
-
     common::keep_indices(ixs, used_chunks);
     common::keep_indices(train_feature_chunks_t, used_chunks);
     common::keep_indices(train_label_chunks, used_chunks);

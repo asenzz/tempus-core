@@ -42,19 +42,15 @@
 namespace svr {
 namespace datamodel {
 
+
 class onlinesvr_lib_init {
 public:
     onlinesvr_lib_init()
     {
         mlockall(MCL_CURRENT | MCL_FUTURE);
         ip_errchk(ippInit());
+        ma_errchk(magma_init());
 
-#ifndef SOLVE_PRUNE
-
-        static int petsc_argc = 1;
-        static std::string petsc_arg_name = "tempus";
-        static char *p = petsc_arg_name.data();
-        static char **pp = (char **) &p;
         static int zero = 0;
 
         int provided = 0;
@@ -67,24 +63,12 @@ public:
         MPI_Comm_size(MPI_COMM_WORLD, &size);
 
         if (rank == 0) LOG4_DEBUG("Running with " << size << " MPI processes.");
-
-        PetscCallCXXAbort(PETSC_COMM_SELF, PetscInitialize(&petsc_argc, &pp, nullptr, nullptr));
-        PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-omp_num_threads", C_n_cpu_str.c_str()));
-        PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-start_in_debugger", nullptr)); // -stop_for_debugger
-
-#endif
-
-        ma_errchk(magma_init());
     }
 
     ~onlinesvr_lib_init()
     {
-        munlockall();
-
-#ifndef SOLVE_PRUNE
-        PetscFinalize();
         MPI_Finalize();
-#endif
+        munlockall();
     }
 };
 
@@ -361,9 +345,12 @@ void OnlineMIMOSVR::self_predict(const uint32_t m, const uint32_t n, CRPTRd K, C
 
 double OnlineMIMOSVR::score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs)
 {
-    auto diff = (double *) malloc(m * n * sizeof(double));
+    const auto mn = m * n;
+    auto diff = (double *const) malloc(mn * sizeof(double));
     self_predict(m, n, K, w, rhs, diff);
-    const auto res =  cblas_dasum(m * n, diff, 1);
+    // const auto res =  common::medianabs(diff, mn);
+    const auto res = cblas_dasum(mn, diff, 1);
+    // const auto res = common::stdscore(diff, mn);
     free(diff);
     return res;
 }
@@ -436,14 +423,14 @@ uint32_t OnlineMIMOSVR::get_full_train_len(const uint32_t n_rows, const uint32_t
     return n_rows > PROPS.get_shift_limit() ? std::min<uint32_t>(n_rows - PROPS.get_shift_limit(), decrement) : decrement;
 }
 
-uint16_t OnlineMIMOSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_)
+uint32_t OnlineMIMOSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_)
 {
     if (!n_rows || !chunk_size_) LOG4_THROW("Rows count " << n_rows << " or maximum chunk size " << chunk_size_ << " is zero!");
     if (n_rows <= chunk_size_) return 1;
     return cdiv(n_rows, chunk_size_ * C_chunk_offlap) - cdiv(1, C_chunk_offlap) + C_end_chunks;
 }
 
-uint16_t OnlineMIMOSVR::get_num_chunks() const
+uint32_t OnlineMIMOSVR::get_num_chunks() const
 {
     if (is_manifold())
         return 0;
@@ -581,12 +568,6 @@ double OnlineMIMOSVR::calc_epsco(const arma::mat &K, const arma::mat &labels)
     return arma::mean(arma::mean(labels, 1) - arma::sum(K, 1) - arma::sum(arma::vectorise(labels)));
 }
 
-
-std::array<double, OnlineMIMOSVR::C_epscos_len> OnlineMIMOSVR::get_epscos(const double K_mean)
-{
-    const DTYPE(K_mean) s = std::signbit(K_mean) ? -1 : 1;
-    return {s - K_mean}; // {0., .5 * K_mean, K_mean, 2. * K_mean, s - K_mean, s, s + K_mean};
-}
 
 std::tuple<double, double> OnlineMIMOSVR::calc_gamma(const arma::mat &Z, const arma::mat &L)
 {
