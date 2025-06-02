@@ -58,8 +58,7 @@ std::string OnlineMIMOSVR::to_string() const
       ", multiout " << multiout <<
       ", max chunk size " << max_chunk_size <<
       ", gradient level " << gradient <<
-      ", decon level " << level <<
-      ", manifold " << p_manifold ? p_manifold->to_string() : "nil";
+      ", decon level " << level;
     return s.str();
 }
 

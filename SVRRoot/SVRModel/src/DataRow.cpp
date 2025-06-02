@@ -361,23 +361,31 @@ find_nearest(
     return iter;
 }
 
+datamodel::DataRow::container::const_iterator
+find_nearest(
+        const datamodel::DataRow::container::const_iterator &cbegin,
+        const datamodel::DataRow::container::const_iterator &cend,
+        const boost::posix_time::ptime &time) noexcept
+{
+    if (cbegin == cend) {
+        LOG4_ERROR("Data is empty");
+        return cend;
+    }
+    auto iter = lower_bound(cbegin, cend, time);
+    if (iter == cend) {
+        LOG4_ERROR("Row for time " << time << " not found.");
+        return --iter;
+    }
+    if (iter != cbegin && time - (**(iter - 1)).get_value_time() < (**iter).get_value_time() - time) --iter;
+    return iter;
+}
 
 datamodel::DataRow::container::const_iterator
 find_nearest(
         const datamodel::DataRow::container &data,
         const boost::posix_time::ptime &time) noexcept
 {
-    if (data.empty()) {
-        LOG4_ERROR("Data is empty");
-        return data.cend();
-    }
-    auto iter = lower_bound(data, time);
-    if (iter == data.cend()) {
-        LOG4_ERROR("Row for time " << time << " not found.");
-        return --iter;
-    }
-    if (iter != data.cbegin() && time - (**(iter - 1)).get_value_time() < (**iter).get_value_time() - time) --iter;
-    return iter;
+    return find_nearest(data.cbegin(), data.cend(), time);
 }
 
 

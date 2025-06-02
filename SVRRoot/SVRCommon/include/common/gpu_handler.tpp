@@ -178,9 +178,9 @@ void gpu_handler<ctx_per_gpu>::init_devices()
     max_gpu_data_chunk_size_ = std::numeric_limits<DTYPE(max_gpu_data_chunk_size_)>::max();
     int gpu_devices_count;
     cu_errchk(cudaGetDeviceCount(&gpu_devices_count));
-    for (int i = 0; i < gpu_devices_count; ++i) {
-        available_devices_.emplace_back(device_info{.id = (uint16_t) available_devices_.size(), .p_mx = std::make_shared<tbb::mutex>()});
+    for (DTYPE(gpu_devices_count) i = 0; i < gpu_devices_count; ++i) {
         const auto dev_mem = get_max_allocatable_memory(i);
+        available_devices_.emplace_back(device_info{.id = (uint16_t) available_devices_.size(), .p_mx = std::make_shared<tbb::mutex>(), .total_mem = dev_mem});
         if (dev_mem < max_gpu_data_chunk_size_) max_gpu_data_chunk_size_ = dev_mem;
     }
     max_running_gpu_threads_number_ = available_devices_.size() * ctx_per_gpu;
@@ -217,7 +217,7 @@ constexpr auto comp_cuda_dev = [](const device_info &lhs, const device_info &rhs
 
     if (lhs.running_threads < rhs.running_threads) return true;
     if (lhs.running_threads > rhs.running_threads) return false;
-
+#if 0
     cu_errchk(cudaSetDevice(lhs.id));
     size_t lhs_free_mem, lhs_total_mem;
     cu_errchk(cudaMemGetInfo(&lhs_free_mem, &lhs_total_mem));
@@ -230,8 +230,10 @@ constexpr auto comp_cuda_dev = [](const device_info &lhs, const device_info &rhs
 
     if (lhs_free_mem > rhs_free_mem) return true;
     if (lhs_free_mem < rhs_free_mem) return false;
-    if (lhs_total_mem > rhs_total_mem) return true;
-    if (lhs_total_mem < rhs_total_mem) return false;
+#endif
+
+    if (lhs.total_mem > rhs.total_mem) return true;
+    if (lhs.total_mem < rhs.total_mem) return false;
 
 #ifdef ENABLE_OPENCL
     if (lhs.p_ocl_info->max_mem_alloc_size() > rhs.p_ocl_info->max_mem_alloc_size()) return true;

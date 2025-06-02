@@ -6,11 +6,10 @@
 #include "relations/ensemble_relation.hpp"
 #include "SVRParametersService.hpp"
 #include "SVRParameters.hpp"
-
+#include "DataRow.hpp"
 
 namespace svr {
 namespace datamodel {
-
 
 class Model : public Entity
 {
@@ -23,8 +22,14 @@ class Model : public Entity
     std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
     bpt::ptime last_modified = bpt::not_a_date_time; // model modified (system) time
     bpt::ptime last_modeled_value_time = bpt::min_date_time; // last input queue modeled value time
+    std::pair<SVRParameters_ptr, SVRParameters_ptr> parameters;
+    PROPERTY(arma::mat, features)
+    PROPERTY(arma::mat, labels)
+    PROPERTY(arma::vec, last_knowns)
+    PROPERTY(data_row_container, times)
 
     virtual void init_id() override;
+
 public:
     Model() = default;
 
@@ -49,7 +54,13 @@ public:
 
     uint16_t get_multiout() const;
 
-    datamodel::SVRParameters_ptr get_head_params() const;
+    std::pair<SVRParameters_ptr, SVRParameters_ptr> &get_head_params();
+
+    const std::pair<SVRParameters_ptr, SVRParameters_ptr> &get_head_params() const;
+
+    void set_head_params(const std::pair<SVRParameters_ptr, SVRParameters_ptr> &params);
+
+    void adjust_gradient_decrement(const uint32_t distance);
 
     bool operator==(const Model &o) const;
 
@@ -76,6 +87,9 @@ public:
     void set_last_modeled_value_time(bpt::ptime const &_last_modeled_value_time);
 
     virtual std::string to_string() const override;
+
+    static constexpr uint16_t C_paramid_left = 0xbeef;
+    static constexpr uint16_t C_paramid_right = 0xdead;
 };
 
 using Model_ptr = std::shared_ptr<Model>;
@@ -85,7 +99,8 @@ find_model(const std::deque<datamodel::Model_ptr> &models, const uint16_t levix)
 
 template<typename T> std::basic_ostream<T> &
 operator<<(std::basic_ostream<T> &s, const datamodel::Model &m)
-{ return s << m.to_string(); }
-
+{
+    return s << m.to_string();
+}
 }
 }

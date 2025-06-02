@@ -737,26 +737,67 @@ meanabs(const typename std::vector<scalar_t>::const_iterator &begin, const typen
     return std::reduce(C_default_exec_policy, begin, end, 0., [](const double acc, const double v) { return acc + std::abs(v); }) / double(end - begin);
 }
 
-template<> double
-meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end);
+template<> double meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end);
 
-template<typename T> inline arma::Mat<T> extrude_rows(const arma::Mat<T> &m, const uint32_t ct)
+template<template<typename> class T, typename S> inline arma::Mat<S> extrude_cols(const T<S> &m, const uint32_t ct)
 {
-    arma::Mat<T> r = m;
+    arma::Mat<S> r = m;
     while (r.n_cols < ct) r = arma::join_horiz(r, m);
     if (r.n_cols > ct) r.shed_cols(ct, r.n_cols - 1);
     return r;
 }
 
-template<typename T> inline arma::Mat<T> extrude_cols(const arma::Mat<T> &m, const uint32_t ct)
+template<template<typename> class T, typename S> inline arma::Mat<S> extrude_rows(const T<S> &m, const uint32_t ct)
 {
     assert(m.n_rows > 0);
-    arma::Mat<T> r(ct, m.n_cols);
+    arma::Mat<S> r(ct, m.n_cols);
     OMP_FOR(ct / m.n_rows)
-    for (uint32_t start_i = 0; start_i < ct; start_i += m.n_rows) {
-        const auto end_i = std::min<uint32_t>(ct, start_i + m.n_rows) - 1;
+    for (DTYPE(ct) start_i = 0; start_i < ct; start_i += m.n_rows) {
+        const auto end_i = std::min<DTYPE(ct)>(ct, start_i + m.n_rows) - 1;
         r.rows(start_i, end_i) = m.rows(0, m.n_rows - 1);
     }
+    return r;
+}
+
+template<template<typename> class T, typename S> inline arma::Mat<S> stretch_cols(const T<S> &m, const uint32_t ct)
+{
+    if (m.n_cols == ct) return m;
+    assert(m.n_cols > 0 && ct > 0);
+    arma::Mat<S> r(m.n_rows, ct, arma::fill::zeros);
+    const auto coef = ct / float(m.n_cols);
+    if (coef < 1) {
+        arma::u32_vec div(ct);
+        for (DTYPE(ct) i = 0; i < ct; ++i) {
+            r.col(i) = m.col(i / coef);
+            div[i] += 1;
+        }
+        for (DTYPE(ct) i = 0; i < ct; ++i)
+            r.col(i) /= div[i];
+    } else
+        for (DTYPE(ct) i = 0; i < ct; ++i)
+            r.col(i) = m.col(i / coef);
+
+    return r;
+}
+
+template<template<typename> class T, typename S> inline arma::Mat<S> stretch_rows(const T<S> &m, const uint32_t ct)
+{
+    if (m.n_rows == ct) return m;
+    assert(m.n_rows > 0 && ct > 0);
+    arma::Mat<S> r(ct, m.n_cols, arma::fill::zeros);
+    const auto coef = ct / float(m.n_rows);
+    if (coef < 1) {
+        arma::u32_vec div(ct);
+        for (DTYPE(ct) i = 0; i < ct; ++i) {
+            r.row(i) = m.row(i / coef);
+            div[i] += 1;
+        }
+        for (DTYPE(ct) i = 0; i < ct; ++i)
+            r.row(i) /= div[i];
+    } else
+        for (DTYPE(ct) i = 0; i < ct; ++i)
+            r.row(i) = m.row(i / coef);
+
     return r;
 }
 

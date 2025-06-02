@@ -19,7 +19,6 @@ OnlineMIMOSVR::serialize(A &ar, const unsigned version)
     ar & p_features;
     ar & p_labels;
     ar & p_last_knowns;
-    ar & p_manifold;
     ar & p_kernel_matrices;
     ar & p_input_weights;
     ar & train_label_chunks;

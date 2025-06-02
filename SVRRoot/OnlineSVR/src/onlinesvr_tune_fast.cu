@@ -58,7 +58,7 @@ cutuner::cutuner(
 {
     LOG4_TRACE("Train len " << train_len << ", streams per GPU " << streams_per_gpu << ", calc len " << calc_len);
     dx.resize(n_gpus);
-    const auto K_train_l = common::extrude_cols<double>(train_label_chunk.t(), train_len);
+    const auto K_train_l = common::extrude_rows(train_label_chunk.t().eval(), train_len);
     const double as_err = common::sumabs<double>((K_train_l + ref_K) * arma::ones<arma::vec>(train_len) - train_len * train_label_chunk);
     if (as_err > 0)
         LOG4_WARN("Tune ftor parameters " << parameters << "(K_train_l + ref_K) * ones are not equal to labels " << as_err / train_len << ", K_train_l "

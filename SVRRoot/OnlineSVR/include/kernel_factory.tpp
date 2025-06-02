@@ -1,11 +1,5 @@
 #pragma once
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 
-/* kernel factory template implementation to be included inside kernel_factory.h*/
 namespace svr {
 namespace kernel {
 
@@ -82,6 +76,9 @@ template<typename T> std::unique_ptr<kernel_base<T>> kernel_factory<T>::create(c
 
         case svr::datamodel::kernel_type::PATH:
             return std::make_unique<kernel_path<T>>(params);
+
+        case svr::datamodel::kernel_type::DEEP_PATH:
+            return std::make_unique<kernel_deep_path<T>>(params);
 
         case svr::datamodel::kernel_type::DTW:
             return std::make_unique<kernel_dtw<T>>(params);

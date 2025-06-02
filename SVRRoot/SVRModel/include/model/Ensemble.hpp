@@ -12,7 +12,7 @@ namespace datamodel {
 struct t_level_predict_features
 {
     data_row_container times;
-    mat_ptr p_features;
+    mat_ptr p;
 };
 using t_predict_features = boost::unordered_flat_map<std::tuple<size_t /* level */, size_t /* step */>, t_level_predict_features, common::hash_tuple>;
 

@@ -166,7 +166,7 @@ double score_weights::operator()(CPTRd weights) const
     constexpr double one = 1, minus_one = -1;
 
     const common::gpu_context_<streams_gpu> ctx(false);
-    if (!ctx) return std::numeric_limits<double>::quiet_NaN();
+    // if (!ctx) return std::numeric_limits<double>::quiet_NaN();
     const auto dev_phy_id = ctx.phy_id();
 
     const auto &ctx_dev = K_rhs_dev[dev_phy_id];
@@ -181,7 +181,7 @@ double score_weights::operator()(CPTRd weights) const
     double res;
     cb_errchk(cublasDasum(ctx_stream.cublas_H, mn, ctx_stream.tmp_L, 1, &res));
     cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
-
+    LOG4_TRACE("Score " << res << " for weights " << common::to_string(weights, std::min<uint32_t>(4, m * n)) << " on device " << dev_phy_id);
     return res;
 }
 

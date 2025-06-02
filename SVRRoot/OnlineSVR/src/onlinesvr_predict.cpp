@@ -46,54 +46,48 @@ arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uve
 
 arma::mat OnlineMIMOSVR::feature_chunk_t(const arma::uvec &ixs_i) const
 {
-    const auto &fm = front(param_set)->get_feature_mechanics();
-    if (fm.needs_tuning())
-        LOG4_THROW("Feature alignment parameters not present.");
-    return sst(*p_features, fm, ixs_i);
-}
-
-arma::mat OnlineMIMOSVR::predict_chunk_t(const arma::mat &x_predict) const
-{
-    const auto &fm = front(param_set)->get_feature_mechanics();
-    if (fm.needs_tuning())
-        LOG4_WARN("Feature alignment parameters not present.");
-    return sst(arma::join_cols(*p_features, x_predict), fm, arma::regspace<arma::uvec>(p_features->n_rows, p_features->n_rows + x_predict.n_rows - 1));
+    return p_features->rows(ixs_i).t();
 }
 
 arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
 {
-    // const auto dev_ct = 1; // common::gpu_handler<>::get().get_gpu_devices_count();
-    CPTR(arma::mat) p_x_predict_t = projection ? &x_predict : new auto(predict_chunk_t(x_predict));
+    return predict_t(x_predict.t());
+}
+
+arma::mat OnlineMIMOSVR::predict_t(const arma::mat &x_predict_t, const bpt::ptime &time)
+{
+#if 0
     if (is_manifold()) {
         const auto res = manifold_predict(*p_x_predict_t, time);
         if (!projection) delete p_x_predict_t;
         return res;
     }
+#endif
     arma::mat prediction;
     tbb::mutex predict_l;
     const auto l_cols = p_labels->n_cols;
     const auto active_chunks = get_predict_chunks();
     const double chunk_divisor = 1. / active_chunks.size();
-#pragma omp parallel ADJ_THREADS(ixs.size() * p_x_predict_t->n_cols * PROPS.get_weight_columns())
+#pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_columns())
 #pragma omp single
     {
         OMP_TASKLOOP_1()
         for (const auto chunk_ix: active_chunks) {
             const auto p_params = get_params_ptr(chunk_ix);
-            if (!p_params) LOG4_THROW("No parameters for chunk " << chunk_ix);
-            arma::mat scaled_x_predict_t = *p_x_predict_t;
+            assert(p_params);
+            arma::mat scaled_x_predict_t = x_predict_t;
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
             business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
-            const arma::mat chunk_predict_K = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), scaled_x_predict_t, train_feature_chunks_t[chunk_ix], time, last_trained_time);
-            // TODO Fix order of scaled predict and train chunk after fixing the kernel output position
-            assert(p_x_predict_t->n_cols == chunk_predict_K.n_rows);
+            arma::mat chunk_predict_K = kernel::IKernel<double>::get(*p_params)->kernel(
+                ccache(), scaled_x_predict_t, train_feature_chunks_t[chunk_ix], time, last_trained_time);
+            assert(x_predict_t.n_cols == chunk_predict_K.n_rows);
             arma::mat multiplicated(chunk_predict_K.n_rows, l_cols, arma::fill::zeros);
             tbb::mutex add_l;
             const uint32_t w_cols = weight_chunks[chunk_ix].n_cols / l_cols;
             OMP_TASKLOOP_(chunk_predict_K.n_rows,)
             for (uint32_t predict_row = 0; predict_row < chunk_predict_K.n_rows; ++predict_row) {
                 arma::mat K_row_t = chunk_predict_K.row(predict_row).t();
-                if (l_cols > 1) K_row_t = common::extrude_rows<double>(K_row_t, l_cols);
+                if (l_cols > 1) K_row_t = common::extrude_cols(K_row_t, l_cols);
                 OMP_TASKLOOP(w_cols)
                 for (uint32_t weight_col = 0; weight_col < w_cols; ++weight_col) {
                     const auto start_col = weight_col * l_cols;
@@ -110,10 +104,10 @@ arma::mat OnlineMIMOSVR::predict(const arma::mat &x_predict, const bpt::ptime &t
                 common::present(train_feature_chunks_t[chunk_ix]) << ", chunk divisor " << chunk_divisor << ", time " << time << ", column " << p_params->get_input_queue_column_name() <<
                 ", predict features " << common::present(scaled_x_predict_t));
             const tbb::mutex::scoped_lock lk_pred(predict_l);
-            if (prediction.empty()) prediction = multiplicated; else prediction += multiplicated;
+            if (prediction.empty()) prediction = multiplicated;
+            else prediction += multiplicated;
         }
     }
-    if (!projection) delete p_x_predict_t;
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }

@@ -58,7 +58,6 @@ class OnlineMIMOSVR final : public Entity
     mat_ptr p_features, p_labels, p_input_weights;
     vec_ptr p_last_knowns;
     t_param_set param_set;
-    OnlineMIMOSVR_ptr p_manifold;
     matrices_ptr p_kernel_matrices;
     datamodel::dq_scaling_factor_container_t scaling_factors;
     std::deque<arma::mat> weight_chunks, train_feature_chunks_t, train_label_chunks;
@@ -83,8 +82,6 @@ class OnlineMIMOSVR final : public Entity
     void clean_chunks();
 
     arma::mat feature_chunk_t(const arma::uvec &ixs_i) const;
-
-    arma::mat predict_chunk_t(const arma::mat &x_predict) const;
 
 public:
     static constexpr float C_chunk_overlap = 0; // Chunk rows overlap ratio [0..1], higher generates more chunks
@@ -158,9 +155,7 @@ public:
 
     void clear_kernel_matrix();
 
-    void init_manifold(const SVRParameters_ptr &p, const bpt::ptime &last_manifold_time);
-
-    OnlineMIMOSVR_ptr get_manifold();
+    void init_manifold(SVRParameters_ptr &p, const bpt::ptime &last_manifold_time);
 
     DTYPE(OnlineMIMOSVR::param_set) get_param_set() const noexcept;
 
@@ -204,8 +199,6 @@ public:
 
     static uint32_t get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_);
 
-    static std::deque<arma::uvec> generate_indexes(const bool projection, const uint32_t n_rows_dataset, const uint32_t decrement, const uint32_t max_chunk_size);
-
     arma::uvec get_other_ixs(const uint16_t i) const; // Get row indexes not belonging to the chunk
 
     std::deque<arma::uvec> generate_indexes() const;
@@ -214,7 +207,7 @@ public:
 
     arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
 
-    arma::mat manifold_predict(arma::mat x_predict, const boost::posix_time::ptime &time) const;
+    arma::mat predict_t(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
 
     t_gradient_data produce_residuals();
 

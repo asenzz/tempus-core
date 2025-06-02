@@ -24,7 +24,7 @@ OnlineMIMOSVR::batch_train(
         LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", last knowns " << arma::size(*p_ylastknown) <<
                                                         ", instance weights " << arma::size(*p_input_weights_) << ", level " << level);
 #else
-    if (p_xtrain->n_rows != p_ytrain->n_rows || p_ytrain->n_rows != p_ylastknown->n_rows || p_xtrain->empty() || p_ytrain->empty())
+    if (p_xtrain->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty())
         LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", last knowns " << arma::size(*p_ylastknown) <<
         ", level " << level);
 #endif
@@ -66,27 +66,20 @@ OnlineMIMOSVR::batch_train(
 
     LOG4_DEBUG("Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown) <<
         ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin() <<
-        ", last value time " << last_value_time); {
-        datamodel::SVRParameters_ptr p;
-        if ((p = is_manifold())) {
-            init_manifold(p, last_value_time);
-            samples_trained = std::min<size_t>(p->get_svr_decremental_distance(), p_xtrain->n_rows);
-            return;
-        }
-    }
+        ", last value time " << last_value_time);
 
     if (needs_tuning()) {
-        if (precalc_kernel_matrices && precalc_kernel_matrices->size())
-            LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
+        if (precalc_kernel_matrices && precalc_kernel_matrices->size()) LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
         PROFILE_MSG(tune_sys(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
     // OMP_FOR_i(num_chunks) {
     for (uint32_t i = 0; i < num_chunks; ++i) {
-        const auto p_params = get_params_ptr(i);
-        if (p_kernel_matrices->at(i).empty())
+        auto p_params = get_params_ptr(i);
+        if (p_kernel_matrices->at(i).empty()) {
+            if (p_params->is_manifold()) init_manifold(p_params, last_value_time);
             p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], last_value_time);
-        else
+        } else
             LOG4_DEBUG("Using pre-calculated kernel matrix " << arma::size(p_kernel_matrices->at(i)) << " for chunk " << i);
         calc_weights(i, ixs[i].n_rows * PROPS.get_solve_iterations_coefficient(), PROPS.get_stabilize_iterations_count());
     }
@@ -164,8 +157,6 @@ void OnlineMIMOSVR::learn(
     const auto new_rows_ct = new_x.n_rows;
 
     if (is_manifold()) {
-        if (!p_manifold)
-            LOG4_THROW("Manifold not initialized.");
         auto gen = common::reproducibly_seeded_64<xso::rng64>();
         common::threadsafe_uniform_int_distribution<uint32_t> rand_int(0, PROPS.get_interleave());
         const auto new_manifold_rows_ct = new_x.n_rows * p_features->n_rows / PROPS.get_interleave();
@@ -186,7 +177,7 @@ void OnlineMIMOSVR::learn(
                 }
             }
         samples_trained += new_rows_ct;
-        p_manifold->learn(new_x_manifold, new_y_manifold, new_ylk_manifold, new_w, last_value_time);
+        // p_manifold->learn(new_x_manifold, new_y_manifold, new_ylk_manifold, new_w, last_value_time);
         p_features->shed_rows(0, new_rows_ct - 1);
         p_labels->shed_rows(0, new_rows_ct - 1);
         p_last_knowns->shed_rows(0, new_rows_ct - 1);
@@ -225,8 +216,7 @@ void OnlineMIMOSVR::learn(
                 active_rows.shed_row(found.front());
             } else {
                 const auto oldest_ix = active_rows.index_min();
-                LOG4_ERROR(
-                    "Suggested forget index " << f << " not found in active indexes, using oldest active index " << oldest_ix << ", " << active_rows[oldest_ix] << " instead.");
+                LOG4_ERROR("Suggested forget index " << f << " not found in active indexes, using oldest active index " << oldest_ix << ", " << active_rows[oldest_ix] << " instead.");
                 const tbb::mutex::scoped_lock lk(learn_lk);
                 shed_ixs.insert_rows(shed_ixs.n_rows, active_rows[oldest_ix]);
                 active_rows.shed_row(oldest_ix);
@@ -373,7 +363,7 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
 
     const uint32_t n_rows = K_.n_rows;
     const uint32_t n_cols = labels_.n_cols;
-    const arma::mat K = (K_ + common::extrude_cols<double>(labels_.t(), n_rows));
+    const arma::mat K = K_ + common::extrude_rows(labels_.t().eval(), n_rows);
     const arma::mat L = labels_ * n_rows;
     bool fresh_start;
     const auto w_cols = n_cols * PROPS.get_weight_columns();
@@ -484,7 +474,7 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
 
     const uint32_t n_rows = K_.n_rows;
     const uint32_t n_cols = labels_.n_cols;
-    const arma::mat K = (K_ + common::extrude_cols<double>(labels_.t(), n_rows));
+    const arma::mat K = K_ + common::extrude_rows(labels_.t().eval(), n_rows);
     const arma::mat L = labels_ * n_rows;
     bool fresh_start;
     if (weights.n_rows != n_rows || weights.n_cols != n_cols * PROPS.get_weight_columns()) {
@@ -502,7 +492,7 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
 
     auto best_mae = std::numeric_limits<double>::max();
     auto best_c = PROPS.get_weight_columns();
-    arma::mat x0; // Starting points using IRWLS and/or linsolver, columns 1 or 2
+    arma::mat x0(n_residuals, 1, ARMA_DEFAULT_FILL); // Starting points using IRWLS and/or linsolver, columns 1 or 2
     for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
         const auto start_col = wcol * n_cols;
         const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
@@ -511,7 +501,6 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
         if (wcol) {
             fresh_start = false;
             const auto prev_start_col = start_col - n_cols;
-            x0.set_size(n_residuals, 1);
             x0.col(0) = arma::vectorise(weights.cols(prev_start_col, prev_start_col + n_cols - 1));
         } else if (fresh_start) {
             arma::mat prec;
@@ -521,18 +510,16 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
                 x0.col(0).zeros();
             } else
                 x0.col(0) = arma::vectorise(prec);
-        } else {
-            x0.set_size(n_residuals, 1);
+        } else
             x0.col(0) = arma::vectorise(weights.head_cols(n_cols));
-        }
-
 
         static const auto max_weight_calc = CDIVI(C_n_cpu, PROPS.get_solve_particles());
         static std::counting_semaphore<> sem(max_weight_calc);
         sem.acquire();
-        common::AppConfig::set_global_log_level(boost::log::trivial::info); {
+        common::AppConfig::set_global_log_level(boost::log::trivial::info);
+        {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 1500);
+                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 500);
             sol_v = res.best_parameters;
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());

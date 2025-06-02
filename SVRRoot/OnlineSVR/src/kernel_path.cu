@@ -33,13 +33,13 @@ template<typename T> __device__ __forceinline__ T path_impl(
 #define pdp(i, j) dp[(i) + (j) * lag]
     pdp(0, 0) = pathdiff(X2, Xy2, 0, 0, powbuf);
 
-    UNROLL(1 + common::C_default_svrparam_lag_count / 10)
+    UNROLL(common::C_default_svrparam_lag_count)
     for (DTYPE(lag) i = 1; i < lag; ++i) {
         pdp(0, i) = H * pdp(0, i - 1) + pathdiff(X2, Xy2, 0, i, powbuf);
         pdp(i, 0) = V * pdp(i - 1, 0) + pathdiff(X2, Xy2, i, 0, powbuf);
     }
 
-    UNROLL(1 + common::C_default_svrparam_lag_count / 10)
+    UNROLL(common::C_default_svrparam_lag_count)
     for (DTYPE(lag) i = 1; i < lag; ++i) {
         for (DTYPE(lag) j = 1; j < lag; ++j) {
             pdp(i, j) = pathdiff(X2, Xy2, i, j, powbuf);
@@ -122,7 +122,8 @@ template<typename PATH_KERNEL_WRAPPER> void cu_path_caller(
     const auto num_chunks = CDIVI(Xy_cols, max_chunky_len);
     const auto chunk_size = max_chunky_len * X_dim_size;
     LOG4_TRACE("X dim size " << X_dim_size << ", kernel size " << kernel_size << ", free mem " << free_mem << ", num chunks " << num_chunks << ", max chunky len " << max_chunky_len
-        << ", chunk size " << chunk_size << ", lag2 " << lag2 << ", X cols " << X_cols << ", Xy cols " << Xy_cols << ", dim " << dim << ", num memory chunks " << num_mem_chunks);
+        << ", chunk size " << chunk_size << ", lag2 " << lag2 << ", X cols " << X_cols << ", Xy cols " << Xy_cols << ", dim " << dim << ", num memory chunks " << num_mem_chunks <<
+        ", tau " << tau);
     double *dpbuf;
     cu_errchk(cudaMallocAsync(&dpbuf, chunk_size, custream));
     cu_errchk(cudaMemsetAsync(Kz, 0, X_cols * Xy_cols * sizeof(double), custream));

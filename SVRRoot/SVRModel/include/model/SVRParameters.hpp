@@ -15,6 +15,9 @@
 namespace svr {
 namespace datamodel {
 
+class OnlineMIMOSVR;
+using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+
 typedef enum class kernel_type : int {
     LINEAR = 0,
     POLYNOMIAL = 1,
@@ -64,12 +67,12 @@ constexpr double C_default_svrparam_kernel_param2 = 1;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
-constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::PATH;
-constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(e_kernel_type::PATH);
+constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::DEEP_PATH;
+constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(C_default_svrparam_kernel_type);
 #ifdef VALGRIND_BUILD
 constexpr uint32_t C_default_svrparam_lag_count = 2;
 #else
-constexpr uint32_t C_default_svrparam_lag_count = 10; // All parameters should have the same lag count because of kernel function limitations
+constexpr uint32_t C_default_svrparam_lag_count = 20; // All parameters should have the same lag count because of kernel function limitations
 #endif
 const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
@@ -140,7 +143,6 @@ class SVRParameters : public Entity
     uint32_t lag_count = C_default_svrparam_lag_count;
 
     t_feature_mechanics feature_mechanics; // TODO Save to DB and init properly
-
 public:
     explicit SVRParameters() : Entity(0) {}
 
@@ -266,6 +268,8 @@ public:
     bool is_manifold() const;
 
     void set_kernel_type(const e_kernel_type _kernel_type) noexcept;
+
+    PROPERTY(OnlineMIMOSVR_ptr, manifold);
 
     // Lag count across all models should be the same with the current infrastructure inplace // Only head param (chunk 0, grad 0, manifold 0) takes effect
     uint32_t get_lag_count() const noexcept;

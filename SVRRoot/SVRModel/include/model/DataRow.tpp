@@ -293,7 +293,7 @@ template<typename I> inline void generate_twap_indexes(
     UNROLL()
     for (auto time_iter = start_time; time_iter < end_time; time_iter += resolution, ++inctr) {
         while (it != it_end && is_valid(it) && get_time(it) < time_iter) ++it;
-        out[uint32_t(inctr * inout_ratio)] = it - cbegin - (!is_valid(it) || it == it_end || (get_time(it) != time_iter && it != start_it && it != cbegin));
+        out[uint32_t(inctr * inout_ratio)] = it - cbegin - (it >= it_end || !is_valid(it) || (get_time(it) != time_iter && it != start_it && it != cbegin));
     }
 #ifndef NDEBUG
     const auto dist_it = it - start_it;

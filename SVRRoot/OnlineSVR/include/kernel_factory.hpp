@@ -32,6 +32,7 @@
 #include "kernel_global_alignment.hpp"
 #include "kernel_path.hpp"
 #include "kernel_dtw.hpp"
+#include "kernel_deep_path.hpp"
 
 namespace svr {
 namespace kernel {

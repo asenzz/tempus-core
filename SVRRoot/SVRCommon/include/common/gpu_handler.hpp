@@ -53,6 +53,7 @@ struct device_info
     uint16_t id;
     std::shared_ptr<tbb::mutex> p_mx;
     copyable_atomic<uint16_t> running_threads = 0;
+    size_t total_mem = 0;
 #ifdef ENABLE_OPENCL
     std::shared_ptr<viennacl::ocl::device> p_ocl_info;
 #endif

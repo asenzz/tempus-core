@@ -39,13 +39,9 @@ namespace datamodel {
  * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
  */
 
-void
-OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::ptime &last_value_time)
+void OnlineMIMOSVR::init_manifold(datamodel::SVRParameters_ptr &p, const bpt::ptime &last_value_time)
 {
-    if (p_manifold) {
-        LOG4_WARN("Manifold already initialized!");
-        return;
-    }
+    if (p->get_manifold()) LOG4_WARN("Manifold already initialized!");
 
     assert(ixs.size() == 1);
     assert(train_feature_chunks_t.size() == 1);
@@ -55,8 +51,6 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
     const auto &labels = train_label_chunks.front();
     const auto n_samples = features_t.n_cols;
     const auto n_samples_2 = n_samples * n_samples;
-    const auto manifold_interleave = PROPS.get_interleave();
-    const uint32_t n_manifold_samples = CDIVI(n_samples_2, manifold_interleave);
     const auto n_manifold_features = features_t.n_rows * 2;
 
     auto p_manifold_parameters = otr(*p);
@@ -69,59 +63,34 @@ OnlineMIMOSVR::init_manifold(const datamodel::SVRParameters_ptr &p, const bpt::p
     }
     p_manifold_parameters->set_chunk_index(0);
     p_manifold_parameters->set_svr_kernel_param(0);
-    p_manifold_parameters->set_svr_decremental_distance(n_manifold_samples); {
+    p_manifold_parameters->set_svr_decremental_distance(n_samples_2);
+    {
         auto &fm = p_manifold_parameters->get_feature_mechanics();
         fm.stretches = arma::fvec(n_manifold_features, arma::fill::ones);
         fm.shifts = arma::u32_vec(n_manifold_features, arma::fill::zeros);
         // fm.skips = arma::join_cols(fm.skips, fm.skips);
     }
-    p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
-    p_manifold->projection += 1;
-    const auto p_manifold_features = ptr<arma::mat>(n_manifold_samples, n_manifold_features, ARMA_DEFAULT_FILL);
-    const auto p_manifold_labels = ptr<arma::mat>(n_manifold_samples, labels.n_cols, ARMA_DEFAULT_FILL);
-    const auto p_manifold_lastknowns = ptr<arma::vec>(n_manifold_samples, arma::fill::zeros);
-    const auto p_manifold_weights = ptr<arma::vec>(n_manifold_samples, arma::fill::ones); // TODO Implement
-#pragma omp parallel ADJ_THREADS(n_samples_2 * labels.n_cols)
-#pragma omp single
-    {
-#ifdef RANDOMIZE_MANIFOLD_INDEXES
-    common::threadsafe_uniform_int_distribution<uint32_t> rand_int(0, manifold_interleave - 1);
-    // auto gen = common::reproducibly_seeded_64<xso::rng64>(); // TODO Freezes in multithreaded environment
-    auto gen = std::mt19937_64((uint_fast64_t) common::pseudo_random_dev::max(manifold_interleave));
-#endif
-    tbb::mutex sm;
-    OMP_TASKLOOP_(n_samples, firstprivate(manifold_interleave, n_samples) collapse(2))
-    for (uint32_t r = 0; r < n_samples; ++r) {
-        for (uint32_t c = 0; c < n_samples; ++c) {
-#ifdef RANDOMIZE_MANIFOLD_INDEXES
-                const auto rand_int_g = rand_int(gen); // For some odd reason this freezes on operator() if inside loop below
-                const auto rr = common::bounce<uint32_t>(r + rand_int_g, n_samples - 1);
-                const auto cc = common::bounce<uint32_t>(c + rand_int_g, n_samples - 1);
-#else
-#define rr r
-#define cc c
-#endif
-                for (uint32_t k = 0; k < labels.n_cols; ++k) {
-                    const auto row_out = r + c * n_samples; // Column by column ordering
-                    if (row_out % manifold_interleave) continue;
-                    const auto row_out_il = row_out / manifold_interleave;
-                    if (row_out_il >= n_manifold_samples) continue;
-                    const auto L_out = labels(cc, k) - labels(rr, k);
-                    const arma::rowvec F_out = arma::join_rows(features_t.col(cc).t(), features_t.col(rr).t());
-                    const tbb::mutex::scoped_lock lk(sm);
-                    p_manifold_labels->at(row_out_il, k) = L_out;
-                    p_manifold_features->row(row_out_il) = F_out;
-                }
-            }
+    auto p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
+    p_manifold->projection = projection + 1;
+    const auto p_manifold_features = ptr<arma::mat>(n_samples_2, n_manifold_features, ARMA_DEFAULT_FILL);
+    const auto p_manifold_labels = ptr<arma::mat>(n_samples_2, labels.n_cols, ARMA_DEFAULT_FILL);
+    const auto p_manifold_lastknowns = ptr<arma::vec>(n_samples_2, arma::fill::zeros);
+    const auto p_manifold_weights = ptr<arma::vec>(n_samples_2, arma::fill::ones); // TODO Implement
+    OMP_FOR_(n_samples_2, collapse(2) firstprivate(n_samples) SSIMD)
+    for (DTYPE(n_samples) i = 0; i < n_samples; ++i)
+        for (DTYPE(n_samples) j = 0; j < n_samples; ++j) {
+            const auto row = i * n_samples + j;
+            p_manifold_labels->row(row) = labels.row(i) - labels.row(j);
+            p_manifold_features->row(row) = arma::join_cols(features_t.col(i), features_t.col(j)).t();
         }
-    }
 
     LOG4_DEBUG("Generated " << common::present(*p_manifold_labels) << " manifold label matrix and " << common::present(*p_manifold_features) <<
         " manifold feature matrix from " << common::present(features_t) << " feature matrix and " << common::present(labels) << " label matrix.");
     p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_lastknowns, p_manifold_weights, last_value_time);
-
     assert(p_manifold_features->has_nonfinite() == false && p_manifold_labels->has_nonfinite() == false);
     assert(p_manifold_lastknowns->has_nonfinite() == false && p_manifold_weights->has_nonfinite() == false);
+    p->set_manifold(p_manifold);
+    LOG4_END();
 }
 
 datamodel::SVRParameters_ptr OnlineMIMOSVR::is_manifold() const
@@ -129,6 +98,7 @@ datamodel::SVRParameters_ptr OnlineMIMOSVR::is_manifold() const
     return business::SVRParametersService::is_manifold(param_set);
 }
 
+#if 0
 arma::mat OnlineMIMOSVR::manifold_predict(arma::mat x_predict_t, const boost::posix_time::ptime &time) const
 {
     assert(ixs.size() == 1 && train_feature_chunks_t.size() == 1 && train_label_chunks.size() == 1);
@@ -169,10 +139,7 @@ arma::mat OnlineMIMOSVR::manifold_predict(arma::mat x_predict_t, const boost::po
     }
     return result;
 }
+#endif
 
-OnlineMIMOSVR_ptr OnlineMIMOSVR::get_manifold()
-{
-    return p_manifold;
-}
 } // datamodel
 } // namespace svr

@@ -318,7 +318,7 @@ if (USE_CUDA)
         LIST(APPEND LINK_FLAGS_CUDA --shared)
     ENDIF ()
     IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-        LIST(APPEND COMPILER_EXTENSIONS_CUDA --std=c++${CXX_STANDARD} -O3 --dopt=on -lineinfo --extra-device-vectorization --fmad=true --prec-div=true --prec-sqrt=true -split-compile=0 --ftz=false) # --split-compile-extended=1
+        LIST(APPEND COMPILER_EXTENSIONS_CUDA --std=c++${CXX_STANDARD} -O3 --dopt=on -lineinfo --extra-device-vectorization --fmad=true --prec-div=true --prec-sqrt=true -split-compile=0 --ftz=false -Wno-deprecated-declarations) # --split-compile-extended=1
     ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
         LIST(APPEND COMPILER_EXTENSIONS_CUDA -G -g --device-debug --no-compress)
         LIST(APPEND LINK_FLAGS_CUDA --debug --device-stack-protector --preserve-relocs --keep-system-libraries --ignore-host-info)

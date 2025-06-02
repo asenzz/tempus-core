@@ -84,15 +84,14 @@ void align_features(
         CPTRd p_features, CPTRd labels, double *const p_scores, float *const p_stretches,
         RPTR(uint32_t) p_shifts, float *const p_skips, const uint32_t n_rows, const uint32_t n_cols)
 {
-    const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
-    assert(n_rows_integration - PROPS.get_shift_limit() >= PROPS.get_align_window());
+    assert(n_rows - PROPS.get_shift_limit() >= PROPS.get_align_window());
 #ifdef INTEGRATION_TEST
     LOG4_DEBUG("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols);
 #endif
     CTX4_CUSTREAM;
     double *d_features;
-    cu_errchk(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
-    copy_submat(p_features, d_features, n_rows, 0, 0, n_rows_integration, n_cols, n_rows_integration, cudaMemcpyHostToDevice, custream);
+    cu_errchk(cudaMallocAsync((void **) &d_features, n_rows * n_cols * sizeof(double), custream));
+    copy_submat(p_features, d_features, n_rows, 0, 0, n_rows, n_cols, n_rows, cudaMemcpyHostToDevice, custream);
     const auto d_labels = cumallocopy(labels, custream, n_rows);
     double *d_scores;
     cu_errchk(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
@@ -103,7 +102,7 @@ void align_features(
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
     G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(
-                d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(), PROPS.get_align_window(),
+                d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows, n_cols, 0, PROPS.get_stretch_limit(), PROPS.get_align_window(),
             PROPS.get_shift_limit(), PROPS.get_stretch_coef());
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));

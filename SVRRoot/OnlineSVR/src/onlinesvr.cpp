@@ -428,23 +428,20 @@ uint32_t OnlineMIMOSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chu
 
 uint32_t OnlineMIMOSVR::get_num_chunks() const
 {
-    if (is_manifold())
-        return 0;
-    else if (!projection)
-        return 1;
-    else
-        return get_num_chunks(get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance()), max_chunk_size);
+    return projection ? get_num_chunks(get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance()), max_chunk_size) : 1;
 }
 
-
-std::deque<arma::uvec>
-OnlineMIMOSVR::generate_indexes(const bool projection, const uint32_t n_rows_dataset, const uint32_t decrement, const uint32_t max_chunk_size)
+std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
 {
+    if (is_manifold()) return {arma::regspace<arma::uvec>(0, std::sqrt(PROPS.get_interleave()), p_features->n_rows - 1)};
+    const auto n_rows_dataset = p_labels->n_rows;
+    const auto decrement = (**param_set.cbegin()).get_svr_decremental_distance();
+
     // Make sure we train on the latest data
     const auto n_rows_train = get_full_train_len(n_rows_dataset, decrement);
     assert(n_rows_dataset >= n_rows_train);
     const auto start_offset = n_rows_dataset - n_rows_train;
-    if (!projection) return {arma::regspace<arma::uvec>(start_offset, n_rows_dataset - 1)};
+    // if (!projection) return {arma::regspace<arma::uvec>(start_offset, n_rows_dataset - 1)};
 
     const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     assert(num_chunks);
@@ -454,7 +451,7 @@ OnlineMIMOSVR::generate_indexes(const bool projection, const uint32_t n_rows_dat
         LOG4_TRACE("Linear single chunk, start offset " << start_offset << ", n rows " << n_rows_dataset << ", chunk indexes " << common::present(indexes[0]));
         return indexes;
     }
-    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1. / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
+    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1 / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
     LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks << ", max chunk size " <<
                               max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << C_chunk_offlap);
 
@@ -462,15 +459,10 @@ OnlineMIMOSVR::generate_indexes(const bool projection, const uint32_t n_rows_dat
         const uint32_t start_row = i * this_chunk_size * C_chunk_offlap;
         const uint32_t end_row = std::min<uint32_t>(start_row + this_chunk_size + PROPS.get_outlier_slack(), n_rows_dataset);
         indexes[i] = arma::regspace<arma::uvec>(start_row, end_row - 1);
-        if (!i || i == DTYPE(i)(num_chunks - 1))
-            LOG4_DEBUG("Chunk " << i << ", start row " << start_row << ", end row " << end_row << ", indexes " << common::present(indexes[i]));
+
+        if (!i || i == DTYPE(i)(num_chunks - 1)) LOG4_DEBUG("Chunk " << i << ", start row " << start_row << ", end row " << end_row << ", indexes " << common::present(indexes[i]));
     }
     return indexes;
-}
-
-std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
-{
-    return generate_indexes(projection, p_labels->n_rows, (**param_set.cbegin()).get_svr_decremental_distance(), max_chunk_size);
 }
 
 arma::uvec

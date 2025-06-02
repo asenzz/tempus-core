@@ -12,7 +12,6 @@
 
 namespace svr {
 namespace datamodel {
-
 typedef std::function<double(const double)> t_iqscaler;
 
 class DataRow;
@@ -27,7 +26,8 @@ class DataRow
     std::vector<double> values_;
 
 public:
-    using container = std::deque<std::shared_ptr<DataRow>>;
+    using container = std::deque<DataRow_ptr>;
+    using manifold_container = std::deque<std::pair<DataRow_ptr, DataRow_ptr> >;
 
     /* TODO Finish implementing
      *
@@ -41,43 +41,16 @@ public:
      *
      */
 
-    static bpt::ptime // Returns last inserted row value time
-    insert_rows(
-            container &rows_container,
-            const arma::mat &data,
-            const bpt::ptime &start_time,
-            const bpt::time_duration &resolution,
-            const unsigned level,
-            const unsigned level_ct,
-            const bool merge);
+    static bpt::ptime insert_rows(container &rows_container, const arma::mat &data, const bpt::ptime &start_time, const bpt::time_duration &resolution, const unsigned level,
+                                  const unsigned level_ct, const bool merge);
 
-    static void
-    insert_rows(
-            container &rows_container,
-            const arma::mat &data,
-            const std::deque<bpt::ptime> &times,
-            const unsigned level,
-            const unsigned level_ct,
-            const bool merge);
+    static void insert_rows(container &rows_container, const arma::mat &data, const std::deque<bpt::ptime> &times, const unsigned level, const unsigned level_ct, const bool merge);
 
-    static container
-    insert_rows(
-            const arma::mat &data,
-            const std::deque<bpt::ptime> &times,
-            const unsigned level,
-            const unsigned level_ct,
-            const bool merge);
+    static container insert_rows(const arma::mat &data, const std::deque<bpt::ptime> &times, const unsigned level, const unsigned level_ct, const bool merge);
 
-    static void insert_rows(
-            container &rows_container,
-            const arma::mat &data,
-            const container &times,
-            const unsigned level,
-            const unsigned level_ct,
-            const bool merge);
+    static void insert_rows(container &rows_container, const arma::mat &data, const container &times, const unsigned level, const unsigned level_ct, const bool merge);
 
-    static container
-    construct(const std::deque<datamodel::MultivalResponse_ptr> &responses);
+    static container construct(const std::deque<datamodel::MultivalResponse_ptr> &responses);
 
     static void sort(container &rows_container);
 
@@ -87,31 +60,13 @@ public:
 
     DataRow(const bpt::ptime &value_time);
 
-    DataRow(
-            const bpt::ptime &value_time,
-            const bpt::ptime &update_time,
-            const double tick_volume,
-            const unsigned levels);
+    DataRow(const bpt::ptime &value_time, const bpt::ptime &update_time, const double tick_volume, const unsigned levels);
 
-    DataRow(
-            const bpt::ptime &value_time,
-            const bpt::ptime &update_time,
-            const double tick_volume,
-            const unsigned levels,
-            const double value);
+    DataRow(const bpt::ptime &value_time, const bpt::ptime &update_time, const double tick_volume, const unsigned levels, const double value);
 
-    DataRow(
-            const bpt::ptime &value_time,
-            const bpt::ptime &update_time,
-            const double tick_volume,
-            const std::vector<double> &values);
+    DataRow(const bpt::ptime &value_time, const bpt::ptime &update_time, const double tick_volume, const std::vector<double> &values);
 
-    explicit DataRow(
-            const bpt::ptime &value_time,
-            const bpt::ptime &update_time,
-            const double tick_volume,
-            CPTRd values_ptr,
-            const unsigned values_size);
+    explicit DataRow(const bpt::ptime &value_time, const bpt::ptime &update_time, const double tick_volume, CPTRd values_ptr, const unsigned values_size);
 
     std::vector<double> &get_values();
 
@@ -261,184 +216,128 @@ public:
 typedef container_range<const DataRow::container, DataRow::container::const_iterator> datarow_crange;
 typedef container_range<DataRow::container, DataRow::container::reverse_iterator> datarow_rrange;
 typedef container_range<DataRow::container, DataRow::container::iterator> datarow_range;
-
 }
 
 using data_row_container = datamodel::DataRow::container;
 using data_row_container_ptr = std::shared_ptr<data_row_container>;
 
-datamodel::DataRow::container
-clone_datarows(datamodel::DataRow::container::const_iterator it, const datamodel::DataRow::container::const_iterator &end);
+datamodel::DataRow::container clone_datarows(datamodel::DataRow::container::const_iterator it, const datamodel::DataRow::container::const_iterator &end);
 
-datamodel::DataRow::container::iterator
-lower_bound(const datamodel::DataRow::container::iterator &begin, const datamodel::DataRow::container::iterator &end, const bpt::ptime &t);
+datamodel::DataRow::container::iterator lower_bound(const datamodel::DataRow::container::iterator &begin, const datamodel::DataRow::container::iterator &end, const bpt::ptime &t);
 
 datamodel::DataRow::container::const_iterator
 lower_bound(const datamodel::DataRow::container::const_iterator &cbegin, const datamodel::DataRow::container::const_iterator &cend, const bpt::ptime &t);
 
-data_row_container::const_iterator
-lower_bound(const data_row_container &c, const bpt::ptime &t);
+data_row_container::const_iterator lower_bound(const data_row_container &c, const bpt::ptime &t);
 
-data_row_container::iterator
-lower_bound(data_row_container &c, const bpt::ptime &t);
+data_row_container::iterator lower_bound(data_row_container &c, const bpt::ptime &t);
 
-data_row_container::const_iterator
-upper_bound(const data_row_container &c, const bpt::ptime &t);
+data_row_container::const_iterator upper_bound(const data_row_container &c, const bpt::ptime &t);
 
-data_row_container::iterator
-upper_bound(data_row_container &c, const bpt::ptime &t);
+data_row_container::iterator upper_bound(data_row_container &c, const bpt::ptime &t);
 
-data_row_container::const_iterator
-upper_bound(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key);
+data_row_container::const_iterator upper_bound(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key);
 
-data_row_container::iterator
-upper_bound(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
+data_row_container::iterator upper_bound(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
-data_row_container::iterator
-upper_bound(data_row_container &data, const bpt::ptime &time_key);
+data_row_container::iterator upper_bound(data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-upper_bound(const data_row_container &data, const bpt::ptime &time_key);
+data_row_container::const_iterator upper_bound(const data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-lower_bound(const data_row_container &data, const data_row_container::const_iterator &hint_start, const bpt::ptime &key);
+data_row_container::const_iterator lower_bound(const data_row_container &data, const data_row_container::const_iterator &hint_start, const bpt::ptime &key);
 
-data_row_container::const_iterator
-lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint, const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_back(const data_row_container &data, const data_row_container::const_iterator &hint, const bpt::ptime &time_key);
 
 data_row_container::iterator lower_bound_back(data_row_container &data, const data_row_container::iterator &hint_end, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-lower_bound(const data_row_container &data, const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound(const data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-lower_bound_back_before(
-        const data_row_container &data,
-        const data_row_container::const_iterator &hint,
-        const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_back_before(const data_row_container &data, const data_row_container::const_iterator &hint, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-lower_bound_before(
-        const data_row_container &data,
-        const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_before(const data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::iterator
-lower_bound_back_before(data_row_container &data, const bpt::ptime &time_key);
+data_row_container::iterator lower_bound_back_before(data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-lower_bound_or_before(
-        const data_row_container &data,
-        const data_row_container::const_iterator &hint_end,
-        const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_or_before(const data_row_container &data, const data_row_container::const_iterator &hint_end, const bpt::ptime &time_key);
 
 data_row_container::const_iterator lower_bound_or_before_back(const data_row_container &data, const bpt::ptime &time_key);
 
 data_row_container::const_iterator lower_bound_or_before(const data_row_container &data, const bpt::ptime &time_key);
 
-data_row_container::const_iterator
-lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
 
 
-data_row_container::const_iterator
-lower_bound_or_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
+data_row_container::const_iterator lower_bound_or_before(const data_row_container::const_iterator &cbegin, const data_row_container::const_iterator &cend, const bpt::ptime &time_key);
 
 data_row_container::iterator lower_bound(data_row_container &data, const bpt::ptime &time_key);
 
-datamodel::DataRow::container::const_iterator
-find(
-        const datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &vtime,
-        const boost::posix_time::time_duration &deviation);
+datamodel::DataRow::container::const_iterator find(const datamodel::DataRow::container &data, const boost::posix_time::ptime &vtime, const boost::posix_time::time_duration &deviation);
 
 data_row_container::iterator find(data_row_container &data, const bpt::ptime &value_time);
 
 data_row_container::const_iterator find(const data_row_container &data, const bpt::ptime &value_time);
 
-data_row_container::const_iterator
-find_nearest_before(
-        const data_row_container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = 0);
+data_row_container::const_iterator find_nearest_before(
+    const data_row_container &data, const boost::posix_time::ptime &time, const boost::posix_time::time_duration &max_gap, const size_t lag_count = 0);
 
-data_row_container::iterator
-find_nearest_before(
-        data_row_container &data,
-        const boost::posix_time::ptime &time,
-        const size_t lag_count = 0);
+data_row_container::iterator find_nearest_before(data_row_container &data, const boost::posix_time::ptime &time, const size_t lag_count = 0);
 
-data_row_container::iterator
-find_nearest(
-        data_row_container &data,
-        const boost::posix_time::ptime &time);
-
-data_row_container::const_iterator
-find_nearest(
-        const datamodel::DataRow::container &data,
-        const boost::posix_time::ptime &time) noexcept;
+data_row_container::iterator find_nearest(data_row_container &data, const boost::posix_time::ptime &time);
 
 datamodel::DataRow::container::const_iterator
-find_nearest_back(
-        const datamodel::DataRow::container &data,
-        const datamodel::DataRow::container::const_iterator &hint,
-        const boost::posix_time::ptime &time);
-
-data_row_container::iterator
 find_nearest(
-        data_row_container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
+        const datamodel::DataRow::container::const_iterator &cbegin,
+        const datamodel::DataRow::container::const_iterator &cend,
+        const boost::posix_time::ptime &time) noexcept;
 
-data_row_container::const_iterator
-find_nearest(
-        const data_row_container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count = std::numeric_limits<size_t>::max());
+data_row_container::const_iterator find_nearest(const datamodel::DataRow::container &data, const boost::posix_time::ptime &time) noexcept;
 
-data_row_container::const_iterator
-find_nearest_after(
-        const data_row_container &data,
-        const boost::posix_time::ptime &time,
-        const boost::posix_time::time_duration &max_gap,
-        const size_t lag_count);
+datamodel::DataRow::container::const_iterator find_nearest_back(const datamodel::DataRow::container &data, const datamodel::DataRow::container::const_iterator &hint,
+                                                                const boost::posix_time::ptime &time);
+
+data_row_container::iterator find_nearest(
+    data_row_container &data, const boost::posix_time::ptime &time, const boost::posix_time::time_duration &max_gap, const size_t lag_count = std::numeric_limits<size_t>::max());
+
+data_row_container::const_iterator find_nearest(
+    const data_row_container &data, const boost::posix_time::ptime &time, const boost::posix_time::time_duration &max_gap, const size_t lag_count = std::numeric_limits<size_t>::max());
+
+data_row_container::const_iterator find_nearest_after(const data_row_container &data, const boost::posix_time::ptime &time, const boost::posix_time::time_duration &max_gap,
+                                                      const size_t lag_count);
 
 inline std::vector<unsigned>
 generate_twap_indexes(
-        const std::deque<bpt::ptime>::const_iterator &cbegin, // Begin of container
-        const std::deque<bpt::ptime>::const_iterator &start_it, // At start time or before
-        const std::deque<bpt::ptime>::const_iterator &it_end, // At end time or after
-        const bpt::ptime &start_time, // Exact start time
-        const boost::posix_time::ptime &end_time, // Exact end time
-        const bpt::time_duration &resolution, // Aux input queue resolution
-        const unsigned n_out); // Input column index
+    const std::deque<bpt::ptime>::const_iterator &cbegin, // Begin of container
+    const std::deque<bpt::ptime>::const_iterator &start_it, // At start time or before
+    const std::deque<bpt::ptime>::const_iterator &it_end, // At end time or after
+    const bpt::ptime &start_time, // Exact start time
+    const boost::posix_time::ptime &end_time, // Exact end time
+    const bpt::time_duration &resolution, // Aux input queue resolution
+    const unsigned n_out); // Input column index
 
 template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
-        uint32_t *const out, // Output array
-        const bool maxmin, // Min or max
-        const I &cbegin, // Begin of container
-        const I &start_it, // At start time or before
-        const I &it_end, // At end time or after
-        const bpt::ptime &start_time, // Exact start time
-        const bpt::ptime &end_time, // Exact end time
-        const bpt::time_duration &resolution, // Aux input queue resolution
-        const uint32_t n_out, // Count of positions to output
-        const uint16_t level // Level
-        );
+    uint32_t *const out, // Output array
+    const bool maxmin, // Min or max
+    const I &cbegin, // Begin of container
+    const I &start_it, // At start time or before
+    const I &it_end, // At end time or after
+    const bpt::ptime &start_time, // Exact start time
+    const bpt::ptime &end_time, // Exact end time
+    const bpt::time_duration &resolution, // Aux input queue resolution
+    const uint32_t n_out, // Count of positions to output
+    const uint16_t level // Level
+);
 
 bool
 generate_twav( // Time-weighted average volume
-        const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
-        const datamodel::DataRow::container::const_iterator &it_end,
-        const bpt::ptime &start_time,
-        const boost::posix_time::ptime &end_time,
-        const bpt::time_duration &hf_resolution,
-        const size_t colix,
-        arma::subview<double> out); // Needs to be zeroed out before submitting to this function
+    const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
+    const datamodel::DataRow::container::const_iterator &it_end,
+    const bpt::ptime &start_time,
+    const boost::posix_time::ptime &end_time,
+    const bpt::time_duration &hf_resolution,
+    const size_t colix,
+    arma::subview<double> out); // Needs to be zeroed out before submitting to this function
 
 arma::mat to_arma_mat(const data_row_container &c);
-
 }
 
 #include "DataRow.tpp"

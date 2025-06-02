@@ -65,7 +65,7 @@ template<typename kT, typename fT> __rT cached<kT, fT>::operator()(const kT &cac
     }
     LOG4_TRACE("Looking for " << cache_key << " in cache");
 
-    auto iter = cache_cont.find(cache_key);
+    auto iter = cache_cont.find(cache_key); // TODO Risky remove this it may cause issues with concurrent access
     if (iter != cache_cont.cend()) goto __bail;
     {
         static tbb::mutex mx;
@@ -116,8 +116,26 @@ template<typename kT, typename fT> cached<kT, fT>::~cached()
     cached_register::cr.unsafe_erase(this);
 }
 
-
 // calc_cache
+std::tuple<mat_ptr, data_row_container_ptr, data_row_container_ptr> calc_cache::get_manifold_labels(
+    datamodel::Model &model, const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
+    const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
+    const bpt::time_duration &main_resolution, const uint16_t lag)
+{
+    LOG4_TRACE("Getting labels for " << column_name << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " << level << ", step " << step <<
+        ", aux last values " << labels_aux.back()->to_string());
+    const auto prepare_f = [&] {
+        auto p_labels = ptr<arma::mat>();
+        auto p_label_times_left = ptr<data_row_container>();
+        auto p_label_times_right = ptr<data_row_container>();
+        ModelService::prepare_manifold_labels(model, *p_labels, *p_label_times_left, *p_label_times_right, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
+            main_resolution, multistep, lag);
+        return std::make_tuple(p_labels, p_label_times_left, p_label_times_right);
+    };
+    const auto k = std::make_tuple(column_name, (*main_data.cbegin())->get_value_time(), main_data.distance(), level, main_resolution, aux_queue_res);
+    const auto [p_labels, p_label_times_left, p_label_times_right] = cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
+    return {ptr<arma::mat>(p_labels->col(step)), p_label_times_left, p_label_times_right};
+}
 
 std::tuple<mat_ptr, vec_ptr, data_row_container_ptr> calc_cache::get_labels(
     const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
@@ -131,7 +149,7 @@ std::tuple<mat_ptr, vec_ptr, data_row_container_ptr> calc_cache::get_labels(
         auto p_last_knowns = ptr<arma::vec>();
         auto p_label_times = ptr<data_row_container>();
         ModelService::prepare_labels(*p_labels, *p_last_knowns, *p_label_times, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
-                                     main_resolution, multistep, lag, column_name.find("_ask") != std::string::npos);
+                                     main_resolution, multistep, lag);
         return std::make_tuple(p_labels, p_last_knowns, p_label_times);
     };
     const auto k = std::make_tuple(column_name, (*main_data.cbegin())->get_value_time(), main_data.distance(), level, main_resolution, aux_queue_res);
@@ -257,11 +275,11 @@ template<> arma::Mat<T> calc_cache::get_Ky(const kernel::kernel_base<T> &kernel_
     const auto prepare_f = [&params, &X, &Xy, &time_X, &time_Xy, &kernel_ftor, this] {
         switch (params.get_kernel_type()) {
             case datamodel::e_kernel_type::DEEP_PATH:
-                LOG4_THROW("Unhandled kernel type " << params.get_kernel_type());
+                return ptr(kernel_ftor.kernel(X, Xy));
             default:
                 const auto Zy = get_Zy(kernel_ftor, X, Xy, time_X, time_Xy);
                 const auto K = kernel_ftor.kernel_from_distances(Zy);
-                return ptr<arma::Mat<T> >(K);
+                return ptr(K);
         }
     };
 

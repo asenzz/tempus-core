@@ -113,15 +113,32 @@ OnlineMIMOSVR_ptr Model::get_gradient(const uint16_t i) const
     return nullptr;
 }
 
-datamodel::SVRParameters_ptr Model::get_head_params() const
+std::pair<SVRParameters_ptr, SVRParameters_ptr> &Model::get_head_params()
 {
-    if (svr_models.empty())
-        return nullptr;
-    else
-        for (const auto &m: svr_models)
-            if (!m->get_param_set().empty())
-                return *(m->get_param_set().cbegin());
-    return nullptr;
+    return parameters;
+}
+
+const std::pair<SVRParameters_ptr, SVRParameters_ptr> &Model::get_head_params() const
+{
+    return parameters;
+}
+
+void Model::set_head_params(const std::pair<SVRParameters_ptr, SVRParameters_ptr> &params)
+{
+    parameters = params;
+    for (const auto &p: {parameters.first, parameters.second}) {
+        p->set_decon_level(decon_level);
+        p->set_step(step);
+        p->set_grad_level(0);
+        p->set_chunk_index(0);
+    }
+}
+
+void Model::adjust_gradient_decrement(const uint32_t distance)
+{
+    for (auto &m: svr_models)
+        for (auto p_params : m->get_param_set())
+            p_params->set_svr_decremental_distance(distance);
 }
 
 std::deque<OnlineMIMOSVR_ptr> &Model::get_gradients()

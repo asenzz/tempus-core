@@ -68,10 +68,8 @@ namespace {
 constexpr auto C_online_validate = false;
 #ifdef VALGRIND_BUILD
 constexpr unsigned C_test_decrement = 5;
-constexpr unsigned C_test_lag = 2;
 #else
 const uint32_t C_test_decrement = 1000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
-constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif
 #define MAIN_QUEUE_RES 3600
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
@@ -84,17 +82,13 @@ constexpr uint16_t C_test_levels = 1;
 constexpr auto C_test_gradient_count = common::C_default_gradient_count;
 constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
 const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
-const uint32_t C_max_features_len = C_test_lag * PROPS.get_lag_multiplier() * business::ModelService::get_max_quantisation();
+const uint32_t C_max_features_len = datamodel::C_default_svrparam_lag_count * PROPS.get_lag_multiplier() * business::ModelService::get_max_quantisation();
 const uint32_t C_test_features_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
 const uint32_t C_dataset_id = 0xDeadBeef;
 const auto C_dataset_id_str = std::to_string(C_dataset_id);
 const auto C_test_features_len_h_str = std::to_string(C_test_features_len_h);
 constexpr char C_last_test_time[] = "2025-01-13 01:00:00";
-#if 1
 constexpr auto C_test_kernel = datamodel::e_kernel_type::DEEP_PATH;
-#else
-constexpr auto C_test_kernel = datamodel::e_kernel_type::PATH;
-#endif
 
 }
 
@@ -152,42 +146,35 @@ TEST(manifold_tune_train_predict, basic_integration)
             for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
-            data_row_container_ptr p_times;
+            data_row_container times;
             arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_multistep()),
                     recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep());
             arma::vec recon_last_knowns(common::C_integration_test_validation_window);
             tbb::mutex recon_l;
+            const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
+            LOG4_TRACE("Got scaling factor " << *p_iqsf);
 //            OMP_TASKLOOP_1(collapse(2))
             for (uint16_t l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
                 for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
                         auto p_model = p_ensemble->get_model(l, s);
                         if (!p_model) LOG4_THROW("Model not found!");
-                        datamodel::SVRParameters_ptr p_head_params;
-                        for (auto &p_gradient: p_model->get_gradients())
-                            for (auto &p_params: p_gradient->get_param_set()) {
-                                if (!p_head_params) p_head_params = p_params;
-                                p_params->set_kernel_type(C_test_kernel);
-                                p_params->set_svr_decremental_distance(C_test_decrement);
-                                p_params->set_lag_count(C_test_lag);
-                            }
+                        const auto p_head_params = p_model->get_head_params();
+                        p_head_params.first->set_svr_decremental_distance(C_test_decrement);
+                        p_head_params.second->set_svr_decremental_distance(C_test_decrement);
 
-                        LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params << ", integration test validation_window " << common::C_integration_test_validation_window);
-                        const auto [p_model_features, p_model_labels, p_model_last_knowns, p_weights, p_model_times] =
-                                business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_labels_len_h);
-                        assert(p_model_labels->n_rows == C_test_labels_len_h);
-                        assert(p_model_times->size() == C_test_labels_len_h);
-                        const uint32_t train_start = p_model_labels->n_rows - C_test_labels_len_h;
-                        const uint32_t train_end = p_model_labels->n_rows - common::C_integration_test_validation_window - 1;
-                        LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_labels_len_h);
-                        const auto feat_levels = p_head_params->get_adjacent_levels();
-                        const auto last_value_time = p_model_times->at(train_end)->get_value_time();
+                        LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params.first << ", integration test validation_window " << common::C_integration_test_validation_window);
+                        const auto [p_train_features, p_train_labels, p_last_knowns, p_train_weights, p_times] =
+                                business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_decrement);
+                        const auto last_value_time = p_times->back()->get_value_time();
+                        p_model->adjust_gradient_decrement(p_train_features->n_rows - PROPS.get_outlier_slack());
+                        LOG4_DEBUG("All features size " << arma::size(*p_train_features) << ", full test length " << C_test_labels_len_h);
                         business::ModelService::train_batch(*p_model,
-                                                            otr<arma::mat>(p_model_features->rows(train_start, train_end)),
-                                                            otr<arma::mat>(p_model_labels->rows(train_start, train_end)),
-                                                            otr<arma::vec>(p_model_last_knowns->rows(train_start, train_end)),
+                                                            p_train_features,
+                                                            p_train_labels,
+                                                            otr<arma::vec>(),
 #ifdef INSTANCE_WEIGHTS
-                                                            otr<arma::mat>(p_weights->rows(train_start, train_end)),
+                                                            p_train_weights,
 #else
                                                             nullptr,
 #endif
@@ -195,13 +182,10 @@ TEST(manifold_tune_train_predict, basic_integration)
                         p_model->set_last_modeled_value_time(last_value_time);
                         p_model->set_last_modified(bpt::second_clock::local_time());
 
-                        const auto [predict_mae_level, predict_mape_level, predicted, actual, mape_lk, last_knowns] =
-                                business::ModelService::validate(
-                                        p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
-                                        *p_model_features, *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
-                                        p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
+                        const auto [predict_mae_level, predict_mape_level, predicted, actual, mape_lk, last_knowns, model_times] =
+                                business::ModelService::validate(*p_dataset, *p_ensemble, *p_model, C_online_validate, p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT, last_value_time, *p_iqsf);
                         const tbb::mutex::scoped_lock lk(recon_l);
-                        if (!p_times) p_times = p_model_times;
+                        if (times.empty()) times = model_times;
                         recon_predicted.col(s) += predicted;
                         recon_actual.col(s) += actual;
                         if (!s) recon_last_knowns += last_knowns;
@@ -209,11 +193,6 @@ TEST(manifold_tune_train_predict, basic_integration)
             recon_predicted = arma::mean(recon_predicted, 1);
             recon_actual = arma::mean(recon_actual, 1);
 
-            const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
-            LOG4_TRACE("Got scaling factor " << *p_iqsf);
-            business::IQScalingFactorService::unscale(*p_iqsf, recon_predicted);
-            business::IQScalingFactorService::unscale(*p_iqsf, recon_last_knowns);
-            business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);
             LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual - recon_predicted) << ", last known to actual difference " <<
                                                               common::present<double>(recon_actual - recon_last_knowns));
 
@@ -222,11 +201,11 @@ TEST(manifold_tune_train_predict, basic_integration)
             const auto validated_ct = recon_actual.size();
             const auto resolution = p_dataset->get_input_queue()->get_resolution();
             const auto horizon_duration = resolution * PROPS.get_prediction_horizon();
-            const auto validate_start = p_times->size() - validated_ct;
+            const auto validate_start = times.size() - validated_ct;
             const auto column_ix = p_dataset->get_input_queue()->get_value_column_index(column);
             for (uint16_t i = 0; i < validated_ct; ++i) {
                 const auto i_div = i + 1.;
-                const auto cur_time = p_times->at(validate_start + i)->get_value_time();
+                const auto cur_time = times.at(validate_start + i)->get_value_time();
                 const auto actual = (**lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
                 const auto last_known_iter = lower_bound_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
                 const auto last_known = (**last_known_iter)[column_ix];

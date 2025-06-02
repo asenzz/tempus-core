@@ -31,7 +31,7 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
-        ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params(), max_gap, aux_res, main_res);
+        ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params().first, max_gap, aux_res, main_res);
         const tbb::mutex::scoped_lock lk(res_l);
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
     }

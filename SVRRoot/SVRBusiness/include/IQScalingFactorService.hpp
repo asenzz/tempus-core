@@ -56,9 +56,14 @@ public:
 
     static const std::function<double(double)> C_default_scaler;
 
-    template<typename T> static inline void unscale(const datamodel::IQScalingFactor &sf, T &labels)
+    template<typename T> static inline void unscale_I(const datamodel::IQScalingFactor &sf, T &v)
     {
-        common::unscale_I<T>(labels, sf.get_scaling_factor(), sf.get_dc_offset());
+        common::unscale_I<T>(v, sf.get_scaling_factor(), sf.get_dc_offset());
+    }
+
+    template<typename T> static inline T unscale(const datamodel::IQScalingFactor &sf, T v)
+    {
+        return common::unscale<T>(v, sf.get_scaling_factor(), sf.get_dc_offset());
     }
 };
 

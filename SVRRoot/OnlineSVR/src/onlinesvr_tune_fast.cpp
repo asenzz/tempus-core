@@ -56,7 +56,7 @@ arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, co
 void OnlineMIMOSVR::tune_sys()
 {
     if (is_manifold()) {
-        LOG4_DEBUG("Skipping tuning of manifold kernel!");
+        LOG4_DEBUG("Tuning a manifold kernel, not.");
         return;
     }
 
