@@ -17,23 +17,25 @@
 #include "common/gpu_handler.hpp"
 #include "common/constants.hpp"
 #include "onlinesvr.hpp"
-#include "cuda_path.hpp"
 #include "common/cuda_util.cuh"
 
 
 namespace svr {
 namespace kernel {
 
-template<typename T> __global__ void G_kernel_from_distances_I(RPTR(T) Kz, const uint32_t mn, const T divisor, const T mean);
-
-template<typename T> __global__ void G_kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t mn, const T divisor, const T mean);
-
-
-// Distances to kernel value
-template<typename T> __forceinline__ __host__ __device__ T z2k(const T z, const T gamma)
+template<typename T> __device__ __host__ __forceinline__ T K_from_Z(const T z, const float degree)
 {
-    return z / gamma;
-    // return (1. - z) / gamma; // Original SVM kernel (less precise)
+    return copysign(pow(abs(z), degree), z);
+}
+
+template<typename T> __device__ __host__ __forceinline__ T K_from_Z(const T z, const T divisor, const T mean)
+{
+    return common::scale(z, divisor, mean);
+}
+
+template<typename T> __device__ __host__ __forceinline__ T K_from_Z(const T z, const T divisor, const T mean, const float degree)
+{
+    return common::scale(K_from_Z(z, degree), divisor, mean);
 }
 
 }

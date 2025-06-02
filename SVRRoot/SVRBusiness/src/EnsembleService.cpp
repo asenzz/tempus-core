@@ -28,7 +28,7 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     const auto &aux_decons = ensemble.get_aux_decon_queues();
     datamodel::t_predict_features res;
     tbb::mutex res_l;
-    // OMP_FOR(ensemble.get_models().size())
+    OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
         ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params(), max_gap, aux_res, main_res);
@@ -241,7 +241,9 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
     std::deque<datamodel::DeconQueue_ptr> main_decon_queues, aux_decon_queues;
     if (load_data) PROFILE_MSG(APP.input_queue_service.load(*p_input_queue), "Loading " << p_input_queue->get_table_name());
     get_decon_queues_from_input_queue(*p_dataset, *p_input_queue, main_decon_queues);
+#ifdef NDEBUG
     OMP_FOR(p_dataset->get_aux_input_queues().size())
+#endif
     for (const auto &p_aux_input_queue: p_dataset->get_aux_input_queues()) {
         if (load_data) {
             PROFILE_BEGIN;
@@ -261,7 +263,9 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
 
     tbb::mutex ens_emplace_l;
     auto &ensembles = p_dataset->get_ensembles();
+#ifdef NDEBUG
     OMP_FOR(main_decon_queues.size())
+#endif
     for (const auto &p_main_decon: main_decon_queues) {
         tbb::mutex::scoped_lock lk(ens_emplace_l);
         auto ens_iter = std::find_if(C_default_exec_policy, ensembles.cbegin(), ensembles.cend(),
@@ -303,10 +307,10 @@ void EnsembleService::get_decon_queues_from_input_queue(
         const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
 {
     const uint16_t prev_size = decon_queues.size();
-//    OMP_FOR_(input_queue.get_value_columns().size(),)
+    OMP_FOR_(input_queue.get_value_columns().size(),)
     for (const auto &column_name: input_queue.get_value_columns()) {
         bool skip = false;
-//        UNROLL()
+        UNROLL()
         for (uint16_t j = 0; j < prev_size; ++j) {
             if (decon_queues[j]->get_input_queue_table_name() != input_queue.get_table_name() || decon_queues[j]->get_input_queue_column_name() != column_name) continue;
             skip = true;
@@ -320,7 +324,7 @@ void EnsembleService::get_decon_queues_from_input_queue(
             p_decon_queue = dtr<datamodel::DeconQueue>(
                     DeconQueueService::make_queue_table_name(input_queue.get_table_name(), dataset.get_id(), column_name),
                     input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_spectral_levels());
-//#pragma omp critical
+#pragma omp critical
         decon_queues.emplace_back(p_decon_queue);
     }
 }
@@ -335,10 +339,12 @@ EnsembleService::update_ensemble_decon_queues(
 
     if (ensembles.size() != new_decon_queues.size())
         LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
-// #pragma omp parallel ADJ_THREADS(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
-// #pragma omp single
+#ifdef NDEBUG
+#pragma omp parallel ADJ_THREADS(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
+#pragma omp single
+#endif
     {
-//        OMP_TASKLOOP(ensembles.size())
+        OMP_TASKLOOP(ensembles.size())
         for (auto p_ensemble: ensembles) {
             {
                 const auto p_decon_queue = DeconQueueService::find_decon_queue(
@@ -349,7 +355,9 @@ EnsembleService::update_ensemble_decon_queues(
                 else
                     LOG4_WARN("New data for " << *p_ensemble->get_decon_queue() << " not found!");
             }
-//            OMP_TASKLOOP(p_ensemble->get_aux_decon_queues().size())
+#ifdef NDEBUG
+            OMP_TASKLOOP(p_ensemble->get_aux_decon_queues().size())
+#endif
             for (auto p_ensemble_aux_decon_queue: p_ensemble->get_aux_decon_queues()) {
                 const auto p_decon_queue = DeconQueueService::find_decon_queue(
                         new_decon_queues,

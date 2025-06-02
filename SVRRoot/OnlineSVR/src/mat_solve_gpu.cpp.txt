@@ -86,7 +86,7 @@ magma_malloc_cpu(void **ptr_ptr, size_t size)
         size = sizeof(cl_double2);
 #if 1
 #if defined( _WIN32 ) || defined( _WIN64 )
-    *ptr_ptr = _aligned_malloc( size, 32 );
+    *ptr_ptr = _aligned_malloc( size, MEM_ALIGN );
     if ( *ptr_ptr == nullptr ) {
         return MAGMA_ERR_HOST_ALLOC;
     }

@@ -5,7 +5,7 @@
 #ifndef SVR_DBCACHE_TPP
 #define SVR_DBCACHE_TPP
 
-#include <unordered_map>
+#include <boost/unordered/unordered_flat_map.hpp>
 #include <boost/functional/hash.hpp>
 #include "common/compatibility.hpp"
 
@@ -21,7 +21,7 @@ template<typename T> class dbcache
 #define actual_T_id typeid(actual_T).hash_code()
 #define __MAKE_SHARED_OBJ(__ID) std::make_shared<actual_T>(__ID, args...)
 
-    static std::unordered_map<bigint, registered_ptr<actual_T>> cached_db_entities;
+    static boost::unordered_flat_map<bigint, registered_ptr<actual_T>> cached_db_entities;
     static std::mutex mx_obj;
 
 public:
@@ -93,7 +93,7 @@ public:
     }
 };
 
-template<typename T> std::unordered_map<bigint, registered_ptr<actual_T>> dbcache<T>::cached_db_entities;
+template<typename T> boost::unordered_flat_map<bigint, registered_ptr<actual_T>> dbcache<T>::cached_db_entities;
 template<typename T> std::mutex dbcache<T>::mx_obj;
 
 }

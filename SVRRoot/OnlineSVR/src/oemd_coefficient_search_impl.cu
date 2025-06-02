@@ -1006,11 +1006,11 @@ oemd_coefficients_search::run(
 #endif
                         evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, meanabs_input, times_i, label_ixs, feat_params);
             };
-            /* arma::vec x0(3, arma::fill::none);
+            /* arma::vec x0(3, ARMA_DEFAULT_FILL);
             x0[0] = .5;
             x0[1] = .5 * C_freq_ceil; // common::constrain(dominant_frequency(workspace_window, .95, custream), 1. / workspace_len, 1.);
             x0[2] = .01; */
-            arma::mat bounds(3, 2, arma::fill::none);
+            arma::mat bounds(3, 2, ARMA_DEFAULT_FILL);
             bounds(0, 0) = 1e-1; // Min gain
             bounds(0, 1) = 1; // Max gain
             bounds(1, 0) = C_freq_ceil / (workspace.size() - prev_masks_len); // Min pass frequency

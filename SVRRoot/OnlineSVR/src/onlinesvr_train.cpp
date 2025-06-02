@@ -61,7 +61,7 @@ OnlineMIMOSVR::batch_train(
             param_set.emplace(p);
         }
         param_set_l.release();
-        prepare_chunk(i);
+        prepare_chunk(p);
     }
 
     LOG4_DEBUG("Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown) <<
@@ -81,8 +81,8 @@ OnlineMIMOSVR::batch_train(
         PROFILE_MSG(tune_sys(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
-
-    OMP_FOR_i(num_chunks) {
+    // OMP_FOR_i(num_chunks) {
+    for (uint32_t i = 0; i < num_chunks; ++i) {
         const auto p_params = get_params_ptr(i);
         if (p_kernel_matrices->at(i).empty())
             p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], last_value_time);
@@ -103,6 +103,12 @@ OnlineMIMOSVR::batch_train(
 void OnlineMIMOSVR::prepare_chunk(const uint32_t i)
 {
     const auto p = get_params_ptr(i);
+    prepare_chunk(p);
+}
+
+void OnlineMIMOSVR::prepare_chunk(const SVRParameters_ptr &p)
+{
+    const auto i = p->get_chunk_index();
     train_feature_chunks_t[i] = feature_chunk_t(ixs[i]);
     train_label_chunks[i] = p_labels->rows(ixs[i]);
     LOG4_TRACE("Before scaling chunk " << i << ", train labels " << common::present(train_label_chunks[i]) << ", train features " << common::present(train_feature_chunks_t[i]));
@@ -335,7 +341,7 @@ void OnlineMIMOSVR::learn(
 
 arma::mat OnlineMIMOSVR::instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights)
 {
-    arma::mat w(ixs.n_rows, ixs.n_rows, arma::fill::none);
+    arma::mat w(ixs.n_rows, ixs.n_rows, ARMA_DEFAULT_FILL);
     const arma::vec Wv = arma::mean(weights.rows(ixs), 1);
     OMP_FOR_i(ixs.n_rows) w.col(i) = Wv * Wv[i];
     return arma::sqrt(w);
@@ -370,8 +376,9 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
     const arma::mat K = (K_ + common::extrude_cols<double>(labels_.t(), n_rows));
     const arma::mat L = labels_ * n_rows;
     bool fresh_start;
-    if (weights.n_rows != n_rows || weights.n_cols != n_cols * PROPS.get_weight_columns()) {
-        weights.set_size(n_rows, n_cols * PROPS.get_weight_columns());
+    const auto w_cols = n_cols * PROPS.get_weight_columns();
+    if (weights.n_rows != n_rows || weights.n_cols != w_cols) {
+        weights.set_size(n_rows, w_cols);
         fresh_start = true;
     } else
         fresh_start = false;
@@ -381,27 +388,22 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
     const auto n_residuals = residuals.n_elem;
     const auto rhs_size = n_residuals * sizeof(double);
 
-    const solvers::score_weights sw(K, residuals, n_rows, n_cols, n_residuals, K.n_elem);
     const auto p_K = K.mem;
     // Hybrid scoring both on CPU and GPU degrades tuning quality because of the precision offset introduced by difference in GPU precision, so do either but not both.
 #define CO_ (optimizer::t_pprune_cost_fun)
     const auto loss_fun =
             n_rows < 1100
                 ? CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
-                    auto tmp = ALIGN_ALLOCA(double, rhs_size, 32);
+                    auto tmp = ALIGN_ALLOCA(double, rhs_size, MEM_ALIGN);
                     self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
                     *f = cblas_dasum(n_residuals, tmp, 1);
                 }
-                : n_rows < solvers::antisymmetric_solver::C_gpu_solve_threshold
-                      ? CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
-                          auto tmp = (double *const) aligned_alloc(32, rhs_size);
-                          self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
-                          *f = cblas_dasum(n_residuals, tmp, 1);
-                          free(tmp);
-                      }
-                      : CO_ [&sw](CPTRd x, RPTR(double) f) {
-                          *f = sw(x);
-                      };
+                : CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
+                    auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, rhs_size);
+                    self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
+                    *f = cblas_dasum(n_residuals, tmp, 1);
+                    ALIGNED_FREE_(tmp);
+                };
 
     auto best_mae = std::numeric_limits<double>::max();
     auto best_c = PROPS.get_weight_columns();
@@ -409,7 +411,7 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
     for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
         const auto start_col = wcol * n_cols;
         const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
-        auto sol_v = weights.cols(start_col, end_col);
+        arma::subview<double> sol_v = weights.cols(start_col, end_col);
         const auto bounds = get_bounds(K, residuals);
         if (wcol) {
             fresh_start = false;
@@ -430,31 +432,37 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
             x0.set_size(n_residuals, 1);
             x0.col(0) = arma::vectorise(weights.head_cols(n_cols));
         }
-
 #if 0
+        if (x0.n_cols < 2 || x0.n_rows != n_rows) {
+            x0.set_size(n_rows, 2);
+            x0.zeros();
+        }
         const solvers::antisymmetric_solver solver(n_rows, n_cols, iter_opt, x0.colptr(0), K.mem, residuals_ptr, false, iter_irwls);
         const auto err = solver(x0.colptr(1));
         LOG4_DEBUG("Linear solver error " << err << ", weight layer " << wcol);
         if (x0.col(1).has_nonfinite()) x0.col(1).zeros();
 #endif
 
+        static const auto max_weight_calc = CDIVI(C_n_cpu, PROPS.get_solve_particles());
 #if 1
-        static std::counting_semaphore<> sem(CDIVI(C_n_cpu, PROPS.get_solve_particles()));
+        static std::counting_semaphore<> sem(max_weight_calc);
         sem.acquire();
-        common::AppConfig::set_global_log_level(boost::log::trivial::info);
-        const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                              {}, {}, std::min<DTYPE(iter_opt) >(iter_opt, 2));
+        common::AppConfig::set_global_log_level(boost::log::trivial::info); {
+            const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
+                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 1500);
+            memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
+        }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
         sem.release();
-        sol_v = res.best_parameters;
 #else
         sol_v = x0.col(1);
 #endif
         residuals -= K * sol_v;
+
         const auto mae = common::meanabs(residuals);
         LOG4_TRACE("Best MAE " << best_mae << ", this MAE " << mae << ", improvement " << common::imprv(mae, best_mae) << "%, delta " << mae - best_mae << ", column " << wcol <<
             ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " << common::present(residuals) << ", labels " << common::present(L) <<
-            ", weights " << common::present(sol_v));
+            ", weights " << common::present(sol_v) << ", max weight calculations " << max_weight_calc);
         // On the first iteration, this MAE should be significantly lower than meanabs labels, approaching zero but thats not the case TODO investigate why it isn't the case
         if (mae < best_mae) {
             best_mae = mae;
@@ -464,11 +472,91 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
 
     if (best_c < PROPS.get_weight_columns() - 1) weights.shed_cols((best_c + 1) * n_cols, weights.n_cols - 1);
 
-    LOG4_DEBUG("Final MAE " << best_mae << ", column " << best_c << ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start <<
-        ", residuals " << common::present(residuals) << ", labels " << common::present(L) << ", weights " << common::present(weights));
+    LOG4_DEBUG("Final MAE " << best_mae << ", column " << best_c << ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " <<
+        common::present(residuals) << ", labels " << common::present(L) << ", weights " << common::present(weights));
 
     return best_mae;
 }
+
+double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
+{
+    LOG4_BEGIN();
+
+    const uint32_t n_rows = K_.n_rows;
+    const uint32_t n_cols = labels_.n_cols;
+    const arma::mat K = (K_ + common::extrude_cols<double>(labels_.t(), n_rows));
+    const arma::mat L = labels_ * n_rows;
+    bool fresh_start;
+    if (weights.n_rows != n_rows || weights.n_cols != n_cols * PROPS.get_weight_columns()) {
+        weights.set_size(n_rows, n_cols * PROPS.get_weight_columns());
+        fresh_start = true;
+    } else
+        fresh_start = false;
+
+    arma::mat residuals = L;
+    const auto n_residuals = residuals.n_elem;
+
+    const solvers::score_weights sw(K, residuals, n_rows, n_cols, n_residuals, K.n_elem);
+    // Hybrid scoring both on CPU and GPU degrades tuning quality because of the precision offset introduced by difference in GPU precision, so do either but not both.
+    const auto loss_fun = CO_ [&sw](CPTRd x, RPTR(double) f) { *f = sw(x); };
+
+    auto best_mae = std::numeric_limits<double>::max();
+    auto best_c = PROPS.get_weight_columns();
+    arma::mat x0; // Starting points using IRWLS and/or linsolver, columns 1 or 2
+    for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
+        const auto start_col = wcol * n_cols;
+        const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
+        auto sol_v = weights.cols(start_col, end_col);
+        const auto bounds = get_bounds(K, residuals);
+        if (wcol) {
+            fresh_start = false;
+            const auto prev_start_col = start_col - n_cols;
+            x0.set_size(n_residuals, 1);
+            x0.col(0) = arma::vectorise(weights.cols(prev_start_col, prev_start_col + n_cols - 1));
+        } else if (fresh_start) {
+            arma::mat prec;
+            solvers::solve_irwls(K, K, residuals, prec, iter_irwls);
+            if (arma::size(prec) != arma::size(residuals) || prec.has_nonfinite()) {
+                LOG4_ERROR("Preconditioned matrix contains non-finite values.");
+                x0.col(0).zeros();
+            } else
+                x0.col(0) = arma::vectorise(prec);
+        } else {
+            x0.set_size(n_residuals, 1);
+            x0.col(0) = arma::vectorise(weights.head_cols(n_cols));
+        }
+
+
+        static const auto max_weight_calc = CDIVI(C_n_cpu, PROPS.get_solve_particles());
+        static std::counting_semaphore<> sem(max_weight_calc);
+        sem.acquire();
+        common::AppConfig::set_global_log_level(boost::log::trivial::info); {
+            const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
+                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 1500);
+            sol_v = res.best_parameters;
+        }
+        common::AppConfig::set_global_log_level(PROPS.get_log_level());
+        sem.release();
+        residuals -= K * sol_v;
+        const auto mae = common::meanabs(residuals);
+        LOG4_TRACE("Best MAE " << best_mae << ", this MAE " << mae << ", improvement " << common::imprv(mae, best_mae) << "%, delta " << mae - best_mae << ", column " << wcol <<
+            ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " << common::present(residuals) << ", labels " << common::present(L) <<
+            ", weights " << common::present(sol_v) << ", max weight calculations " << max_weight_calc);
+        // On the first iteration, this MAE should be significantly lower than meanabs labels, approaching zero but thats not the case TODO investigate why it isn't the case
+        if (mae < best_mae) {
+            best_mae = mae;
+            best_c = wcol;
+        }
+    }
+
+    if (best_c < PROPS.get_weight_columns() - 1) weights.shed_cols((best_c + 1) * n_cols, weights.n_cols - 1);
+
+    LOG4_DEBUG("Final MAE " << best_mae << ", column " << best_c << ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " <<
+        common::present(residuals) << ", labels " << common::present(L) << ", weights " << common::present(weights));
+
+    return best_mae;
+}
+
 
 void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls)
 {
@@ -484,8 +572,13 @@ void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_op
           "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
                 ", W " << common::present(weight_chunks[chunk_ix]));
 #else
-    PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
-                "Calculate weights " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
+    if (ixs[chunk_ix].n_elem < 3333) {
+        PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
+                    "Calculate weights " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
+    } else {
+        PROFILE_MSG(chunks_score[chunk_ix] = d_calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
+                    "Calculate weights on device " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
+    }
 #endif
     assert(std::isnormal(chunks_score[chunk_ix]) && chunks_score[chunk_ix] != common::C_bad_validation && !std::signbit(chunks_score[chunk_ix]));
 

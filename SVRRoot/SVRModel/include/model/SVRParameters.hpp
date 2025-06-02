@@ -60,13 +60,17 @@ constexpr uint16_t C_default_svrparam_grad_level = 0;
 constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
-constexpr double C_default_svrparam_kernel_param2 = 2;
+constexpr double C_default_svrparam_kernel_param2 = 1;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
 constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::PATH;
 constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(e_kernel_type::PATH);
-constexpr uint32_t C_default_svrparam_lag_count = 100; // All parameters should have the same lag count because of kernel function limitations
+#ifdef VALGRIND_BUILD
+constexpr uint32_t C_default_svrparam_lag_count = 2;
+#else
+constexpr uint32_t C_default_svrparam_lag_count = 10; // All parameters should have the same lag count because of kernel function limitations
+#endif
 const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
 struct t_feature_mechanics
@@ -100,9 +104,16 @@ struct t_feature_mechanics
 
     bool operator == (const t_feature_mechanics &o) const;
 };
-
-
+using t_feature_mechanics_ptr = std::shared_ptr<t_feature_mechanics>;
 std::ostream &operator <<(std::ostream &s, const t_feature_mechanics &fm);
+
+
+struct t_delannoy1_path
+{
+    std::vector<uint16_t> coordinates;
+    uint32_t path_count = 0;
+    std::vector<double> weights;
+};
 
 class SVRParameters : public Entity
 {
@@ -115,6 +126,7 @@ class SVRParameters : public Entity
     uint16_t step_ = C_default_svrparam_step;
     uint16_t chunk_ix_ = C_default_svrparam_chunk_ix;
     uint16_t grad_level_ = C_default_svrparam_grad_level;
+
     // TODO Implement manifold projection index
 
     arma::vec epsco; // TODO Save to DB and init properly
@@ -156,7 +168,7 @@ public:
 
     SVRParameters(const SVRParameters &o);
 
-    SVRParameters &operator=(const SVRParameters &v);
+    SVRParameters &operator=(const SVRParameters &o);
 
     virtual void init_id() override;
 
@@ -230,9 +242,15 @@ public:
 
     PROPERTY(uint32_t, svr_decremental_distance, C_default_svrparam_decrement_distance) // TODO Refactor all class properties to use the PROPERTY macro
 
-    PROPERTY(double, min_Z, 0);
+    PROPERTY(double, min_Z, 0)
 
-    PROPERTY(double, max_Z, 1);
+    PROPERTY(double, max_Z, 1)
+
+    PROPERTY(float, H_feedback, .3);
+
+    PROPERTY(float, D_feedback, .34);
+
+    PROPERTY(float, V_feedback, .3);
 
     // Only head param (chunk 0, grad 0, manifold 0) takes effect
     double get_svr_adjacent_levels_ratio() const noexcept;

@@ -11,7 +11,7 @@ ENDIF()
 SET(BUILD_MAIN OFF)
 
 #Define project dependencies
-SET(DEPENDENCIES SVRPersist SVRCommon SVRModel OnlineSVR)
+SET(DEPENDENCIES SVRPersist SVRCommon SVRFix-shared SVRModel OnlineSVR)
 
 INCLUDE(../../cmake/IncludeDependencies.cmake)
 INCLUDE_DIRECTORIES(../SVRFix/include)

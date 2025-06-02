@@ -9,7 +9,7 @@
 namespace svr {
 namespace kernel {
 
-template<typename T> std::unordered_map<datamodel::e_kernel_type, std::shared_ptr<kernel_factory<T>>> IKernel<T>::kernel_factories = [] {
+template<typename T> boost::unordered_flat_map<datamodel::e_kernel_type, std::shared_ptr<kernel_factory<T>>> IKernel<T>::kernel_factories = [] {
     DTYPE(IKernel<T>::kernel_factories) r;
     for (auto k_type = datamodel::e_kernel_type(0); k_type < datamodel::e_kernel_type::end; ++k_type) r.emplace(k_type, ptr<kernel_factory<T>>(k_type));
     return r;

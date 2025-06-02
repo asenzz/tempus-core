@@ -175,7 +175,7 @@ void DaemonFacade::start_loop()
 
             auto &dataset = *dsu.p_dataset;
             try {
-                std::unordered_map<bigint, std::deque<datamodel::MultivalRequest_ptr>> user_requests;
+                boost::unordered_flat_map<bigint, std::deque<datamodel::MultivalRequest_ptr>> user_requests;
                 for (const auto &p_user: dsu.users)
                     user_requests[p_user->get_id()] = context::AppContext::get_instance().request_service.get_active_multival_requests(*p_user, dataset);
                 PROFILE_MSG(business::DatasetService::process(*dsu.p_dataset), "Process dataset");

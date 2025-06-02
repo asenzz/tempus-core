@@ -33,7 +33,7 @@ class pprune {
 
     static constexpr uint32_t C_max_population = 3000;
 
-    const uint32_t n, D, maxfun, depth, max_population;
+    const uint32_t n, D, maxfun, depth, iter, max_population;
     const arma::mat bounds;
     const arma::vec pows, ranges;
     const bool no_elect;

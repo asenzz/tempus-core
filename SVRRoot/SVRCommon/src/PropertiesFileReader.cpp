@@ -121,12 +121,6 @@ uint16_t AppConfig::get_quantisation_divisor() const noexcept
 uint16_t AppConfig::get_oemd_quantisation_skipdiv() const noexcept
 { return oemd_quantisation_skipdiv_; }
 
-uint16_t AppConfig::get_tune_particles() const noexcept
-{ return tune_particles_; }
-
-uint16_t AppConfig::get_tune_iterations() const noexcept
-{ return tune_iterations_; }
-
 float AppConfig::get_solve_iterations_coefficient() const noexcept
 { return solve_iterations_coefficient_; }
 
@@ -196,14 +190,10 @@ PropertiesReader::PropertiesReader(const char delimiter, const std::string &conf
     property_files_location = get_property<DTYPE(property_files_location) >(config_file, SQL_PROPERTIES_DIR_KEY, C_default_sql_properties_dir);
 }
 
-// TODO Move hardcoded values to header file
+// TODO Move hardcoded values to header file using the CONFPROP macro
 AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
         PropertiesReader(delimiter, app_config_file), dao_type(ConcreteDaoType::PgDao)
 {
-#ifndef NDEBUG
-    //__cilkrts_set_param("nworkers", "1"); // For debugging purposes
-#endif
-
     feature_quantization_ = get_property<DTYPE(feature_quantization_) >(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str);
     prediction_horizon_ = get_property<DTYPE(prediction_horizon_) >(app_config_file, PREDICTION_HORIZON, C_default_prediction_horizon_str);
     recombine_parameters_ = get_property<DTYPE(recombine_parameters_) >(app_config_file, RECOMBINE_PARAMETERS, C_default_recombine_parameters_str);
@@ -228,8 +218,6 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     oemd_quantisation_skipdiv_ = get_property<DTYPE(oemd_quantisation_skipdiv_) >(app_config_file, OEMD_QUANTISATION_SKIPDIV, C_default_oemd_quantisation_skipdiv);
     oemd_tune_particles_ = get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles);
     oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);
-    tune_particles_ = get_property<DTYPE(tune_particles_) >(app_config_file, TUNE_PARTICLES, C_default_tune_particles);
-    tune_iterations_ = get_property<DTYPE(tune_iterations_) >(app_config_file, TUNE_ITERATIONS, C_default_tune_iterations);
     solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);
 }
 

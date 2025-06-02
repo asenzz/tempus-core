@@ -1,6 +1,5 @@
 #include <cuda_runtime_api.h>
 #include <mutex>
-#include "common/semaphore.hpp"
 #include "common/gpu_handler.hpp"
 
 namespace svr {
@@ -10,7 +9,7 @@ namespace svr {
 namespace common {
 
 namespace {
-std::unordered_map<std::string, std::stringstream> kernel_file_cache;
+boost::unordered_flat_map<std::string, std::stringstream> kernel_file_cache;
 tbb::mutex kernel_file_cache_mx;
 }
 

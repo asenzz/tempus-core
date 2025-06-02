@@ -6,7 +6,6 @@
 #include <boost/math/special_functions/pow.hpp>
 #include "new_path_kernel.cuh"
 #include "common/logging.hpp"
-#include "cuda_path.hpp"
 #include "model/SVRParameters.hpp"
 #include "common/cuda_util.cuh"
 
@@ -37,7 +36,7 @@ __device__ __forceinline__ double path_distances(CRPTRd s, CRPTRd t, const unsig
     constexpr unsigned tmp_len = (datamodel::C_default_svrparam_lag_count + 1) * 2;
     constexpr unsigned last_ix = (datamodel::C_default_svrparam_lag_count % 2) * (datamodel::C_default_svrparam_lag_count + 1) + datamodel::C_default_svrparam_lag_count;
     double tmp[tmp_len]; // TODO change to kernel with shared memory of length_1 * 2
-    memset(tmp + sizeof(double), 0, length_1 * sizeof(double));
+    memset(tmp + 1, 0, length_1 * sizeof(double));
     *tmp = ground_kernel(*s, *t);
     UNROLL(datamodel::C_default_svrparam_lag_count)
     for (unsigned i = 1; i <= length; ++i)
@@ -145,7 +144,7 @@ arma::mat path_distances_t(const arma::mat &x_t, const arma::mat &y_t, const uns
     cu_errchk(cudaStreamSynchronize(custream));
     cu_errchk(cudaFreeAsync(d_x, custream));
     cu_errchk(cudaFreeAsync(d_y, custream));
-    arma::mat result(y_t.n_cols, x_t.n_cols, arma::fill::none);
+    arma::mat result(y_t.n_cols, x_t.n_cols, ARMA_DEFAULT_FILL);
     cu_errchk(cudaMemcpyAsync(result.memptr(), d_result, x_t.n_cols * y_t.n_cols * sizeof(double), cudaMemcpyDeviceToHost, custream));
     cu_errchk(cudaFreeAsync(d_result, custream));
     cusyndestroy(custream);
@@ -159,7 +158,7 @@ arma::mat path_distances_t(const arma::mat &x_t, const unsigned lag, const doubl
     auto d_x = cumallocopy(x_t, custream);
     const auto d_result = cu_compute_path_distances(d_x, d_x, x_t.n_rows, x_t.n_rows, x_t.n_cols, x_t.n_cols, lag, lambda, 0, custream);
     cu_errchk(cudaFreeAsync(d_x, custream));
-    arma::mat result(x_t.n_cols, x_t.n_cols, arma::fill::none);
+    arma::mat result(x_t.n_cols, x_t.n_cols, ARMA_DEFAULT_FILL);
     cu_errchk(cudaMemcpyAsync(result.memptr(), d_result, x_t.n_cols * x_t.n_cols * sizeof(double), cudaMemcpyDeviceToHost, custream));
     cu_errchk(cudaFreeAsync(d_result, custream));
     cusyndestroy(custream);

@@ -39,10 +39,14 @@
 #define OMP_TASKLOOP_1(__x) PRAGMASTR(omp taskloop grainsize(1) default(shared) mergeable __x)
 #define OMP_TASKLOOP_(__n, __x) PRAGMASTR(omp taskloop NGRAIN(__n) default(shared) mergeable __x)
 #define OMP_FOR_ITERS_(_n) CDIV((_n), C_n_cpu)
+
+#define ITERS_CTR TOKENPASTE2(__iters_, __LINE__)
 #define ADJ_ITERS_CTR TOKENPASTE2(__adj_iters_, __LINE__)
 #define OMP_FOR_(__n, __x)                               \
-    const unsigned ADJ_ITERS_CTR = OMP_FOR_ITERS_(__n);  \
-    PRAGMASTR(omp parallel for __x schedule(static, ADJ_ITERS_CTR) num_threads((unsigned) CDIV(__n, ADJ_ITERS_CTR)) default(shared))
+    const unsigned ITERS_CTR = (__n);                    \
+    const unsigned ADJ_ITERS_CTR = OMP_FOR_ITERS_(ITERS_CTR);  \
+    PRAGMASTR(omp parallel for __x schedule(static, ADJ_ITERS_CTR) num_threads((unsigned) CDIV(ITERS_CTR, ADJ_ITERS_CTR)) default(shared))
+
 #define OMP_FOR_i_(__n, __x) \
     OMP_FOR_(__n, __x)      \
     for (DTYPE(__n) i = 0; i < __n; ++i)
@@ -107,14 +111,13 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 #define tbb_stpfor__(TY, IX, FROM, TO, STEP, ...)  non_stpfor__(TYPE, IX, FROM, TO, STEP, __VA_ARGS__)
 #else
 #define tbb_stpfor__(TY, IX, FROM, TO, STEP, ...) \
-    tbb::task_arena __limited_arena(C_n_cpu); \
-    __limited_arena.execute([&]{ \
-    tbb::parallel_for(tbb::blocked_range<TY>(FROM, TO, STEP), [&](const tbb::blocked_range<TY> &__brange_##IX) \
-        { for (TY IX = __brange_##IX.begin(); IX < __brange_##IX.end(); IX += STEP) \
-            { __VA_ARGS__; }} );  }); // Custom stepping is impossible with random starts
+        tbb::parallel_for(tbb::blocked_range<TY>(FROM, TO, STEP), [&](const tbb::blocked_range<TY> &__brange_##IX) \
+            { for (TY IX = __brange_##IX.begin(); IX < __brange_##IX.end(); IX += STEP) \
+            { __VA_ARGS__; }} ); // Custom stepping is impossible with random starts
 #endif
 #define tbb_tpfor__(TY, IX, FROM, TO, ...) tbb_stpfor__(TY, IX, FROM, TO, 1, __VA_ARGS__)
 #define tbb_pfor__(IX, FROM, TO, ...) tbb_tpfor__(DTYPE(TO), IX, FROM, TO, __VA_ARGS__)
+#define tbb_zpfor__(IX, TO, ...) tbb_pfor__(IX, DTYPE(TO)(0), TO, __VA_ARGS__)
 #define tbb_pfor_i__(FROM, TO, ...) tbb_pfor__(i, FROM, TO, __VA_ARGS__)
 #define tbb_zpfor_i__(TO, ...) tbb_pfor_i__(DTYPE(TO)(0), TO, __VA_ARGS__)
 #define tbb_tpfor_i__(TY, FROM, TO, ...) tbb_stpfor__(TY, i, FROM, TO, 1, __VA_ARGS__)

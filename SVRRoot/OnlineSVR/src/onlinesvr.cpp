@@ -15,21 +15,17 @@
 #include <magma_v2.h>
 #include <memory>
 #include <sys/mman.h>
+#include <mpi.h>
 #include "common/compatibility.hpp"
 #include "common/gpu_handler.hpp"
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
 #include "onlinesvr.hpp"
-
-#include <mpi.h>
-
 #include "mat_solve_gpu.hpp"
 #include "cuqrsolve.cuh"
 #include "model/Entity.hpp"
 #include "model/SVRParameters.hpp"
 #include "util/math_utils.hpp"
-#include "cuda_path.hpp"
-#include "new_path_kernel.cuh"
 #include "calc_cache.hpp"
 #include "kernel_factory.hpp"
 #include "pprune.hpp"
@@ -49,8 +45,8 @@ public:
     {
         mlockall(MCL_CURRENT | MCL_FUTURE);
         ip_errchk(ippInit());
-        ma_errchk(magma_init());
 
+        ma_errchk(magma_init());
         static int zero = 0;
 
         int provided = 0;
@@ -332,7 +328,7 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m,
 
 arma::mat OnlineMIMOSVR::self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs)
 {
-    arma::mat diff(arma::size(rhs), arma::fill::none);
+    arma::mat diff(arma::size(rhs), ARMA_DEFAULT_FILL);
     self_predict(K.n_rows, rhs.n_cols, K.mem, w.mem, rhs.mem, diff.memptr());
     return diff;
 }
@@ -599,7 +595,7 @@ arma::vec OnlineMIMOSVR::calc_gammas(const arma::mat &Z, const arma::mat &L)
         mean_L = arma::mean(L, 1);
     }
 
-    arma::vec g_row(Z.n_rows, arma::fill::none);
+    arma::vec g_row(Z.n_rows, ARMA_DEFAULT_FILL);
     OMP_FOR_i(Z.n_rows) {
         // const auto min_qgamma = kernel::path::calc_qgamma(mean_Z(i), min_Z(i), mean_L(i), min_L(i), Z.n_cols);
         // g_row(i) = bias * (kernel::path::calc_qgamma(mean_Z(i), max_Z(i), mean_L(i), max_L(i), Z.n_cols) - min_qgamma) + min_qgamma;

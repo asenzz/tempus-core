@@ -14,7 +14,8 @@ export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_tri
 # export CUBLAS_LOGINFO_DBG=1 CUBLAS_LOGDEST_DBG=cublas.log
 # export CUBLASLT_LOG_LEVEL=5 CUBLASLT_LOG_FILE=cublasLt.log
 export PETSC_MATH_LIB_PRECISION=double
-export MPIEXEC=${ONEAPI_ROOT}/mpi/latest/bin/mpiexec
+# export MPIEXEC=${ONEAPI_ROOT}/mpi/latest/bin/mpiexec -n 1
+unset MPIEXEC
 
 export scriptname="$(basename $0)"
 
@@ -41,8 +42,8 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/
 
 # Debugger
 # export DBG=/usr/bin/gdb # GNU debugger for GCC builds
-# export DBG=${ONEAPI_ROOT}/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
-export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
+export DBG=${ONEAPI_ROOT}/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
+# export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
 
 # export PERF=${ONEAPI_ROOT}/vtune/2024.1/bin64/amplxe-perf
 export PERF=/usr/bin/perf

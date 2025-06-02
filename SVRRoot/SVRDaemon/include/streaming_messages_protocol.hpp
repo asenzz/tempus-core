@@ -5,9 +5,9 @@
 #ifndef SVR_STREAMING_MESSAGES_PROTOCOL_HPP
 #define SVR_STREAMING_MESSAGES_PROTOCOL_HPP
 
-#include <cstdint>
 #include <deque>
 #include <string>
+#include <boost/unordered/unordered_flat_map.hpp>
 #include "model/DataRow.hpp"
 #include "DatasetService.hpp"
 
@@ -19,7 +19,7 @@ typedef struct _msg_table {
     std::deque<datamodel::DataRow_ptr> rows;
 } t_msg_table, *t_msg_table_ptr;
 
-using t_msg_tables = std::unordered_map<std::string, t_msg_table>;
+using t_msg_tables = boost::unordered_flat_map<std::string, t_msg_table>;
 
 template<typename T> concept queue_binary_type =
 std::same_as<T, double> || std::same_as<T, float> ||

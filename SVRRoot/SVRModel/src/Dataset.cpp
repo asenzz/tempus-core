@@ -435,10 +435,10 @@ void Dataset::set_decon_queue(const datamodel::DeconQueue_ptr &p_decon_queue)
 }
 
 
-std::unordered_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr>
+boost::unordered_flat_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr>
 Dataset::get_decon_queues() const
 {
-    std::unordered_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr> result;
+    boost::unordered_flat_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr> result;
     for (const auto &p_ensemble: ensembles_) {
         result[{p_ensemble->get_decon_queue()->get_input_queue_table_name(),
                 p_ensemble->get_decon_queue()->get_input_queue_column_name()}] = p_ensemble->get_decon_queue();
@@ -496,7 +496,7 @@ void Dataset::set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensem
 #pragma omp parallel ADJ_THREADS(ensembles_.size() + new_ensembles.size())
 #pragma omp single
     {
-	OMP_TASKLOOP_1(untied)
+    	OMP_TASKLOOP_1(untied)
         for (const auto &e: new_ensembles) {
             std::atomic<bool> found = false;
             OMP_TASKLOOP_1(firstprivate(prev_size) untied)

@@ -16,6 +16,8 @@ namespace svr {
 
 template<class T> class copyable_atomic: public std::atomic<T>
 {
+    using std::atomic<T>::store;
+
 public:
     copyable_atomic() : std::atomic<T>(T{})
     {}

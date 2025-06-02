@@ -127,7 +127,7 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
         const auto num_cursors = std::min<uint32_t>(PROPS.get_db_num_threads(), result_size / common::C_min_cursor_rows + 1);
         const auto cursor_size = result_size / num_cursors;
         LOG4_DEBUG("Getting up to " << result_size << " rows for " << query);
-        res.resize(result_size);
+        res.resize(result_size, nullptr);
 #pragma omp parallel ADJ_THREADS(result_size)
 #pragma omp single
         {
@@ -152,6 +152,8 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
                 }
             }
         }
+        for (auto it_res = res.begin(); it_res != res.end();)
+            if (*it_res) ++it_res; else it_res = res.erase(it_res);
         return res;
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << ", while executing " << query);

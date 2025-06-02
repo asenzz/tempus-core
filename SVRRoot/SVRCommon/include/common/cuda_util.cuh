@@ -45,7 +45,19 @@ constexpr unsigned C_cufft_input_limit = 64e5;
 #define CU_BLOCKS_THREADS_2D2(x, y) dim3(CU_BLOCKS_2D(x), CU_BLOCKS_2D(y)), dim3(CU_THREADS_2D(x), CU_THREADS_2D(y))
 #define CU_BLOCKS_THREADS_2D2_t(x, y) std::pair{CU_BLOCKS_THREADS_2D2((x), (y))}
 
+constexpr uint16_t C_tile_width_3D_xy = 16;
+constexpr uint16_t C_tile_width_3D_xy2 = C_tile_width_3D_xy * C_tile_width_3D_xy;
+constexpr uint16_t C_tile_width_3D_z = 4;
+#define CU_THREADS_3DXY(x) unsigned((x) > C_tile_width_3D_xy ? C_tile_width_3D_xy : (x))
+#define CU_BLOCKS_3DXY(x) (unsigned) CDIVI((x), C_tile_width_3D_xy)
+#define CU_THREADS_3DZ(x) unsigned((x) > C_tile_width_3D_z ? C_tile_width_3D_z : (x))
+#define CU_BLOCKS_3DZ(x) (unsigned) CDIVI((x), C_tile_width_3D_z)
+#define CU_BLOCKS_THREADS_3D3(x, y, z) dim3(CU_BLOCKS_3DXY(x), CU_BLOCKS_3DXY(y), CU_BLOCKS_3DZ(z)), dim3(CU_THREADS_3DXY(x), CU_THREADS_3DXY(y), CU_THREADS_3DZ(z))
+#define CU_BLOCKS_THREADS_3D3_t(x, y, z) std::pair{CU_BLOCKS_THREADS_3D3((x), (y), (z))}
+
 constexpr dim3 C_cu_tile_dim(common::C_cu_tile_width, common::C_cu_tile_width);
+
+uint32_t total(const dim3 &d);
 
 template<typename T> inline __device__ __host__ DTYPE(T::x) cunorm(const T &v)
 { return v.x * v.x + v.y * v.y; };
@@ -351,6 +363,14 @@ template<typename T> __host__ __device__ __forceinline__ int8_t signum(const T v
 
 // ICPX bug forced to move this out of cuvalidate
 uint8_t get_streams_per_gpu(const uint32_t n_rows);
+
+template<typename T> __device__ inline T min(const T a, const T b, const T c)
+{
+    T m = a;
+    if (m > b) m = b;
+    if (m > c) m = c;
+    return m;
+}
 
 }
 

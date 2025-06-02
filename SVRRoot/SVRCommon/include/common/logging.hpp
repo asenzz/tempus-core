@@ -28,7 +28,7 @@ namespace bpt = boost::posix_time;
 #else
 #define FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
-#define LOG_FORMAT std::setprecision(std::numeric_limits<double>::max_digits10) << boost::format("%|_4|:%|_2| [%|-4|] %s")
+#define LOG_FORMAT std::setprecision(std::numeric_limits<double>::max_digits10) << boost::format("%|_2x| %|_4|:%|_2| [%|-4|] %s")
 
 class logging {
 public:
@@ -55,7 +55,7 @@ extern const logging l__;
 #define THROW_EX_F(ex, msg) CMD_WRAP( svr::common::throwx<ex>( svr::common::formatter() << EXCEPTION_FORMAT << msg); )
 #define THROW_EX_FS(ex, msg) CMD_WRAP( PRINT_STACK; svr::common::throwx<ex>( svr::common::formatter() << EXCEPTION_FORMAT << msg); )
 
-#define BOOST_CODE_LOCATION LOG_FORMAT % FILE_NAME % __LINE__ % __FUNCTION__
+#define BOOST_CODE_LOCATION LOG_FORMAT % std::this_thread::get_id() % FILE_NAME % __LINE__ % __FUNCTION__
 
 #define FUN_START_TIME__ TOKENPASTE2(__start_time_, __FUNCTION__)
 
@@ -229,7 +229,7 @@ constexpr unsigned C_cu_alloc_retries = 1e2;
 
 #define cu_errchk(cmd) {               \
     cudaError_t __err = (cmd);                 \
-    if (__err == cudaErrorMemoryAllocation) {        \
+    if (false /* __err == cudaErrorMemoryAllocation */ ) {        \
         unsigned __retries = 0;                                             \
         while (__err == cudaErrorMemoryAllocation && __retries < C_cu_alloc_retries) {     \
             LOG4_ERROR("CUDA call " #cmd " failed with error " << int(__err) << " " << cudaGetErrorName(__err) << ", " << cudaGetErrorString(__err) << ", retrying."); \

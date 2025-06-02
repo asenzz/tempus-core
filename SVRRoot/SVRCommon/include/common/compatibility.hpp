@@ -3,13 +3,14 @@
 #include <memory>
 #include <sstream>
 #include <type_traits>
+#include <tuple>
 #include <vector>
 #include <map>
 #include <set>
 #include <execution>
 #include <functional>
-#include <thread>
 #include <armadillo>
+#include <oneapi/tbb/mutex.h>
 #ifdef ENABLE_OPENCL
 #include <viennacl/matrix.hpp>
 #endif
@@ -73,8 +74,9 @@ namespace bpt = boost::posix_time;
 #define PROPERTY_2(T, X) private: T X; PROPERTY_PUBLISHED(T, X)
 #define PROPERTY_3(T, X, D) private: T X = D; PROPERTY_PUBLISHED(T, X)
 
-template <typename Derived, typename Base>
-std::unique_ptr<Derived> dynamic_ptr_cast(std::unique_ptr<Base>&& base) {
+template<typename Derived, typename Base>
+std::unique_ptr<Derived> dynamic_ptr_cast(std::unique_ptr<Base> &&base)
+{
     if (auto derived = dynamic_cast<Derived *>(base.get())) {
         base.release();
         return std::unique_ptr<Derived>(derived);
@@ -82,9 +84,10 @@ std::unique_ptr<Derived> dynamic_ptr_cast(std::unique_ptr<Base>&& base) {
     return nullptr;
 }
 
-template <typename Derived, typename Base>
-std::shared_ptr<Derived> dynamic_ptr_cast(std::shared_ptr<Base>&& base) {
-    if (auto derived = dynamic_cast<Derived*>(base.get())) {
+template<typename Derived, typename Base>
+std::shared_ptr<Derived> dynamic_ptr_cast(std::shared_ptr<Base> &&base)
+{
+    if (auto derived = dynamic_cast<Derived *>(base.get())) {
         base.release();
         return std::shared_ptr<Derived>(derived);
     }
@@ -92,77 +95,70 @@ std::shared_ptr<Derived> dynamic_ptr_cast(std::shared_ptr<Base>&& base) {
 }
 
 template<typename T>
-struct return_type : return_type<decltype(&T::operator())> {
+struct return_type : return_type<decltype(&T::operator())>
+{
 };
+
 // For generic types, directly use the result of the signature of its 'operator()'
 
 template<typename ClassType, typename ReturnType, typename... Args>
-struct return_type<ReturnType(ClassType::*)(Args...) const> {
+struct return_type<ReturnType(ClassType::*)(Args...) const>
+{
     using type = ReturnType;
 };
 
-namespace boost {
-
-#include "hashing.tpp"
-
-}
-
-namespace std {
-
-#include "hashing.tpp"
-
-//template<typename T, typename ...Args>
-//std::unique_ptr<T> make_unique( Args&& ...args )
-//{
-//    return std::unique_ptr<T>( new T( std::forward<Args>(args)... ) );
-//}
-} // namespace std
-
 
 namespace svr {
-
 constexpr double C_double_nan = std::numeric_limits<double>::quiet_NaN();
 
 template<typename... T>
 constexpr auto make_array(T &&... values) ->
-std::array<
+    std::array<
         typename std::decay<
-                typename std::common_type<T...>::type>::type,
+            typename std::common_type<T...>::type>::type,
         sizeof...(T)>
 {
     return {std::forward<T>(values)...};
 }
 
 template<typename T, typename Enable = void>
-struct is_smart_pointer {
-    enum {
+struct is_smart_pointer
+{
+    enum
+    {
         value = false
     };
 };
 
 template<typename T>
-struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::shared_ptr<typename T::element_type>>::value>::type> {
-    enum {
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::shared_ptr<typename T::element_type> >::value>::type>
+{
+    enum
+    {
         value = true
     };
 };
 
 template<typename T>
-struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::unique_ptr<typename T::element_type>>::value>::type> {
-    enum {
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::unique_ptr<typename T::element_type> >::value>::type>
+{
+    enum
+    {
         value = true
     };
 };
 
 template<typename T>
-struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::weak_ptr<typename T::element_type>>::value>::type> {
-    enum {
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::weak_ptr<typename T::element_type> >::value>::type>
+{
+    enum
+    {
         value = true
     };
 };
 
 
-typedef std::shared_ptr<std::deque<arma::mat>> matrices_ptr;
+typedef std::shared_ptr<std::deque<arma::mat> > matrices_ptr;
 typedef std::shared_ptr<arma::cube> cube_ptr;
 typedef std::shared_ptr<arma::mat> mat_ptr;
 typedef std::shared_ptr<arma::vec> vec_ptr;
@@ -171,7 +167,7 @@ typedef arma::Col<std::time_t> tvec;
 std::string demangle(const std::string &name);
 
 template<typename T>
-bool operator!=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
+bool operator!=(const std::set<std::shared_ptr<T> > &lhs, const std::set<std::shared_ptr<T> > &rhs)
 {
     if (lhs.size() != rhs.size()) return true;
     for (auto lhs_iter = lhs.begin(), rhs_iter = rhs.begin(); lhs_iter != lhs.end(), rhs_iter != rhs.end(); ++lhs_iter, ++rhs_iter) {
@@ -191,14 +187,16 @@ bool operator<(const std::set<size_t> &lhs, const std::set<size_t> &rhs);
 
 using type_info_ref = std::reference_wrapper<const std::type_info>;
 
-struct type_hasher {
+struct type_hasher
+{
     std::size_t operator()(type_info_ref code) const
     {
         return code.get().hash_code();
     }
 };
 
-struct equal_to {
+struct equal_to
+{
     bool operator()(type_info_ref lhs, type_info_ref rhs) const
     {
         return lhs.get() == rhs.get();
@@ -209,7 +207,7 @@ struct equal_to {
 template<typename... Args> \
 inline auto highLevelF(Args&&... args) -> DTYPE(lowLevelF(std::forward<Args>(args)...)) \
 { \
-    return lowLevelF(std::forward<Args>(args)...); \
+return lowLevelF(std::forward<Args>(args)...); \
 }
 
 template<typename I, typename T = typename I::value_type> I
@@ -271,6 +269,21 @@ template<typename K, typename V> inline const V &operator^(const std::unordered_
 }
 
 template<typename K, typename V> inline V &operator^(std::unordered_map<K, V> &s, const size_t i)
+{
+    return std::next(s.begin(), i)->second;
+}
+
+template<typename K, typename V> inline const K &operator%(const boost::unordered_flat_map<K, V> &s, const size_t i)
+{
+    return std::next(s.cbegin(), i)->first;
+}
+
+template<typename K, typename V> inline const V &operator^(const boost::unordered_flat_map<K, V> &s, const size_t i)
+{
+    return std::next(s.cbegin(), i)->second;
+}
+
+template<typename K, typename V> inline V &operator^(boost::unordered_flat_map<K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
@@ -343,7 +356,7 @@ template<typename T> inline bool operator==(const arma::Mat<T> &lhs, const arma:
     return true;
 }
 
-template<typename T> inline bool operator==(const std::deque<std::shared_ptr<T>> &lhs, const std::deque<std::shared_ptr<T>> &rhs)
+template<typename T> inline bool operator==(const std::deque<std::shared_ptr<T> > &lhs, const std::deque<std::shared_ptr<T> > &rhs)
 {
     if (lhs.size() != rhs.size()) return false;
     for (size_t i = 0; i < lhs.size(); ++i) {
@@ -353,7 +366,7 @@ template<typename T> inline bool operator==(const std::deque<std::shared_ptr<T>>
     return true;
 }
 
-template<typename T> inline bool operator==(const std::deque<arma::Col<T>> &lhs, const std::deque<arma::Col<T>> &rhs)
+template<typename T> inline bool operator==(const std::deque<arma::Col<T> > &lhs, const std::deque<arma::Col<T> > &rhs)
 {
     if (lhs.size() != rhs.size()) return false;
     for (size_t i = 0; i < lhs.size(); ++i) {
@@ -374,6 +387,10 @@ template<typename T> inline bool operator==(const std::deque<T> &lhs, const std:
 }
 
 namespace common {
+template<typename C> inline size_t capacity(const C &um)
+{
+    return um.bucket_count() * um.max_load_factor();
+}
 
 void init_petsc();
 
@@ -437,19 +454,19 @@ bool Equals(const double &lhs, const double &rhs);
 double Round(const double &dbl);
 
 template<typename T>
-std::vector<std::shared_ptr<T>> inline
-clone_shared_ptr_elements(const std::vector<std::shared_ptr<T>> &arg)
+std::vector<std::shared_ptr<T> > inline
+clone_shared_ptr_elements(const std::vector<std::shared_ptr<T> > &arg)
 {
-    std::vector<std::shared_ptr<T>> res;
+    std::vector<std::shared_ptr<T> > res;
     for (const std::shared_ptr<T> &p_elem: arg) res.emplace_back(std::make_shared<T>(*p_elem));
     return res;
 }
 
 template<typename T>
-std::deque<std::shared_ptr<T>> inline
-clone_shared_ptr_elements(const std::deque<std::shared_ptr<T>> &arg)
+std::deque<std::shared_ptr<T> > inline
+clone_shared_ptr_elements(const std::deque<std::shared_ptr<T> > &arg)
 {
-    std::deque<std::shared_ptr<T>> res;
+    std::deque<std::shared_ptr<T> > res;
     for (const std::shared_ptr<T> &p_elem: arg) res.emplace_back(std::make_shared<T>(*p_elem));
     return res;
 }
@@ -468,10 +485,10 @@ clone_shared_ptr_elements(const tbb::concurrent_set<std::shared_ptr<T>, L> &arg)
 }
 
 template<typename K, typename T>
-std::map<K, std::shared_ptr<T>> inline
-clone_shared_ptr_elements(const std::map<K, std::shared_ptr<T>> &arg)
+std::map<K, std::shared_ptr<T> > inline
+clone_shared_ptr_elements(const std::map<K, std::shared_ptr<T> > &arg)
 {
-    std::map<K, std::shared_ptr<T>> res;
+    std::map<K, std::shared_ptr<T> > res;
     for (const auto &pair: arg) res.emplace(K(pair.first), std::make_shared<T>(*pair.second));
     return res;
 }
@@ -500,18 +517,18 @@ to_multistep_times(const ptimes_set_t &prediction_times,
 
 ptimes_set_t
 to_times(
-        const boost::posix_time::time_period &prediction_range,
-        const boost::posix_time::time_duration &resolution);
+    const boost::posix_time::time_period &prediction_range,
+    const boost::posix_time::time_duration &resolution);
 
 ptimes_set_t
 to_times(
-        const boost::posix_time::time_period &prediction_range,
-        const boost::posix_time::time_duration &resolution,
-        const size_t comb_train_ct,
-        const size_t comb_validate_ct);
+    const boost::posix_time::time_period &prediction_range,
+    const boost::posix_time::time_duration &resolution,
+    const size_t comb_train_ct,
+    const size_t comb_validate_ct);
 
 template<typename T> ptimes_set_t
-to_times(const std::map<bpt::ptime, std::shared_ptr<T>> &data_rows)
+to_times(const std::map<bpt::ptime, std::shared_ptr<T> > &data_rows)
 {
     ptimes_set_t result;
     for (const auto &row: data_rows) result.insert(row.first);
@@ -625,20 +642,24 @@ typename Container::iterator remove_constness(Container &c, ConstIterator it)
 
 
 template<typename T>
-struct copyatomic {
+struct copyatomic
+{
     std::atomic<T> _a;
 
     copyatomic()
-            : _a()
-    {}
+        : _a()
+    {
+    }
 
     copyatomic(const std::atomic<T> &a)
-            : _a(a.load(std::memory_order_relaxed))
-    {}
+        : _a(a.load(std::memory_order_relaxed))
+    {
+    }
 
     copyatomic(const copyatomic &other)
-            : _a(other._a.load(std::memory_order_relaxed))
-    {}
+        : _a(other._a.load(std::memory_order_relaxed))
+    {
+    }
 
     copyatomic &operator=(const copyatomic &other)
     {
@@ -654,7 +675,6 @@ struct copyatomic {
     {
         return _a.load(std::memory_order_relaxed) == other;
     }
-
 };
 
 size_t hash_lambda(const double param_val);
@@ -691,8 +711,8 @@ arma::mat af_product(const arma::mat &a, const arma::mat &b)
     {
         af::setDevice(context.id());
         {
-        af_device_mem_info()
-            af::deviceGC();
+            af_device_mem_info()
+                af::deviceGC();
             af::array af_a = armat_to_af_2d(a);
             af::array af_b = armat_to_af_2d(b);
             af::array af_c = af::matmul(af_a, af_b);
@@ -725,66 +745,159 @@ void remove_if(ContainerT &items, const PredicateT &predicate)
             ++it;
 }
 
-template<typename T> class threadsafe_uniform_int_distribution : public std::uniform_int_distribution<T> {
-    omp_lock_t *const _p_lock;
+
+template<typename C> void delete_nth(C &c, const size_t N)
+{
+    if (N == 0 || c.empty()) return;
+
+    for (size_t i = N - 1; i < c.size(); i += N - 1) {
+        c.erase(c.begin() + i);
+        if (c.size() < N) break;
+    }
+}
+
+
+template<typename T, typename = void> struct is_iterable : std::false_type
+{
+};
+
+template<typename T> struct is_iterable<T, std::void_t<
+            decltype(std::begin(std::declval<T &>())),
+            decltype(std::end(std::declval<T &>()))
+        > > : std::true_type
+{
+};
+
+template<typename T> constexpr bool is_iterable_v = is_iterable<T>::value;
+
+
+template<typename T> class threadsafe_uniform_int_distribution : public std::uniform_int_distribution<T>
+{
+    tbb::mutex mx;
+
 public:
-    threadsafe_uniform_int_distribution(const T &a, const T &b): std::uniform_int_distribution<T>(a, b), _p_lock(new omp_lock_t())
+    threadsafe_uniform_int_distribution(const T &a, const T &b): std::uniform_int_distribution<T>(a, b)
     {
-        omp_init_lock(_p_lock);
     }
 
-    ~threadsafe_uniform_int_distribution()
+    template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator &__urng)
     {
-        omp_destroy_lock(_p_lock);
-        delete _p_lock;
-    }
-
-    template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator& __urng)
-    {
-        T result;
-        omp_set_lock(_p_lock);
-        result = std::uniform_int_distribution<T>::operator()(__urng);
-        omp_unset_lock(_p_lock);
-        return result;
+        const tbb::mutex::scoped_lock lock(mx);
+        return std::uniform_int_distribution<T>::operator()(__urng);
     }
 };
 
 template<typename T>
-class threadsafe_uniform_real_distribution : private std::uniform_real_distribution<T> {
-    omp_lock_t _lock;
+class threadsafe_uniform_real_distribution : private std::uniform_real_distribution<T>
+{
+    tbb::mutex mx;
+
 public:
-    threadsafe_uniform_real_distribution(const T &a, const T &b)
-            : std::uniform_real_distribution<T>(a, b)
+    threadsafe_uniform_real_distribution(const T &a, const T &b) : std::uniform_real_distribution<T>(a, b)
     {
-        omp_init_lock(&_lock);
     }
 
-    ~threadsafe_uniform_real_distribution()
+    template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator &__urng)
     {
-        omp_destroy_lock(&_lock);
+        const tbb::mutex::scoped_lock lock(mx);
+        return std::uniform_real_distribution<T>::operator()(__urng);
+    }
+};
+}
+}
+
+#include "highwayhash/highwayhash_target.h"
+#include "highwayhash/instruction_sets.h"
+
+namespace svr {
+namespace common {
+template<typename T> size_t highway_hash_pod(const T v)
+{
+    constexpr highwayhash::HHKey highway_key = {0xbeefef0123456789ULL, 0x1122334455667788ULL, 0x99aabbccddeeff00ULL, 0x1234567890abcdefULL};
+    highwayhash::HHResult64 hash;
+    highwayhash::InstructionSets::Run<highwayhash::HighwayHash>(highway_key, (char *) &v, sizeof(v), &hash);
+    return hash;
+}
+
+struct hash_pair
+{
+    template<typename... Elements> size_t operator()(const std::pair<Elements...> &k) const
+    {
+        std::size_t seed = 0;
+        boost::hash_combine(seed, k.first);
+        boost::hash_combine(seed, k.second);
+        return seed;
+    }
+};
+
+template<typename Tuple, std::size_t Index = 0> class tuple_hash_helper
+{
+    template<typename E> static void apply(std::string &seed, const E &el)
+    {
+        if constexpr (std::is_trivial_v<E> && std::is_standard_layout_v<E>)
+            seed.append((const char *) (&el), sizeof(el));
+        else if constexpr (svr::common::is_iterable_v<E>)
+            for (const auto &e: el) apply(seed, e);
+        else if constexpr (std::is_same_v<E, boost::posix_time::time_duration>) {
+            const size_t ticks = el.ticks();
+            seed.append((const char *) (&ticks), sizeof(ticks));
+        } else if constexpr (std::is_same_v<E, boost::posix_time::ptime>) {
+            const size_t utime = to_time_t(el) + el.time_of_day().total_milliseconds() % 1000;
+            seed.append((const char *) (&utime), sizeof(utime));
+        } else {
+            boost::hash<DTYPE(el) > hasher;
+            const auto hashed = hasher(el);
+            seed.append((const char *) (&hashed), sizeof(hashed));
+        }
     }
 
-    template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator& __urng)
+public:
+    static void applyt(std::string &seed, const Tuple &tuple)
     {
-        T result;
-        omp_set_lock(&_lock);
-        result = std::uniform_real_distribution<T>::operator()(__urng);
-        omp_unset_lock(&_lock);
-        return result;
+        if constexpr (Index < std::tuple_size_v<Tuple>) apply(seed, std::get<Index>(tuple));
+        if constexpr (Index + 1 < std::tuple_size_v<Tuple>) tuple_hash_helper<Tuple, Index + 1>::applyt(seed, tuple);
+    }
+};
+
+struct tuple_equal
+{
+    template<typename... T>
+    bool operator()(const std::tuple<T...> &a, const std::tuple<T...> &b) const
+    {
+        return a == b;
+    }
+};
+
+struct hash_tuple
+{
+    static constexpr highwayhash::HHKey highway_key = {0xabcdef0123456789ULL, 0x1122334455667788ULL, 0x99aabbccddeeff00ULL, 0x1234567890abcdefULL};
+
+    template<typename... Elements> std::size_t operator()(const std::tuple<Elements...> &k) const
+    {
+        std::string seed;
+        tuple_hash_helper<std::tuple<Elements...> >::applyt(seed, k);
+        highwayhash::HHResult64 hash;
+        highwayhash::InstructionSets::Run<highwayhash::HighwayHash>(highway_key, seed.data(), seed.size(), &hash);
+        return hash;
     }
 };
 
 } // namespace common
 } // namespace svr
 
-/* #ifndef __CUDACC__
-
-#ifndef __host__
-#define __host__
+#ifdef USE_MKL_MALLOC
+#include <mkl.h>
+#define ALIGNED_ALLOC_(align, size) mkl_malloc((size), (align))
+#define ALIGNED_FREE_(ptr) mkl_free((ptr));
+#else
+#define ALIGNED_ALLOC_(align, size) aligned_alloc((align), CDIVI(size, align) * (align))
+#define ALIGNED_FREE_(ptr) free((ptr))
 #endif
 
-#ifndef __device__
-#define __device__
-#endif
+namespace boost {
+#include "hashing.tpp"
+}
 
-#endif */
+namespace std {
+#include "hashing.tpp"
+} // namespace std

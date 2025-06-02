@@ -9,8 +9,8 @@
 
 namespace svr {
 namespace common {
-
-enum class ConcreteDaoType : uint8_t {
+enum class ConcreteDaoType : uint8_t
+{
     PgDao,
     AsyncDao
 };
@@ -36,7 +36,8 @@ public:                                                                 \
 
 #define CONFPRO_(x, D) CONFPROP(DTYPE(D), x, D)
 
-class PropertiesReader {
+class PropertiesReader
+{
     static constexpr char SQL_PROPERTIES_DIR_KEY[] = "SQL_PROPERTIES_DIR";
     static constexpr char COMMENT_CHARS[] = "#";
 
@@ -53,11 +54,9 @@ class PropertiesReader {
 
     const std::string &get_property_value(const std::string &property_file, const std::string &key, const std::string &default_value);
 
-
 protected:
     tbb::mutex set_mx;
     const std::string config_file;
-
 
 public:
     PropertiesReader(const char delimiter, const std::string &config_file);
@@ -75,57 +74,67 @@ public:
     }
 };
 
-class AppConfig : public PropertiesReader {
+class AppConfig : public PropertiesReader
+{
+    CONFPROP(float, tune_max_fback, 1)
 
-CONFPROP(float, weight_inertia, 0)
+    CONFPROP(float, weight_inertia, 0)
 
-CONFPROP(uint16_t, solve_particles, 80)
+    CONFPROP(uint16_t, solve_particles, 80)
 
-CONFPROP(bool, combine_queues, 0)
+    CONFPROP(bool, combine_queues, 0)
 
-CONFPROP(uint16_t, paral_ensembles, 1)
+    CONFPROP(uint16_t, paral_ensembles, 1)
 
-CONFPROP(uint16_t, parallel_models, 1)
+    CONFPROP(uint16_t, parallel_models, 1)
 
-CONFPROP(uint16_t, parallel_chunks, 2)
+    CONFPROP(uint16_t, parallel_chunks, 2)
 
-CONFPROP(uint32_t, oemd_interleave, 2)
+    CONFPROP(uint32_t, oemd_interleave, 2)
 
-CONFPROP(float, weights_exp, 1)
+    CONFPROP(float, weights_exp, 1)
 
-CONFPROP(float, weights_slope, 10)
+    CONFPROP(float, weights_slope, 10)
 
-CONFPROP(float, stretch_limit, .5)
+    CONFPROP(float, stretch_limit, .5)
 
-CONFPROP(float, stretch_coef, .999)
+    CONFPROP(float, stretch_coef, .999)
 
-CONFPROP(uint32_t, shift_limit, 100)
+    CONFPROP(uint32_t, shift_limit, 100)
 
-CONFPROP(uint32_t, outlier_slack, 0)
+    CONFPROP(uint32_t, outlier_slack, 0)
 
-CONFPROP(uint32_t, kernel_length, 10000)
+    CONFPROP(uint32_t, kernel_length, 10000)
 
-CONFPROP(uint32_t, predict_chunks, 100)
+    CONFPROP(uint32_t, predict_chunks, 100)
 
-CONFPROP(double, lag_multiplier, 100)
+    CONFPROP(double, lag_multiplier, 100)
 
-CONFPROP(uint16_t, interleave, 10)
+    CONFPROP(uint16_t, interleave, 10)
 
-CONFPROP(uint16_t, predict_ileave, 10)
+    CONFPROP(uint16_t, predict_ileave, 10)
 
-CONFPROP(double, tune_max_lambda, 50)
+    CONFPROP(double, tune_max_lambda, 50)
 
-CONFPROP(double, tune_max_tau, 2)
+    CONFPROP(double, tune_max_tau, 2)
 
-CONFPROP(uint16_t, db_num_threads, 8)
+    CONFPROP(uint16_t, db_num_threads, 8)
 
-CONFPROP(uint32_t, tune_skip, 7500)
+    CONFPROP(uint32_t, tune_skip, 7500)
 
-CONFPROP(uint32_t, align_window, 1000)
+    CONFPROP(uint32_t, align_window, 1000)
 
-CONFPRO_(max_loop_count, -1)
+    CONFPRO_(max_loop_count, -1)
 
-CONFPROP(uint16_t, weight_columns, 1)
+    CONFPROP(uint16_t, weight_columns, 1)
+
+    CONFPROP(uint16_t, tune_particles1, 10)
+
+    CONFPROP(uint16_t, tune_particles2, 10)
+
+    CONFPROP(uint16_t, tune_iteration1, 10)
+
+    CONFPROP(uint16_t, tune_iteration2, 10)
 
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
@@ -152,8 +161,6 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char OEMD_QUANTISATION_SKIPDIV[] = "OEMD_QUANTISATION_SKIPDIV"; // Higher skipdiv finer OEMD FIR coefficients tuning
     static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
     static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
-    static constexpr char TUNE_PARTICLES[] = "TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
-    static constexpr char TUNE_ITERATIONS[] = "TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision (up to 64 recommended for 3 SVM hyperparameters)
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
 
     ConcreteDaoType dao_type;
@@ -169,13 +176,14 @@ private: // TODO port properties below to use the CONFPROP macro
     bool self_request_;
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     bool daemonize_;
-    uint16_t num_quantisations_, quantisation_divisor_, tune_particles_, tune_iterations_;
+    uint16_t num_quantisations_, quantisation_divisor_;
     uint16_t oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
     float solve_iterations_coefficient_;
 
 public:
     virtual ~AppConfig()
-    {}
+    {
+    }
 
     explicit AppConfig(const std::string &app_config_file, const char delimiter = '=');
 
@@ -233,10 +241,6 @@ public:
 
     uint16_t get_oemd_tune_iterations() const noexcept;
 
-    uint16_t get_tune_particles() const noexcept;
-
-    uint16_t get_tune_iterations() const noexcept;
-
     uint16_t get_weight_columns() const noexcept;
 
     float get_solve_iterations_coefficient() const noexcept;
@@ -249,6 +253,5 @@ public:
 };
 
 using MessageSource_ptr = std::shared_ptr<common::AppConfig>;
-
 } /* namespace common */
 } /* namespace svr */

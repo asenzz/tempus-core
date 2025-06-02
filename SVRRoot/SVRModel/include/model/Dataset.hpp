@@ -186,7 +186,7 @@ public:
 
     datamodel::DeconQueue_ptr get_decon_queue(const std::string &table_name, const std::string &column_name) const;
 
-    std::unordered_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr> get_decon_queues() const;
+    boost::unordered_flat_map<std::pair<std::string, std::string>, datamodel::DeconQueue_ptr> get_decon_queues() const;
 
     void set_decon_queue(const datamodel::DeconQueue_ptr &p_decon_queue);
 

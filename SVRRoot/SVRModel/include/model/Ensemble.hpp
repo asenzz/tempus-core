@@ -1,10 +1,10 @@
 #pragma once
 
+#include <boost/unordered/unordered_flat_map.hpp>
 #include "util/PerformanceUtils.hpp"
 #include "model/Entity.hpp"
 #include "model/Model.hpp"
 #include "model/DeconQueue.hpp"
-#include "model/SVRParameters.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -14,13 +14,13 @@ struct t_level_predict_features
     data_row_container times;
     mat_ptr p_features;
 };
-using t_predict_features = std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, t_level_predict_features>;
+using t_predict_features = boost::unordered_flat_map<std::tuple<size_t /* level */, size_t /* step */>, t_level_predict_features, common::hash_tuple>;
 
 struct t_training_data
 {
-    std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, mat_ptr> labels;
-    std::unordered_map<std::tuple<size_t /* level */, size_t /* step */>, mat_ptr> features;
-    std::unordered_map<size_t /* level */, vec_ptr> last_knowns;
+    boost::unordered_flat_map<std::tuple<size_t /* level */, size_t /* step */>, mat_ptr> labels;
+    boost::unordered_flat_map<std::tuple<size_t /* level */, size_t /* step */>, mat_ptr> features;
+    boost::unordered_flat_map<size_t /* level */, vec_ptr> last_knowns;
     bpt::ptime last_row_time = bpt::not_a_date_time;
 };
 

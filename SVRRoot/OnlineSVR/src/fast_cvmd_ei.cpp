@@ -232,7 +232,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const size_t input
     //Discard empty space if converged early
     N = std::min(N, n);
     const VectorXd omega = omega_plus.row(N - 1).real();
-    arma::vec aomega(omega.size(), arma::fill::none);
+    arma::vec aomega(omega.size(), ARMA_DEFAULT_FILL);
     for (int i = 0; i < omega.size(); ++i) aomega[i] = omega[i];
     vmd_frequencies.emplace(freq_key, compute_cos_sin(aomega, DEFAULT_PHASE_STEP));
 }

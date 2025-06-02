@@ -96,7 +96,7 @@ public:
         }
     };
 
-    typedef std::unordered_map<
+    typedef boost::unordered_flat_map<
             const kernel_cache_key_t, vektor_ptr<scalar_type>, kernel_cache_hash> kernel_values_cache_t;
 
     static kernel_values_cache_t kernel_values_cache__; // TODO hide into a static factory method and fix linking issues

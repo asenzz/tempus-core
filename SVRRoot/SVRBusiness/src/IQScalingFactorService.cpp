@@ -58,7 +58,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     if (common::AppConfig::S_log_threshold <= boost::log::trivial::severity_level::trace) {
         OMP_FOR_i(columns_ct) LOG4_TRACE("Column " << i << " " << common::present(iq_values.col(i)));
     }
-    arma::rowvec dc_offset(iq_values.n_cols, arma::fill::none), scaling_factors(iq_values.n_cols, arma::fill::none);
+    arma::rowvec dc_offset(iq_values.n_cols, ARMA_DEFAULT_FILL), scaling_factors(iq_values.n_cols, ARMA_DEFAULT_FILL);
     std::deque<datamodel::IQScalingFactor_ptr> result(columns_ct);
     OMP_FOR_i(columns_ct) {
         std::tie(dc_offset[i], scaling_factors[i]) = calc(iq_values.col(i), common::C_input_obseg_labels);
@@ -74,7 +74,9 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
 bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns)
 {
     tbb::concurrent_vector<bool> present(value_columns.size(), false);
+#ifdef NDEBUG
     OMP_FOR_(value_columns.size() * iqsf.size(), SSIMD collapse(2))
+#endif
     for (const auto &sf: iqsf)
         for (size_t i = 0; i < value_columns.size(); ++i)
             if (sf->get_input_queue_column_name() == value_columns[i]

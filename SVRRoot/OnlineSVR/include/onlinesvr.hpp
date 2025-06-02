@@ -8,6 +8,10 @@
 #include <deque>
 #include <armadillo>
 #include <magma_types.h>
+#include <tuple>
+#include <tuple>
+#include <tuple>
+
 #include "common/compatibility.hpp"
 #include "common/constants.hpp"
 #include "common/defines.h"
@@ -44,8 +48,6 @@ using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 class OnlineMIMOSVR final : public Entity
 {
     friend class boost::serialization::access;
-
-    t_weight_scaling_factors weight_scaling_factors;
 
     bigint model_id = 0;
     bpt::ptime last_trained_time;
@@ -212,7 +214,7 @@ public:
 
     arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
 
-    arma::mat manifold_predict(const arma::mat &x_predict, const boost::posix_time::ptime &time) const;
+    arma::mat manifold_predict(arma::mat x_predict, const boost::posix_time::ptime &time) const;
 
     t_gradient_data produce_residuals();
 
@@ -234,6 +236,8 @@ public:
 
     static double calc_weights(const arma::mat &K, const arma::mat &labels, const uint32_t iters_opt, const uint16_t iters_irwls, arma::mat &weights);
 
+    static double d_calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights);
+
     void calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls);
 
     static arma::mat instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights);
@@ -252,20 +256,25 @@ public:
     }
 
     void prepare_chunk(uint32_t i);
+
+    void prepare_chunk(const SVRParameters_ptr &p);
+
+    static SVRParameters make_tuning_template(const SVRParameters &example);
 };
 
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 
-class cusys {
-    static constexpr auto streams_per_gpu = 4;
-    static const uint16_t n_gpus;
+class cutuner {
+    static constexpr uint16_t streams_per_gpu = 1;
+    const uint16_t n_gpus;
     SVRParameters template_parameters;
     const bool weighted;
-    const uint32_t n, train_len, calc_start, calc_len, train_F_rows, train_F_cols; // calc len of 3000 seems to work best
+    const uint32_t n, train_len, calc_start, calc_len, train_F_rows; // calc len of 3000 seems to work best
     const uint64_t K_train_len, K_train_size, K_calc_len, K_off, train_len_n, train_n_size;
-    const arma::mat ref_K;
+    const arma::mat ref_K, train_F;
     const double ref_K_mean, ref_K_meanabs;
 
+public:
     struct dev_ctx {
         struct stream_ctx {
             cudaStream_t custream;
@@ -273,18 +282,21 @@ class cusys {
             magma_queue_t ma_queue;
             double *d_K_train, *K_train_off;
         };
-        double *d_train_cuml, *d_train_W, *d_ref_K;
+        double *d_train_F, *d_train_W, *d_ref_K, *d_D_paths;
         std::deque<stream_ctx> sx;
     };
     std::deque<dev_ctx> dx;
 
-public:
-    static SVRParameters make_tuning_template(const SVRParameters &example);
+    cutuner(const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters);
+    ~cutuner();
 
-    cusys(const arma::mat &train_cuml, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters);
-    ~cusys();
-    std::tuple<double, double, double> operator()(const double lambda, const double tau) const;
+    std::tuple<double, double, double> normalize_result(const dev_ctx &dx_, const dev_ctx::stream_ctx &dxsx, const SVRParameters &parameters) const;
+
+    void prepare_second_phase(const SVRParameters &first_phase_parameters);
+    std::tuple<double, double, double> phase1(const double tau, const double H, const double D, const double V) const;
+    std::tuple<double, double, double> phase2(const double lambda) const;
 };
+
 
 void init_petsc();
 

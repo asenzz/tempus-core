@@ -24,7 +24,7 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
-#include <unordered_map>
+#include <boost/unordered/unordered_flat_map.hpp>
 #include <atomic>
 #include <mutex>
 #include "common/compatibility.hpp"
@@ -181,8 +181,8 @@ class pso_state_io
 
     pso_state_io &operator=(const pso_state_io &) = delete;
 
-    std::unordered_map<std::pair<std::string, std::string>, pso_state> pso_states;
-    std::unordered_map<std::pair<std::string, std::string>, bool> finish_states;
+    boost::unordered_flat_map<std::pair<std::string, std::string>, pso_state> pso_states;
+    boost::unordered_flat_map<std::pair<std::string, std::string>, bool> finish_states;
 
     std::atomic<bool> dirty_state;
     std::mutex pso_states_mutex;

@@ -14,7 +14,6 @@
 #include "cuqrsolve.cuh"
 #include "common/constants.hpp"
 #include "onlinesvr.hpp"
-#include "cuda_path.hpp"
 #include "kernel_base.cuh"
 #include "ScalingFactorService.hpp"
 #include "common/cuda_util.cuh"
@@ -213,112 +212,6 @@ G_score_kernel(
     if (thr_ix == 0) *score = _sh_sum[0] / (norm_ker * norm_ref);
 }
 
-
-__global__ void
-G_kernel_from_distances_symm(RPTR(double) K, CRPTRd dist, const uint32_t mm, const uint32_t m, const double divisor)
-{ // TODO Fix, broken!
-    const auto g_thr_ix = threadIdx.x + blockIdx.x * blockDim.x;
-    if (g_thr_ix >= mm) return;
-    const auto col = g_thr_ix / m;
-    K[g_thr_ix + col] = K[((g_thr_ix + col) % m) * m + col] = kernel::z2k(dist[g_thr_ix], divisor);
-}
-
-
-void kernel_from_distances_symm(double *const K, CPTRd Z, const uint32_t m, const double gamma)
-{
-    LOG4_THROW("Buggy.");
-
-    double *d_K, *d_Z;
-    const auto mm = m * m;
-    const auto mat_size = mm * sizeof(double);
-    const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cu_errchk(cudaMalloc((void **) &d_K, mat_size));
-    cu_errchk(cudaMalloc((void **) &d_Z, mat_size));
-    cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
-    const auto half_mm = mm / 2;
-    G_kernel_from_distances_symm<<<CU_BLOCKS_THREADS(half_mm)>>>(d_K, d_Z, mm / 2, m, gamma);
-    cu_errchk(cudaDeviceSynchronize());
-    cu_errchk(cudaMemcpy(K, d_K, mat_size, cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_K));
-    cu_errchk(cudaFree(d_Z));
-}
-
-// TODO Unify inplace and outplace versions
-__global__ void
-G_kernel_from_distances(double *__restrict__ const K, const double *__restrict__ const Z, const uint32_t mn, const double divisor, const double mean)
-{
-    CU_STRIDED_FOR_i(mn) K[i] = kernel::z2k(Z[i] - mean, divisor);
-}
-
-__global__ void
-G_kernel_from_distances(double *K, const double *const Z, const uint32_t mn, const uint32_t m, const double *const gamma, const double mean)
-{
-    CU_STRIDED_FOR_i(mn) K[i] = kernel::z2k(Z[i], gamma[i % m] - mean);
-}
-
-__global__ void
-G_kernel_from_distances_I(double *Kz, const uint32_t mn, const double divisor, const double mean)
-{
-    CU_STRIDED_FOR_i(mn) Kz[i] = kernel::z2k(Kz[i] - mean, divisor);
-}
-
-__global__ void
-G_kernel_from_distances_I(RPTR(double) Kz, const uint32_t mn, const uint32_t m, CRPTRd gamma)
-{
-    CU_STRIDED_FOR_i(mn) Kz[i] = kernel::z2k(Kz[i], gamma[i % m]);
-}
-
-void kernel_from_distances(double *const K, const double *const Z, const uint32_t m, const uint32_t n, const double gamma, const double mean)
-{
-    const auto mn = m * n;
-    const auto mat_size = mn * sizeof(double);
-    CTX4_CUSTREAM;
-    double *d_K;
-    const auto d_Z = cumallocopy(Z, custream, mn);
-    cu_errchk(cudaMallocAsync((void **) &d_K, mat_size, custream));
-    G_kernel_from_distances<<<CU_BLOCKS_THREADS(mn), 0, custream>>>(d_K, d_Z, mn, gamma, mean);
-    cu_errchk(cudaFreeAsync(d_Z, custream));
-    cufreecopy(K, d_K, custream, mn);
-    cusyndestroy(custream);
-}
-
-void kernel_from_distances(double *const K, const double *const Z, const uint32_t m, const uint32_t n, const double *__restrict__ const gammas, const double mean)
-{
-    const auto mn = m * n;
-    const auto mat_size = mn * sizeof(double);
-    CTX4_CUSTREAM;
-    double *d_K;
-    const auto d_Z = cumallocopy(Z, custream, mn);
-    const auto d_gammas = cumallocopy(gammas, custream, n);
-    cu_errchk(cudaMallocAsync((void **) &d_K, mat_size, custream));
-    G_kernel_from_distances<<<CU_BLOCKS_THREADS(mn), 0, custream>>>(d_K, d_Z, mn, n, d_gammas, mean);
-    cu_errchk(cudaFreeAsync(d_Z, custream));
-    cu_errchk(cudaFreeAsync(d_gammas, custream));
-    cufreecopy(K, d_K, custream, mn);
-    cusyndestroy(custream);
-}
-
-void kernel_from_distances_I(arma::mat &Kz, const double gamma)
-{
-    CTX4_CUSTREAM;
-    auto d_Kz = cumallocopy(Kz, custream);
-    LOG4_DEBUG("Gamma " << gamma);
-    G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(Kz.n_elem), 0, custream>>>(d_Kz, Kz.n_elem, gamma, 0);
-    cufreecopy(Kz.memptr(), d_Kz, custream, Kz.n_elem);
-    cusyndestroy(custream);
-}
-
-void kernel_from_distances_I(arma::mat &Kz, const arma::vec &gamma)
-{
-    CTX4_CUSTREAM;
-    auto d_Kz = cumallocopy(Kz, custream);
-    const auto d_gamma = cumallocopy(gamma, custream);
-    G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(Kz.n_elem), 0, custream>>>(d_Kz, Kz.n_elem, Kz.n_rows, d_gamma);
-    cu_errchk(cudaFreeAsync(d_gamma, custream));
-    cufreecopy(Kz.memptr(), d_Kz, custream, Kz.n_elem);
-    cusyndestroy(custream);
-}
 
 __global__ void G_calc_gamma(CRPTRd Z, CRPTRd L, const uint32_t m, const uint32_t n, const uint32_t mm, const uint32_t mn, const double bias, RPTR(double) gamma)
 {
@@ -926,9 +819,7 @@ double cu_mae(CRPTRd d_in1, CRPTRd d_in2, const size_t n, const cudaStream_t cus
     auto const d_result_sum = cucalloc<double>(custream);
     G_sumabsdif<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in1, d_in2, d_result_sum, n);
     double r;
-    cu_errchk(cudaMemcpyAsync(&r, d_result_sum, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_result_sum, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
+    cufreecopy(&r, d_result_sum, custream);
     return r / n;
 }
 
@@ -1684,21 +1575,6 @@ UNROLL()
 }
 #endif
 
-
-void scale_labels(const uint16_t chunk, const uint16_t i, RPTR(double) d_labels, const uint32_t n_rows,
-                  t_weight_scaling_factors &weight_scaling_factors, const cudaStream_t custream, const cublasHandle_t cublas_H)
-{
-    const auto chunk_i_key = std::pair{chunk, i};
-    const tbb::mutex::scoped_lock l(weight_scaling_factors.mx);
-    auto &all_sf = weight_scaling_factors.scaling_factors;
-    auto i_sf = all_sf.find(chunk_i_key);
-    if (i_sf == all_sf.cend()) {
-        bool rc;
-        std::tie(i_sf, rc) = all_sf.insert(std::pair{chunk_i_key, std::pair{1., 0.}});
-        if (!rc) LOG4_THROW("Failed inserting scaling factor for chunk " << chunk << ", column " << i);
-    }
-    if (i) business::ScalingFactorService::cu_scale_calc_I(d_labels, n_rows, i_sf->second.first, i_sf->second.second, custream, cublas_H); // First column already scaled
-}
 
 __global__ void G_prepare_labels(RPTR(double) d_labels, const double L_sum, const uint32_t n)
 {

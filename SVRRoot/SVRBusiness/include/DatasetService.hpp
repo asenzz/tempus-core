@@ -29,7 +29,7 @@ class SVRParametersService;
 namespace svr {
 namespace business {
 
-typedef std::unordered_map<std::string /* column */, std::deque<datamodel::DataRow_ptr>> t_stream_results, *t_stream_results_ptr;
+typedef boost::unordered_flat_map<std::string /* column */, std::deque<datamodel::DataRow_ptr>> t_stream_results, *t_stream_results_ptr;
 
 class DatasetService
 {

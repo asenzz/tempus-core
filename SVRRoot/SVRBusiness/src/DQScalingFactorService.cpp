@@ -129,11 +129,13 @@ DQScalingFactorService::calculate(const uint16_t chunk_ix, const datamodel::Onli
 void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const uint16_t grad_level, const uint16_t step, const uint16_t lag,
                                             const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t)
 {
+    assert(sf.size());
     const auto num_levels = features_t.n_rows / lag;
     OMP_FOR_i(num_levels) {
         const auto row1 = i * lag;
         const auto row2 = row1 + lag - 1;
         const auto p_sf = find(sf, 0, chunk_ix, grad_level, step, i, true, false);
+        if (!p_sf) LOG4_THROW("Features scaling factor not found for chunk " << chunk_ix << ", gradient " << grad_level << ", step " << step << ", level " << i << " in " << sf);
         auto features_t_view = features_t.rows(row1, row2);
         features_t_view = common::scale<arma::mat>(features_t_view, p_sf->get_features_factor(), p_sf->get_dc_offset_features());
         if (features_t_view.has_nonfinite()) LOG4_THROW("Scaled features not sane, factors " << *p_sf << ", level " << i << ", feats " << features_t_view << ", start " << row1 <<

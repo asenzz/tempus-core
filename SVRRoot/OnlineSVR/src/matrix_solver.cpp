@@ -114,11 +114,11 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
     // Set more options
     // PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-ksp_gmres_preallocate", nullptr));
     // PetscCallCXXAbort(PETSC_COMM_SELF, PetscOptionsSetValue(nullptr, "-ksp_pipefgmres_shift", "10"));
-    PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetTolerances(ksp, 1e-7, PETSC_DEFAULT, PETSC_DEFAULT, iter));
+    PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetTolerances(ksp, 1e-9, PETSC_DEFAULT, PETSC_DEFAULT, iter));
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetFromOptions(ksp));
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetOperators(ksp, A, A));
 
-#ifndef NDEBUG
+#if 0
 
     // Monitor convergence by checking the cost function
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPMonitorSet(ksp, [](KSP ksp, Ti it, Tv rnorm, void *ctx) {

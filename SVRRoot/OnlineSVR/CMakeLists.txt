@@ -45,7 +45,7 @@ IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     FILE(GLOB TEST_SOURCE_FILES "test/*.cpp")
 
     ADD_EXECUTABLE(${PROJECT_NAME}-test ${TEST_SOURCE_FILES} ${COMMON_SOURCE_FILES})
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES} sycl ${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so)
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES} sycl ${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so) # absl::hash absl::flags_reflection absl::raw_hash_set
 ENDIF()
 
 ADD_LIBRARY(${PROJECT_NAME} ${SOURCE_FILES})

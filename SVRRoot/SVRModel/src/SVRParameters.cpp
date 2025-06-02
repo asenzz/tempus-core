@@ -10,9 +10,10 @@
 #include "SVRParametersService.hpp"
 #include "model/SVRParameters.hpp"
 
+#include "model/Dataset.hpp"
+
 namespace svr {
 namespace datamodel {
-
 e_kernel_type fromstring(const std::string &kernel_type_str)
 {
     e_kernel_type kernel_type = e_kernel_type::LINEAR;
@@ -76,15 +77,15 @@ std::ostream &operator<<(std::ostream &os, const e_kernel_type &kt)
 std::ostream &operator<<(std::ostream &s, const t_feature_mechanics &fm)
 {
     return s << "quantization " << common::present(fm.quantization)
-      << ", stretches " << common::present(fm.stretches)
-      << ", shifts " << common::present(fm.shifts)
-      << ", skips " << common::present(fm.skips)
-      << ", trims front " << (fm.trims.empty() ? std::string("empty") : common::present(fm.trims.front()));
+           << ", stretches " << common::present(fm.stretches)
+           << ", shifts " << common::present(fm.shifts)
+           << ", skips " << common::present(fm.skips)
+           << ", trims front " << (fm.trims.empty() ? std::string("empty") : common::present(fm.trims.front()));
 }
 
 e_kernel_type operator++(e_kernel_type &k_type)
 {
-    int *tmp = (int *) &k_type;
+    auto tmp = (int * const) &k_type;
     ++(*tmp);
     return k_type;
 }
@@ -102,46 +103,46 @@ bool less_SVRParameters_ptr::operator()(const SVRParameters_ptr &lhs, const SVRP
 }
 
 SVRParameters::SVRParameters(
-        const bigint id,
-        const bigint dataset_id,
-        const std::string &input_queue_table_name,
-        const std::string &input_queue_column_name,
-        const uint16_t level_ct,
-        const uint16_t decon_level,
-        const uint16_t step,
-        const uint16_t chunk_ix,
-        const uint16_t grad_level,
-        const double svr_C,
-        const double svr_epsilon,
-        const double svr_kernel_param,
-        const double svr_kernel_param2,
-        const double kernel_param3,
-        const uint32_t svr_decremental_distance,
-        const double svr_adjacent_levels_ratio,
-        const e_kernel_type kernel_type,
-        const uint32_t lag_count,
-        const std::set<uint16_t> &adjacent_levels,
-        const t_feature_mechanics &feature_mechanics)
-        : Entity(id),
-          dataset_id(dataset_id),
-          input_queue_table_name(input_queue_table_name),
-          input_queue_column_name(input_queue_column_name),
-          levels_ct(level_ct),
-          decon_level_(decon_level),
-          step_(step),
-          chunk_ix_(chunk_ix),
-          grad_level_(grad_level),
-          svr_epsilon(svr_epsilon),
-          svr_kernel_param(svr_kernel_param),
-          svr_kernel_param2(svr_kernel_param2),
-          svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
-          adjacent_levels(adjacent_levels),
-          kernel_type(kernel_type),
-          lag_count(lag_count),
-          feature_mechanics(feature_mechanics),
-          svr_C(svr_C),
-          kernel_param3(kernel_param3),
-          svr_decremental_distance(svr_decremental_distance)
+    const bigint id,
+    const bigint dataset_id,
+    const std::string &input_queue_table_name,
+    const std::string &input_queue_column_name,
+    const uint16_t level_ct,
+    const uint16_t decon_level,
+    const uint16_t step,
+    const uint16_t chunk_ix,
+    const uint16_t grad_level,
+    const double svr_C,
+    const double svr_epsilon,
+    const double svr_kernel_param,
+    const double svr_kernel_param2,
+    const double kernel_param3,
+    const uint32_t svr_decremental_distance,
+    const double svr_adjacent_levels_ratio,
+    const e_kernel_type kernel_type,
+    const uint32_t lag_count,
+    const std::set<uint16_t> &adjacent_levels,
+    const t_feature_mechanics &feature_mechanics)
+    : Entity(id),
+      dataset_id(dataset_id),
+      input_queue_table_name(input_queue_table_name),
+      input_queue_column_name(input_queue_column_name),
+      levels_ct(level_ct),
+      decon_level_(decon_level),
+      step_(step),
+      chunk_ix_(chunk_ix),
+      grad_level_(grad_level),
+      svr_epsilon(svr_epsilon),
+      svr_kernel_param(svr_kernel_param),
+      svr_kernel_param2(svr_kernel_param2),
+      svr_adjacent_levels_ratio(svr_adjacent_levels_ratio),
+      adjacent_levels(adjacent_levels),
+      kernel_type(kernel_type),
+      lag_count(lag_count),
+      feature_mechanics(feature_mechanics),
+      svr_C(svr_C),
+      kernel_param3(kernel_param3),
+      svr_decremental_distance(svr_decremental_distance)
 {
     if (adjacent_levels.empty()) (void) get_adjacent_levels();
 #ifdef ENTITY_INIT_ID
@@ -149,59 +150,69 @@ SVRParameters::SVRParameters(
 #endif
 }
 
-SVRParameters::SVRParameters(const SVRParameters &o) :
-        SVRParameters(
-                bigint(0),
-                o.dataset_id,
-                o.input_queue_table_name,
-                o.input_queue_column_name,
-                o.levels_ct,
-                o.decon_level_,
-                o.step_,
-                o.chunk_ix_,
-                o.grad_level_,
-                o.svr_C,
-                o.svr_epsilon,
-                o.svr_kernel_param,
-                o.svr_kernel_param2,
-                o.kernel_param3,
-                o.svr_decremental_distance,
-                o.svr_adjacent_levels_ratio,
-                o.kernel_type,
-                o.lag_count,
-                o.adjacent_levels,
-                o.feature_mechanics)
+SVRParameters::SVRParameters(const SVRParameters &o) : SVRParameters(
+    bigint(0),
+    o.dataset_id,
+    o.input_queue_table_name,
+    o.input_queue_column_name,
+    o.levels_ct,
+    o.decon_level_,
+    o.step_,
+    o.chunk_ix_,
+    o.grad_level_,
+    o.svr_C,
+    o.svr_epsilon,
+    o.svr_kernel_param,
+    o.svr_kernel_param2,
+    o.kernel_param3,
+    o.svr_decremental_distance,
+    o.svr_adjacent_levels_ratio,
+    o.kernel_type,
+    o.lag_count,
+    o.adjacent_levels,
+    o.feature_mechanics)
 {
+    gamma = o.gamma;
+    epsco = o.epsco;
+    H_feedback = o.H_feedback;
+    D_feedback = o.D_feedback;
+    V_feedback = o.V_feedback;
+    min_Z = o.min_Z;
+    max_Z = o.max_Z;
+}
+
+SVRParameters &SVRParameters::operator=(const SVRParameters &o)
+{
+    if (this == &o) return *this;
+
+    set_id(o.get_id());
+    dataset_id = o.dataset_id;
+    input_queue_table_name = o.input_queue_table_name;
+    input_queue_column_name = o.input_queue_column_name;
+    levels_ct = o.levels_ct;
+    decon_level_ = o.decon_level_;
+    chunk_ix_ = o.chunk_ix_;
+    grad_level_ = o.grad_level_;
+    step_ = o.step_;
+    svr_C = o.svr_C;
+    svr_epsilon = o.svr_epsilon;
+    svr_kernel_param = o.svr_kernel_param;
+    svr_kernel_param2 = o.svr_kernel_param2;
+    kernel_param3 = o.kernel_param3;
+    H_feedback = o.H_feedback;
+    D_feedback = o.D_feedback;
+    V_feedback = o.V_feedback;
+    min_Z = o.min_Z;
+    max_Z = o.max_Z;
+    svr_decremental_distance = o.svr_decremental_distance;
+    svr_adjacent_levels_ratio = o.svr_adjacent_levels_ratio;
+    adjacent_levels = o.adjacent_levels;
+    kernel_type = o.kernel_type;
+    lag_count = o.lag_count;
     feature_mechanics = o.feature_mechanics;
     gamma = o.gamma;
     epsco = o.epsco;
-}
-
-SVRParameters &SVRParameters::operator=(const SVRParameters &v)
-{
-    if (this == &v) return *this;
-
-    set_id(v.get_id());
-    dataset_id = v.dataset_id;
-    input_queue_table_name = v.input_queue_table_name;
-    input_queue_column_name = v.input_queue_column_name;
-    levels_ct = v.levels_ct;
-    decon_level_ = v.decon_level_;
-    chunk_ix_ = v.chunk_ix_;
-    grad_level_ = v.grad_level_;
-    step_ = v.step_;
-    svr_C = v.svr_C;
-    svr_epsilon = v.svr_epsilon;
-    svr_kernel_param = v.svr_kernel_param;
-    svr_kernel_param2 = v.svr_kernel_param2;
-    svr_decremental_distance = v.svr_decremental_distance;
-    svr_adjacent_levels_ratio = v.svr_adjacent_levels_ratio;
-    adjacent_levels = v.adjacent_levels;
-    kernel_type = v.kernel_type;
-    lag_count = v.lag_count;
-    feature_mechanics = v.feature_mechanics;
-    gamma = v.gamma;
-    epsco = v.epsco;
+    feature_mechanics = o.feature_mechanics;
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
@@ -233,6 +244,12 @@ bool SVRParameters::operator==(const SVRParameters &o) const
            && svr_epsilon == o.svr_epsilon
            && svr_kernel_param == o.svr_kernel_param
            && svr_kernel_param2 == o.svr_kernel_param2
+           && min_Z == o.min_Z
+           && max_Z == o.max_Z
+           && kernel_param3 == o.kernel_param3
+           && H_feedback == o.H_feedback
+           && D_feedback == o.D_feedback
+           && V_feedback == o.V_feedback
            && svr_decremental_distance == o.svr_decremental_distance
            && svr_adjacent_levels_ratio == o.svr_adjacent_levels_ratio
            && kernel_type == o.kernel_type
@@ -421,7 +438,6 @@ double SVRParameters::get_svr_adjacent_levels_ratio() const noexcept
     return svr_adjacent_levels_ratio;
 }
 
-
 void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio) noexcept
 {
     if (_svr_adjacent_levels_ratio < 0 || _svr_adjacent_levels_ratio > 1)
@@ -434,13 +450,14 @@ void SVRParameters::set_svr_adjacent_levels_ratio(const double _svr_adjacent_lev
 std::set<uint16_t> &SVRParameters::get_adjacent_levels()
 {
     return adjacent_levels.empty()
-           ? adjacent_levels = business::SVRParametersService::get_adjacent_indexes(decon_level_, svr_adjacent_levels_ratio, levels_ct)
-           : adjacent_levels;
+               ? adjacent_levels = business::SVRParametersService::get_adjacent_indexes(decon_level_, svr_adjacent_levels_ratio, levels_ct)
+               : adjacent_levels;
 }
 
 const std::set<uint16_t> &SVRParameters::get_adjacent_levels() const
 {
-    if (adjacent_levels.empty()) LOG4_THROW("Adjacent levels not initialized.");
+    if (adjacent_levels.empty())
+        LOG4_THROW("Adjacent levels not initialized.");
     return adjacent_levels;
 }
 
@@ -469,7 +486,8 @@ uint32_t SVRParameters::get_lag_count() const noexcept
 
 void SVRParameters::set_lag_count(const uint32_t _lag_count) noexcept
 {
-    if (_lag_count == 0) THROW_EX_FS(std::invalid_argument, "Lag count parameter cannot be zero.");
+    if (_lag_count == 0)
+        THROW_EX_FS(std::invalid_argument, "Lag count parameter cannot be zero.");
     lag_count = _lag_count;
 }
 
@@ -493,29 +511,32 @@ std::string SVRParameters::to_string() const
     std::stringstream s;
     s << std::setprecision(std::numeric_limits<double>::max_digits10);
     s << "id " << id
-      << ", dataset id " << dataset_id
-      << ", cost " << svr_C
-      << ", epsco " << common::present(epsco)
-      << ", epsilon " << svr_epsilon
-      << ", kernel param " << svr_kernel_param
-      << ", gamma " << common::present(gamma)
-      << ", kernel param 2 " << svr_kernel_param2
-      << ", kernel param 3 " << kernel_param3
-      << ", decrement distance " << svr_decremental_distance
-      << ", min Z " << min_Z
-      << ", max Z " << max_Z
-      << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
-      << ", kernel type " << static_cast<int>(kernel_type)
-      << ", lag count " << lag_count
-      << ", table name " << input_queue_table_name
-      << ", column name " << input_queue_column_name
-      << ", decon level " << decon_level_
-      << ", chunk " << chunk_ix_
-      << ", gradient " << grad_level_
-      << ", step " << step_
-      // << ", adjacent levels " << common::to_string(adjacent_levels)
-      // << ", feature mechanics " << feature_mechanics
-      ;
+            << ", dataset id " << dataset_id
+            << ", cost " << svr_C
+            << ", epsco " << common::present(epsco)
+            << ", epsilon " << svr_epsilon
+            << ", kernel param " << svr_kernel_param
+            << ", gamma " << common::present(gamma)
+            << ", kernel param 2 " << svr_kernel_param2
+            << ", kernel param 3 " << kernel_param3
+            << ", horizontal " << H_feedback
+            << ", diagonal " << D_feedback
+            << ", vertical path feedback " << V_feedback
+            << ", decrement distance " << svr_decremental_distance
+            << ", min Z " << min_Z
+            << ", max Z " << max_Z
+            << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
+            << ", kernel type " << static_cast<int>(kernel_type)
+            << ", lag count " << lag_count
+            << ", table name " << input_queue_table_name
+            << ", column name " << input_queue_column_name
+            << ", decon level " << decon_level_
+            << ", chunk " << chunk_ix_
+            << ", gradient " << grad_level_
+            << ", step " << step_
+            // << ", adjacent levels " << common::to_string(adjacent_levels)
+            // << ", feature mechanics " << feature_mechanics
+            ;
 
     return s.str();
 }
@@ -526,25 +547,25 @@ std::string SVRParameters::to_sql_string() const
     s.precision(std::numeric_limits<double>::max_digits10);
 
     s << "\t" << get_id()
-      << "\t" << get_dataset_id()
-      << "\t" << input_queue_table_name
-      << "\t" << input_queue_column_name
-      << "\t" << decon_level_
-      << "\t" << chunk_ix_
-      << "\t" << grad_level_
-      << "\t" << step_
-      << "\t" << svr_C
-      << "\t" << svr_epsilon
-      << "\t" << svr_kernel_param
-      << "\t" << svr_kernel_param2
-      << "\t" << kernel_param3
-      << "\t" << svr_decremental_distance
-      << "\t" << svr_adjacent_levels_ratio
-      << "\t" << static_cast<int>(kernel_type)
-      << "\t" << lag_count
-      // << "\t" << common::to_string(adjacent_levels)
-      // << "\t" << feature_mechanics
-      ;
+            << "\t" << get_dataset_id()
+            << "\t" << input_queue_table_name
+            << "\t" << input_queue_column_name
+            << "\t" << decon_level_
+            << "\t" << chunk_ix_
+            << "\t" << grad_level_
+            << "\t" << step_
+            << "\t" << svr_C
+            << "\t" << svr_epsilon
+            << "\t" << svr_kernel_param
+            << "\t" << svr_kernel_param2
+            << "\t" << kernel_param3
+            << "\t" << svr_decremental_distance
+            << "\t" << svr_adjacent_levels_ratio
+            << "\t" << static_cast<int>(kernel_type)
+            << "\t" << lag_count
+            // << "\t" << common::to_string(adjacent_levels)
+            // << "\t" << feature_mechanics
+            ;
 
     return s.str();
 }
@@ -592,7 +613,7 @@ bool t_feature_mechanics::needs_tuning() const noexcept
     return quantization.empty() || quantization.has_nonfinite()
            || stretches.empty() || stretches.has_nonfinite()
            || shifts.empty() || shifts.has_nonfinite()
-//           || skips.empty() || skips.has_nonfinite()
+           //           || skips.empty() || skips.has_nonfinite()
            || trims.empty();
 }
 
@@ -603,7 +624,7 @@ std::stringstream t_feature_mechanics::save() const
     return s;
 }
 
-t_feature_mechanics t_feature_mechanics::load(const std::string& bin_data)
+t_feature_mechanics t_feature_mechanics::load(const std::string &bin_data)
 {
     std::istringstream iss(bin_data);
     boost::archive::binary_iarchive ia(iss);
@@ -612,7 +633,7 @@ t_feature_mechanics t_feature_mechanics::load(const std::string& bin_data)
     return obj;
 }
 
-bool t_feature_mechanics::operator == (const t_feature_mechanics &o) const
+bool t_feature_mechanics::operator ==(const t_feature_mechanics &o) const
 {
     return arma::all(quantization == o.quantization)
            && arma::all(stretches == o.stretches)
@@ -620,6 +641,5 @@ bool t_feature_mechanics::operator == (const t_feature_mechanics &o) const
            && arma::all(skips == o.skips)
            && trims == o.trims;
 }
-
 }
 }

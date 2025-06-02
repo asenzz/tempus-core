@@ -445,6 +445,17 @@ double mean(const arma::mat &input)
 #endif
 }
 
+double mean(const double *const input, const size_t len)
+{
+#ifdef USE_IPP // IPP freezes when initialized in multiple shared objects
+    double r;
+    ip_errchk(ippsMean_64f(input, len, &r));
+    return r;
+#else
+    LOG4_THROW("Not implemented!");
+#endif
+}
+
 double stdscore(const double *const v, const size_t len)
 {
     const auto meanabs = cblas_dasum(len, v, 1) / len;
@@ -465,8 +476,9 @@ double medianabs(double *const v, const size_t len)
 
 inline double *const abssort(const double *const v, const size_t len)
 {
-    assert(v && q <= 1. && q > 0.);
-    auto tmp = (double *const) aligned_alloc(32, len * sizeof(double));
+    assert(v);
+    assert(len);
+    auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, len * sizeof(double));
     memcpy(tmp, v, len * sizeof(double));
     ip_errchk(ippsAbs_64f_I(tmp, len));
     ip_errchk(ippsSortAscend_64f_I(tmp, len));
@@ -478,7 +490,7 @@ double meanabs_hiquant(const double *const v, const size_t len, const double q)
     const auto tmp = common::abssort(v, len);
     double r;
     ip_errchk(ippsMean_64f(tmp + ptrdiff_t(len * (1 - q)), len * q, &r));
-    free(tmp);
+    ALIGNED_FREE_(tmp);
     return r;
 }
 
@@ -487,7 +499,7 @@ double meanabs_loquant(const double *const v, const size_t len, const double q)
     const auto tmp = common::abssort(v, len);
     double r;
     ip_errchk(ippsMean_64f(tmp, len * q, &r));
-    free(tmp);
+    ALIGNED_FREE_(tmp);
     return r;
 }
 
@@ -496,15 +508,16 @@ double meanabs_quant(const double *const v, const size_t len, const double q)
     const auto tmp = common::abssort(v, len);
     double r;
     ip_errchk(ippsMean_64f(tmp + ptrdiff_t((1. - q) * len / 2.), len * q, &r));
-    free(tmp);
+    ALIGNED_FREE_(tmp);
     return r;
 }
 
 
 inline double *const sort(const double *const v, const size_t len)
 {
-    assert(v && q <= 1. && q > 0.);
-    auto tmp = (double *const) aligned_alloc(32, len * sizeof(double));
+    assert(v);
+    assert(len);
+    auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, len * sizeof(double));
     memcpy(tmp, v, len * sizeof(double));
     ip_errchk(ippsAbs_64f_I(tmp, len));
     ip_errchk(ippsSortAscend_64f_I(tmp, len));
@@ -516,7 +529,7 @@ double mean_hiquant(const double *const v, const size_t len, const double q)
     const auto tmp = common::sort(v, len);
     double r;
     ip_errchk(ippsMean_64f(tmp + ptrdiff_t(len * (1 - q)), len * q, &r));
-    free(tmp);
+    ALIGNED_FREE_(tmp);
     return r;
 }
 
@@ -525,7 +538,7 @@ double mean_loquant(const double *const v, const size_t len, const double q)
     const auto tmp = common::sort(v, len);
     double r;
     ip_errchk(ippsMean_64f(tmp, len * q, &r));
-    free(tmp);
+    ALIGNED_FREE_(tmp);
     return r;
 }
 
@@ -534,7 +547,7 @@ arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level)
     constexpr int value = 9879871;
     arma::arma_rng::set_seed(value + level);
     static std::mutex mx;
-    std::scoped_lock l(mx);
+    const std::scoped_lock l(mx);
     return arma::shuffle(to_shuffle);
 }
 
@@ -550,7 +563,7 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle)
 template<>
 arma::mat scale(const arma::mat &m, const double sf, const double dc)
 {
-    arma::mat r(arma::size(m), arma::fill::none);
+    arma::mat r(arma::size(m), ARMA_DEFAULT_FILL);
 #ifdef USE_IPP
     ip_errchk(ippsNormalize_64f(m.mem, r.memptr(), m.n_elem, dc, sf));
 #else
@@ -573,7 +586,7 @@ arma::mat &scale_I(arma::mat &m, const double sf, const double dc)
 template<>
 arma::mat unscale(const arma::mat &m, const double sf, const double dc)
 {
-    arma::mat r(arma::size(m), arma::fill::none);
+    arma::mat r(arma::size(m), ARMA_DEFAULT_FILL);
     vdLinearFrac(m.n_elem, m.mem, m.mem, sf, dc, 0, 1, r.memptr());
     return r;
 }
@@ -607,6 +620,7 @@ std::atomic<double> pseudo_random_dev::state = .54321;
 constexpr uint32_t max_D = 64;
 
 // #define INIT_SOBOL
+#define PERFECT_REPRODUCIBILITY
 
 void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, uint64_t sobol_ctr)
 {
@@ -620,18 +634,28 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
     if (bounds.n_cols != 2 || bounds.n_rows != D)
         THROW_EX_FS(std::invalid_argument, "n " << n << ", D " << D << ", bounds " << arma::size(bounds));
     const arma::vec range = bounds.col(1) - bounds.col(0);
+#ifndef PERFECT_REPRODUCIBILITY
     const auto init_random = n < 2;
-    const double n_1 = n - 1;
+#endif
+    const auto n_1 = std::max<long double>(1, n - 1);
     const auto seed_pseud_rand = (uint_fast64_t) pseudo_random_dev::max(1.);
     // auto gen = reproducibly_seeded_64<xso::rng64>();
     auto gen = std::mt19937_64(seed_pseud_rand);
     std::uniform_real_distribution<double> dis(0., 1.);
+#ifdef PERFECT_REPRODUCIBILITY
+    OMP_FOR_(n, ordered firstprivate(n, D, sobol_ctr, max_D, n_1))
+#else
     OMP_FOR_(n, ordered firstprivate(n, D, init_random, sobol_ctr, max_D, n_1))
+#endif
     for (uint32_t i = 0; i < n; ++i) {
-        const auto i_n_1 = double(i) / n_1;
+        const auto i_n_1 = (i % max_D) / n_1;
         for (uint32_t j = 0; j < D; ++j) {
             const auto pow_j = pows.empty() ? 1. : pows[j];
+#ifdef PERFECT_REPRODUCIBILITY
+            if constexpr(false)
+#else
             if (init_random || j >= max_D) // Use a pseudo-random number
+#endif
 #ifdef INIT_SOBOL
                 x0(j, i) = sobolnum(j, sobol_ctr + i);
 #else
@@ -639,7 +663,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
                 x0(j, i) = dis(gen);
 #endif
             else // Produce equidistant grid of parameter combinations
-                x0(j, i) = std::fmod<long double>(std::pow<long double>(2, j) * i_n_1, 1);
+                x0(j, i) = std::fmod<long double>(std::pow<long double>(2, j % max_D) * i_n_1, 1);
 #ifndef NDEBUG
             LOG4_TRACE("Particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow " << pow_j);
 #endif

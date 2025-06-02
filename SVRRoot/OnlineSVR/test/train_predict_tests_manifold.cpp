@@ -65,11 +65,11 @@ const auto init_test = [] {
 
 namespace {
 
-#ifdef VALGRIND_BUILD
-constexpr unsigned C_test_decrement = 1;
-constexpr unsigned C_test_lag = 1;
-#else
 constexpr auto C_online_validate = false;
+#ifdef VALGRIND_BUILD
+constexpr unsigned C_test_decrement = 5;
+constexpr unsigned C_test_lag = 2;
+#else
 const uint32_t C_test_decrement = 1000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 constexpr auto C_test_lag = datamodel::C_default_svrparam_lag_count;
 #endif

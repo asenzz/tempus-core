@@ -7,8 +7,10 @@
 #define INTEGRATION_TEST
 // #define OUTPUT_TRAINING_DATA // Output data in Paramsys formatted files // TODO Move to daemon config
 #define NO_ONLINE_TRAINING // Disable online training, buggy and resource-hungry
-#define CTX_PER_GPU 2 // Default streams per GPU
-
+#define CTX_PER_GPU 1 // Default streams per GPU
+#ifndef MEM_ALIGN
+#define MEM_ALIGN 32
+#endif
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
 // #define INSTANCE_WEIGHTS // TODO Test should it multiply labels too?
@@ -44,3 +46,9 @@
 #define TOSTR(X) __TOSTR(X)
 
 #define SANITIZE_THREAD THREAD
+
+#ifdef PRODUCTION_BUILD
+#define ARMA_DEFAULT_FILL arma::fill::none
+#else
+#define ARMA_DEFAULT_FILL arma::fill::value(std::numeric_limits<double>::quiet_NaN())
+#endif

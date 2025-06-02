@@ -11,11 +11,6 @@
 
 namespace svr {
 
-struct t_weight_scaling_factors {
-    std::unordered_map<std::pair<uint16_t, uint16_t>, std::pair<double /* first sf */, double /* first dc */>> scaling_factors;
-    tbb::mutex mx;
-};
-
 namespace solvers {
 
 class score_weights {
@@ -71,25 +66,6 @@ __global__ void G_calc_epsco(const double *const K, const double *const L, doubl
 double *cu_calc_epscos(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const cudaStream_t custream);
 
 double cu_calc_epsco(const double *const K, const double *const L, const uint32_t m, const uint32_t n, const uint32_t ld, const double sum_L, const cudaStream_t custream);
-
-
-void kernel_from_distances(double *const K, const double *const Z, const uint32_t m, const uint32_t n, const double gamma, const double mean);
-
-void kernel_from_distances_I(arma::mat &Kz, const double gamma);
-
-void kernel_from_distances(double *const K, const double *const Z, const uint32_t m, const uint32_t n, const double *const gammas, const double mean);
-
-void kernel_from_distances_I(arma::mat &Kz, const arma::vec &gammas);
-
-void kernel_from_distances_symm(double *const K, CPTRd Z, const uint32_t m, const double gamma); // TODO Buggy fix
-
-__global__ void G_kernel_from_distances(double *K, const double *const Z, const uint32_t mn, const double gamma, const double mean);
-
-__global__ void G_kernel_from_distances(double *K, const double *const Z, const uint32_t mn, const uint32_t m, const double *const gammas, const double mean);
-
-__global__ void G_kernel_from_distances_I(double *Kz, const uint32_t mn, const double gamma, const double mean);
-
-__global__ void G_kernel_from_distances_I(RPTR(double) Kz, const uint32_t mn, const uint32_t m, CRPTR(double) gammas);
 
 // double score_kernel(CPTRd ref_kernel /* colmaj order */, const double norm_ref, CPTRd Z /* colmaj order */, const uint32_t M, const double gamma); // TODO  Test
 

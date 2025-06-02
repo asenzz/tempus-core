@@ -6,6 +6,11 @@
 
 namespace svr {
 
+uint32_t total(const dim3 &d)
+{
+    return d.x * d.y * d.z;
+}
+
 __global__ void
 G_copy_submat(CRPTRd in, double *const out, const unsigned in_m, const unsigned out_m, const unsigned out_mn)
 {

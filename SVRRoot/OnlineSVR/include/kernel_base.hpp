@@ -7,7 +7,6 @@
 
 #include <armadillo>
 #include "model/SVRParameters.hpp"
-#include "common/gpu_handler.hpp"
 #include "calc_cache.hpp"
 
 namespace svr {
@@ -15,11 +14,11 @@ namespace kernel {
 
 template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y);
 
-template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean);
+template<typename T> void kernel_from_distances(RPTR(T) Kz, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree);
 
-template<typename T> void kernel_from_distances(RPTR(T) Kz, const uint32_t m, const uint32_t n, const T gamma, const T mean);
+template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree);
 
-template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const cudaStream_t custream);
+template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree, const cudaStream_t custream);
 
 template<typename T>
 class kernel_base {
@@ -47,13 +46,13 @@ public:
 
     arma::Mat<T> kernel_from_distances(const arma::Mat<T> &Z) const;
 
-    arma::Mat<T> &kernel(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
+    arma::Mat<T> kernel(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
 
-    arma::Mat<T> &kernel(business::calc_cache &cc, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time, const bpt::ptime &Xy_time) const;
+    arma::Mat<T> kernel(business::calc_cache &cc, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time, const bpt::ptime &Xy_time) const;
 
-    arma::Mat<T> &distances(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
+    arma::Mat<T> distances(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
 
-    arma::Mat<T> &distances(business::calc_cache &cc, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time, const bpt::ptime &Xy_time) const;
+    arma::Mat<T> distances(business::calc_cache &cc, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time, const bpt::ptime &Xy_time) const;
 
     virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const = 0; // K is a kernel matrix
 

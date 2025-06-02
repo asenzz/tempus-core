@@ -40,6 +40,9 @@ constexpr char C_mql_date_time_format[] = "%Y.%m.%d %H:%M:%S";
 
 #ifdef INTEGRATION_TEST
 
+#ifdef VALGRIND_BUILD
+constexpr uint16_t C_integration_test_validation_window = 2;
+#else
 const auto C_integration_test_validation_window = [] {
     constexpr uint16_t test_offset_default = 460;
     const auto p = getenv("SVRWAVE_TEST_WINDOW");
@@ -51,6 +54,7 @@ const auto C_integration_test_validation_window = [] {
         return r;
     }
 }();
+#endif
 
 #else
 

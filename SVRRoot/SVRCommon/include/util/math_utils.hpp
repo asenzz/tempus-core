@@ -109,6 +109,19 @@ std::atomic<T> &operator&=(std::atomic<T> &lhs, const T &rhs)
 
 namespace common {
 
+
+template<typename T> T absdiffratio(const T a, const T b)
+{
+    if (a == 0 && b == 0) return 0;
+    return std::abs(a - b) / (std::abs(a) + std::abs(b));
+}
+
+template<typename T> T absdiffinvratio(const T a, const T b)
+{
+    if (a == 0 && b == 0) return 0;
+    return T(1) - std::abs(a - b) / (std::abs(a) + std::abs(b));
+}
+
 struct pseudo_random_dev {
     static std::atomic<double> state;
 
@@ -362,7 +375,7 @@ template<typename T> arma::Mat<T> &normalize_cols_I(arma::Mat<T> &m)
 template<typename T> arma::Mat<T> normalize_cols(const arma::Mat<T> &m)
 {
     const arma::Row<T> means = arma::mean(m);
-    arma::Mat<T> r(arma::size(m), arma::fill::none);
+    arma::Mat<T> r(arma::size(m), ARMA_DEFAULT_FILL);
     OMP_FOR(m.n_cols)
     for (size_t c = 0; c < m.n_cols; ++c) {
         r.col(c) = m.col(c) - means[c];
@@ -460,7 +473,7 @@ template<typename T> inline auto &shift_I(arma::Mat<T> &m, const arma::Col<unsig
 
 template<typename T> inline arma::Mat<T> shift(const arma::Mat<T> &m, const arma::Col<unsigned> &shiftings)
 {
-    arma::Mat<T> v(arma::size(m), arma::fill::none);
+    arma::Mat<T> v(arma::size(m), ARMA_DEFAULT_FILL);
     if (shiftings.n_elem != m.n_cols) LOG4_THROW("Shiftings " << arma::size(shiftings) << " not compatible with matrix " << arma::size(m));
     OMP_FOR(m.n_cols)
     for (size_t i = 0; i < m.n_cols; ++i) v.col(i) = shiftings[i] ? arma::shift(m.col(i), shiftings[i]).eval() : m.col(i);
@@ -615,6 +628,11 @@ join_rows(const size_t arg_ct...)
     return res;
 }
 
+__device__ __host__ __forceinline__ double scale(const double v, const double sf, const double dc)
+{
+    return (v - dc) / sf;
+}
+
 template<typename T> inline T scale(const T &v, const double sf, const double dc)
 {
     return (v - dc) / sf;
@@ -737,7 +755,7 @@ template<typename T> inline arma::Mat<T> extrude_cols(const arma::Mat<T> &m, con
     OMP_FOR(ct / m.n_rows)
     for (uint32_t start_i = 0; start_i < ct; start_i += m.n_rows) {
         const auto end_i = std::min<uint32_t>(ct, start_i + m.n_rows) - 1;
-        r.rows(start_i, end_i) = m.rows(0, end_i - start_i);
+        r.rows(start_i, end_i) = m.rows(0, m.n_rows - 1);
     }
     return r;
 }
@@ -896,6 +914,8 @@ arma::mat pdist(const arma::mat &input);
 
 double mean(const arma::mat &input);
 
+double mean(const double *const input, const size_t len);
+
 double max(const arma::mat &input);
 
 double min(const arma::mat &input);
@@ -907,8 +927,6 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle);
 double calc_quant_offset_mul(const double main_to_aux_period_ratio, const double level, const double levels_count);
 
 double get_quantization_max(const double main_to_aux_period_ratio);
-
-double mean(const arma::mat &input);
 
 arma::mat shuffle_admat(const arma::mat &to_shuffle, const size_t level);
 
