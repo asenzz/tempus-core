@@ -15,8 +15,8 @@
 namespace svr {
 namespace datamodel {
 
-class OnlineMIMOSVR;
-using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+class OnlineSVR;
+using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
 
 typedef enum class kernel_type : int {
     LINEAR = 0,
@@ -67,7 +67,7 @@ constexpr double C_default_svrparam_kernel_param2 = 1;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
-constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::DEEP_PATH;
+constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::PATH;
 constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(C_default_svrparam_kernel_type);
 #ifdef VALGRIND_BUILD
 constexpr uint32_t C_default_svrparam_lag_count = 2;
@@ -84,7 +84,6 @@ struct t_feature_mechanics
     arma::fvec stretches;
     std::deque<arma::uvec> trims;
     arma::u32_vec shifts;
-    arma::fvec skips;
 
     bool needs_tuning() const noexcept;
     std::stringstream save() const;
@@ -102,7 +101,6 @@ struct t_feature_mechanics
         ar & stretches;
         ar & trims;
         ar & shifts;
-        ar & skips;
     }
 
     bool operator == (const t_feature_mechanics &o) const;
@@ -269,7 +267,7 @@ public:
 
     void set_kernel_type(const e_kernel_type _kernel_type) noexcept;
 
-    PROPERTY(OnlineMIMOSVR_ptr, manifold);
+    PROPERTY(OnlineSVR_ptr, manifold);
 
     // Lag count across all models should be the same with the current infrastructure inplace // Only head param (chunk 0, grad 0, manifold 0) takes effect
     uint32_t get_lag_count() const noexcept;

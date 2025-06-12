@@ -95,7 +95,7 @@ ENDIF ()
 
 # UNSET(CXX_OPTIMIZATION_FLAGS COMMON_OPTIMIZATION_FLAGS_GCC COMMON_OPTIMIZATION_FLAGS_ICX LINKER_OPTIMIZATION_FLAGS LINKER_OPTIMIZATION_FLAGS_GCC LINKER_OPTIMIZATION_FLAGS_ICX)
 IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-    LIST(APPEND CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -mstackrealign -mmovbe -malign-double -mfpmath=sse -funroll-loops -fno-trapping-math -fno-signed-zeros -fassociative-math -ffp-contract=fast -O3 -mcmodel=large -pipe) # Intel linker crash with -fsplit-stack
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS -march=native -mtune=native -m64 -funroll-loops -mstackrealign -mmovbe -malign-double -mfpmath=sse -fno-trapping-math -fno-signed-zeros -fassociative-math -ffp-contract=fast -O3 -mcmodel=large -pipe) # Intel linker crash with -fsplit-stack
     LIST(APPEND COMMON_OPTIMIZATION_FLAGS_GCC -fno-semantic-interposition -fbranch-target-load-optimize -fbranch-target-load-optimize2 -finline-limit=${INLINE_INSTR_LIMIT} -fprefetch-loop-arrays -fmerge-all-constants -ftree-loop-ivcanon -fivopts -fgcse-sm -fgcse-las -mfma -fearly-inlining -fipa-pta -fsched-pressure -floop-nest-optimize -ftree-vectorize -floop-block -floop-strip-mine -fsched-spec-load -fno-math-errno -fallow-store-data-races -fvect-cost-model=unlimited -fgraphite-identity -fno-semantic-interposition) # Kills a bit of precision -funsafe-math-optimizations
     LIST(APPEND COMMON_OPTIMIZATION_FLAGS_ICX -qopt-prefetch -qopt-dynamic-align -fvec-peel-loops -fvec-remainder-loops -fvec-with-mask -vec-threshold=0 -qopt-multiple-gather-scatter-by-shuffles -qopt-mem-layout-trans=4 -fdiagnostics-show-option -mprefer-vector-width=${CPU_VECTOR_WIDTH} -fslp-vectorize -fjump-tables -fma -Wno-overriding-option -fp-model=precise -fp-speculation=safe -fimf-use-svml=true -mbranches-within-32B-boundaries -vec -finline -qopt-matmul -qopt-jump-tables)
     IF (ENABLE_OMP_OFFLOAD)
@@ -103,7 +103,7 @@ IF (CMAKE_BUILD_TYPE MATCHES "Rel")
         LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX --offload-new-driver -fsycl -lsycl -Xopenmp-target-backend=spir64_x86_64 "-device=cpu -march=sse4.2") # --offload-arch=v100+test
     ENDIF ()
     LIST(APPEND CXX_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC})
-    LIST(APPEND CXX_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -inline-level=2) # -ffp-eval-method=extended
+    LIST(APPEND CXX_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -inline-level=2) # -ffp-eval-method=extended for defaulting to 128 bit long double
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS -O3)
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS_GCC ${COMMON_OPTIMIZATION_FLAGS_GCC} -fwhole-program)
     LIST(APPEND LINKER_OPTIMIZATION_FLAGS_ICX ${COMMON_OPTIMIZATION_FLAGS_ICX} -qopenmp-link=static -Wl,-z,muldefs -static-intel) # -static-libstdc++ not supported with -fsycl
@@ -318,7 +318,7 @@ if (USE_CUDA)
         LIST(APPEND LINK_FLAGS_CUDA --shared)
     ENDIF ()
     IF (CMAKE_BUILD_TYPE MATCHES "Rel")
-        LIST(APPEND COMPILER_EXTENSIONS_CUDA --std=c++${CXX_STANDARD} -O3 --dopt=on -lineinfo --extra-device-vectorization --fmad=true --prec-div=true --prec-sqrt=true -split-compile=0 --ftz=false -Wno-deprecated-declarations) # --split-compile-extended=1
+        LIST(APPEND COMPILER_EXTENSIONS_CUDA --std=c++${CXX_STANDARD} -O3 --dopt=on -lineinfo --prec-div=true --prec-sqrt=true -split-compile=0 --ftz=false -Wno-deprecated-declarations) # --split-compile-extended=1 --extra-device-vectorization --fmad=true split-compile=0
     ELSEIF (CMAKE_BUILD_TYPE MATCHES "Debug")
         LIST(APPEND COMPILER_EXTENSIONS_CUDA -G -g --device-debug --no-compress)
         LIST(APPEND LINK_FLAGS_CUDA --debug --device-stack-protector --preserve-relocs --keep-system-libraries --ignore-host-info)
@@ -366,13 +366,14 @@ IF (ENABLE_OPENCL)
 ENDIF (ENABLE_OPENCL)
 
 SET(MAGMA_DIR "/usr/local/magma" CACHE STRING "Path to directory under which include and lib subfolders contain MAGMA files.")
-LINK_DIRECTORIES(BEFORE ${MAGMA_DIR}/lib)
-INCLUDE_DIRECTORIES("${ONEAPI_ROOT}/tbb/latest/include" "/usr/include/hdf5/serial" "${MAGMA_DIR}/include") # "${ONEAPI_ROOT}/mpi/latest/include"
+SET(LIBDIR "${CMAKE_CURRENT_SOURCE_DIR}/lib")
+LINK_DIRECTORIES(BEFORE ${MAGMA_DIR}/lib ${LIBDIR})
+INCLUDE_DIRECTORIES("${ONEAPI_ROOT}/tbb/latest/include" "/usr/include/hdf5/serial" "${MAGMA_DIR}/include" ${LIBDIR}) # "${ONEAPI_ROOT}/mpi/latest/include"
 IF(ENABLE_OPENCL)
     INCLUDE_DIRECTORIES("${ONEAPI_ROOT}/compiler/latest/include/sycl")
 ENDIF()
 
-SET(MKL_INTERFACE_FULL "intel_ilp64" CACHE STRING "MKL_INTERFACE_FULL")
+SET(MKL_INTERFACE_FULL "intel_lp64" CACHE STRING "MKL_INTERFACE_FULL")
 SET(MKL_LINK "static" CACHE STRING "MKL_LINK" FORCE)
 SET(OpenMP_iomp_LIBRARY "${ONEAPI_ROOT}/compiler/latest/linux/compiler/lib/intel64_lin/libiomp5.a" CACHE STRING "OpenMP_iomp_LIBRARY")
 IF (USE_INTEL_OPENMP)
@@ -455,9 +456,9 @@ IF (APPLE)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-narrowing")
 ENDIF ()
 
-SET(Boost_MIN_VERSION 1.74)
+SET(Boost_MIN_VERSION 1.80)
 SET(PQXX_LIBRARIES -lpqxx -lpq)
-LINK_LIBRARIES(highwayhash) # hdf5_serial
+LINK_LIBRARIES(highwayhash ${LIBDIR}/HDBSCAN-CPP/libhdbscan-cpp.so) # hdf5_serial
 
 FOREACH (module ${MODULES})
     INCLUDE_DIRECTORIES(${SVRROOT_DIR}/${module}/include)

@@ -201,7 +201,6 @@ pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const ar
         result.best_parameters.zeros();
     }
 
-
     if (!std::isnormal(rhobeg)) rhobeg = ranges.front() * C_default_rhobeg;
     if (!std::isnormal(rhoend)) rhoend = ranges.front() * C_default_rhoend;
 

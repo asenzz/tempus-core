@@ -15,8 +15,8 @@
 namespace svr {
 namespace datamodel {
 void
-OnlineMIMOSVR::batch_train(
-    const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
+OnlineSVR::batch_train(
+    const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
     const matrices_ptr &precalc_kernel_matrices)
 {
 #ifdef INSTANCE_WEIGHTS
@@ -25,13 +25,11 @@ OnlineMIMOSVR::batch_train(
                                                         ", instance weights " << arma::size(*p_input_weights_) << ", level " << level);
 #else
     if (p_xtrain->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty())
-        LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", last knowns " << arma::size(*p_ylastknown) <<
-        ", level " << level);
+        LOG4_THROW("Invalid data dimensions, features " << arma::size(*p_xtrain) << ", labels " << arma::size(*p_ytrain) << ", level " << level);
 #endif
 
     p_features = p_xtrain;
     p_labels = p_ytrain;
-    p_last_knowns = p_ylastknown;
     p_input_weights = p_input_weights_;
     ixs = generate_indexes();
     last_trained_time = last_value_time;
@@ -64,13 +62,13 @@ OnlineMIMOSVR::batch_train(
         prepare_chunk(p);
     }
 
-    LOG4_DEBUG("Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) << ", last-knowns " << common::present(*p_ylastknown) <<
+    LOG4_DEBUG("Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) <<
         ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin() <<
         ", last value time " << last_value_time);
 
     if (needs_tuning()) {
         if (precalc_kernel_matrices && precalc_kernel_matrices->size()) LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
-        PROFILE_MSG(tune_sys(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
+        PROFILE_MSG(tune(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
     // OMP_FOR_i(num_chunks) {
@@ -88,18 +86,20 @@ OnlineMIMOSVR::batch_train(
     const auto chunks_score_min = common::min(chunks_score);
     chunks_score = chunks_score_max - chunks_score + chunks_score_min;
     const auto chunks_score_mean = common::mean(chunks_score);
-    const auto mean_inertia = chunks_score_mean * PROPS.get_weight_inertia();
-    chunks_score = (chunks_score + mean_inertia) / (chunks_score_mean + mean_inertia);
+    if (PROPS.get_weight_inertia() != 0) {
+        const auto mean_inertia = chunks_score_mean * PROPS.get_weight_inertia();
+        chunks_score = (chunks_score + mean_inertia) / (chunks_score_mean + mean_inertia);
+    } else chunks_score /= chunks_score_mean;
     samples_trained = p_features->n_rows;
 }
 
-void OnlineMIMOSVR::prepare_chunk(const uint32_t i)
+void OnlineSVR::prepare_chunk(const uint32_t i)
 {
     const auto p = get_params_ptr(i);
     prepare_chunk(p);
 }
 
-void OnlineMIMOSVR::prepare_chunk(const SVRParameters_ptr &p)
+void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
 {
     const auto i = p->get_chunk_index();
     train_feature_chunks_t[i] = feature_chunk_t(ixs[i]);
@@ -133,23 +133,21 @@ void OnlineMIMOSVR::prepare_chunk(const SVRParameters_ptr &p)
 }
 
 
-void OnlineMIMOSVR::learn(
-    const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const arma::mat &new_w, const bpt::ptime &last_value_time,
+void OnlineSVR::learn(
+    const arma::mat &new_x, const arma::mat &new_y, const arma::mat &new_w, const bpt::ptime &last_value_time,
     const bool temp_learn, const std::deque<uint32_t> &forget_ixs)
 {
     // TODO Review and fix this method
     last_trained_time = last_value_time;
     return;
 
-    if (new_x.empty() || new_y.empty() || new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols || new_ylk.n_rows != new_y.n_rows || new_x.n_rows != new_y.n_rows)
-        LOG4_THROW("New data dimensions labels " << arma::size(new_y) << ", last-knowns " << arma::size(new_ylk) << ", features " << arma::size(new_x) <<
-        " not sane or do not match model data dimensions labels " << arma::size(*p_labels) << ", features " << arma::size(*p_features)
-        << ", last-knowns " << arma::size(*p_last_knowns));
+    if (new_x.empty() || new_y.empty() || new_x.n_cols != p_features->n_cols || new_y.n_cols != p_labels->n_cols || new_x.n_rows != new_y.n_rows)
+        LOG4_THROW("New data dimensions labels " << arma::size(new_y) << ", features " << arma::size(new_x) <<
+        " not sane or do not match model data dimensions labels " << arma::size(*p_labels) << ", features " << arma::size(*p_features));
     if (p_features->n_rows == samples_trained) {
         // First call to online learn copy batch data, TODO maybe move to end of batch_train
         p_features = ptr(*p_features);
         p_labels = ptr(*p_labels);
-        p_last_knowns = ptr(*p_last_knowns);
 #ifdef INSTANCE_WEIGHTS
         p_input_weights = ptr(*p_input_weights);
 #endif
@@ -180,22 +178,18 @@ void OnlineMIMOSVR::learn(
         // p_manifold->learn(new_x_manifold, new_y_manifold, new_ylk_manifold, new_w, last_value_time);
         p_features->shed_rows(0, new_rows_ct - 1);
         p_labels->shed_rows(0, new_rows_ct - 1);
-        p_last_knowns->shed_rows(0, new_rows_ct - 1);
         p_features->insert_rows(p_features->n_rows, new_x);
         p_labels->insert_rows(p_labels->n_rows, new_y);
-        p_last_knowns->insert_rows(p_last_knowns->n_rows, new_ylk);
         return;
     }
 
     if (new_rows_ct > ixs.front().size() / 2) {
         p_features->shed_rows(0, new_rows_ct - 1);
         p_labels->shed_rows(0, new_rows_ct - 1);
-        p_last_knowns->shed_rows(0, new_rows_ct - 1);
         p_features->insert_rows(p_features->n_rows, new_x);
         p_labels->insert_rows(p_labels->n_rows, new_y);
-        p_last_knowns->insert_rows(p_last_knowns->n_rows, new_ylk);
         const auto backup_samples_trained = samples_trained + new_rows_ct;
-        batch_train(p_features, p_labels, p_last_knowns, p_input_weights, last_value_time);
+        batch_train(p_features, p_labels, p_input_weights, last_value_time);
         samples_trained = backup_samples_trained;
         return;
     }
@@ -253,7 +247,6 @@ void OnlineMIMOSVR::learn(
     // Do the shedding
     p_features->shed_rows(shed_ixs);
     p_labels->shed_rows(shed_ixs);
-    p_last_knowns->shed_rows(shed_ixs);
     tbb::concurrent_map<uint32_t /* chunk */, std::pair<uint32_t /* affected rows */, arma::mat /* forgotten weights */> > affected_chunks;
     OMP_FOR_i(ixs.size()) {
         // TODO Review
@@ -320,7 +313,6 @@ void OnlineMIMOSVR::learn(
             tmp_ixs.emplace(row_i);
     p_features->insert_rows(p_features->n_rows, new_x);
     p_labels->insert_rows(p_labels->n_rows, new_y);
-    p_last_knowns->insert_rows(p_last_knowns->n_rows, new_ylk);
 
     OMP_FOR_i(affected_chunks.size()) calc_weights(affected_chunks % i, ixs[i].n_rows * PROPS.get_solve_iterations_coefficient(), PROPS.get_online_learn_iter_limit());
     update_all_weights();
@@ -329,7 +321,7 @@ void OnlineMIMOSVR::learn(
 }
 
 
-arma::mat OnlineMIMOSVR::instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights)
+arma::mat OnlineSVR::instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights)
 {
     arma::mat w(ixs.n_rows, ixs.n_rows, ARMA_DEFAULT_FILL);
     const arma::vec Wv = arma::mean(weights.rows(ixs), 1);
@@ -357,7 +349,7 @@ arma::mat get_bounds(const arma::mat &A, const arma::mat &b)
 }
 
 
-double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
+double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
 {
     LOG4_BEGIN();
 
@@ -397,7 +389,7 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
 
     auto best_mae = std::numeric_limits<double>::max();
     auto best_c = PROPS.get_weight_columns();
-    arma::mat x0; // Starting points using IRWLS and/or linsolver, columns 1 or 2
+    arma::mat x0(n_residuals, 1, ARMA_DEFAULT_FILL); // Starting points using IRWLS and/or linsolver, columns 1 or 2
     for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
         const auto start_col = wcol * n_cols;
         const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
@@ -409,20 +401,12 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
             x0.set_size(n_residuals, 1);
             x0.col(0) = arma::vectorise(weights.cols(prev_start_col, prev_start_col + n_cols - 1));
         } else if (fresh_start) {
-#if 0
-            arma::mat prec;
-            solvers::solve_irwls(K, K, residuals, prec, iter_irwls);
-            if (arma::size(prec) != arma::size(residuals) || prec.has_nonfinite()) {
-                LOG4_ERROR("Preconditioned matrix contains non-finite values.");
-            x0.col(0).zeros();
-            } else
-                x0.col(0) = arma::vectorise(prec);
-#endif
+            x0.reset();
         } else {
             x0.set_size(n_residuals, 1);
             x0.col(0) = arma::vectorise(weights.head_cols(n_cols));
         }
-#if 0
+#if 0 // PETSc solver seems unstable
         if (x0.n_cols < 2 || x0.n_rows != n_rows) {
             x0.set_size(n_rows, 2);
             x0.zeros();
@@ -439,7 +423,7 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
         sem.acquire();
         common::AppConfig::set_global_log_level(boost::log::trivial::info); {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 1500);
+                                                                  {}, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 1500);
             memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
@@ -468,7 +452,7 @@ double OnlineMIMOSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_
     return best_mae;
 }
 
-double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
+double OnlineSVR::d_calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
 {
     LOG4_BEGIN();
 
@@ -477,8 +461,9 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
     const arma::mat K = K_ + common::extrude_rows(labels_.t().eval(), n_rows);
     const arma::mat L = labels_ * n_rows;
     bool fresh_start;
-    if (weights.n_rows != n_rows || weights.n_cols != n_cols * PROPS.get_weight_columns()) {
-        weights.set_size(n_rows, n_cols * PROPS.get_weight_columns());
+    const auto w_cols = n_cols * PROPS.get_weight_columns();
+    if (weights.n_rows != n_rows || weights.n_cols != w_cols) {
+        weights.set_size(n_rows, w_cols);
         fresh_start = true;
     } else
         fresh_start = false;
@@ -496,7 +481,7 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
     for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
         const auto start_col = wcol * n_cols;
         const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
-        auto sol_v = weights.cols(start_col, end_col);
+        arma::subview<double> sol_v = weights.cols(start_col, end_col);
         const auto bounds = get_bounds(K, residuals);
         if (wcol) {
             fresh_start = false;
@@ -520,7 +505,7 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
         {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
                                                                   x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 500);
-            sol_v = res.best_parameters;
+            memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
         sem.release();
@@ -545,7 +530,7 @@ double OnlineMIMOSVR::d_calc_weights(const arma::mat &K_, const arma::mat &label
 }
 
 
-void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls)
+void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls)
 {
     LOG4_BEGIN();
 
@@ -559,7 +544,7 @@ void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_op
           "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
                 ", W " << common::present(weight_chunks[chunk_ix]));
 #else
-    if (ixs[chunk_ix].n_elem < 3333) {
+    if (ixs[chunk_ix].n_elem < 1900) {
         PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
                     "Calculate weights " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
     } else {
@@ -573,7 +558,7 @@ void OnlineMIMOSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_op
 }
 
 
-void OnlineMIMOSVR::update_all_weights()
+void OnlineSVR::update_all_weights()
 {
     /*
     if (arma::size(all_weights) != arma::size(*p_labels)) all_weights.set_size(arma::size(*p_labels));

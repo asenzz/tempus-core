@@ -13,6 +13,8 @@
 #include <tuple>
 #include <tuple>
 #include <tuple>
+#include <tuple>
+#include <tuple>
 
 #include <oneapi/tbb/concurrent_set.h>
 #include "common/types.hpp"
@@ -145,11 +147,9 @@ public:
 
     static void train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
-    static void train_batch(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_lastknowns, const mat_ptr &p_weights,
-                            const bpt::ptime &last_value_time);
+    static void train_batch(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const mat_ptr &p_weights, const bpt::ptime &last_value_time);
 
-    static void train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights,
-                             const bpt::ptime &last_value_time);
+    static void train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::mat &weights, const bpt::ptime &last_value_time);
 
     static datamodel::Model_ptr find(const std::deque<datamodel::Model_ptr> &models, const uint16_t levix, const uint16_t stepix);
 
@@ -160,7 +160,7 @@ public:
 
     static bool check(const std::deque<datamodel::Model_ptr> &models, const uint16_t model_ct);
 
-    static bool check(const std::deque<datamodel::OnlineMIMOSVR_ptr> &models, const uint16_t grad_ct);
+    static bool check(const std::deque<datamodel::OnlineSVR_ptr> &models, const uint16_t grad_ct);
 
     static uint16_t to_level_ix(const uint16_t model_ix, const uint16_t level_ct) noexcept;
 
@@ -170,9 +170,9 @@ public:
 
     static uint16_t to_model_ct(const uint16_t level_ct) noexcept;
 
-    static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec, data_row_container>
-    validate(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model,
-             const bool online, const bool verbose, const bpt::ptime &start_time, const datamodel::IQScalingFactor &sf);
+    static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec> validate(const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble,
+        datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times,
+        const bool online, const bool verbose);
 
     static void
     do_features(

@@ -18,7 +18,7 @@ class StatementPreparerDBTemplate
 
     std::string escape(std::nullptr_t);
 
-    std::string escape(const std::shared_ptr<datamodel::OnlineMIMOSVR> &model);
+    std::string escape(const std::shared_ptr<datamodel::OnlineSVR> &model);
 
     std::string escape(const datamodel::Priority &priority);
 

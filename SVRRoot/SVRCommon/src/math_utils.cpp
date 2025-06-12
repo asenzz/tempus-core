@@ -14,6 +14,7 @@
 #include <xoshiro.h>
 
 namespace svr {
+
 std::vector<double> operator*(const std::vector<double> &v1, const double &m)
 {
     std::vector<double> ret(v1.size());

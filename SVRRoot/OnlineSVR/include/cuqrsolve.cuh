@@ -39,10 +39,6 @@ public:
     double operator()(CPTRd weights) const;
 };
 
-struct mmm_t { double mean = 0, sum = 0, max = 0, min = 0; };
-
-constexpr double C_gamma_variance = 6e4; // Inverse tuning gamma variance
-
 __global__ void G_normalize_distances_I(double *x, const double sf, const double dc, const uint32_t n);
 
 __global__ void G_div_I(RPTR(double) x, const double a, const uint32_t n);
@@ -68,8 +64,6 @@ double *cu_calc_epscos(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, con
 double cu_calc_epsco(const double *const K, const double *const L, const uint32_t m, const uint32_t n, const uint32_t ld, const double sum_L, const cudaStream_t custream);
 
 // double score_kernel(CPTRd ref_kernel /* colmaj order */, const double norm_ref, CPTRd Z /* colmaj order */, const uint32_t M, const double gamma); // TODO  Test
-
-std::pair<double, double> cu_calc_minmax_gamma(CPTRd Z, const mmm_t &train_L_m, const double train_len, const uint32_t Z_n_elem, const cudaStream_t stm);
 
 double cu_calc_gamma(CPTRd Z, const double L_mean, const double train_len, const uint32_t n_elem, const cudaStream_t stm);
 

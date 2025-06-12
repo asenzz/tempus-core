@@ -15,7 +15,7 @@
  Lx - L0, Lx - L1, Lx - L2, ... Lx - Ly
 */
 
-#define PATHS_AVERAGE
+// #define PATHS_AVERAGE
 
 namespace svr {
 namespace kernel {

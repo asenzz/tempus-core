@@ -16,7 +16,7 @@ THREADSAFE_DAO_CLASS_DECLARATION_HEADER (TsModelDAO, ModelDAO)
     virtual datamodel::Model_ptr get_by_id(const bigint model_id);
     virtual datamodel::Model_ptr get_by_ensemble_id_and_decon_level(const bigint ensemble_id, size_t decon_level);
     virtual std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id);
-    virtual std::deque<datamodel::OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id);
+    virtual std::deque<datamodel::OnlineSVR_ptr> get_svr_by_model_id(const bigint model_id);
 };
 
 }

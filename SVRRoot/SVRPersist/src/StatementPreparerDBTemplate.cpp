@@ -61,11 +61,11 @@ std::string StatementPreparerDBTemplate::escape(std::nullptr_t)
     return "null";
 }
 
-std::string StatementPreparerDBTemplate::escape(const std::shared_ptr<datamodel::OnlineMIMOSVR> &model)
+std::string StatementPreparerDBTemplate::escape(const std::shared_ptr<datamodel::OnlineSVR> &model)
 {
     if (!model) return "''";
     std::stringstream s;
-    datamodel::OnlineMIMOSVR::save(*model, s);
+    datamodel::OnlineSVR::save(*model, s);
     return connection.quote(s);
 }
 

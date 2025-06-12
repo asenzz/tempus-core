@@ -16,7 +16,7 @@ bool Model::operator==(const Model &o) const
 
 Model::Model(const bigint id, const bigint ensemble_id, const uint16_t decon_level, const uint16_t step,
              const uint16_t multiout_, const uint16_t gradient_ct, const uint32_t chunk_size,
-             std::deque<OnlineMIMOSVR_ptr> svr_model, const bpt::ptime &last_modified,
+             std::deque<OnlineSVR_ptr> svr_model, const bpt::ptime &last_modified,
              const bpt::ptime &last_modeled_value_time)
         : Entity(id),
           ensemble(ensemble_id),
@@ -103,7 +103,7 @@ void Model::set_step(const uint16_t _step)
 }
 
 /** Get pointer to an OnlineSVR model instance */
-OnlineMIMOSVR_ptr Model::get_gradient(const uint16_t i) const
+OnlineSVR_ptr Model::get_gradient(const uint16_t i) const
 {
     const auto svr_model_iter = std::find_if(C_default_exec_policy, svr_models.begin(), svr_models.end(), [&](const auto &p_svr_model) {
         return p_svr_model->get_gradient_level() == i;
@@ -141,18 +141,18 @@ void Model::adjust_gradient_decrement(const uint32_t distance)
             p_params->set_svr_decremental_distance(distance);
 }
 
-std::deque<OnlineMIMOSVR_ptr> &Model::get_gradients()
+std::deque<OnlineSVR_ptr> &Model::get_gradients()
 {
     return svr_models;
 }
 
-std::deque<OnlineMIMOSVR_ptr> Model::get_gradients() const
+std::deque<OnlineSVR_ptr> Model::get_gradients() const
 {
     return svr_models;
 }
 
 
-void Model::set_gradient(const OnlineMIMOSVR_ptr &m)
+void Model::set_gradient(const OnlineSVR_ptr &m)
 {
     std::atomic<bool> found{false};
     OMP_FOR_i(svr_models.size()) {
@@ -170,7 +170,7 @@ void Model::set_gradient(const OnlineMIMOSVR_ptr &m)
 /** Set member svr model point to a OnlineSVR instance
  * \param new_svr_models new OnlineSVR instance
  */
-void Model::set_gradients(const std::deque<OnlineMIMOSVR_ptr> &new_svr_models, const bool overwrite)
+void Model::set_gradients(const std::deque<OnlineSVR_ptr> &new_svr_models, const bool overwrite)
 {
     const uint16_t prev_size = svr_models.size();
     for (const auto &new_m: new_svr_models) {

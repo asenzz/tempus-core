@@ -91,9 +91,6 @@ size_t AppConfig::get_slide_count() const noexcept
 size_t AppConfig::get_slide_skip() const noexcept
 { return slide_skip_; }
 
-size_t AppConfig::get_validation_window() const noexcept
-{ return validation_window_; }
-
 size_t AppConfig::get_tune_run_limit() const noexcept
 { return tune_run_limit_; }
 

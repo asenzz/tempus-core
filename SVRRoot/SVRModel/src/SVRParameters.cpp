@@ -79,7 +79,6 @@ std::ostream &operator<<(std::ostream &s, const t_feature_mechanics &fm)
     return s << "quantization " << common::present(fm.quantization)
            << ", stretches " << common::present(fm.stretches)
            << ", shifts " << common::present(fm.shifts)
-           << ", skips " << common::present(fm.skips)
            << ", trims front " << (fm.trims.empty() ? std::string("empty") : common::present(fm.trims.front()));
 }
 
@@ -613,7 +612,6 @@ bool t_feature_mechanics::needs_tuning() const noexcept
     return quantization.empty() || quantization.has_nonfinite()
            || stretches.empty() || stretches.has_nonfinite()
            || shifts.empty() || shifts.has_nonfinite()
-           //           || skips.empty() || skips.has_nonfinite()
            || trims.empty();
 }
 
@@ -638,7 +636,6 @@ bool t_feature_mechanics::operator ==(const t_feature_mechanics &o) const
     return arma::all(quantization == o.quantization)
            && arma::all(stretches == o.stretches)
            && arma::all(shifts == o.shifts)
-           && arma::all(skips == o.skips)
            && trims == o.trims;
 }
 }

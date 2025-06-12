@@ -93,7 +93,7 @@ DQScalingFactorService::find(
 
 
 datamodel::dq_scaling_factor_container_t // TODO Make calc and scale inplace version
-DQScalingFactorService::calculate(const uint16_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, const arma::mat &features_t, const arma::mat &labels)
+DQScalingFactorService::calculate(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, const arma::mat &features_t, const arma::mat &labels)
 {
     datamodel::dq_scaling_factor_container_t res;
     auto p_params = svr_model.get_params_ptr(chunk_ix);
@@ -143,7 +143,7 @@ void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const uint1
     }
 }
 
-void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &features_t)
+void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &features_t)
 {
     if (features_t.empty()) return;
     const auto chunk_sf = slice(svr_model.get_scaling_factors(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_step());
@@ -158,7 +158,7 @@ DQScalingFactorService::scale_labels(const uint16_t chunk, const uint16_t gradie
     scale_labels(*p_sf_labels, labels);
 }
 
-void DQScalingFactorService::scale_labels(const uint16_t chunk_ix, const datamodel::OnlineMIMOSVR &svr_model, arma::mat &labels)
+void DQScalingFactorService::scale_labels(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &labels)
 {
     if (labels.empty()) return;
     const auto p_sf_labels = find(svr_model.get_scaling_factors(), svr_model.get_model_id(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_step(),

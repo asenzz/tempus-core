@@ -3,7 +3,6 @@
 //
 
 #include <jemalloc/jemalloc.h>
-#include <ipp/ipp.h>
 #include <execution>
 #include <cublas_v2.h>
 #include <armadillo>
@@ -22,11 +21,62 @@
 #include "appcontext.hpp"
 #include "recombine_parameters.cuh"
 #include "common/logging.hpp"
-#include "cuqrsolve.cuh"
 #include "kernel_factory.hpp"
+#include "HDBSCAN-CPP/Hdbscan/hdbscan.hpp"
 
 namespace svr {
 namespace datamodel {
+
+// Returns column indexes of outliers
+arma::uvec outlier_hdbscan(const arma::mat &features_t)
+{
+    std::vector<std::vector<double> > hdbscan_dataset(features_t.n_cols);
+    OMP_FOR_i(features_t.n_cols) hdbscan_dataset[i] = arma::conv_to<std::vector<double>>::from(features_t.col(i));
+
+    Hdbscan hdbscan(hdbscan_dataset);
+    const auto min_p = std::max<uint32_t>(2, features_t.n_cols / 10);
+    hdbscan.execute(min_p, min_p, "Euclidean");
+#ifndef NDEBUG
+    hdbscan.displayResult();
+#endif
+    /*
+    cout << "You can access other fields like cluster labels, membership probabilities and outlier scores." << endl;
+     * Use it like this
+    hdbscan.labels_;
+    hdbscan.membershipProbabilities_;
+    */
+    arma::vec hdbscan_scores(hdbscan.outlierScores_.size(), ARMA_DEFAULT_FILL);
+    OMP_FOR_i(hdbscan.outlierScores_.size()) hdbscan_scores[i] = hdbscan.outlierScores_[i].score;
+    arma::uvec ures = arma::stable_sort_index(hdbscan_scores).eval().tail_rows(PROPS.get_outlier_slack());
+    LOG4_TRACE("Returning " << common::present(ures));
+    return ures;
+}
+
+arma::uvec outlier_bacon(const arma::mat &features_t)
+{
+    VSLSSTaskPtr task;
+    const arma::mat x = features_t.t();
+    const MKL_INT N = x.n_rows;
+    const MKL_INT DIM = x.n_cols;
+    const MKL_INT xstorage = VSL_SS_MATRIX_STORAGE_ROWS;
+    const MKL_INT NParams = VSL_SS_BACON_PARAMS_N;
+    constexpr double BaconParams[VSL_SS_BACON_PARAMS_N] = {VSL_SS_METHOD_BACON_MEDIAN_INIT, .01, .01};
+    arma::vec BaconWeights(N, ARMA_DEFAULT_FILL);
+    /* Create a task */
+    vs_errchk(vsldSSNewTask(&task, &DIM, &N, &xstorage, x.mem, nullptr, nullptr));
+
+    /* Initialize the task parameters */
+    vs_errchk(vsldSSEditOutliersDetection(task, &NParams, BaconParams, BaconWeights.memptr()));
+
+    /* Detect the outliers in the observations */
+    vs_errchk(vsldSSCompute(task, VSL_SS_OUTLIERS, VSL_SS_METHOD_BACON));
+
+    /* BaconWeights will hold zeros or/and ones */ /* Deallocate the task resources */
+    vs_errchk(vslSSDeleteTask(&task));
+
+    return arma::find(BaconWeights == 0);
+}
+
 // TODO Port outlier detection to CUDA
 arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, const float dual_lag_ratio)
 {
@@ -53,7 +103,8 @@ arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, co
     return score;
 }
 
-void OnlineMIMOSVR::tune_sys()
+
+void OnlineSVR::tune()
 {
     if (is_manifold()) {
         LOG4_DEBUG("Tuning a manifold kernel, not.");
@@ -79,77 +130,19 @@ void OnlineMIMOSVR::tune_sys()
     const auto num_chunks = ixs.size();
     LOG4_TRACE("Systuning level " << level << ", step " << step << ", num chunks " << num_chunks << ", first chunk " << common::present_chunk(ixs.front(), .1) <<
         ", last chunk " << common::present_chunk(ixs.back(), .1) << " labels " << common::present(*p_labels) << ", features " << common::present(*p_features) <<
-        ", last-knowns " << common::present(*p_last_knowns) << ", max lambda " << PROPS.get_tune_max_lambda() << ", gamma variance " << solvers::C_gamma_variance << ", tau particles " <<
-        PROPS.get_tune_particles1() << ", iterations " << PROPS.get_tune_iteration1() << ", lambda particles " << PROPS.get_tune_particles2() << ", iterations " <<
-        PROPS.get_tune_iteration2() << ", opt depth " << opt_depth);
+        ", max lambda " << PROPS.get_tune_max_lambda() << ", tau particles " << PROPS.get_tune_particles1() << ", iterations " << PROPS.get_tune_iteration1() << ", lambda particles " <<
+        PROPS.get_tune_particles2() << ", iterations " << PROPS.get_tune_iteration2() << ", opt depth " << opt_depth);
 
 #pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_parallel_chunks())) default(shared) firstprivate(num_chunks)
     for (DTYPE(num_chunks) chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_chunk_params = get_params_ptr(chunk_ix);
-        if (!p_chunk_params) LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
+        if (!p_chunk_params)
+            LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
         const arma::mat &chunk_F = train_feature_chunks_t[chunk_ix];
         if (PROPS.get_outlier_slack()) {
-            // TODO Rewrite outlier detection
-            p_chunk_params->set_svr_kernel_param2(datamodel::C_default_svrparam_kernel_param2);
-            p_chunk_params->set_kernel_param3(datamodel::C_default_svrparam_kernel_param_tau);
-            auto K = kernel::IKernel<double>::get<kernel::kernel_path<double>>(*p_chunk_params)->kernel_base::distances(chunk_F);
-            const auto [gamma, dc] = calc_gamma(K, train_label_chunks[chunk_ix]);
-            p_chunk_params->set_svr_kernel_param(gamma);
-            p_chunk_params->set_min_Z(dc);
-            kernel::IKernel<double>::get(*p_chunk_params)->kernel_from_distances_I(K);
-            if (K.has_nonfinite())
-                LOG4_THROW("Kernel matrix has non-finites!");
-            arma::uvec sorted_ixs;
-            if constexpr (true) {
-                const arma::mat L_biased = train_label_chunks[chunk_ix] % arma::linspace(1., PROPS.get_weights_slope(), train_label_chunks[chunk_ix].n_rows);
-                arma::mat w;
-#ifdef INSTANCE_WEIGHTS
-                calc_weights(K * instance_weight_matrix(chunk_ixs_tune, *p_input_weights), L_biased, chunk_ixs_tune.n_rows * PROPS.get_solve_iterations_coefficient(),
-                             PROPS.get_stabilize_iterations_count(), w);
-#else
-                calc_weights(K, L_biased, ixs[chunk_ix].n_rows * PROPS.get_solve_iterations_coefficient(), PROPS.get_stabilize_iterations_count(), w);
-#endif
-                sorted_ixs = arma::stable_sort_index(arma::pow(arma::abs(self_predict(K, w, L_biased)), PROPS.get_weights_exp()) % score_dataset(
-                                                         L_biased, train_feature_chunks_t[chunk_ix], 1e-2)) + PROPS.get_shift_limit();
-            } else
-                sorted_ixs = ixs[chunk_ix](arma::stable_sort_index(score_dataset(train_label_chunks[chunk_ix], train_feature_chunks_t[chunk_ix], 1e-2)));
-
-            const auto max_chunk_rows = std::min<uint32_t>(sorted_ixs.n_rows - PROPS.get_outlier_slack(), max_chunk_size);
-            ixs[chunk_ix] = arma::sort(sorted_ixs.tail(max_chunk_rows));
+            ixs[chunk_ix].shed_rows(outlier_hdbscan(chunk_F));
             prepare_chunk(chunk_ix);
-            LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk tune ixs " << common::present(ixs[chunk_ix]) <<
-                ", sorted ixs " << common::present(sorted_ixs) << ", labels rows " << p_labels->n_rows << ", max chunk rows " << max_chunk_rows);
-#if 0 // TODO Test BACON outlier detection, consider HDBSCAN
-            const arma::mat joint_dataset = common::normalize_cols<double>(arma::join_rows(train_label_chunks[chunk_ix], train_feature_chunks_t[chunk_ix].t()));
-            LOG4_DEBUG("joint_dataset " << common::present(joint_dataset));
-            const MKL_INT DIM = joint_dataset.n_cols; /* dimension of the task */
-            const MKL_INT N = joint_dataset.n_rows; /* number of observations */
-            double BaconParams[VSL_SS_BACON_PARAMS_N];
-            arma::vec BaconWeights(N);
-            /* Task and Initialization Parameters */
-            constexpr MKL_INT xstorage = VSL_SS_MATRIX_STORAGE_ROWS;
-            /* Parameters of the BACON algorithm */
-            constexpr MKL_INT NParams = VSL_SS_BACON_PARAMS_N;
-            BaconParams[0] = VSL_SS_METHOD_BACON_MEDIAN_INIT;
-            BaconParams[1] = 1e-2; /* alpha */
-            BaconParams[2] = 1e-2; /* beta */
-            /* Create a task */
-            VSLSSTaskPtr task;
-            vs_errchk(vsldSSNewTask( &task, &DIM, &N, &xstorage, joint_dataset.mem, nullptr, nullptr ));
-            /* Initialize the task parameters */
-            vs_errchk(vsldSSEditOutliersDetection( task, &NParams, BaconParams, BaconWeights.memptr() ));
-            /* Detect the outliers in the observations */
-            vs_errchk(vsldSSCompute( task, VSL_SS_OUTLIERS, VSL_SS_METHOD_BACON ));
-            /* BaconWeights will hold zeros or/and ones */
-            const arma::uvec to_shed = arma::find(BaconWeights == 1);
-            LOG4_ERROR("BACON found " << to_shed << " indexes to shed from chunk with size " << arma::size(joint_dataset) << ", BACON weights " << BaconWeights);
-            /* Deallocate the task resources */
-            vs_errchk(vslSSDeleteTask( &task ));
-
-            ixs[chunk_ix].shed_rows(to_shed);
-            train_label_chunks[chunk_ix] = p_labels->rows(ixs[chunk_ix]);
-            train_feature_chunks_t[chunk_ix] = p_features->rows(ixs[chunk_ix]).t();
-#endif
+            LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
         }
         tbb::mutex chunk_preds_l;
         auto best_score = std::numeric_limits<double>::max();
@@ -212,20 +205,20 @@ void OnlineMIMOSVR::tune_sys()
     clean_chunks();
 }
 
-arma::u32_vec OnlineMIMOSVR::get_predict_chunks() const
+arma::u32_vec OnlineSVR::get_predict_chunks() const
 {
     LOG4_BEGIN();
     assert(chunks_score.size());
     auto res = arma::regspace<arma::u32_vec>(0, chunks_score.size() - 1);
     if (PROPS.get_predict_chunks() > chunks_score.size()) goto __bail;
     std::stable_sort(C_default_exec_policy, res.begin(), res.end(), [this](const auto i1, const auto i2) { return chunks_score[i1] < chunks_score[i2]; });
-    res.shed_rows(0, std::min<uint32_t>(res.size(), PROPS.get_predict_chunks()) - 1);
+    res.shed_rows(0, res.size() - PROPS.get_predict_chunks() - 1);
 __bail:
     LOG4_TRACE("Using up to " << PROPS.get_predict_chunks() << " chunks with scores " << common::present(chunks_score) << ", selected " << common::present(res));
     return res;
 }
 
-void OnlineMIMOSVR::clean_chunks()
+void OnlineSVR::clean_chunks()
 {
     return;
 

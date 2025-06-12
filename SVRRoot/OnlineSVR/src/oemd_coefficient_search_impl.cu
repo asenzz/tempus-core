@@ -755,8 +755,8 @@ oemd_coefficients_search::evaluate_mask(
                 d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
         G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-                d_features, d_labels, d_scores, nullptr, nullptr, nullptr, validate_rows, feat_cols_ileave, 0,
-                PROPS.get_stretch_coef(), PROPS.get_align_window(), PROPS.get_shift_limit(), PROPS.get_stretch_coef());
+            d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, PROPS.get_stretch_coef(),
+            PROPS.get_align_window(), PROPS.get_shift_limit(), PROPS.get_stretch_coef());
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
             thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);

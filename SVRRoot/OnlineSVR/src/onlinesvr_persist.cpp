@@ -3,36 +3,37 @@
 //
 
 #include "common/serialization.hpp"
+#include "appcontext.hpp"
 #include "onlinesvr_persist.tpp"
 
 namespace svr {
 namespace datamodel {
 
-bigint OnlineMIMOSVR::get_model_id() const
+bigint OnlineSVR::get_model_id() const
 {
     return model_id;
 }
 
-OnlineMIMOSVR::OnlineMIMOSVR(const bigint id, const bigint model_id, std::stringstream &input_stream) : Entity(id), model_id(model_id)
+OnlineSVR::OnlineSVR(const bigint id, const bigint model_id, std::stringstream &input_stream) : Entity(id), model_id(model_id), chunk_offlap(1 - PROPS.get_chunk_overlap())
 {
     boost::archive::binary_iarchive ia(input_stream);
     ia >> *this;
 }
 
-std::stringstream OnlineMIMOSVR::save() const
+std::stringstream OnlineSVR::save() const
 {
     std::stringstream res;
     save(*this, res);
     return res;
 }
 
-void OnlineMIMOSVR::set_model_id(const size_t new_model_id)
+void OnlineSVR::set_model_id(const size_t new_model_id)
 {
     model_id = new_model_id;
 }
 
 
-void OnlineMIMOSVR::init_id()
+void OnlineSVR::init_id()
 {
     if (!id) {
         boost::hash_combine(id, column_name);
@@ -47,7 +48,7 @@ void OnlineMIMOSVR::init_id()
 }
 
 
-std::string OnlineMIMOSVR::to_string() const
+std::string OnlineSVR::to_string() const
 {
     std::stringstream s;
     s << " Samples trained " << samples_trained <<

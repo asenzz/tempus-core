@@ -99,7 +99,7 @@ std::deque<datamodel::Model_ptr> AsyncModelDAO::get_all_ensemble_models(const bi
     return pImpl.pgDao.get_all_ensemble_models(ensemble_id);
 }
 
-std::deque<datamodel::OnlineMIMOSVR_ptr> AsyncModelDAO::get_svr_by_model_id(const bigint model_id)
+std::deque<datamodel::OnlineSVR_ptr> AsyncModelDAO::get_svr_by_model_id(const bigint model_id)
 {
     pImpl.flush();
     const std::scoped_lock lg(pImpl.pgMutex);

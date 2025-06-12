@@ -112,8 +112,6 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(uint16_t, interleave, 10)
 
-    CONFPROP(uint16_t, predict_ileave, 10)
-
     CONFPROP(double, tune_max_lambda, 50)
 
     CONFPROP(double, tune_max_tau, 2)
@@ -122,9 +120,9 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(uint32_t, tune_skip, 7500)
 
-    CONFPROP(uint32_t, align_window, 1000)
+    CONFPROP(uint32_t, align_window, 1000) // should be half of average of the decrement distance used across models
 
-    CONFPRO_(max_loop_count, -1)
+    CONFPRO_(max_loop_count, -1) // -1 means no limit
 
     CONFPROP(uint16_t, weight_columns, 1)
 
@@ -135,6 +133,8 @@ class AppConfig : public PropertiesReader
     CONFPROP(uint16_t, tune_iteration1, 10)
 
     CONFPROP(uint16_t, tune_iteration2, 10)
+
+    CONFPROP(float, chunk_overlap, .0) // 0..1, higher means more chunks
 
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
@@ -170,7 +170,7 @@ private: // TODO port properties below to use the CONFPROP macro
     size_t multistep_len, multiout, online_learn_iter_limit_, stabilize_iterations_count_;
     double scaling_alpha_;
     bool recombine_parameters_, tune_parameters_;
-    size_t slide_count_, slide_skip_, validation_window_, tune_run_limit_;
+    size_t slide_count_, slide_skip_, tune_run_limit_;
     std::string db_connection_string_;
     boost::log::trivial::severity_level log_level_;
     bool self_request_;
@@ -216,8 +216,6 @@ public:
     size_t get_slide_count() const noexcept;
 
     size_t get_slide_skip() const noexcept;
-
-    size_t get_validation_window() const noexcept;
 
     size_t get_tune_run_limit() const noexcept;
 

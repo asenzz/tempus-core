@@ -180,7 +180,6 @@ double score_weights::operator()(CPTRd weights) const
     // const auto res = sumabs(ctx_stream.tmp_L, mn, ctx_stream.custream);
     double res;
     cb_errchk(cublasDasum(ctx_stream.cublas_H, mn, ctx_stream.tmp_L, 1, &res));
-    cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
     LOG4_TRACE("Score " << res << " for weights " << common::to_string(weights, std::min<uint32_t>(4, m * n)) << " on device " << dev_phy_id);
     return res;
 }
@@ -316,17 +315,6 @@ double cu_calc_gamma(CPTRd Z, const double L_mean, const double train_len, const
     const auto g = 0;//kernel::path::calc_g(train_len, Z_mm, L_mean);
     LOG4_TRACE("Mean Z " << Z_mm << ", mean L " << L_mean << ", n " << train_len << ", gamma " << g);
     return g;
-}
-
-std::pair<double, double> cu_calc_minmax_gamma(CPTRd Z, const mmm_t &train_L_m, const double train_len, const uint32_t Z_n_elem, const cudaStream_t stm)
-{
-    const auto [Z_mean, Z_min, Z_max] = meanminmax(Z, Z_n_elem, stm);
-    assert(common::isnormalz(Z_mean));
-    assert(common::isnormalz(Z_min));
-    assert(common::isnormalz(Z_max));
-//    return {kernel::path::calc_qgamma(Z_mean, Z_min, train_L_m.mean, train_L_m.min, train_len),
-//            kernel::path::calc_qgamma(Z_mean, Z_max, train_L_m.mean, train_L_m.max, train_len)};
-    return {0, 0};
 }
 
 double score_kernel(CPTRd ref_kernel /* colmaj order */, const double norm_ref, CPTRd Z /* colmaj order */, const uint32_t m, const double gamma)

@@ -39,7 +39,7 @@ namespace datamodel {
  * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
  */
 
-void OnlineMIMOSVR::init_manifold(datamodel::SVRParameters_ptr &p, const bpt::ptime &last_value_time)
+void OnlineSVR::init_manifold(datamodel::SVRParameters_ptr &p, const bpt::ptime &last_value_time)
 {
     if (p->get_manifold()) LOG4_WARN("Manifold already initialized!");
 
@@ -68,9 +68,8 @@ void OnlineMIMOSVR::init_manifold(datamodel::SVRParameters_ptr &p, const bpt::pt
         auto &fm = p_manifold_parameters->get_feature_mechanics();
         fm.stretches = arma::fvec(n_manifold_features, arma::fill::ones);
         fm.shifts = arma::u32_vec(n_manifold_features, arma::fill::zeros);
-        // fm.skips = arma::join_cols(fm.skips, fm.skips);
     }
-    auto p_manifold = otr<OnlineMIMOSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
+    auto p_manifold = otr<OnlineSVR>(0, model_id, t_param_set{p_manifold_parameters}, p_dataset);
     p_manifold->projection = projection + 1;
     const auto p_manifold_features = ptr<arma::mat>(n_samples_2, n_manifold_features, ARMA_DEFAULT_FILL);
     const auto p_manifold_labels = ptr<arma::mat>(n_samples_2, labels.n_cols, ARMA_DEFAULT_FILL);
@@ -79,21 +78,21 @@ void OnlineMIMOSVR::init_manifold(datamodel::SVRParameters_ptr &p, const bpt::pt
     OMP_FOR_(n_samples_2, collapse(2) firstprivate(n_samples) SSIMD)
     for (DTYPE(n_samples) i = 0; i < n_samples; ++i)
         for (DTYPE(n_samples) j = 0; j < n_samples; ++j) {
-            const auto row = i * n_samples + j;
+            const auto row = i + n_samples * j;
             p_manifold_labels->row(row) = labels.row(i) - labels.row(j);
             p_manifold_features->row(row) = arma::join_cols(features_t.col(i), features_t.col(j)).t();
         }
 
     LOG4_DEBUG("Generated " << common::present(*p_manifold_labels) << " manifold label matrix and " << common::present(*p_manifold_features) <<
         " manifold feature matrix from " << common::present(features_t) << " feature matrix and " << common::present(labels) << " label matrix.");
-    p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_lastknowns, p_manifold_weights, last_value_time);
+    p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_weights, last_value_time);
     assert(p_manifold_features->has_nonfinite() == false && p_manifold_labels->has_nonfinite() == false);
     assert(p_manifold_lastknowns->has_nonfinite() == false && p_manifold_weights->has_nonfinite() == false);
     p->set_manifold(p_manifold);
     LOG4_END();
 }
 
-datamodel::SVRParameters_ptr OnlineMIMOSVR::is_manifold() const
+datamodel::SVRParameters_ptr OnlineSVR::is_manifold() const
 {
     return business::SVRParametersService::is_manifold(param_set);
 }
@@ -108,7 +107,7 @@ arma::mat OnlineMIMOSVR::manifold_predict(arma::mat x_predict_t, const boost::po
     business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, get_params(chunk_ix).get_lag_count(), chunk_sf, x_predict_t);
     arma::mat result(x_predict_t.n_cols, p_labels->n_cols);
     const arma::mat &features_t = train_feature_chunks_t.front();
-    const auto manifold_interleave = PROPS.get_predict_ileave();
+    const auto manifold_interleave = PROPS.get_interleave();
     const arma::SizeMat predict_size(x_predict_t.n_rows + features_t.n_rows, CDIVI(features_t.n_cols, manifold_interleave));
     arma::uvec predict_ixs(predict_size.n_cols);
 #ifdef RANDOMIZE_MANIFOLD_INDEXES

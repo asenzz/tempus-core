@@ -19,7 +19,7 @@ class Model : public Entity
     uint16_t multiout = common::C_default_multiout;
     uint16_t gradient_ct = common::C_default_gradient_count;
     uint32_t max_chunk_size = common::AppConfig::C_default_kernel_length;
-    std::deque<OnlineMIMOSVR_ptr> svr_models; // one model per gradient
+    std::deque<OnlineSVR_ptr> svr_models; // one model per gradient
     bpt::ptime last_modified = bpt::not_a_date_time; // model modified (system) time
     bpt::ptime last_modeled_value_time = bpt::min_date_time; // last input queue modeled value time
     std::pair<SVRParameters_ptr, SVRParameters_ptr> parameters;
@@ -34,17 +34,17 @@ public:
     Model() = default;
 
     Model(const bigint id, const bigint ensemble_id, const uint16_t decon_level, const uint16_t step, const uint16_t multiout_, const uint16_t gradient_ct, const uint32_t chunk_size,
-          std::deque<OnlineMIMOSVR_ptr> svr_models = {}, const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time);
+          std::deque<OnlineSVR_ptr> svr_models = {}, const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time);
 
-    OnlineMIMOSVR_ptr get_gradient(const uint16_t i = 0) const;
+    OnlineSVR_ptr get_gradient(const uint16_t i = 0) const;
 
-    std::deque<OnlineMIMOSVR_ptr> &get_gradients();
+    std::deque<OnlineSVR_ptr> &get_gradients();
 
-    std::deque<OnlineMIMOSVR_ptr> get_gradients() const;
+    std::deque<OnlineSVR_ptr> get_gradients() const;
 
-    void set_gradient(const OnlineMIMOSVR_ptr &m);
+    void set_gradient(const OnlineSVR_ptr &m);
 
-    void set_gradients(const std::deque<OnlineMIMOSVR_ptr> &_svr_models, const bool overwrite);
+    void set_gradients(const std::deque<OnlineSVR_ptr> &_svr_models, const bool overwrite);
 
     uint16_t get_gradient_count() const;
 

@@ -29,7 +29,7 @@ namespace datamodel {
 constexpr double C_min_gamma = 1e-12;
 constexpr double C_max_gamma = 1e12;
 
-SVRParameters OnlineMIMOSVR::make_tuning_template(const SVRParameters &example)
+SVRParameters OnlineSVR::make_tuning_template(const SVRParameters &example)
 {
 #if 0
     SVRParameters template_p;
@@ -54,7 +54,7 @@ cutuner::cutuner(
     train_n_size(train_len_n * sizeof(double)), calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), K_calc_len(calc_len * calc_len),
     weighted(train_W.n_elem), train_F_rows(train_F.n_rows), K_off(calc_start * train_len + calc_start),
     ref_K(kernel::get_reference_Z(train_label_chunk)), ref_K_mean(common::mean(ref_K)), ref_K_meanabs(common::meanabs(ref_K)),
-    template_parameters(OnlineMIMOSVR::make_tuning_template(parameters)), train_F(train_F), n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count())
+    template_parameters(OnlineSVR::make_tuning_template(parameters)), train_F(train_F), n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count())
 {
     LOG4_TRACE("Train len " << train_len << ", streams per GPU " << streams_per_gpu << ", calc len " << calc_len);
     dx.resize(n_gpus);

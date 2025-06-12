@@ -108,7 +108,7 @@ std::deque<datamodel::Model_ptr> PgModelDAO::get_all_ensemble_models(const bigin
     return data_source.query_for_deque(row_mapper, get_sql(/* "get_all_ensemble_models_empty" */ "get_all_ensemble_models"), ensemble_id);
 }
 
-std::deque<datamodel::OnlineMIMOSVR_ptr> PgModelDAO::get_svr_by_model_id(const bigint model_id)
+std::deque<datamodel::OnlineSVR_ptr> PgModelDAO::get_svr_by_model_id(const bigint model_id)
 {
     SVRModelRowMapper row_mapper;
     return data_source.query_for_deque(row_mapper, get_sql("get_svr_by_model_id"), model_id);

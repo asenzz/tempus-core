@@ -25,27 +25,27 @@ class calc_cache;
 }
 
 namespace datamodel {
-
 #define FORGET_MIN_WEIGHT
 // #define SOLVE_PRUNE // Matrix solver is PPrune instead of PETSc
 
 struct t_gradient_data
 {
     mat_ptr p_features, p_labels;
-    vec_ptr p_last_knowns;
-    t_gradient_data(const mat_ptr &p_features, const mat_ptr &p_labels, const vec_ptr &p_last_knowns)
-            : p_features(p_features), p_labels(p_labels), p_last_knowns(p_last_knowns) {}
+
+    t_gradient_data(const mat_ptr &p_features, const mat_ptr &p_labels) : p_features(p_features), p_labels(p_labels)
+    {
+    }
 };
 
 class Dataset;
 
 using Dataset_ptr = std::shared_ptr<Dataset>;
 
-class OnlineMIMOSVR;
+class OnlineSVR;
 
-using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
 
-class OnlineMIMOSVR final : public Entity
+class OnlineSVR final : public Entity
 {
     friend class boost::serialization::access;
 
@@ -56,7 +56,6 @@ class OnlineMIMOSVR final : public Entity
     std::set<size_t> tmp_ixs;
     size_t samples_trained = 0;
     mat_ptr p_features, p_labels, p_input_weights;
-    vec_ptr p_last_knowns;
     t_param_set param_set;
     matrices_ptr p_kernel_matrices;
     datamodel::dq_scaling_factor_container_t scaling_factors;
@@ -83,34 +82,33 @@ class OnlineMIMOSVR final : public Entity
 
     arma::mat feature_chunk_t(const arma::uvec &ixs_i) const;
 
+    arma::mat predict_chunk_t(const arma::mat &x_predict) const;
+
 public:
-    static constexpr float C_chunk_overlap = 0; // Chunk rows overlap ratio [0..1], higher generates more chunks
-    static constexpr float C_chunk_offlap = 1. - C_chunk_overlap;
+    const float chunk_offlap;
+
     static constexpr uint16_t C_end_chunks = 1; // [1..1/offlap]
 
-    OnlineMIMOSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
+    OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
-    OnlineMIMOSVR(
-            const bigint id, const bigint model_id, const t_param_set &param_set,
-            const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown,
-            const bpt::ptime &last_value_time, const matrices_ptr &p_kernel_matrices = nullptr,
-            const Dataset_ptr &p_dataset = nullptr);
+    OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown,
+              const bpt::ptime &last_value_time, const matrices_ptr &p_kernel_matrices = nullptr, const Dataset_ptr &p_dataset = nullptr);
 
-    explicit OnlineMIMOSVR(const bigint id, const bigint model_id, std::stringstream &input_stream);
+    explicit OnlineSVR(const bigint id, const bigint model_id, std::stringstream &input_stream);
 
-    OnlineMIMOSVR();
+    OnlineSVR();
 
-    ~OnlineMIMOSVR() = default;
+    ~OnlineSVR() = default;
 
     void reset();
 
-    bool operator==(OnlineMIMOSVR const &) const;
+    bool operator==(OnlineSVR const &) const;
 
-    template<typename S> static void save(const OnlineMIMOSVR &osvr, S &output_stream);
+    template<typename S> static void save(const OnlineSVR &osvr, S &output_stream);
 
     std::stringstream save() const;
 
-    template<typename S> static OnlineMIMOSVR_ptr load(S &input_stream);
+    template<typename S> static OnlineSVR_ptr load(S &input_stream);
 
     template<class A> void serialize(A &ar, const unsigned version);
 
@@ -132,36 +130,31 @@ public:
 
     void set_dataset(const Dataset_ptr &p_dataset);
 
-    // Move to solver module
-    static void solve_opt(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint32_t iter_petsc, const uint16_t iter_irwls);
-
     static std::deque<arma::mat> solve_batched_irwls(
-            const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
-            const magma_queue_t &magma_queue, const size_t gpu_phy_id);
-
-    static arma::mat do_ocl_solve(CPTRd host_a, double *host_b, const int m, const unsigned nrhs);
+        const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters,
+        const magma_queue_t &magma_queue, const size_t gpu_phy_id);
 
     static arma::mat direct_solve(const arma::mat &a, const arma::mat &b);
 
-    DTYPE(OnlineMIMOSVR::gradient) get_gradient_level() const noexcept;
+    DTYPE(OnlineSVR::gradient) get_gradient_level() const noexcept;
 
-    DTYPE(OnlineMIMOSVR::level) get_decon_level() const noexcept;
+    DTYPE(OnlineSVR::level) get_decon_level() const noexcept;
 
-    DTYPE(OnlineMIMOSVR::step) get_step() const noexcept;
+    DTYPE(OnlineSVR::step) get_step() const noexcept;
 
-    DTYPE(OnlineMIMOSVR::multiout) get_multiout() const noexcept;
+    DTYPE(OnlineSVR::multiout) get_multiout() const noexcept;
 
-    DTYPE(OnlineMIMOSVR::samples_trained) get_samples_trained_number() const noexcept;
+    DTYPE(OnlineSVR::samples_trained) get_samples_trained_number() const noexcept;
 
     void clear_kernel_matrix();
 
     void init_manifold(SVRParameters_ptr &p, const bpt::ptime &last_manifold_time);
 
-    DTYPE(OnlineMIMOSVR::param_set) get_param_set() const noexcept;
+    DTYPE(OnlineSVR::param_set) get_param_set() const noexcept;
 
-    DTYPE(OnlineMIMOSVR::param_set) &get_param_set() noexcept;
+    DTYPE(OnlineSVR::param_set) &get_param_set() noexcept;
 
-    void set_param_set(const DTYPE(OnlineMIMOSVR::param_set) &param_set_);
+    void set_param_set(const DTYPE(OnlineSVR::param_set) &param_set_);
 
     void set_params(const SVRParameters_ptr &p_svr_parameters_, const uint16_t chunk_ix = 0);
 
@@ -181,18 +174,6 @@ public:
 
     void tune();
 
-    void tune_fast();
-
-    void tune_sys();
-
-    void recombine_params(const unsigned chunkix, const unsigned stepix);
-
-#if defined(TUNE_HYBRID)
-    double produce_kernel_inverse_order(const SVRParameters &svr_parameters, const arma::mat &x_train, const arma::mat &y_train);
-#endif
-
-    static double get_gamma_range_variance(const unsigned train_len);
-
     static uint32_t get_full_train_len(const uint32_t n_rows, const uint32_t decrement);
 
     uint32_t get_num_chunks() const;
@@ -207,14 +188,12 @@ public:
 
     arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
 
-    arma::mat predict_t(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
-
     t_gradient_data produce_residuals();
 
-    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::vec &new_ylk, const arma::mat &new_w, const bpt::ptime &last_value_time,
+    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::mat &new_w, const bpt::ptime &last_value_time,
                const bool temp_learn = false, const std::deque<uint32_t> &forget_ixs = {});
 
-    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
+    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
                      const matrices_ptr &precalc_kernel_matrices = {});
 
     arma::mat &get_features();
@@ -255,9 +234,10 @@ public:
     static SVRParameters make_tuning_template(const SVRParameters &example);
 };
 
-using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
+using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
 
-class cutuner {
+class cutuner
+{
     static constexpr uint16_t streams_per_gpu = 1;
     const uint16_t n_gpus;
     SVRParameters template_parameters;
@@ -268,33 +248,34 @@ class cutuner {
     const double ref_K_mean, ref_K_meanabs;
 
 public:
-    struct dev_ctx {
-        struct stream_ctx {
+    struct dev_ctx
+    {
+        struct stream_ctx
+        {
             cudaStream_t custream;
             cublasHandle_t cublas_H;
             magma_queue_t ma_queue;
             double *d_K_train, *K_train_off;
         };
+
         double *d_train_F, *d_train_W, *d_ref_K, *d_D_paths;
         std::deque<stream_ctx> sx;
     };
+
     std::deque<dev_ctx> dx;
 
     cutuner(const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters);
+
     ~cutuner();
 
     std::tuple<double, double, double> normalize_result(const dev_ctx &dx_, const dev_ctx::stream_ctx &dxsx, const SVRParameters &parameters) const;
 
     void prepare_second_phase(const SVRParameters &first_phase_parameters);
+
     std::tuple<double, double, double> phase1(const double tau, const double H, const double D, const double V) const;
+
     std::tuple<double, double, double> phase2(const double lambda) const;
 };
-
-
-void init_petsc();
-
-void uninit_petsc();
-
 } // datamodel
 } // svr
 

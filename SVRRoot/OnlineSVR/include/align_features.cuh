@@ -29,15 +29,15 @@ __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { r
 #define STRETCHSKIP_(IX) STRETCH_(IX) // SKIP_(STRETCH_(IX))
 
 __global__ void G_align_features(
-        CRPTRd features, CRPTRd labels,
-        RPTR(double) scores, RPTR(float) stretches, RPTR(unsigned) shifts, RPTR(float) skips, const uint32_t n_rows, const uint32_t n_cols,
-        const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate, const uint32_t shift_limit, const float stretch_multiplier);
+    CRPTRd features, CRPTRd labels,
+    RPTR(double) scores, RPTR(float) stretches, RPTR(unsigned) shifts, const uint32_t n_rows, const uint32_t n_cols,
+    const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate, const uint32_t shift_limit, const float stretch_multiplier);
 
 __global__ void G_quantise_features(
         RPTR(double) features /* zeroed out before */, CRPTRd d_decon_F, CRPTR(t_feat_params) d_feat_params,
         const uint32_t rows, const uint32_t cols, const uint16_t quantise, const uint32_t interleave_quantise);
 
-void align_features(CPTRd p_features, CPTRd p_labels, double *const p_scores, float *const p_stretches, uint32_t *const p_shifts, float *const p_skips,
+void align_features(CPTRd p_features, CPTRd p_labels, double *const p_scores, float *const p_stretches, uint32_t *const p_shifts,
                     const uint32_t n_rows, const uint32_t n_cols);
 
 void quantise_features(

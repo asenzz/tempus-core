@@ -28,7 +28,7 @@ public:
                 PROPS.get_multiout(),
                 row_set["gradients"].as<size_t>(datamodel::C_default_svrparam_grad_level + 1),
                 common::AppConfig::C_default_kernel_length,
-                std::deque<datamodel::OnlineMIMOSVR_ptr>{},
+                std::deque<datamodel::OnlineSVR_ptr>{},
                 row_set["last_modified_time"].is_null() ? bpt::not_a_date_time : bpt::time_from_string(
                         row_set["last_modified_time"].as<std::string>("")),
                 row_set["last_modeled_value_time"].is_null() ? bpt::not_a_date_time : bpt::time_from_string(
@@ -37,15 +37,15 @@ public:
     }
 };
 
-class SVRModelRowMapper : public IRowMapper<datamodel::OnlineMIMOSVR>
+class SVRModelRowMapper : public IRowMapper<datamodel::OnlineSVR>
 {
 public:
-    datamodel::OnlineMIMOSVR_ptr map_row(const pqxx_tuple &row_set) const override
+    datamodel::OnlineSVR_ptr map_row(const pqxx_tuple &row_set) const override
     {
         std::stringstream model_bin;
         const auto &binstr = row_set["model_binary"].as<std::basic_string<std::byte>>();
         model_bin.write((const char *)binstr.c_str(), binstr.size());
-        return ptr<datamodel::OnlineMIMOSVR>(row_set["id"].as<bigint>(0), row_set["model_id"].as<bigint>(0), model_bin);
+        return ptr<datamodel::OnlineSVR>(row_set["id"].as<bigint>(0), row_set["model_id"].as<bigint>(0), model_bin);
     }
 };
 

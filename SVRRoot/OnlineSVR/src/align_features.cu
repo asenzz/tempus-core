@@ -52,10 +52,10 @@ __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd feature
 }
 
 __global__ void G_align_features(
-        CRPTRd features, CRPTRd labels,
-        RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts, RPTR(float) skips,
-        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate,
-        const uint32_t shift_limit, const float stretch_multiplier)
+    CRPTRd features, CRPTRd labels,
+    RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts,
+    const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate,
+    const uint32_t shift_limit, const float stretch_multiplier)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
@@ -65,50 +65,43 @@ __global__ void G_align_features(
             const auto validate_rows = n_rows - sh;
             UNROLL()
             for (float st = 1; st > stretch_limit; st *= stretch_multiplier) {
-// UNROLL()
-//                for (float sk = 1; sk < C_skip_limit; sk *= C_skip_multiplier) {
                 const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1, align_validate);
                 if (score >= scores[i]) continue;
                 scores[i] = score;
                 if (shifts) shifts[i] = sh;
                 if (stretches) stretches[i] = st;
-                // skips[i] = sk; // Skips degrade precision, retest and enable if necessary
-//                }
             }
         }
     }
 }
 
 
-void align_features(
-        CPTRd p_features, CPTRd labels, double *const p_scores, float *const p_stretches,
-        RPTR(uint32_t) p_shifts, float *const p_skips, const uint32_t n_rows, const uint32_t n_cols)
+void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, float *const p_stretches, RPTR(uint32_t) p_shifts, const uint32_t n_rows, const uint32_t n_cols)
 {
-    assert(n_rows - PROPS.get_shift_limit() >= PROPS.get_align_window());
+    const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
+    const uint32_t align_window = (n_rows_integration - PROPS.get_shift_limit()) * PROPS.get_stretch_limit();
 #ifdef INTEGRATION_TEST
-    LOG4_DEBUG("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols);
+    LOG4_DEBUG("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols << ", align window " << align_window);
 #endif
     CTX4_CUSTREAM;
     double *d_features;
-    cu_errchk(cudaMallocAsync((void **) &d_features, n_rows * n_cols * sizeof(double), custream));
-    copy_submat(p_features, d_features, n_rows, 0, 0, n_rows, n_cols, n_rows, cudaMemcpyHostToDevice, custream);
+    cu_errchk(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
+    copy_submat(p_features, d_features, n_rows, 0, 0, n_rows_integration, n_cols, n_rows_integration, cudaMemcpyHostToDevice, custream);
     const auto d_labels = cumallocopy(labels, custream, n_rows);
     double *d_scores;
     cu_errchk(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
-    float *d_stretches, *d_skips;
+    float *d_stretches;
     const auto cols_size_float = n_cols * sizeof(float);
     cu_errchk(cudaMallocAsync((void **) &d_stretches, cols_size_float, custream));
-    cu_errchk(cudaMallocAsync((void **) &d_skips, cols_size_float, custream));
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
     G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(
-                d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows, n_cols, 0, PROPS.get_stretch_limit(), PROPS.get_align_window(),
-            PROPS.get_shift_limit(), PROPS.get_stretch_coef());
+        d_features, d_labels, d_scores, d_stretches, d_shifts, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(), align_window, PROPS.get_shift_limit(),
+        PROPS.get_stretch_coef());
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
     cufreecopy(p_stretches, d_stretches, custream, n_cols);
-    cufreecopy(p_skips, d_skips, custream, n_cols);
     cufreecopy(p_shifts, d_shifts, custream, n_cols);
     cusyndestroy(custream);
 }

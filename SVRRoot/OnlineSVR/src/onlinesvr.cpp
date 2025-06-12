@@ -72,7 +72,7 @@ const auto __lib_init = []() {
     return onlinesvr_lib_init();
 }();
 
-OnlineMIMOSVR::OnlineMIMOSVR() : Entity(0), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length())
+OnlineSVR::OnlineSVR() : Entity(0), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
 {
     LOG4_WARN("Created OnlineMIMOSVR object with default constructor and default multistep_len " << multiout);
 #ifdef ENTITY_INIT_ID
@@ -80,8 +80,40 @@ OnlineMIMOSVR::OnlineMIMOSVR() : Entity(0), multiout(PROPS.get_multiout()), max_
 #endif
 }
 
+OnlineSVR::OnlineSVR(
+        const bigint id,
+        const bigint model_id,
+        const t_param_set &param_set,
+        const Dataset_ptr &p_dataset) :
+        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
+{
+    if (model_id) scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model_id);
+    parse_params();
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
+}
 
-void OnlineMIMOSVR::parse_params()
+OnlineSVR::OnlineSVR(
+        const bigint id,
+        const bigint model_id,
+        const t_param_set &param_set,
+        const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time,
+        const matrices_ptr &kernel_matrices,
+        const Dataset_ptr &p_dataset) :
+        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
+{
+    if (model_id) scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model_id);
+    parse_params();
+#ifdef ENTITY_INIT_ID
+    init_id();
+#endif
+    PROFILE_MSG(
+            batch_train(p_xtrain, p_ytrain, nullptr, last_value_time, kernel_matrices),
+            "Batch SVM train on " << arma::size(*p_ytrain) << " labels and " << arma::size(*p_xtrain) << " features, parameters " << *front(param_set));
+}
+
+void OnlineSVR::parse_params()
 {
     if (param_set.empty()) LOG4_THROW("At least one parameter set should be supplied to construct an SVR model.");
 
@@ -95,109 +127,76 @@ void OnlineMIMOSVR::parse_params()
     LOG4_END();
 }
 
-OnlineMIMOSVR::OnlineMIMOSVR(
-        const bigint id,
-        const bigint model_id,
-        const t_param_set &param_set,
-        const Dataset_ptr &p_dataset) :
-        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length())
-{
-    if (model_id) scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model_id);
-    parse_params();
-#ifdef ENTITY_INIT_ID
-    init_id();
-#endif
-}
-
-OnlineMIMOSVR::OnlineMIMOSVR(
-        const bigint id,
-        const bigint model_id,
-        const t_param_set &param_set,
-        const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time,
-        const matrices_ptr &kernel_matrices,
-        const Dataset_ptr &p_dataset) :
-        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length())
-{
-    if (model_id) scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model_id);
-    parse_params();
-#ifdef ENTITY_INIT_ID
-    init_id();
-#endif
-    PROFILE_MSG(
-            batch_train(p_xtrain, p_ytrain, p_ylastknown, nullptr, last_value_time, kernel_matrices),
-            "Batch SVM train on " << arma::size(*p_ytrain) << " labels and " << arma::size(*p_xtrain) << " features, parameters " << *front(param_set));
-}
-
-void OnlineMIMOSVR::set_dataset(const Dataset_ptr &p_dataset_)
+void OnlineSVR::set_dataset(const Dataset_ptr &p_dataset_)
 {
     p_dataset = p_dataset_;
 }
 
-DTYPE(OnlineMIMOSVR::p_dataset) OnlineMIMOSVR::get_dataset() const
+DTYPE(OnlineSVR::p_dataset) OnlineSVR::get_dataset() const
 {
     return p_dataset;
 }
 
-DTYPE(OnlineMIMOSVR::p_dataset) &OnlineMIMOSVR::get_dataset()
+DTYPE(OnlineSVR::p_dataset) &OnlineSVR::get_dataset()
 {
     return p_dataset;
 }
 
-DTYPE(OnlineMIMOSVR::samples_trained) OnlineMIMOSVR::get_samples_trained_number() const noexcept
+DTYPE(OnlineSVR::samples_trained) OnlineSVR::get_samples_trained_number() const noexcept
 {
     return samples_trained;
 }
 
-void OnlineMIMOSVR::clear_kernel_matrix()
+void OnlineSVR::clear_kernel_matrix()
 {
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(p_kernel_matrices->size()))
     for (auto &k: *p_kernel_matrices) k.clear();
 }
 
-DTYPE(OnlineMIMOSVR::gradient) OnlineMIMOSVR::get_gradient_level() const noexcept
+DTYPE(OnlineSVR::gradient) OnlineSVR::get_gradient_level() const noexcept
 {
     return gradient;
 }
 
-DTYPE(OnlineMIMOSVR::level) OnlineMIMOSVR::get_decon_level() const noexcept
+DTYPE(OnlineSVR::level) OnlineSVR::get_decon_level() const noexcept
 {
     return level;
 }
 
-DTYPE(OnlineMIMOSVR::step) OnlineMIMOSVR::get_step() const noexcept
+DTYPE(OnlineSVR::step) OnlineSVR::get_step() const noexcept
 {
     return step;
 }
 
-DTYPE(OnlineMIMOSVR::multiout) OnlineMIMOSVR::get_multiout() const noexcept
+DTYPE(OnlineSVR::multiout) OnlineSVR::get_multiout() const noexcept
 {
     return multiout;
 }
 
-arma::uvec OnlineMIMOSVR::get_active_ixs() const
+arma::uvec OnlineSVR::get_active_ixs() const
 {
     arma::uvec active_ixs;
     for (const auto &ix: ixs) active_ixs.insert_rows(active_ixs.n_rows, ix);
     return arma::unique(active_ixs);
 }
 
-DTYPE(OnlineMIMOSVR::param_set) OnlineMIMOSVR::get_param_set() const noexcept
+DTYPE(OnlineSVR::param_set) OnlineSVR::get_param_set() const noexcept
 {
     return param_set;
 }
 
-DTYPE(OnlineMIMOSVR::param_set) &OnlineMIMOSVR::get_param_set() noexcept
+DTYPE(OnlineSVR::param_set) &OnlineSVR::get_param_set() noexcept
 {
     return param_set;
 }
 
-void OnlineMIMOSVR::set_param_set(const DTYPE(OnlineMIMOSVR::param_set) &param_set_)
+void OnlineSVR::set_param_set(const DTYPE(OnlineSVR::param_set) &param_set_)
 {
     for (const auto &new_p: param_set_)
         set_params(new_p, new_p->get_chunk_index());
 }
 
-void OnlineMIMOSVR::set_params(const SVRParameters_ptr &p_svr_parameters_, const uint16_t chunk_ix)
+void OnlineSVR::set_params(const SVRParameters_ptr &p_svr_parameters_, const uint16_t chunk_ix)
 {
     auto it_target_params = business::SVRParametersService::find(param_set, chunk_ix, gradient);
     if (it_target_params == param_set.cend())
@@ -206,7 +205,7 @@ void OnlineMIMOSVR::set_params(const SVRParameters_ptr &p_svr_parameters_, const
         **it_target_params = *p_svr_parameters_;
 }
 
-void OnlineMIMOSVR::set_params(const SVRParameters &param, const uint16_t chunk_ix)
+void OnlineSVR::set_params(const SVRParameters &param, const uint16_t chunk_ix)
 {
     auto p_target_params = get_params_ptr(chunk_ix);
     if (p_target_params)
@@ -215,48 +214,48 @@ void OnlineMIMOSVR::set_params(const SVRParameters &param, const uint16_t chunk_
         param_set.emplace(ptr<SVRParameters>(param));
 }
 
-SVRParameters &OnlineMIMOSVR::get_params(const uint16_t chunk_ix) const
+SVRParameters &OnlineSVR::get_params(const uint16_t chunk_ix) const
 {
     return **business::SVRParametersService::find(param_set, chunk_ix, gradient);
 }
 
-SVRParameters_ptr OnlineMIMOSVR::get_params_ptr(const uint16_t chunk_ix) const
+SVRParameters_ptr OnlineSVR::get_params_ptr(const uint16_t chunk_ix) const
 {
     return business::SVRParametersService::find_ptr(param_set, chunk_ix, gradient);
 }
 
-business::calc_cache &OnlineMIMOSVR::ccache()
+business::calc_cache &OnlineSVR::ccache()
 {
     return p_dataset->get_calc_cache();
 }
 
-arma::mat &OnlineMIMOSVR::get_features()
+arma::mat &OnlineSVR::get_features()
 {
     return *p_features;
 }
 
-arma::mat &OnlineMIMOSVR::get_labels()
+arma::mat &OnlineSVR::get_labels()
 {
     return *p_labels;
 }
 
 
-const dq_scaling_factor_container_t &OnlineMIMOSVR::get_scaling_factors() const
+const dq_scaling_factor_container_t &OnlineSVR::get_scaling_factors() const
 {
     return scaling_factors;
 }
 
-void OnlineMIMOSVR::set_scaling_factor(const DQScalingFactor_ptr &p_sf)
+void OnlineSVR::set_scaling_factor(const DQScalingFactor_ptr &p_sf)
 {
     business::DQScalingFactorService::add(scaling_factors, p_sf);
 }
 
-void OnlineMIMOSVR::set_scaling_factors(const dq_scaling_factor_container_t &new_scaling_factors)
+void OnlineSVR::set_scaling_factors(const dq_scaling_factor_container_t &new_scaling_factors)
 {
     business::DQScalingFactorService::add(scaling_factors, new_scaling_factors);
 }
 
-bool OnlineMIMOSVR::needs_tuning(const t_param_set &param_set)
+bool OnlineSVR::needs_tuning(const t_param_set &param_set)
 {
     if (PROPS.get_tune_parameters()) return true;
     for (const auto &p: param_set)
@@ -264,7 +263,7 @@ bool OnlineMIMOSVR::needs_tuning(const t_param_set &param_set)
     return false;
 }
 
-bool OnlineMIMOSVR::needs_tuning() const
+bool OnlineSVR::needs_tuning() const
 {
     return needs_tuning(param_set) || ixs.empty();
 }
@@ -326,20 +325,20 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m,
 
 #endif
 
-arma::mat OnlineMIMOSVR::self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs)
+arma::mat OnlineSVR::self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs)
 {
     arma::mat diff(arma::size(rhs), ARMA_DEFAULT_FILL);
     self_predict(K.n_rows, rhs.n_cols, K.mem, w.mem, rhs.mem, diff.memptr());
     return diff;
 }
 
-void OnlineMIMOSVR::self_predict(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs, RPTR(double) diff)
+void OnlineSVR::self_predict(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs, RPTR(double) diff)
 {
     memcpy(diff, rhs, m * n * sizeof(double));
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, m, 1., K, m, w, m, -1., diff, m);
 }
 
-double OnlineMIMOSVR::score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs)
+double OnlineSVR::score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs)
 {
     const auto mn = m * n;
     auto diff = (double *const) malloc(mn * sizeof(double));
@@ -353,7 +352,7 @@ double OnlineMIMOSVR::score_weights(const uint32_t m, const uint32_t n, CRPTRd K
 
 
 // TODO Buggy, rewrite and test
-std::deque<arma::mat> OnlineMIMOSVR::solve_batched_irwls(
+std::deque<arma::mat> OnlineSVR::solve_batched_irwls(
         const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters, const magma_queue_t &magma_queue,
         const size_t gpu_phy_id)
 {
@@ -405,7 +404,7 @@ std::deque<arma::mat> OnlineMIMOSVR::solve_batched_irwls(
 }
 
 
-arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
+arma::mat OnlineSVR::direct_solve(const arma::mat &a, const arma::mat &b)
 {
     LOG4_THROW("Deprecated");
     if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
@@ -414,27 +413,29 @@ arma::mat OnlineMIMOSVR::direct_solve(const arma::mat &a, const arma::mat &b)
     return solved;
 }
 
-uint32_t OnlineMIMOSVR::get_full_train_len(const uint32_t n_rows, const uint32_t decrement)
+uint32_t OnlineSVR::get_full_train_len(const uint32_t n_rows, const uint32_t decrement)
 {
     return n_rows > PROPS.get_shift_limit() ? std::min<uint32_t>(n_rows - PROPS.get_shift_limit(), decrement) : decrement;
 }
 
-uint32_t OnlineMIMOSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_)
+uint32_t OnlineSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_)
 {
     if (!n_rows || !chunk_size_) LOG4_THROW("Rows count " << n_rows << " or maximum chunk size " << chunk_size_ << " is zero!");
     if (n_rows <= chunk_size_) return 1;
-    return cdiv(n_rows, chunk_size_ * C_chunk_offlap) - cdiv(1, C_chunk_offlap) + C_end_chunks;
+    static const float chunk_offlap = 1 - PROPS.get_chunk_overlap();
+    return cdiv(n_rows, chunk_size_ * chunk_offlap) - cdiv(1, chunk_offlap) + C_end_chunks;
 }
 
-uint32_t OnlineMIMOSVR::get_num_chunks() const
+uint32_t OnlineSVR::get_num_chunks() const
 {
     return projection ? get_num_chunks(get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance()), max_chunk_size) : 1;
 }
 
-std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
+std::deque<arma::uvec> OnlineSVR::generate_indexes() const
 {
-    if (is_manifold()) return {arma::regspace<arma::uvec>(0, std::sqrt(PROPS.get_interleave()), p_features->n_rows - 1)};
     const auto n_rows_dataset = p_labels->n_rows;
+    if (is_manifold()) return {arma::regspace<arma::uvec>(0, std::sqrt(PROPS.get_interleave()), n_rows_dataset - 1)};
+
     const auto decrement = (**param_set.cbegin()).get_svr_decremental_distance();
 
     // Make sure we train on the latest data
@@ -451,12 +452,12 @@ std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
         LOG4_TRACE("Linear single chunk, start offset " << start_offset << ", n rows " << n_rows_dataset << ", chunk indexes " << common::present(indexes[0]));
         return indexes;
     }
-    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1 / C_chunk_offlap - C_end_chunks) * C_chunk_offlap);
+    const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1 / chunk_offlap - C_end_chunks) * chunk_offlap);
     LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks << ", max chunk size " <<
-                              max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << C_chunk_offlap);
+                              max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << chunk_offlap);
 
     OMP_FOR_i(num_chunks) {
-        const uint32_t start_row = i * this_chunk_size * C_chunk_offlap;
+        const uint32_t start_row = i * this_chunk_size * chunk_offlap;
         const uint32_t end_row = std::min<uint32_t>(start_row + this_chunk_size + PROPS.get_outlier_slack(), n_rows_dataset);
         indexes[i] = arma::regspace<arma::uvec>(start_row, end_row - 1);
 
@@ -466,7 +467,7 @@ std::deque<arma::uvec> OnlineMIMOSVR::generate_indexes() const
 }
 
 arma::uvec
-OnlineMIMOSVR::get_other_ixs(const uint16_t i) const
+OnlineSVR::get_other_ixs(const uint16_t i) const
 {
     return ixs[i](arma::find(ixs[i] != arma::linspace<arma::uvec>(0, p_features->n_rows - 1, p_features->n_rows)));
 }
@@ -516,7 +517,7 @@ void do_mkl_over_solve(const arma::mat &a, const arma::mat &b, arma::mat &solved
 }
 
 //Assuming objects are equal if sizes of the containers are the same
-bool OnlineMIMOSVR::operator==(OnlineMIMOSVR const &o) const
+bool OnlineSVR::operator==(OnlineSVR const &o) const
 {
     if (p_features->n_elem != o.p_features->n_elem
         || p_labels->n_elem != o.p_labels->n_elem
@@ -530,12 +531,11 @@ bool OnlineMIMOSVR::operator==(OnlineMIMOSVR const &o) const
     return true;
 }
 
-void OnlineMIMOSVR::reset()
+void OnlineSVR::reset()
 {
     samples_trained = 0;
     p_features = ptr<arma::mat>();
     p_labels = ptr<arma::mat>();
-    p_last_knowns = ptr<arma::vec>();
     p_kernel_matrices = ptr<std::deque<arma::mat>>();
 
     weight_chunks.clear();
@@ -545,19 +545,19 @@ void OnlineMIMOSVR::reset()
     train_label_chunks.clear();
 }
 
-bool OnlineMIMOSVR::is_gradient() const
+bool OnlineSVR::is_gradient() const
 {
     return std::any_of(C_default_exec_policy, param_set.cbegin(), param_set.cend(), [](const auto &p) -> bool { return p->get_grad_level(); });
 }
 
 
-double OnlineMIMOSVR::calc_epsco(const arma::mat &K, const arma::mat &labels)
+double OnlineSVR::calc_epsco(const arma::mat &K, const arma::mat &labels)
 {
     return arma::mean(arma::mean(labels, 1) - arma::sum(K, 1) - arma::sum(arma::vectorise(labels)));
 }
 
 
-std::tuple<double, double> OnlineMIMOSVR::calc_gamma(const arma::mat &Z, const arma::mat &L)
+std::tuple<double, double> OnlineSVR::calc_gamma(const arma::mat &Z, const arma::mat &L)
 {
     const auto ref = kernel::get_reference_Z(L);
     const auto mean = common::mean(Z) - common::mean(ref);
@@ -566,7 +566,7 @@ std::tuple<double, double> OnlineMIMOSVR::calc_gamma(const arma::mat &Z, const a
     return {gamma, mean};
 }
 
-arma::vec OnlineMIMOSVR::calc_gammas(const arma::mat &Z, const arma::mat &L)
+arma::vec OnlineSVR::calc_gammas(const arma::mat &Z, const arma::mat &L)
 {
     arma::vec mean_Z, min_Z, max_Z, min_L, max_L, mean_L;
 

@@ -213,7 +213,7 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 
 #endif
 
-    return datamodel::OnlineMIMOSVR::score_weights(m, n, A_, sol, b_);
+    return datamodel::OnlineSVR::score_weights(m, n, A_, sol, b_);
 }
 }
 }

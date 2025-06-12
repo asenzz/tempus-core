@@ -8,7 +8,7 @@ namespace svr {
 namespace datamodel {
 
 template<class A> void
-OnlineMIMOSVR::serialize(A &ar, const unsigned version)
+OnlineSVR::serialize(A &ar, const unsigned version)
 {
     // TODO Decide upon weight scaling factors serialization
     ar & last_trained_time;
@@ -18,7 +18,6 @@ OnlineMIMOSVR::serialize(A &ar, const unsigned version)
     ar & samples_trained;
     ar & p_features;
     ar & p_labels;
-    ar & p_last_knowns;
     ar & p_kernel_matrices;
     ar & p_input_weights;
     ar & train_label_chunks;
@@ -35,16 +34,16 @@ OnlineMIMOSVR::serialize(A &ar, const unsigned version)
 }
 
 template<typename S> void
-OnlineMIMOSVR::save(const OnlineMIMOSVR &osvr, S &output_stream)
+OnlineSVR::save(const OnlineSVR &osvr, S &output_stream)
 {
     boost::archive::binary_oarchive oa(output_stream);
     oa << osvr;
 }
 
-template<typename S> OnlineMIMOSVR_ptr
-OnlineMIMOSVR::load(S &input_stream)
+template<typename S> OnlineSVR_ptr
+OnlineSVR::load(S &input_stream)
 {
-    return ptr<OnlineMIMOSVR>(0, 0, input_stream);
+    return ptr<OnlineSVR>(0, 0, input_stream);
 }
 
 } // datamodel
