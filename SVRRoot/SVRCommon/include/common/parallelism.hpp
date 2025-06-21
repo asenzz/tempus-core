@@ -35,6 +35,13 @@
 #define SSIMD simd
 #endif
 
+#ifdef NO_PARALLEL
+#define OMP_TASKLOOP(__n)
+#define OMP_TASKLOOP_1(__x)
+#define OMP_TASKLOOP_(__n, __x)
+#define OMP_FOR_(__n, __x)
+#define OMP_FOR_i_(__n, __x)
+#else
 #define OMP_TASKLOOP(__n) PRAGMASTR(omp taskloop SSIMD NGRAIN(__n) default(shared) mergeable)
 #define OMP_TASKLOOP_1(__x) PRAGMASTR(omp taskloop grainsize(1) default(shared) mergeable __x)
 #define OMP_TASKLOOP_(__n, __x) PRAGMASTR(omp taskloop NGRAIN(__n) default(shared) mergeable __x)
@@ -46,7 +53,7 @@
     const unsigned ITERS_CTR = (__n);                    \
     const unsigned ADJ_ITERS_CTR = OMP_FOR_ITERS_(ITERS_CTR);  \
     PRAGMASTR(omp parallel for __x schedule(static, ADJ_ITERS_CTR) num_threads((unsigned) CDIV(ITERS_CTR, ADJ_ITERS_CTR)) default(shared))
-
+#endif
 #define OMP_FOR_i_(__n, __x) \
     OMP_FOR_(__n, __x)      \
     for (DTYPE(__n) i = 0; i < __n; ++i)
@@ -138,25 +145,25 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 
 
 // TODO Rewrite with TBB parallel_for_each
-#define GRAIN_SIZE 10
+#define GRAIN_SIZE_ 10
 
 #define __F(...) [&](const auto _IX) { __VA_ARGS__; }
-#define __par_iter(_C_START_ITER, _C_COUNT, _C_ACC_FUNCT) _C_CILK_ITER(_C_START_ITER, _C_COUNT, __F(_C_ACC_FUNCT))
-#define _C_CILK_ITER(_C_START_ITER, _C_COUNT, _C_ACC_FUNCT) \
+#define __par_iter(_C_START_ITER, C_COUNT_, _C_ACC_FUNCT) _C_CILK_ITER(_C_START_ITER, C_COUNT_, __F(_C_ACC_FUNCT))
+#define _C_CILK_ITER(_C_START_ITER, C_COUNT_, _C_ACC_FUNCT) \
 {\
-    const size_t __max_cores = _C_COUNT / GRAIN_SIZE;\
+    const size_t __max_cores = C_COUNT_ / GRAIN_SIZE_;\
     if (__max_cores < 2) {\
         auto _ITER = _C_START_ITER;\
-        for (size_t t = 0; t < _C_COUNT; ++t, ++_ITER) {\
+        for (size_t t = 0; t < C_COUNT_; ++t, ++_ITER) {\
             _C_ACC_FUNCT(t);\
         } \
     } else { \
         const size_t __num_cores = C_n_cpu; \
         const size_t __cores_used = __max_cores > __num_cores ? __num_cores : __max_cores; \
-        const size_t __chunk_len = _C_COUNT / __cores_used; \
+        const size_t __chunk_len = C_COUNT_ / __cores_used; \
         tbb_tpfor__(size_t, t, 0, __cores_used, \
             const size_t __pos_start = t * __chunk_len; \
-            const size_t cur___chunk_len = t == __cores_used - 1 ? _C_COUNT - __pos_start : __chunk_len; \
+            const size_t cur___chunk_len = t == __cores_used - 1 ? C_COUNT_ - __pos_start : __chunk_len; \
             auto _ITER = _C_START_ITER + __pos_start; \
             for (size_t sub_t = 0; sub_t < cur___chunk_len; ++sub_t, ++_ITER) \
                 _C_ACC_FUNCT(sub_t + __pos_start); \

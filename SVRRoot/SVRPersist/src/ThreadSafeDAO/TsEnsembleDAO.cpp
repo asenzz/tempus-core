@@ -21,14 +21,14 @@ datamodel::Ensemble_ptr TsEnsembleDAO::get_by_id(const bigint id)
 
 bool TsEnsembleDAO::exists(const bigint ensemble_id)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guar(mutex);
+    const std::scoped_lock scope_guar(mutex);
     return dao->exists(ensemble_id);
 }
 
 
 bool TsEnsembleDAO::exists(const datamodel::Ensemble_ptr &ensemble)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guar(mutex);
+    const std::scoped_lock scope_guar(mutex);
     return dao->exists(ensemble);
 }
 

@@ -22,7 +22,7 @@ template<typename T>
 class kernel_global_alignment : public kernel_base<T> {
 
 public:
-    explicit kernel_global_alignment(const datamodel::SVRParameters &p) : kernel_base<T>(p)
+    explicit kernel_global_alignment(datamodel::SVRParameters &p) : kernel_base<T>(p)
     {}
 
     virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const

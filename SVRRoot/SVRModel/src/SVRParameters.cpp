@@ -35,6 +35,8 @@ e_kernel_type fromstring(const std::string &kernel_type_str)
         kernel_type = e_kernel_type::DEEP_PATH;
     else if (kernel_type_str == "DTW")
         kernel_type = e_kernel_type::DTW;
+    else if (kernel_type_str == "TFT")
+        kernel_type = e_kernel_type::TFT;
     else
         THROW_EX_FS(std::invalid_argument, "Incorrect kernel type.");
 
@@ -62,6 +64,8 @@ std::string tostring(const e_kernel_type kt)
             return "DEEP_PATH";
         case e_kernel_type::DTW:
             return "DTW";
+        case e_kernel_type::TFT:
+            return "TFT";
         case e_kernel_type::end:
             return "e_kernel_type::end";
         default:
@@ -171,13 +175,12 @@ SVRParameters::SVRParameters(const SVRParameters &o) : SVRParameters(
     o.adjacent_levels,
     o.feature_mechanics)
 {
-    gamma = o.gamma;
-    epsco = o.epsco;
     H_feedback = o.H_feedback;
     D_feedback = o.D_feedback;
     V_feedback = o.V_feedback;
     min_Z = o.min_Z;
     max_Z = o.max_Z;
+    tft_model = o.tft_model;
 }
 
 SVRParameters &SVRParameters::operator=(const SVRParameters &o)
@@ -209,9 +212,7 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &o)
     kernel_type = o.kernel_type;
     lag_count = o.lag_count;
     feature_mechanics = o.feature_mechanics;
-    gamma = o.gamma;
-    epsco = o.epsco;
-    feature_mechanics = o.feature_mechanics;
+    tft_model = o.tft_model;
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
@@ -370,21 +371,6 @@ void SVRParameters::decrement_gradient() noexcept
     if (grad_level_) --grad_level_;
 }
 
-double SVRParameters::get_svr_epsco() const noexcept
-{
-    return 1. / svr_C;
-}
-
-void SVRParameters::set_epsco(const arma::vec &epsco_) noexcept
-{
-    epsco = epsco_;
-}
-
-arma::vec SVRParameters::get_epsco() const noexcept
-{
-    return epsco;
-}
-
 double SVRParameters::get_svr_epsilon() const noexcept
 {
     return svr_epsilon;
@@ -405,21 +391,6 @@ double SVRParameters::get_svr_kernel_param() const noexcept
 void SVRParameters::set_svr_kernel_param(const double _svr_kernel_param) noexcept
 {
     svr_kernel_param = _svr_kernel_param;
-}
-
-arma::vec SVRParameters::get_gamma() const noexcept
-{
-    return gamma;
-}
-
-arma::vec &SVRParameters::get_gamma() noexcept
-{
-    return gamma;
-}
-
-void SVRParameters::set_gamma(const arma::vec &_gamma) noexcept
-{
-    gamma = _gamma;
 }
 
 double SVRParameters::get_svr_kernel_param2() const noexcept
@@ -512,10 +483,8 @@ std::string SVRParameters::to_string() const
     s << "id " << id
             << ", dataset id " << dataset_id
             << ", cost " << svr_C
-            << ", epsco " << common::present(epsco)
             << ", epsilon " << svr_epsilon
             << ", kernel param " << svr_kernel_param
-            << ", gamma " << common::present(gamma)
             << ", kernel param 2 " << svr_kernel_param2
             << ", kernel param 3 " << kernel_param3
             << ", horizontal " << H_feedback

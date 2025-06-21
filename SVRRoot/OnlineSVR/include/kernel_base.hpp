@@ -23,14 +23,16 @@ template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, con
 template<typename T>
 class kernel_base {
 protected:
-    const datamodel::SVRParameters &parameters;
+    datamodel::SVRParameters &parameters;
 
 public:
-    const datamodel::SVRParameters &get_parameters() const;
+    datamodel::SVRParameters &get_parameters();
+
+    datamodel::SVRParameters get_parameters() const;
 
     kernel_base() = default;
 
-    explicit kernel_base(const datamodel::SVRParameters &p);
+    explicit kernel_base(datamodel::SVRParameters &p);
 
     virtual ~kernel_base();
 

@@ -17,7 +17,6 @@ constexpr double inversepow2_52 = 1. / pow2_52;
 
 const auto sobol_direction_numbers_cross = []() {
     std::deque<std::deque<uint64_t>> result(sobol_max_power, std::deque<uint64_t>(sobol_max_dimension));
-    OMP_FOR_(sobol_max_dimension * sobol_max_power, simd collapse(2))
     for (unsigned i = 0; i < sobol_max_power; ++i) {
         for (unsigned j = 0; j < sobol_max_dimension; ++j) {
             result[i][j] = sobol_direction_numbers[j][i];

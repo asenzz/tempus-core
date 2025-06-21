@@ -16,7 +16,7 @@ namespace kernel {
 template<typename T>
 class kernel_dtw : public kernel_base<T> {
 public:
-    explicit kernel_dtw(const datamodel::SVRParameters &p) : kernel_base<T>(p)
+    explicit kernel_dtw(datamodel::SVRParameters &p) : kernel_base<T>(p)
     {}
 
     virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const

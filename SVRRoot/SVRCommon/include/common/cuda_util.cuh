@@ -22,7 +22,7 @@ constexpr uint64_t C_sign_mask_dbl = 0x7FFFFFFF;
 constexpr unsigned C_cufft_input_limit = 64e5;
 // #define HETEROGENOUS_GPU_HW
 
-#define tid threadIdx.x
+#define tid_ threadIdx.x
 #ifdef PRODUCTION_BUILD
 #define CU_STRIDED_FOR_i(N)                             \
     const auto __stride = blockDim.x * gridDim.x;       \

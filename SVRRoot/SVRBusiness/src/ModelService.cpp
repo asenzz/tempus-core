@@ -807,8 +807,9 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
             const auto adj_ix_q = adj_ix + qix * levels;
             const auto adj_ix_q_1 = adj_ix_q + 1;
             const std::deque<uint32_t> &quantisations = get_quantisations();
-            OMP_TASKLOOP_1(firstprivate(n_rows, lag, coef_lag, adj_ix_q, adj_ix_q_1, qix))
-            for (const auto quantise: quantisations) {
+            OMP_TASKLOOP_(quantisations.size(), firstprivate(n_rows, lag, coef_lag, adj_ix_q, adj_ix_q_1, qix))
+            for (uint32_t qq = 0; qq < quantisations.size(); ++qq) {
+                const auto quantise = quantisations[qq];
                 auto feat_params_qix_qt = feat_params[qix];
                 const auto coef_lag_q = coef_lag_ * quantise;
                 OMP_TASKLOOP_(n_rows, SSIMD firstprivate(quantise))
@@ -879,8 +880,10 @@ void ModelService::do_features(
     LOG4_TRACE("Preparing features " << n_rows << "x" << feature_cols << ", lag " << lag << ", coef lag " << coef_lag << ", levels " << levels << ", queues " << n_queues << ", decon queue "
         << common::present(decon.front()) << ", feat params " << feat_params_f.size() << ", feat params ix_end " << feat_params_f.front().ix_end << ", stripe period " << stripe_period <<
         ", quantisation " << fm.quantization[0] << ", stretches " << common::present(fm.stretches) << ", shifts " << common::present(fm.shifts));
+#ifdef NDEBUG
 #pragma omp parallel num_threads(C_n_cpu)
 #pragma omp single
+#endif
     {
         OMP_TASKLOOP_1(firstprivate(levels_lag))
         for (DTYPE(n_queues) qix = 0; qix < n_queues; ++qix) {
@@ -891,7 +894,7 @@ void ModelService::do_features(
                 auto feat_params_qix_qt = feat_params[qix];
                 const auto quantise = fm.quantization[adj_ix_q];
                 const auto coef_lag_q = coef_lag_ * quantise;
-#pragma omp taskloop SSIMD NGRAIN(n_rows) default(shared) mergeable untied
+                OMP_TASKLOOP_(n_rows, firstprivate(coef_lag_q))
                 for (auto &f: feat_params_qix_qt) f.ix_start = f.ix_end - coef_lag_q + 1;
                 arma::mat level_features(n_rows, coef_lag, ARMA_DEFAULT_FILL);
                 OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, coef_lag_, coef_lag))
@@ -1092,28 +1095,12 @@ ModelService::predict(
     tbb::mutex &insemx,
     data_row_container &out)
 {
-    assert(model.get_features().size() > 0 && model.get_labels().size() > 0 && model.get_labels().n_rows == model.get_features().n_rows);
     arma::mat prediction(predict_features.p->n_rows, model.get_multiout());
     tbb::mutex predict_lock;
-#if 0
-    const auto row_ixs = arma::regspace<arma::uvec>(0, PROPS.get_interleave(), model.get_labels().n_rows - 1);
-    const arma::mat i_labels = model.get_labels().rows(row_ixs);
-    const arma::mat i_features = model.get_features().rows(row_ixs);
-    assert(i_features.n_rows == i_labels.n_rows);
-#endif
     const auto predict_time = predict_features.times.front()->get_value_time();
-#ifdef NDEBUG
     OMP_FOR(model.get_gradient_count())
-#endif
     for (const auto &p_svr: model.get_gradients()) {
-#if 0
-        arma::mat this_prediction(predict_features.p->n_rows, i_labels.n_cols, ARMA_DEFAULT_FILL);
-        OMP_FOR_i(predict_features.p->n_rows)
-            this_prediction.row(i) = arma::mean(p_svr->predict(arma::join_rows(common::extrude_cols(predict_features.p->row(i), i_features.n_rows), i_features),
-                                                               predict_features.times.front()->get_value_time()) + i_labels);
-#else
         const auto this_prediction = p_svr->predict(*predict_features.p, predict_time);
-#endif
         const tbb::mutex::scoped_lock lk(predict_lock);
         prediction += this_prediction;
     }
@@ -1175,8 +1162,7 @@ ModelService::init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::En
                 auto p_model = ensemble.get_model(levix, stepix);
                 lk.release();
                 if (!p_model) {
-                    p_model = ptr<datamodel::Model>(0, ensemble.get_id(), levix, stepix, PROPS.get_multiout(), p_dataset->get_gradient_count(),
-                                                    p_dataset->get_max_chunk_size());
+                    p_model = ptr<datamodel::Model>(0, ensemble.get_id(), levix, stepix, PROPS.get_multiout(), p_dataset->get_gradient_count(), p_dataset->get_max_chunk_size());
                     const tbb::mutex::scoped_lock lk2(init_models_l);
                     ensemble.get_models().emplace_back(p_model);
                 }

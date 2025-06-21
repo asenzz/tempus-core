@@ -114,11 +114,8 @@ double cu_calc_epsco(const double *const K, const double *const L, const uint32_
     return mean_epsco;
 }
 
-
-const uint16_t score_weights::n_gpus = common::gpu_handler_1::get().get_gpu_devices_count();
-
 score_weights::score_weights(const arma::mat &K, const arma::mat &L, const uint32_t m, const uint32_t n, const uint64_t mn, const uint64_t mm) :
-        m(m), n(n), mn(mn), mm(mm), L_size(L.n_elem * sizeof(double))
+        n_gpus(common::gpu_handler_1::get().get_gpu_devices_count()), m(m), n(n), mn(mn), mm(mm), L_size(L.n_elem * sizeof(double))
 {
     K_rhs_dev.resize(n_gpus);
     const auto K_size = K.n_elem * sizeof(double);
@@ -798,16 +795,24 @@ __global__ void G_abs(RPTR(double) inout, const uint32_t N)
 __global__ void G_sumabsdif(CRPTRd d_in1, CRPTRd d_in2, RPTR(double) d_result_sum, const size_t n)
 {
     double sum = 0;
-    CU_STRIDED_FOR_i(n) sum += fabs(d_in1[i] - d_in2[i]);
+    CU_STRIDED_FOR_i(n) sum += abs(d_in1[i] - d_in2[i]);
     atomicAdd(d_result_sum, sum);
+}
+
+__global__ void G_meanabsdif(CRPTRd d_in1, CRPTRd d_in2, RPTR(double) d_result_sum, const size_t n)
+{
+    double sum = 0;
+    CU_STRIDED_FOR_i(n) sum += abs(d_in1[i] - d_in2[i]);
+    atomicAdd(d_result_sum, sum / n);
 }
 
 double cu_mae(CRPTRd d_in1, CRPTRd d_in2, const size_t n, const cudaStream_t custream)
 {
     auto const d_result_sum = cucalloc<double>(custream);
-    G_sumabsdif<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in1, d_in2, d_result_sum, n);
+    G_meanabsdif<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in1, d_in2, d_result_sum, n);
     double r;
     cufreecopy(&r, d_result_sum, custream);
+    cu_errchk(cudaStreamSynchronize(custream));
     return r / n;
 }
 
@@ -817,22 +822,22 @@ template<const uint32_t block_size> __global__ void
 G_sumabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
 {
     __shared__ double sumdata[common::C_cu_block_size];
-    auto i = blockIdx.x * block_size + tid;
+    auto i = blockIdx.x * block_size + tid_;
     if (i < n) {
-        sumdata[tid] = fabs(d_input[i]);
+        sumdata[tid_] = fabs(d_input[i]);
         const auto stride1 = blockDim.x * gridDim.x;
         UNROLL()
-        for (i += stride1; i < n; i += stride1) sumdata[tid] += fabs(d_input[i]);
-    } else sumdata[tid] = 0;
+        for (i += stride1; i < n; i += stride1) sumdata[tid_] += fabs(d_input[i]);
+    } else sumdata[tid_] = 0;
 
     __syncthreads();
     const auto sh_limit = _MIN(n, block_size);
 #define stride_reduce_sum(block_low_)                        \
         if (block_size >= block_low_) {                      \
             constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid + stride2;          \
-            if (tid < stride2 && tid_stride2 < sh_limit)     \
-                sumdata[tid] += sumdata[tid_stride2];        \
+            const auto tid_stride2 = tid_ + stride2;          \
+            if (tid_ < stride2 && tid_stride2 < sh_limit)     \
+                sumdata[tid_] += sumdata[tid_stride2];        \
             __syncthreads();                                 \
         }
 
@@ -841,10 +846,10 @@ G_sumabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
     stride_reduce_sum(256);
     stride_reduce_sum(128);
 
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sumdata, tid, sh_limit);
+    if (tid_ >= 32) return;
+    warp_reduce_sum<block_size>(sumdata, tid_, sh_limit);
 
-    if (tid) return;
+    if (tid_) return;
     atomicAdd(d_result_sum, *sumdata);
 }
 
@@ -864,7 +869,7 @@ double sumabs(CPTRd d_in, const size_t n, const cudaStream_t stm)
     if (block_start_ >= (N_)) return;                   \
     auto sh_len = (N_) - block_start_;                  \
     if (sh_len > blockDim.x) sh_len = blockDim.x;       \
-    if (tid >= sh_len) return;
+    if (tid_ >= sh_len) return;
 
 
 __global__ void
@@ -874,17 +879,17 @@ G_sumabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
 
     CU_SHLEN_CHECK(n);
 
-    sumdata[tid] = 0;
-    CU_STRIDED_FOR_i(n) sumdata[tid] += fabs(d_input[i]);
+    sumdata[tid_] = 0;
+    CU_STRIDED_FOR_i(n) sumdata[tid_] += fabs(d_input[i]);
 
     __syncthreads();
 
 #define stride_reduce_sum(reduce_block_)                        \
         if (sh_len >= reduce_block_) {                          \
             constexpr uint32_t stride_2 = reduce_block_ / 2;    \
-            const auto tid_stride_2 = tid + stride_2;        \
-            if (tid < stride_2 && tid_stride_2 < sh_len)     \
-                sumdata[tid] += sumdata[tid_stride_2];       \
+            const auto tid_stride_2 = tid_ + stride_2;        \
+            if (tid_ < stride_2 && tid_stride_2 < sh_len)     \
+                sumdata[tid_] += sumdata[tid_stride_2];       \
             __syncthreads();                                 \
         }
 
@@ -893,10 +898,10 @@ G_sumabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
     stride_reduce_sum(256);
     stride_reduce_sum(128);
 
-    if (tid >= 32) return;
-    warp_reduce_sum(sumdata, tid, sh_len);
+    if (tid_ >= 32) return;
+    warp_reduce_sum(sumdata, tid_, sh_len);
 
-    if (tid) return;
+    if (tid_) return;
     atomicAdd(d_result_sum, *sumdata);
 }
 
@@ -992,21 +997,21 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sumabs, RPTR(double) d_r
 {
     __shared__ double sumabs[block_size];
     __shared__ double minabs[block_size];
-    auto i = blockIdx.x * block_size + tid;
+    auto i = blockIdx.x * block_size + tid_;
     if (i < n) {
         d_input[i] = fabs(d_input[i]);
-        sumabs[tid] = d_input[i];
-        minabs[tid] = d_input[i];
+        sumabs[tid_] = d_input[i];
+        minabs[tid_] = d_input[i];
         const auto stride1 = blockDim.x * gridDim.x;
         UNROLL()
         for (i += stride1; i < n; i += stride1) {
             d_input[i] = fabs(d_input[i]);
-            sumabs[tid] += d_input[i];
-            MINAS(minabs[tid], d_input[i]);
+            sumabs[tid_] += d_input[i];
+            MINAS(minabs[tid_], d_input[i]);
         }
     } else {
-        sumabs[tid] = 0;
-        minabs[tid] = common::C_bad_validation;
+        sumabs[tid_] = 0;
+        minabs[tid_] = common::C_bad_validation;
     }
 
     __syncthreads();
@@ -1014,10 +1019,10 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sumabs, RPTR(double) d_r
 #define stride_reduce_minsum(block_low_)                        \
         if (block_size >= block_low_) {                      \
             constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid + stride2;          \
-            if (tid < stride2 && tid_stride2 < sh_limit) {   \
-                sumabs[tid] += sumabs[tid_stride2];          \
-                MINAS(minabs[tid], minabs[tid_stride2]);     \
+            const auto tid_stride2 = tid_ + stride2;          \
+            if (tid_ < stride2 && tid_stride2 < sh_limit) {   \
+                sumabs[tid_] += sumabs[tid_stride2];          \
+                MINAS(minabs[tid_], minabs[tid_stride2]);     \
             }                                                \
             __syncthreads();                                 \
         }
@@ -1026,9 +1031,9 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sumabs, RPTR(double) d_r
     stride_reduce_minsum(512);
     stride_reduce_minsum(256);
     stride_reduce_minsum(128);
-    if (tid >= 32) return;
-    warp_reduce_minsum<block_size>(sumabs, minabs, tid, sh_limit);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_minsum<block_size>(sumabs, minabs, tid_, sh_limit);
+    if (tid_) return;
     atomicAdd(d_result_sumabs, *sumabs);
     atomicMin(d_result_minabs, *minabs);
 }
@@ -1038,29 +1043,29 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sum, const uint32_t n)
 {
 //    constexpr double C_error_threshold = 1e-8;
     __shared__ double sumdata[block_size];
-    auto i = blockIdx.x * block_size + tid;
+    auto i = blockIdx.x * block_size + tid_;
     if (i < n) {
         d_input[i] = fabs(d_input[i]);
-        sumdata[tid] = d_input[i];
+        sumdata[tid_] = d_input[i];
         // d_input[i] = 1. / _MAX(d_input[i], C_error_threshold);
         const auto stride1 = blockDim.x * gridDim.x;
         UNROLL()
         for (i += stride1; i < n; i += stride1) {
             d_input[i] = fabs(d_input[i]);
-            sumdata[tid] += d_input[i];
+            sumdata[tid_] += d_input[i];
             // d_input[i] = 1. / _MAX(d_input[i], C_error_threshold);
         }
     } else
-        sumdata[tid] = 0;
+        sumdata[tid_] = 0;
 
     __syncthreads();
     const auto sh_limit = _MIN(n, block_size);
 #define stride_reduce_sum(block_low_)                        \
         if (block_size >= block_low_) {                      \
             constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid + stride2;          \
-            if (tid < stride2 && tid_stride2 < sh_limit)     \
-                sumdata[tid] += sumdata[tid_stride2];        \
+            const auto tid_stride2 = tid_ + stride2;          \
+            if (tid_ < stride2 && tid_stride2 < sh_limit)     \
+                sumdata[tid_] += sumdata[tid_stride2];        \
             __syncthreads();                                 \
         }
 
@@ -1068,9 +1073,9 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sum, const uint32_t n)
     stride_reduce_sum(512);
     stride_reduce_sum(256);
     stride_reduce_sum(128);
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sumdata, tid, sh_limit);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_sum<block_size>(sumdata, tid_, sh_limit);
+    if (tid_) return;
     atomicAdd(d_result_sum, *sumdata);
 }
 
@@ -1108,14 +1113,14 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sum, const uint32_t n)
 
     CU_SHLEN_CHECK(n);
 
-    auto i = blockIdx.x * blockDim.x + tid;
+    auto i = blockIdx.x * blockDim.x + tid_;
     d_input[i] = fabs(d_input[i]);
-    sumdata[tid] = d_input[i];
+    sumdata[tid_] = d_input[i];
     const auto stride1 = blockDim.x * gridDim.x;
 UNROLL()
     for (i += stride1; i < n; i += stride1) {
         d_input[i] = fabs(d_input[i]);
-        sumdata[tid] += d_input[i];
+        sumdata[tid_] += d_input[i];
     }
 
     __syncthreads();
@@ -1125,10 +1130,10 @@ UNROLL()
     stride_reduce_sum(256);
     stride_reduce_sum(128);
 
-    if (tid >= 32) return;
-    warp_reduce_sum(sumdata, tid, sh_len);
+    if (tid_ >= 32) return;
+    warp_reduce_sum(sumdata, tid_, sh_len);
 
-    if (tid) return;
+    if (tid_) return;
     atomicAdd(d_result_sum, *sumdata);
 }
 
@@ -1175,25 +1180,25 @@ template<const uint32_t block_size> __global__ void
 G_suminmax(CRPTRd d_input, RPTR(double) d_result_sum, RPTR(double) d_result_min, RPTR(double) d_result_max, const uint32_t n)
 {
     static __shared__ double sumdata[block_size], mindata[block_size], maxdata[block_size];
-    auto i = blockIdx.x * block_size + tid;
+    auto i = blockIdx.x * block_size + tid_;
     if (i < n) {
-        sumdata[tid] = mindata[tid] = maxdata[tid] = d_input[i];
+        sumdata[tid_] = mindata[tid_] = maxdata[tid_] = d_input[i];
         const auto stride1 = blockDim.x * gridDim.x;
         UNROLL()
-        for (i += stride1; i < n; i += stride1) _SMM_OP(sumdata[tid], mindata[tid], maxdata[tid], d_input[i], d_input[i], d_input[i]);
+        for (i += stride1; i < n; i += stride1) _SMM_OP(sumdata[tid_], mindata[tid_], maxdata[tid_], d_input[i], d_input[i], d_input[i]);
     } else {
-        sumdata[tid] = 0;
-        mindata[tid] = std::numeric_limits<double>::max();
-        maxdata[tid] = std::numeric_limits<double>::min();
+        sumdata[tid_] = 0;
+        mindata[tid_] = std::numeric_limits<double>::max();
+        maxdata[tid_] = std::numeric_limits<double>::min();
     }
     __syncthreads();
     const auto sh_limit = _MIN(n, block_size);
 #define stride_reduce_suminmax(block_low_)                          \
         if (block_size >= block_low_) {                             \
             constexpr uint32_t stride2 = block_low_ / 2;            \
-            const auto tid_stride2 = tid + stride2;                 \
-            if (tid < stride2 && tid_stride2 < sh_limit)            \
-                _SMM_OP(sumdata[tid], mindata[tid], maxdata[tid], sumdata[tid_stride2], mindata[tid_stride2], maxdata[tid_stride2]); \
+            const auto tid_stride2 = tid_ + stride2;                 \
+            if (tid_ < stride2 && tid_stride2 < sh_limit)            \
+                _SMM_OP(sumdata[tid_], mindata[tid_], maxdata[tid_], sumdata[tid_stride2], mindata[tid_stride2], maxdata[tid_stride2]); \
             __syncthreads();                                \
         }
 
@@ -1201,9 +1206,9 @@ G_suminmax(CRPTRd d_input, RPTR(double) d_result_sum, RPTR(double) d_result_min,
     stride_reduce_suminmax(512);
     stride_reduce_suminmax(256);
     stride_reduce_suminmax(128);
-    if (tid >= 32) return;
-    warp_reduce_suminmax<block_size>(sumdata, mindata, maxdata, tid, sh_limit);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_suminmax<block_size>(sumdata, mindata, maxdata, tid_, sh_limit);
+    if (tid_) return;
     atomicAdd(d_result_sum, *sumdata);
     atomicMin(d_result_min, *mindata);
     atomicMax(d_result_max, *maxdata);
@@ -1253,20 +1258,20 @@ G_suminmax(CRPTRd d_input, RPTR(double) d_result_sum, RPTR(double) d_result_min,
 
     CU_SHLEN_CHECK(n);
 
-    auto i = blockIdx.x * blockDim.x + tid;
-    sumdata[tid] = mindata[tid] = maxdata[tid] = d_input[i];
+    auto i = blockIdx.x * blockDim.x + tid_;
+    sumdata[tid_] = mindata[tid_] = maxdata[tid_] = d_input[i];
     const auto stride1 = blockDim.x * gridDim.x;
 UNROLL()
-    for (i += stride1; i < n; i += stride1) _SMM_OP(sumdata[tid], mindata[tid], maxdata[tid], d_input[i], d_input[i], d_input[i]);
+    for (i += stride1; i < n; i += stride1) _SMM_OP(sumdata[tid_], mindata[tid_], maxdata[tid_], d_input[i], d_input[i], d_input[i]);
 
     __syncthreads();
 
 #define stride_reduce_suminmax(reduce_block_)                           \
         if (sh_len >= reduce_block_) {                                  \
             constexpr uint32_t stride_2 = reduce_block_ / 2;            \
-            const auto tid_stride_2 = tid + stride_2;                   \
-            if (tid < stride_2 && tid_stride_2 < sh_len)                \
-                _SMM_OP(sumdata[tid], mindata[tid], maxdata[tid], sumdata[tid_stride_2], mindata[tid_stride_2], maxdata[tid_stride_2]); \
+            const auto tid_stride_2 = tid_ + stride_2;                   \
+            if (tid_ < stride_2 && tid_stride_2 < sh_len)                \
+                _SMM_OP(sumdata[tid_], mindata[tid_], maxdata[tid_], sumdata[tid_stride_2], mindata[tid_stride_2], maxdata[tid_stride_2]); \
             __syncthreads();                                            \
         }
 
@@ -1275,10 +1280,10 @@ UNROLL()
     stride_reduce_suminmax(256);
     stride_reduce_suminmax(128);
 
-    if (tid >= 32) return;
-    warp_reduce_suminmax(sumdata, mindata, maxdata, tid, sh_len);
+    if (tid_ >= 32) return;
+    warp_reduce_suminmax(sumdata, mindata, maxdata, tid_, sh_len);
 
-    if (tid) return;
+    if (tid_) return;
     atomicAdd(d_result_sum, *sumdata);
     atomicMin(d_result_min, *mindata);
     atomicMax(d_result_max, *maxdata);
@@ -1315,8 +1320,8 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
         const uint32_t m, const uint32_t mn, const uint32_t ldl)
 {
     static __shared__ double sh_dist[block_size];
-    sh_dist[tid] = 0;
-    CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]);
+    sh_dist[tid_] = 0;
+    CU_STRIDED_FOR_i(mn) sh_dist[tid_] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]);
 
     __syncthreads();
     const auto n_min = _MIN(mn, block_size);
@@ -1324,9 +1329,9 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
 #define stride_reduce_dist(block_low_)                                                  \
         if (block_size >= block_low_) {                                                 \
             constexpr uint32_t stride2 = block_low_ / 2;                                \
-            const auto tid_stride2 = tid + stride2;                                     \
-            if (tid < stride2 && tid_stride2 < n_min)                                      \
-                sh_dist[tid] += sh_dist[tid_stride2];                                   \
+            const auto tid_stride2 = tid_ + stride2;                                     \
+            if (tid_ < stride2 && tid_stride2 < n_min)                                      \
+                sh_dist[tid_] += sh_dist[tid_stride2];                                   \
             __syncthreads();                                                            \
         }
 
@@ -1334,9 +1339,9 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
     stride_reduce_dist(512);
     stride_reduce_dist(256);
     stride_reduce_dist(128);
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sh_dist, tid, n_min);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_sum<block_size>(sh_dist, tid_, n_min);
+    if (tid_) return;
     atomicAdd(d_sum, sh_dist[0]);
 }
 
@@ -1344,8 +1349,8 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
         RPTR(double) d_sum, CRPTRd d_labels, CRPTRd d_predictions, const uint32_t mn)
 {
     static __shared__ double sh_dist[block_size];
-    sh_dist[tid] = 0;
-    CU_STRIDED_FOR_i(mn) sh_dist[tid] += fabs(d_labels[i] - d_predictions[i]);
+    sh_dist[tid_] = 0;
+    CU_STRIDED_FOR_i(mn) sh_dist[tid_] += fabs(d_labels[i] - d_predictions[i]);
 
     __syncthreads();
     const auto n_min = _MIN(mn, block_size);
@@ -1353,9 +1358,9 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
 #define stride_reduce_dist(block_low_)                                                  \
         if (block_size >= block_low_) {                                                 \
             constexpr uint32_t stride2 = block_low_ / 2;                                \
-            const auto tid_stride2 = tid + stride2;                                     \
-            if (tid < stride2 && tid_stride2 < n_min)                                      \
-                sh_dist[tid] += sh_dist[tid_stride2];                                   \
+            const auto tid_stride2 = tid_ + stride2;                                     \
+            if (tid_ < stride2 && tid_stride2 < n_min)                                      \
+                sh_dist[tid_] += sh_dist[tid_stride2];                                   \
             __syncthreads();                                                            \
         }
 
@@ -1363,9 +1368,9 @@ template<const uint32_t block_size> __global__ void G_dist_unscaled(
     stride_reduce_dist(512);
     stride_reduce_dist(256);
     stride_reduce_dist(128);
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sh_dist, tid, n_min);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_sum<block_size>(sh_dist, tid_, n_min);
+    if (tid_) return;
     atomicAdd(d_sum, *sh_dist);
 }
 
@@ -1392,8 +1397,8 @@ __global__ void G_dist_unscaled(
 
     CU_SHLEN_CHECK(mn);
 
-    sumdata[tid] = 0;
-    CU_STRIDED_FOR_i(mn) sumdata[tid] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]);
+    sumdata[tid_] = 0;
+    CU_STRIDED_FOR_i(mn) sumdata[tid_] += fabs(d_labels[LDi(i, m, ldl)] - d_predictions[i]);
 
     __syncthreads();
 

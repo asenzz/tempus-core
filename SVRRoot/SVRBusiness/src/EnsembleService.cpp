@@ -241,9 +241,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
     std::deque<datamodel::DeconQueue_ptr> main_decon_queues, aux_decon_queues;
     if (load_data) PROFILE_MSG(APP.input_queue_service.load(*p_input_queue), "Loading " << p_input_queue->get_table_name());
     get_decon_queues_from_input_queue(*p_dataset, *p_input_queue, main_decon_queues);
-#ifdef NDEBUG
     OMP_FOR(p_dataset->get_aux_input_queues().size())
-#endif
     for (const auto &p_aux_input_queue: p_dataset->get_aux_input_queues()) {
         if (load_data) {
             PROFILE_BEGIN;
@@ -263,9 +261,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
 
     tbb::mutex ens_emplace_l;
     auto &ensembles = p_dataset->get_ensembles();
-#ifdef NDEBUG
     OMP_FOR(main_decon_queues.size())
-#endif
     for (const auto &p_main_decon: main_decon_queues) {
         tbb::mutex::scoped_lock lk(ens_emplace_l);
         auto ens_iter = std::find_if(C_default_exec_policy, ensembles.cbegin(), ensembles.cend(),
@@ -307,10 +303,9 @@ void EnsembleService::get_decon_queues_from_input_queue(
         const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues)
 {
     const uint16_t prev_size = decon_queues.size();
-    OMP_FOR_(input_queue.get_value_columns().size(),)
-    for (const auto &column_name: input_queue.get_value_columns()) {
+    OMP_FOR_i(input_queue.get_value_columns().size()) {
+        const auto &column_name = input_queue.get_value_column(i);
         bool skip = false;
-        UNROLL()
         for (uint16_t j = 0; j < prev_size; ++j) {
             if (decon_queues[j]->get_input_queue_table_name() != input_queue.get_table_name() || decon_queues[j]->get_input_queue_column_name() != column_name) continue;
             skip = true;
@@ -339,10 +334,8 @@ EnsembleService::update_ensemble_decon_queues(
 
     if (ensembles.size() != new_decon_queues.size())
         LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
-#ifdef NDEBUG
 #pragma omp parallel ADJ_THREADS(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
 #pragma omp single
-#endif
     {
         OMP_TASKLOOP(ensembles.size())
         for (auto p_ensemble: ensembles) {
@@ -355,9 +348,7 @@ EnsembleService::update_ensemble_decon_queues(
                 else
                     LOG4_WARN("New data for " << *p_ensemble->get_decon_queue() << " not found!");
             }
-#ifdef NDEBUG
             OMP_TASKLOOP(p_ensemble->get_aux_decon_queues().size())
-#endif
             for (auto p_ensemble_aux_decon_queue: p_ensemble->get_aux_decon_queues()) {
                 const auto p_decon_queue = DeconQueueService::find_decon_queue(
                         new_decon_queues,

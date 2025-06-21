@@ -24,14 +24,14 @@ std::deque<datamodel::InputQueue_ptr> TsInputQueueDAO::get_all_queues_with_sign(
 datamodel::InputQueue_ptr TsInputQueueDAO::get_queue_metadata(const std::string &user_name, const std::string &logical_name,
                                                               const bpt::time_duration &resolution)
 {
-    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->get_queue_metadata(user_name, logical_name, resolution);
 }
 
 
 datamodel::InputQueue_ptr TsInputQueueDAO::get_queue_metadata(const std::string &table_name)
 {
-    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->get_queue_metadata(table_name);
 }
 
@@ -95,14 +95,14 @@ size_t TsInputQueueDAO::clear(const datamodel::InputQueue_ptr &input_queue)
 
 bool TsInputQueueDAO::exists(const std::string &table_name)
 {
-    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->exists(table_name);
 }
 
 
 bool TsInputQueueDAO::exists(const datamodel::InputQueue_ptr &input_queue)
 {
-    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->exists(input_queue);
 }
 
@@ -113,7 +113,7 @@ void TsInputQueueDAO::upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_t
 
 bool TsInputQueueDAO::exists(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
 {
-    const std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->exists(user_name, logical_name, resolution);
 }
 

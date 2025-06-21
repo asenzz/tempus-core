@@ -12,6 +12,10 @@ tbb::mutex log_level_mx;
 
 uint8_t AppConfig::S_log_threshold = (uint8_t) boost::log::trivial::severity_level::trace;
 
+AppConfig::~AppConfig()
+{
+}
+
 boost::log::trivial::severity_level AppConfig::set_global_log_level(const std::string &log_level_value)
 {
     boost::log::trivial::severity_level log_threshold = boost::log::trivial::severity_level::info;

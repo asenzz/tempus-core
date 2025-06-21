@@ -1,7 +1,6 @@
 //
 // Created by zarko on 9/29/22.
 //
-
 #include <jemalloc/jemalloc.h>
 #include <execution>
 #include <cublas_v2.h>
@@ -15,6 +14,8 @@
 #include <tuple>
 #include <mkl_vsl.h>
 #include <magma_auxiliary.h>
+#include <hdbscan/hdbscan.h>
+#include <hdbscan/logger.h>
 #include "pprune.hpp"
 #include "DQScalingFactorService.hpp"
 #include "onlinesvr.hpp"
@@ -22,34 +23,24 @@
 #include "recombine_parameters.cuh"
 #include "common/logging.hpp"
 #include "kernel_factory.hpp"
-#include "HDBSCAN-CPP/Hdbscan/hdbscan.hpp"
 
 namespace svr {
 namespace datamodel {
-
 // Returns column indexes of outliers
 arma::uvec outlier_hdbscan(const arma::mat &features_t)
 {
-    std::vector<std::vector<double> > hdbscan_dataset(features_t.n_cols);
-    OMP_FOR_i(features_t.n_cols) hdbscan_dataset[i] = arma::conv_to<std::vector<double>>::from(features_t.col(i));
-
-    Hdbscan hdbscan(hdbscan_dataset);
-    const auto min_p = std::max<uint32_t>(2, features_t.n_cols / 10);
-    hdbscan.execute(min_p, min_p, "Euclidean");
+    const auto min_points = std::min<uint32_t>(PROPS.get_hdbs_points(), features_t.n_cols);
+    clustering::hdbscan *scan = clustering::hdbscan_init(nullptr, min_points);
+    auto err = clustering::hdbscan_run(scan, (distance_t *) features_t.mem, features_t.n_cols, features_t.n_rows, TRUE, H_DOUBLE); // Transposed and colmajor
+    if (err == HDBSCAN_ERROR)
+        LOG4_THROW("Could not run hdbscan. Error code: " << err);
 #ifndef NDEBUG
-    hdbscan.displayResult();
+    clustering::hdbscan_print_outlier_scores(scan->outlierScores, scan->numPoints);
 #endif
-    /*
-    cout << "You can access other fields like cluster labels, membership probabilities and outlier scores." << endl;
-     * Use it like this
-    hdbscan.labels_;
-    hdbscan.membershipProbabilities_;
-    */
-    arma::vec hdbscan_scores(hdbscan.outlierScores_.size(), ARMA_DEFAULT_FILL);
-    OMP_FOR_i(hdbscan.outlierScores_.size()) hdbscan_scores[i] = hdbscan.outlierScores_[i].score;
-    arma::uvec ures = arma::stable_sort_index(hdbscan_scores).eval().tail_rows(PROPS.get_outlier_slack());
+    auto ures = arma::regspace<arma::uvec>(0, scan->numPoints - 1);
+    std::ranges::stable_sort(ures, [&scan](const auto i1, const auto i2) { return scan->outlierScores[i1].score < scan->outlierScores[i2].score; });
     LOG4_TRACE("Returning " << common::present(ures));
-    return ures;
+    return ures.tail_rows(PROPS.get_outlier_slack());
 }
 
 arma::uvec outlier_bacon(const arma::mat &features_t)
@@ -103,15 +94,30 @@ arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, co
     return score;
 }
 
+void OnlineSVR::init_kernel(const SVRParameters_ptr &p_params, const std::function<void()> &init_func)
+{
+    assert(ixs.size() == 1);
+    assert(train_feature_chunks_t.size() == 1);
+    assert(train_label_chunks.size() == 1);
+    init_func();
+    p_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
+}
+
+void save_chunk_params(const SVRParameters_ptr &p_params)
+{
+    if (APP.svr_parameters_service.exists(p_params))
+        APP.svr_parameters_service.remove(p_params);
+    APP.svr_parameters_service.save(p_params);
+}
 
 void OnlineSVR::tune()
 {
-    if (is_manifold()) {
-        LOG4_DEBUG("Tuning a manifold kernel, not.");
+    if (auto p_params = is_manifold()) {
+        init_kernel(p_params, [&]{kernel::IKernel<double>::get<kernel::kernel_deep_path<double>>(*p_params)->init(
+            projection, p_dataset, train_feature_chunks_t.front(), train_label_chunks.front(), last_trained_time); });
         return;
     }
 
-    const auto opt_depth = 1; // std::max<DTYPE(opt_iters) >(1, opt_iters / (opt_iters / 10));
     constexpr uint8_t D = 1;
     // static const auto equiexp = std::log(std::sqrt(PROPS.get_tune_max_lambda())) / M_LN2;
     static const auto bounds1 = [] {
@@ -131,18 +137,23 @@ void OnlineSVR::tune()
     LOG4_TRACE("Systuning level " << level << ", step " << step << ", num chunks " << num_chunks << ", first chunk " << common::present_chunk(ixs.front(), .1) <<
         ", last chunk " << common::present_chunk(ixs.back(), .1) << " labels " << common::present(*p_labels) << ", features " << common::present(*p_features) <<
         ", max lambda " << PROPS.get_tune_max_lambda() << ", tau particles " << PROPS.get_tune_particles1() << ", iterations " << PROPS.get_tune_iteration1() << ", lambda particles " <<
-        PROPS.get_tune_particles2() << ", iterations " << PROPS.get_tune_iteration2() << ", opt depth " << opt_depth);
+        PROPS.get_tune_particles2() << ", iterations " << PROPS.get_tune_iteration2() << ", opt depth " << PROPS.get_opt_depth());
 
 #pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_parallel_chunks())) default(shared) firstprivate(num_chunks)
     for (DTYPE(num_chunks) chunk_ix = 0; chunk_ix < num_chunks; ++chunk_ix) {
         auto p_chunk_params = get_params_ptr(chunk_ix);
         if (!p_chunk_params)
             LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
-        const arma::mat &chunk_F = train_feature_chunks_t[chunk_ix];
         if (PROPS.get_outlier_slack()) {
-            ixs[chunk_ix].shed_rows(outlier_hdbscan(chunk_F));
+            ixs[chunk_ix].shed_rows(outlier_hdbscan(train_feature_chunks_t[chunk_ix]));
             prepare_chunk(chunk_ix);
             LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
+        }
+        if (p_chunk_params->get_kernel_type() == kernel_type::TFT) {
+            kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]);
+            p_chunk_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
+            save_chunk_params(p_chunk_params);
+            continue; // No tuning for TFT
         }
         tbb::mutex chunk_preds_l;
         auto best_score = std::numeric_limits<double>::max();
@@ -153,54 +164,47 @@ void OnlineSVR::tune()
             W_train = instance_weight_matrix(ixs[chunk_ix], *p_input_weights);
         }
 #endif
-        cutuner cv(chunk_F, train_label_chunks[chunk_ix], W_train, *p_chunk_params);
+        cutuner cv(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix], W_train, *p_chunk_params);
         auto costF = [&](const double x[], double *const f) {
             const auto [score, gamma, min] = cv.phase1(x[0], x[1], x[2], x[3]);
             *f = score;
+            const tbb::mutex::scoped_lock lk(chunk_preds_l);
             if (score < best_score) {
-                const tbb::mutex::scoped_lock lk(chunk_preds_l);
-                if (score < best_score) {
-                    p_chunk_params->set_svr_kernel_param(gamma);
-                    p_chunk_params->set_kernel_param3(*x);
-                    p_chunk_params->set_H_feedback(x[1]);
-                    p_chunk_params->set_D_feedback(x[2]);
-                    p_chunk_params->set_V_feedback(x[3]);
-                    p_chunk_params->set_min_Z(min);
-                    LOG4_TRACE("New best score distances " << score << ", previous best " << best_score << ", improvement " << common::imprv(score, best_score) << "pc, parameters " <<
-                        *p_chunk_params << ", opt arg " << common::to_string(x, 4));
-                    best_score = score;
-                }
+                p_chunk_params->set_svr_kernel_param(gamma);
+                p_chunk_params->set_kernel_param3(*x);
+                p_chunk_params->set_H_feedback(x[1]);
+                p_chunk_params->set_D_feedback(x[2]);
+                p_chunk_params->set_V_feedback(x[3]);
+                p_chunk_params->set_min_Z(min);
+                LOG4_TRACE("New best score distances " << score << ", previous best " << best_score << ", improvement " << common::imprv(score, best_score) << "pc, parameters " <<
+                    *p_chunk_params << ", opt arg " << common::to_string(x, 4));
+                best_score = score;
             }
         };
-        (void) optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_tune_particles1(), bounds1, costF, PROPS.get_tune_iteration1(), 0, 0, {}, {}, opt_depth);
+        (void) optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_tune_particles1(), bounds1, costF, PROPS.get_tune_iteration1(), 0, 0, {}, {}, std::min<uint32_t>(PROPS.get_tune_iteration1(), PROPS.get_opt_depth()));
         cv.prepare_second_phase(*p_chunk_params);
         auto costF2 = [&](const double x[], double *const f) {
             const auto [score, gamma, min] = cv.phase2(*x);
             *f = score;
+            const tbb::mutex::scoped_lock lk(chunk_preds_l);
             if (score < best_score) {
-                const tbb::mutex::scoped_lock lk(chunk_preds_l);
-                if (score < best_score) {
-                    p_chunk_params->set_svr_kernel_param2(*x);
-                    p_chunk_params->set_svr_kernel_param(gamma);
-                    p_chunk_params->set_min_Z(min);
-                    LOG4_TRACE("New best score kernel " << score << ", previous best " << best_score << ", improvement " << common::imprv(score, best_score) << "pc, parameters " <<
-                        *p_chunk_params << ", opt arg " << *x);
-                    best_score = score;
-                }
+                p_chunk_params->set_svr_kernel_param(gamma);
+                p_chunk_params->set_svr_kernel_param2(*x);
+                p_chunk_params->set_min_Z(min);
+                LOG4_TRACE("New best score kernel " << score << ", previous best " << best_score << ", improvement " << common::imprv(score, best_score) << "pc, parameters " <<
+                    *p_chunk_params << ", opt arg " << *x);
+                best_score = score;
             }
         };
         chunks_score[chunk_ix] = best_score;
-        (void) optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_tune_particles2(), bounds2, costF2, PROPS.get_tune_iteration2(), 0, 0, {}, {}, opt_depth);
+        (void) optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_tune_particles2(), bounds2, costF2, PROPS.get_tune_iteration2(), 0, 0, {}, {}, std::min<uint32_t>(PROPS.get_tune_iteration2(), PROPS.get_opt_depth()));
 
         assert(p_chunk_params->get_svr_kernel_param() != 0);
 
         set_params(p_chunk_params, chunk_ix);
         LOG4_INFO("Tuned best score " << chunks_score[chunk_ix] << ", final parameters " << *p_chunk_params);
 
-        if (!model_id) continue;
-        if (APP.svr_parameters_service.exists(p_chunk_params))
-            APP.svr_parameters_service.remove(p_chunk_params);
-        APP.svr_parameters_service.save(p_chunk_params);
+        if (model_id) save_chunk_params(p_chunk_params);
     }
     clean_chunks();
 }

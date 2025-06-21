@@ -49,7 +49,7 @@ __global__  void old_gpu_kernel_xx_compute(size_t sizeX, int len, int dim, CPTRd
     double tau = param3;
     int total_len_features = len * dim;
 
-    size_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    const auto tid = threadIdx.x + blockIdx.x * blockDim.x;
     __shared__ double powers[MAX_LEN];
     if (len > MAX_LEN) return;//abort? 720 is the max of len. Usually len ==720
     for (int i = threadIdx.x; i < len; i += blockDim.x) {
@@ -57,8 +57,8 @@ __global__  void old_gpu_kernel_xx_compute(size_t sizeX, int len, int dim, CPTRd
     }
     __syncthreads();
 
-    for (int i = tid % XBLOCK; i < sizeX; i += XBLOCK) {
-        for (int j = ((tid / XBLOCK) % YBLOCK); j <= i; j += YBLOCK) {
+    for (auto i = tid % XBLOCK; i < sizeX; i += XBLOCK) {
+        for (auto j = ((tid / XBLOCK) % YBLOCK); j <= i; j += YBLOCK) {
             double s = 0;
             for (int k = 0; k < dim; k++) {
                 double bs_sum = 0.;

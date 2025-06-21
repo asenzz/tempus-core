@@ -15,9 +15,7 @@
 namespace svr {
 namespace datamodel {
 void
-OnlineSVR::batch_train(
-    const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
-    const matrices_ptr &precalc_kernel_matrices)
+OnlineSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &time, const matrices_ptr &precalc_kernel_matrices)
 {
 #ifdef INSTANCE_WEIGHTS
     if (p_xtrain->n_rows != p_ytrain->n_rows || p_ytrain->n_rows != p_ylastknown->n_rows || p_input_weights_->n_rows != p_ytrain->n_rows || p_xtrain->empty() || p_ytrain->empty())
@@ -32,7 +30,7 @@ OnlineSVR::batch_train(
     p_labels = p_ytrain;
     p_input_weights = p_input_weights_;
     ixs = generate_indexes();
-    last_trained_time = last_value_time;
+    last_trained_time = time;
     const uint32_t num_chunks = ixs.size();
     if (train_feature_chunks_t.size() != num_chunks) train_feature_chunks_t.resize(num_chunks);
     if (train_label_chunks.size() != num_chunks) train_label_chunks.resize(num_chunks);
@@ -44,7 +42,7 @@ OnlineSVR::batch_train(
         LOG4_ERROR("Precalculated kernel matrices do not match needed chunks count!");
 
     LOG4_DEBUG("Initializing kernel matrices from scratch.");
-    if (!p_kernel_matrices) p_kernel_matrices = ptr<DTYPE(*p_kernel_matrices) >(num_chunks);
+    if (!p_kernel_matrices) p_kernel_matrices = ptr<DTYPE(*p_kernel_matrices)>(num_chunks);
     else if (p_kernel_matrices->size() != num_chunks) p_kernel_matrices->resize(num_chunks);
 
     if (weight_chunks.size() != num_chunks) weight_chunks.resize(num_chunks);
@@ -64,7 +62,7 @@ OnlineSVR::batch_train(
 
     LOG4_DEBUG("Training on features " << common::present(*p_xtrain) << ", labels " << common::present(*p_ytrain) <<
         ", pre-calculated kernel matrices " << (precalc_kernel_matrices ? precalc_kernel_matrices->size() : 0) << ", parameters " << **param_set.cbegin() <<
-        ", last value time " << last_value_time);
+        ", last value time " << time);
 
     if (needs_tuning()) {
         if (precalc_kernel_matrices && precalc_kernel_matrices->size()) LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
@@ -74,10 +72,9 @@ OnlineSVR::batch_train(
     // OMP_FOR_i(num_chunks) {
     for (uint32_t i = 0; i < num_chunks; ++i) {
         auto p_params = get_params_ptr(i);
-        if (p_kernel_matrices->at(i).empty()) {
-            if (p_params->is_manifold()) init_manifold(p_params, last_value_time);
-            p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], last_value_time);
-        } else
+        if (p_kernel_matrices->at(i).empty())
+            p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], time);
+        else
             LOG4_DEBUG("Using pre-calculated kernel matrix " << arma::size(p_kernel_matrices->at(i)) << " for chunk " << i);
         calc_weights(i, ixs[i].n_rows * PROPS.get_solve_iterations_coefficient(), PROPS.get_stabilize_iterations_count());
     }
@@ -119,8 +116,7 @@ void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
         set_scaling_factors(features_sf);
         if (model_id)
             for (const auto &sf: features_sf) {
-                if (APP.dq_scaling_factor_service.exists(sf))
-                    APP.dq_scaling_factor_service.remove(sf);
+                if (APP.dq_scaling_factor_service.exists(sf)) APP.dq_scaling_factor_service.remove(sf);
                 APP.dq_scaling_factor_service.save(sf);
             }
         p_labels_sf = business::DQScalingFactorService::find(features_sf, model_id, i, gradient, step, level, false, true);
@@ -288,7 +284,7 @@ void OnlineSVR::learn(
             business::DQScalingFactorService::scale_labels(chunk_ix, *this, new_chunk_labels);
             business::DQScalingFactorService::scale_features(chunk_ix, *this, new_chunk_features_t);
             K_chunk.resize(K_chunk.n_rows + chunk_shed_rows, K_chunk.n_cols + chunk_shed_rows);
-            const auto &params = get_params(i);
+            auto &params = get_params(i);
 #pragma omp task mergeable
             K_chunk.submat(K_chunk.n_rows - chunk_shed_rows, K_chunk.n_cols - chunk_shed_rows, K_chunk.n_rows - 1, K_chunk.n_cols - 1) =
                     kernel::IKernel<double>::get(params)->kernel(new_chunk_features_t, new_chunk_features_t);
@@ -355,7 +351,11 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
 
     const uint32_t n_rows = K_.n_rows;
     const uint32_t n_cols = labels_.n_cols;
-    const arma::mat K = K_ + common::extrude_rows(labels_.t().eval(), n_rows);
+    arma::mat K(arma::size(K_), ARMA_DEFAULT_FILL);
+    {
+        const arma::mat L_t = labels_.t();
+        OMP_FOR_i(n_rows) K.row(i) = K_.row(i) + L_t;
+    }
     const arma::mat L = labels_ * n_rows;
     bool fresh_start;
     const auto w_cols = n_cols * PROPS.get_weight_columns();
@@ -423,7 +423,7 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
         sem.acquire();
         common::AppConfig::set_global_log_level(boost::log::trivial::info); {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  {}, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 1500);
+                                                                  {}, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 1500);
             memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
@@ -504,7 +504,7 @@ double OnlineSVR::d_calc_weights(const arma::mat &K_, const arma::mat &labels_, 
         common::AppConfig::set_global_log_level(boost::log::trivial::info);
         {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, 1), false, 500);
+                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 500);
             memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
@@ -544,7 +544,7 @@ void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, c
           "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
                 ", W " << common::present(weight_chunks[chunk_ix]));
 #else
-    if (ixs[chunk_ix].n_elem < 1900) {
+    if (ixs[chunk_ix].n_elem < 1750) {
         PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
                     "Calculate weights " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
     } else {

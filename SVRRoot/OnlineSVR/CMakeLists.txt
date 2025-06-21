@@ -12,8 +12,8 @@ INCLUDE(../../cmake/SourceList.cmake)
 
 FIND_PACKAGE(prima REQUIRED)
 # FIND_PACKAGE(Bandicoot REQUIRED)
-FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system REQUIRED CONFIG)
-LINK_LIBRARIES(${DEPENDENCIES} magma MKL::MKL TBB::tbb ${JEMALLOC_LIBRARIES} prima::primac Ginkgo::ginkgo) # bandicoot
+FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system iostreams REQUIRED CONFIG)
+LINK_LIBRARIES(${DEPENDENCIES} magma MKL::MKL TBB::tbb ${JEMALLOC_LIBRARIES} ${Boost_LIBRARIES} prima::primac Ginkgo::ginkgo) # bandicoot
 
 IF (EXPERIMENTAL_FEATURES)
     # FIND_PACKAGE(OSQP REQUIRED)
@@ -45,7 +45,7 @@ IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     FILE(GLOB TEST_SOURCE_FILES "test/*.cpp")
 
     ADD_EXECUTABLE(${PROJECT_NAME}-test ${TEST_SOURCE_FILES} ${COMMON_SOURCE_FILES})
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES} sycl ${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so) # absl::hash absl::flags_reflection absl::raw_hash_set
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} hdbscan hdbscan_utils collections ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES} sycl ${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so) # absl::hash absl::flags_reflection absl::raw_hash_set
 ENDIF()
 
 ADD_LIBRARY(${PROJECT_NAME} ${SOURCE_FILES})

@@ -14,7 +14,7 @@ template<typename T>
 class kernel_polynomial : public kernel_base<T> {
     using kernel_base<T>::parameters;
 public:
-    explicit kernel_polynomial(const datamodel::SVRParameters &p) : kernel_base<T>(p)
+    explicit kernel_polynomial(datamodel::SVRParameters &p) : kernel_base<T>(p)
     {}
 
     virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const

@@ -60,14 +60,14 @@ template<const uint32_t block_size> __global__ void G_autocorrelation_sum(
         RPTR(double) d_sum, CRPTRd x, CRPTRd y, const uint32_t n_min, const uint32_t qt, const uint32_t n_qt)
 {
     __shared__ double sh_dist[block_size];
-    sh_dist[tid] = 0;
+    sh_dist[tid_] = 0;
     CU_STRIDED_FOR_i(n_qt) {
         double y_qi = 0;
         const auto to_q = (i + 1) * qt;
         UNROLL()
         for (DTYPE(to_q) qi = i * qt; qi < to_q; ++qi) y_qi += y[qi];
         y_qi /= qt;
-        sh_dist[tid] += fabs(x[i] - y_qi) / (fabs(x[i]) + fabs(y_qi));
+        sh_dist[tid_] += fabs(x[i] - y_qi) / (fabs(x[i]) + fabs(y_qi));
     }
 
     __syncthreads();
@@ -75,9 +75,9 @@ template<const uint32_t block_size> __global__ void G_autocorrelation_sum(
 #define stride_reduce_dist(block_low_)                                                  \
         if (block_size >= block_low_) {                                                 \
             constexpr auto stride2 = block_low_ / 2;                                \
-            const auto tid_stride2 = tid + stride2;                                     \
-            if (tid < stride2 && tid_stride2 < n_min)                                   \
-                sh_dist[tid] += sh_dist[tid_stride2];                                   \
+            const auto tid_stride2 = tid_ + stride2;                                     \
+            if (tid_ < stride2 && tid_stride2 < n_min)                                   \
+                sh_dist[tid_] += sh_dist[tid_stride2];                                   \
             __syncthreads();                                                            \
         }
 
@@ -85,9 +85,9 @@ template<const uint32_t block_size> __global__ void G_autocorrelation_sum(
     stride_reduce_dist(512);
     stride_reduce_dist(256);
     stride_reduce_dist(128);
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sh_dist, tid, n_min);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_sum<block_size>(sh_dist, tid_, n_min);
+    if (tid_) return;
     atomicAdd(d_sum, *sh_dist);
 }
 
@@ -96,10 +96,10 @@ template<const uint32_t block_size> __global__ void G_autocorrelation_block(
 {
 //    constexpr float sk = 1; // Skip is disabled for now
     static __shared__ double sh_dist[block_size];
-    sh_dist[tid] = 0;
+    sh_dist[tid_] = 0;
     CU_STRIDED_FOR_i(n) {
         const auto y_i = y[STRETCHSKIP_(i)];
-        sh_dist[tid] += fabs(x[i] - y_i) / (fabs(x[i]) + fabs(y_i));
+        sh_dist[tid_] += fabs(x[i] - y_i) / (fabs(x[i]) + fabs(y_i));
     }
 
     __syncthreads();
@@ -108,9 +108,9 @@ template<const uint32_t block_size> __global__ void G_autocorrelation_block(
     stride_reduce_dist(512);
     stride_reduce_dist(256);
     stride_reduce_dist(128);
-    if (tid >= 32) return;
-    warp_reduce_sum<block_size>(sh_dist, tid, n_min);
-    if (tid) return;
+    if (tid_ >= 32) return;
+    warp_reduce_sum<block_size>(sh_dist, tid_, n_min);
+    if (tid_) return;
     d_sum[blockIdx.x] = *sh_dist;
 }
 
@@ -170,7 +170,7 @@ __global__ void G_vec_power_I(
         const uint32_t x_size_2_1,
         const uint16_t siftings)
 {
-    const auto ix = blockIdx.x * blockDim.x + tid;
+    const auto ix = blockIdx.x * blockDim.x + tid_;
     const auto stride = blockDim.x * gridDim.x;
     double px_out, py_out, px, py;
     UNROLL()
@@ -254,9 +254,9 @@ __global__ void G_sum_expanded(
     __shared__ double _sh_sum_imf[common::C_cu_block_size];
     __shared__ double _sh_sum_rem[common::C_cu_block_size];
     __shared__ double _sh_sum_corr[common::C_cu_block_size];
-    _sh_sum_imf[tid] = 0;
-    _sh_sum_rem[tid] = 0;
-    _sh_sum_corr[tid] = 0;
+    _sh_sum_imf[tid_] = 0;
+    _sh_sum_rem[tid_] = 0;
+    _sh_sum_corr[tid_] = 0;
     CU_STRIDED_FOR_i(expand_size) {
         double sum1 = 0, sum2 = 0;
         UNROLL()
@@ -265,21 +265,21 @@ __global__ void G_sum_expanded(
             sum1 += d_global_sift_matrix[abs_i_j] * d_imf_mask[j];
             sum2 += d_global_sift_matrix[abs_i_j] * d_rem_mask[j];
         }
-        _sh_sum_imf[tid] += sum1 * d_imf_mask[i] / expand_size_2;
-        _sh_sum_rem[tid] += sum2 * d_rem_mask[i] / expand_size_2;
-        _sh_sum_corr[tid] += sum1 * d_rem_mask[i] / expand_size_2;
+        _sh_sum_imf[tid_] += sum1 * d_imf_mask[i] / expand_size_2;
+        _sh_sum_rem[tid_] += sum2 * d_rem_mask[i] / expand_size_2;
+        _sh_sum_corr[tid_] += sum1 * d_rem_mask[i] / expand_size_2;
     }
     __syncthreads();
 
     UNROLL()
     for (auto size = common::C_cu_block_size / 2; size > 0; size /= 2) { // uniform
-        if (tid >= size) continue;
-        _sh_sum_imf[tid] += _sh_sum_imf[tid + size];
-        _sh_sum_rem[tid] += _sh_sum_rem[tid + size];
-        _sh_sum_corr[tid] += _sh_sum_corr[tid + size];
+        if (tid_ >= size) continue;
+        _sh_sum_imf[tid_] += _sh_sum_imf[tid_ + size];
+        _sh_sum_rem[tid_] += _sh_sum_rem[tid_ + size];
+        _sh_sum_corr[tid_] += _sh_sum_corr[tid_ + size];
         __syncthreads();
     }
-    if (tid) return;
+    if (tid_) return;
     atomicAdd(d_sum_imf, *_sh_sum_imf);
     atomicAdd(d_sum_rem, *_sh_sum_rem);
     atomicAdd(d_sum_corr, *_sh_sum_corr);
@@ -365,15 +365,15 @@ __global__ void G_do_quality(
             const auto zz = make_cuDoubleComplex(1. - mask_fft[i].x, -mask_fft[i].y);
             UNROLL()
             for (DTYPE(siftings) k = 0; k < siftings; ++k) p = cuCmul(p, zz);
-            shared[tid] = cunorm(p) + abs(1. - cunorm(cuCsub(cplx_one, p)));
+            shared[tid_] = cunorm(p) + abs(1. - cunorm(cuCsub(cplx_one, p)));
         } else {
             const cuDoubleComplex zz = mask_fft[i];
             UNROLL()
             for (DTYPE(siftings) k = 0; k < siftings; ++k) p = cuCmul(p, zz);
-            shared[tid] = i < mask_fft_coef ? cunorm(p) : oemd_coefficients_search::C_smooth_factor * cunorm(p);
+            shared[tid_] = i < mask_fft_coef ? cunorm(p) : oemd_coefficients_search::C_smooth_factor * cunorm(p);
         }
         const double norm_zz = cunorm(mask_fft[i]);
-        if (norm_zz > 1) shared[tid] += norm_zz;
+        if (norm_zz > 1) shared[tid_] += norm_zz;
     }
     __syncthreads();
 
@@ -381,9 +381,9 @@ __global__ void G_do_quality(
 #define stride_reduce_sum(block_low_)                        \
         if (common::C_cu_block_size >= block_low_) {         \
             constexpr auto stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid + stride2;          \
-            if (tid < stride2 && tid_stride2 < sh_limit)     \
-                shared[tid] += shared[tid_stride2];          \
+            const auto tid_stride2 = tid_ + stride2;          \
+            if (tid_ < stride2 && tid_stride2 < sh_limit)     \
+                shared[tid_] += shared[tid_stride2];          \
             __syncthreads();                                 \
         }
 
@@ -392,10 +392,10 @@ __global__ void G_do_quality(
     stride_reduce_sum(256);
     stride_reduce_sum(128);
 
-    if (tid >= 32) return;
-    warp_reduce_sum<common::C_cu_block_size>(shared, tid, sh_limit);
+    if (tid_ >= 32) return;
+    warp_reduce_sum<common::C_cu_block_size>(shared, tid_, sh_limit);
 
-    if (tid) return;
+    if (tid_) return;
     atomicAdd(result, shared[0]);
 }
 

@@ -32,14 +32,14 @@ std::deque<datamodel::DataRow_ptr> TsDeconQueueDAO::get_data_having_update_time_
 
 bool TsDeconQueueDAO::exists(const std::string& table_name)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->exists(table_name);
 }
 
 
 bool TsDeconQueueDAO::exists(const datamodel::DeconQueue_ptr& deconQueue)
 {
-    std::scoped_lock<std::recursive_mutex> scope_guard(mutex);
+    const std::scoped_lock scope_guard(mutex);
     return dao->exists(deconQueue);
 }
 

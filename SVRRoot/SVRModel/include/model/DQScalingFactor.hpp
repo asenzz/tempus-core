@@ -109,13 +109,5 @@ struct DQScalingFactorsLess
 
 bool operator<(const DQScalingFactor_ptr &lhs, const DQScalingFactor_ptr &rhs);
 
-template<typename T> inline std::basic_ostream<T> &
-operator<<(std::basic_ostream<T> &s, const dq_scaling_factor_container_t &c)
-{
-    std::for_each(C_default_exec_policy, c.cbegin(), c.cend(), [&s](const auto &d) { s << d->to_string() << ", "; });
-    return s;
-}
-
-
 } // namespace datamodel
 } // namespace svr

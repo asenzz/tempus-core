@@ -47,8 +47,8 @@ public:
         ip_errchk(ippInit());
 
         ma_errchk(magma_init());
+#ifdef USE_MPI
         static int zero = 0;
-
         int provided = 0;
         MPI_Init_thread(&zero, nullptr, MPI_THREAD_MULTIPLE, &provided);
         if (provided != MPI_THREAD_MULTIPLE) LOG4_ERROR("The MPI implementation " << provided << " does not support MPI_THREAD_MULTIPLE.");
@@ -57,13 +57,15 @@ public:
         int rank, size;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
-
         if (rank == 0) LOG4_DEBUG("Running with " << size << " MPI processes.");
+#endif
     }
 
     ~onlinesvr_lib_init()
     {
+#ifdef USE_MPI
         MPI_Finalize();
+#endif
         munlockall();
     }
 };
@@ -434,34 +436,29 @@ uint32_t OnlineSVR::get_num_chunks() const
 std::deque<arma::uvec> OnlineSVR::generate_indexes() const
 {
     const auto n_rows_dataset = p_labels->n_rows;
-    if (is_manifold()) return {arma::regspace<arma::uvec>(0, std::sqrt(PROPS.get_interleave()), n_rows_dataset - 1)};
-
-    const auto decrement = (**param_set.cbegin()).get_svr_decremental_distance();
-
+    const auto interleave_sqrt = std::sqrt(PROPS.get_interleave());
+    if (is_manifold()) return {arma::regspace<arma::uvec>(0, interleave_sqrt, n_rows_dataset - 1)};
+    const auto decrement = (*param_set.cbegin())->get_svr_decremental_distance();
     // Make sure we train on the latest data
     const auto n_rows_train = get_full_train_len(n_rows_dataset, decrement);
     assert(n_rows_dataset >= n_rows_train);
     const auto start_offset = n_rows_dataset - n_rows_train;
-    // if (!projection) return {arma::regspace<arma::uvec>(start_offset, n_rows_dataset - 1)};
-
     const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     assert(num_chunks);
     std::deque<arma::uvec> indexes(num_chunks);
-    if (num_chunks == 1) {
-        indexes[0] = arma::regspace<arma::uvec>(0, n_rows_dataset - 1);
-        LOG4_TRACE("Linear single chunk, start offset " << start_offset << ", n rows " << n_rows_dataset << ", chunk indexes " << common::present(indexes[0]));
-        return indexes;
-    }
     const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1 / chunk_offlap - C_end_chunks) * chunk_offlap);
+    const uint32_t outlier_slack = PROPS.get_outlier_slack();
+    const uint32_t skip = is_tft().get() == nullptr ? 1 : interleave_sqrt;
     LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks << ", max chunk size " <<
-                              max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << chunk_offlap);
-
+            max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << chunk_offlap << ", outlier slack " << outlier_slack <<
+            ", skip " << skip);
     OMP_FOR_i(num_chunks) {
-        const uint32_t start_row = i * this_chunk_size * chunk_offlap;
-        const uint32_t end_row = std::min<uint32_t>(start_row + this_chunk_size + PROPS.get_outlier_slack(), n_rows_dataset);
-        indexes[i] = arma::regspace<arma::uvec>(start_row, end_row - 1);
-
-        if (!i || i == DTYPE(i)(num_chunks - 1)) LOG4_DEBUG("Chunk " << i << ", start row " << start_row << ", end row " << end_row << ", indexes " << common::present(indexes[i]));
+        const uint32_t start_row = start_offset + i * this_chunk_size * chunk_offlap;
+        if (const auto end_row = start_row + this_chunk_size; end_row >= n_rows_dataset)
+            indexes[i] = arma::regspace<arma::uvec>(start_row, skip, n_rows_dataset - 1);
+        else
+            indexes[i] = arma::join_cols(arma::regspace<arma::uvec>(start_row, skip, end_row - 1), arma::regspace<arma::uvec>(end_row, end_row + outlier_slack - 1));
+        if (!i || i == DTYPE(i)(num_chunks - 1)) LOG4_DEBUG("Chunk " << i << ", start row " << start_row << ", chunk len " << this_chunk_size << ", indexes " << common::present(indexes[i]));
     }
     return indexes;
 }
@@ -594,6 +591,16 @@ arma::vec OnlineSVR::calc_gammas(const arma::mat &Z, const arma::mat &L)
     }
     LOG4_DEBUG("Xh-row " << common::present(g_row) << ", Z " << arma::size(Z) << ", L " << arma::size(L));
     return g_row;
+}
+
+datamodel::SVRParameters_ptr OnlineSVR::is_manifold() const
+{
+    return business::SVRParametersService::is_manifold(param_set);
+}
+
+datamodel::SVRParameters_ptr OnlineSVR::is_tft() const
+{
+    return business::SVRParametersService::is_tft(param_set);
 }
 
 } // datamodel

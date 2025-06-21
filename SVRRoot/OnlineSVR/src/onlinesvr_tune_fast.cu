@@ -49,12 +49,13 @@ SVRParameters OnlineSVR::make_tuning_template(const SVRParameters &example)
 }
 
 cutuner::cutuner(
-    const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters) : train_len(train_F.n_cols), K_train_len(train_len * train_len),
-    K_train_size(K_train_len * sizeof(double)), n(train_label_chunk.n_cols), train_len_n(train_len * n),
-    train_n_size(train_len_n * sizeof(double)), calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), K_calc_len(calc_len * calc_len),
-    weighted(train_W.n_elem), train_F_rows(train_F.n_rows), K_off(calc_start * train_len + calc_start),
-    ref_K(kernel::get_reference_Z(train_label_chunk)), ref_K_mean(common::mean(ref_K)), ref_K_meanabs(common::meanabs(ref_K)),
-    template_parameters(OnlineSVR::make_tuning_template(parameters)), train_F(train_F), n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count())
+    const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters)
+    : n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count()), template_parameters(OnlineSVR::make_tuning_template(parameters)),
+      weighted(train_W.n_elem), n(train_label_chunk.n_cols), train_len(train_F.n_cols),
+      calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), train_F_rows(train_F.n_rows), K_train_len(train_len * train_len),
+      K_train_size(K_train_len * sizeof(double)), K_calc_len(calc_len * calc_len), K_off(calc_start * train_len + calc_start),
+      train_len_n(train_len * n), train_n_size(train_len_n * sizeof(double)), ref_K(kernel::get_reference_Z(train_label_chunk)),
+      train_F(train_F), ref_K_mean(common::mean(ref_K)), ref_K_meanabs(common::meanabs(ref_K)) // TODO Consider normalizing ref_K
 {
     LOG4_TRACE("Train len " << train_len << ", streams per GPU " << streams_per_gpu << ", calc len " << calc_len);
     dx.resize(n_gpus);
@@ -73,6 +74,7 @@ cutuner::cutuner(
             dx[i].d_train_F = cumallocopy(train_F, custream);
             cusyndestroy(custream);
         }
+        cu_errchk(cudaSetDevice((i)));
         dx[i].sx.resize(streams_per_gpu);
         UNROLL(streams_per_gpu)
         for (DTYPE(streams_per_gpu) j = 0; j < streams_per_gpu; ++j) {
@@ -82,7 +84,8 @@ cutuner::cutuner(
             dxsx.custream = magma_queue_get_cuda_stream(dxsx.ma_queue);
             dxsx.cublas_H = magma_queue_get_cublas_handle(dxsx.ma_queue);
             cu_errchk(cudaMallocAsync((void **) &dxsx.d_K_train, K_train_size, dxsx.custream));
-            dxsx.K_train_off = dxsx.d_K_train + calc_start * train_len + calc_start;
+            dxsx.K_train_off = dxsx.d_K_train + K_off;
+            cu_errchk(cudaStreamSynchronize(dxsx.custream));
         }
     }
 }
@@ -98,7 +101,7 @@ cutuner::~cutuner()
             if (template_parameters.get_kernel_type() == e_kernel_type::PATH) cu_errchk(cudaFreeAsync(dx[i].d_D_paths, custream));
             cusyndestroy(custream);
         }
-
+        cu_errchk(cudaSetDevice((i)));
         UNROLL(streams_per_gpu)
         for (DTYPE(streams_per_gpu) j = 0; j < streams_per_gpu; ++j) {
             auto &dxsx = dx[i].sx[j];
@@ -112,18 +115,20 @@ std::tuple<double, double, double> cutuner::normalize_result(const dev_ctx &dx_,
 {
     const auto mean = solvers::mean(dxsx.K_train_off, K_train_len, dxsx.custream) - ref_K_mean;
     if (mean != 0)
-        thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_train_len, dxsx.K_train_off,
+        thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_calc_len, dxsx.K_train_off,
                           [mean] __device__(const double x) { return x - mean; });
-    const auto gamma = solvers::meanabs(dxsx.K_train_off, K_train_len, dxsx.custream) / ref_K_meanabs;
+    const auto gamma = solvers::meanabs(dxsx.K_train_off, K_calc_len, dxsx.custream) / ref_K_meanabs;
     if (gamma < C_min_gamma || gamma > C_max_gamma) {
         LOG4_ERROR("Gamma not sane " << gamma << ", ref meanabs " << ref_K_meanabs << ", ref mean " << ref_K_mean << ", Z mean " << mean << ", parameters " << parameters);
         return {std::numeric_limits<double>::max(), 0, 0};
     }
-    if (gamma != 1)
-        thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_train_len, dxsx.K_train_off,
+    if (gamma != 1) {
+        thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_calc_len, dxsx.K_train_off,
                           [gamma] __device__(const double x) { return x / gamma; });
+        cu_errchk(cudaStreamSynchronize(dxsx.custream));
+    }
     if (weighted)
-        thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.d_K_train, dxsx.d_K_train + K_train_len, dx_.d_train_W, dxsx.d_K_train,
+        thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_calc_len, dx_.d_train_W + K_off, dxsx.K_train_off,
                           thrust::multiplies<double>());
     const auto score = solvers::cu_mae(dxsx.K_train_off, dx_.d_ref_K + K_off, K_calc_len, dxsx.custream);
     LOG4_TRACE("Mean " << mean << ", gamma " << gamma << ", score " << score << ", parameters " << parameters);
@@ -144,6 +149,7 @@ std::tuple<double, double, double> cutuner::phase1(const double tau, const doubl
     svr_parameters_.set_V_feedback(V);
     cu_errchk(cudaSetDevice(gpu_id));
     kernel::IKernel<double>::get<kernel::kernel_path<double> >(svr_parameters_)->kernel_base::d_distances(dx_.d_train_F, train_F_rows, train_len, dxsx.d_K_train, dxsx.custream);
+    cu_errchk(cudaStreamSynchronize(dxsx.custream));
     return normalize_result(dx_, dxsx, svr_parameters_);
 }
 
@@ -157,13 +163,11 @@ void cutuner::prepare_second_phase(const SVRParameters &first_phase_parameters)
     OMP_FOR_i(n_gpus) {
         // Read-only buffers per device
         DEV_CUSTREAM(i);
-        dx[i].d_train_F = cumallocopy(train_F, custream);
-        if (template_parameters.get_kernel_type() == e_kernel_type::PATH) dx[i].d_D_paths = cumallocopy(Z);
+        if (template_parameters.get_kernel_type() == e_kernel_type::PATH) dx[i].d_D_paths = cumallocopy(Z, custream);
         cusyndestroy(custream);
     }
 }
 
-// TODO Fix Bug in debug build getting zero valued kernel matrices inside this function
 std::tuple<double, double, double> cutuner::phase2(const double lambda) const
 {
     const common::gpu_context_<streams_per_gpu> ctx;
@@ -174,8 +178,9 @@ std::tuple<double, double, double> cutuner::phase2(const double lambda) const
     const auto &dxsx = dx_.sx[stream_id];
     auto svr_parameters_ = template_parameters;
     svr_parameters_.set_svr_kernel_param2(lambda);
-    thrust::transform(thrust::cuda::par.on(dxsx.custream), dx_.d_D_paths, dx_.d_D_paths + train_len, dxsx.d_K_train,
+    thrust::transform(thrust::cuda::par.on(dxsx.custream), dx_.d_D_paths, dx_.d_D_paths + K_train_len, dxsx.d_K_train,
                       [lambda] __device__ (const double z) { return kernel::K_from_Z(z, lambda); });
+    cu_errchk(cudaStreamSynchronize(dxsx.custream));
     return normalize_result(dx_, dxsx, svr_parameters_);
 }
 }

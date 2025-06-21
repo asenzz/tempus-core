@@ -274,6 +274,7 @@ template<> arma::Mat<T> calc_cache::get_Ky(const kernel::kernel_base<T> &kernel_
 
     const auto prepare_f = [&params, &X, &Xy, &time_X, &time_Xy, &kernel_ftor, this] {
         switch (params.get_kernel_type()) {
+            case datamodel::e_kernel_type::TFT:
             case datamodel::e_kernel_type::DEEP_PATH:
                 return ptr(kernel_ftor.kernel(X, Xy));
             default:

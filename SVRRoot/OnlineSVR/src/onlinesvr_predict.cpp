@@ -70,11 +70,12 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
     const auto l_cols = p_labels->n_cols;
     const auto active_chunks = get_predict_chunks();
     const auto chunk_divisor = 1. / active_chunks.size();
-// #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_columns())
-// #pragma omp single
+#pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_columns())
+#pragma omp single
     {
-        // OMP_TASKLOOP_1()
-        for (const auto chunk_ix: active_chunks) {
+        OMP_TASKLOOP_1()
+        for (uint32_t ch = 0; ch < active_chunks.size(); ++ch) {
+            const auto chunk_ix = active_chunks[ch];
             const auto p_params = get_params_ptr(chunk_ix);
             assert(p_params);
             arma::mat scaled_x_predict_t = x_predict_t;
@@ -83,16 +84,15 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
             arma::mat chunk_predict_K = kernel::IKernel<double>::get(*p_params)->kernel(
                 ccache(), scaled_x_predict_t, train_feature_chunks_t[chunk_ix], time, last_trained_time);
             assert(x_predict_t.n_cols == chunk_predict_K.n_rows);
+            assert(weight_chunks[chunk_ix].n_cols % l_cols == 0);
             arma::mat multiplicated(chunk_predict_K.n_rows, l_cols, arma::fill::zeros);
-            const uint32_t w_cols = weight_chunks[chunk_ix].n_cols / l_cols;
-            // OMP_TASKLOOP_(chunk_predict_K.n_rows,)
+            OMP_TASKLOOP_(chunk_predict_K.n_rows,)
             for (uint32_t predict_row = 0; predict_row < chunk_predict_K.n_rows; ++predict_row) {
                 arma::mat K_row_t = chunk_predict_K.row(predict_row).t();
                 if (l_cols > 1) K_row_t = common::extrude_cols(K_row_t, l_cols);
                 t_omp_lock l1;
-                // OMP_TASKLOOP(w_cols)
-                for (uint32_t weight_col = 0; weight_col < w_cols; ++weight_col) {
-                    const auto start_col = weight_col * l_cols;
+                OMP_TASKLOOP(weight_chunks[chunk_ix].n_cols / l_cols)
+                for (uint32_t start_col = 0; start_col < weight_chunks[chunk_ix].n_cols; start_col += l_cols) {
                     const double pred = common::mean(weight_chunks[chunk_ix].cols(start_col, start_col + l_cols - 1) % (K_row_t + train_label_chunks[chunk_ix]));
                     l1.set();
                     multiplicated.row(predict_row) += pred;

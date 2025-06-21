@@ -22,7 +22,7 @@
 
 namespace svr {
 namespace optimizer {
-constexpr std::array<double, 1> C_maxfun_drop_coefs{.5};
+constexpr std::array<double, 1> C_maxfun_drop_coefs{}; // .5};
 constexpr double C_default_rhoend = 5e-10;
 constexpr double C_default_rhobeg = .25;
 constexpr uint32_t C_elect_threshold = 10;
@@ -145,9 +145,7 @@ __do_wait:
         thread_yield_wait__;
         goto __do_wait;
     }
-    std::stable_sort(ixs.begin(), ixs.end(),
-                     [&](const auto lhs, const auto rhs) { return p_particles->at(lhs)->best_f < p_particles->at(rhs)->best_f; });
-
+    std::stable_sort(ixs.begin(), ixs.end(), [&](const auto lhs, const auto rhs) { return p_particles->at(lhs)->best_f < p_particles->at(rhs)->best_f; });
     return std::find(C_default_exec_policy, ixs.cbegin(), ixs.cend(), particle_index) - ixs.cbegin() > keep_particles;
 }
 
@@ -183,7 +181,11 @@ pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const ar
     LOG4_BEGIN();
 
     assert(maxfun >= depth && depth >= 1);
-
+    assert(D > 0);
+    if (n < 1) {
+        LOG4_WARN("Number of particles is zero, not optimizing.");
+        return;
+    }
     if (x0.n_rows != D || x0.n_cols != n) {
         arma::mat x0_backup;
         if (x0.n_rows == D && x0.n_cols) x0_backup = x0;
@@ -374,7 +376,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
     LOG4_BEGIN();
 
     auto p_particles = ptr<std::deque<t_calfun_data_ptr> >(n_particles);
-    std::deque<std::deque<t_biteopt_prune>> biteopt_particle(n_particles, std::deque<t_biteopt_prune>(depth));
+    std::deque<std::deque<t_biteopt_prune> > biteopt_particle(n_particles, std::deque<t_biteopt_prune>(depth));
     OMP_FOR_(n_particles * depth, SSIMD firstprivate(n_particles, maxfun, no_elect, C_rand_disperse) collapse(2))
     for (uint32_t i = 0; i < n_particles; ++i) {
         for (uint32_t d = 0; d < depth; ++d) {
@@ -389,20 +391,18 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
         }
     }
 
-#pragma omp parallel ADJ_THREADS(n_particles)
-#pragma omp single
-    {
-        for (DTYPE(maxfun) j = 0; j < iter; ++j) {
-            OMP_TASKLOOP_(n_particles, untied firstprivate(n_particles, maxfun))
-            for (DTYPE(n_particles) i = 0; i < n_particles; ++i) {
+    tbb::task_arena tta(adj_threads(n_particles));
+    for (DTYPE(iter) j = 0; j < iter; ++j) {
+        tta.execute([&] {
+            tbb_zpfor_i__(n_particles,
                 for (DTYPE(depth) d = 0; d < depth; ++d) {
                     if (biteopt_particle[i][d].calfun_data->zombie) continue;
-                    auto &biteopt = biteopt_particle[i][d].biteopt;
+                    const auto &biteopt = biteopt_particle[i][d].biteopt;
                     auto &rnd = biteopt_particle[i][d].rnd;
                     biteopt->optimize(*rnd, d + 1 >= depth ? nullptr : biteopt_particle[i][d + 1].biteopt.get());
                 }
-            }
-        }
+            )
+        });
     }
     const auto D_size = D * sizeof(double);
     for (uint16_t i = 0; i < n_particles; ++i) {
@@ -422,7 +422,8 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
     }
 
     result.total_iterations = maxfun;
-    if (result.best_parameters.has_nonfinite()) LOG4_THROW("Best parameters contain non-finite values " << common::present(result.best_parameters));
+    if (result.best_parameters.has_nonfinite())
+        LOG4_THROW("Best parameters contain non-finite values " << common::present(result.best_parameters));
     LOG4_DEBUG(
         "PPrune BiteOpt, final score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n << ", parameters " << D <<
         ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", best parameters " << common::present(result.best_parameters));

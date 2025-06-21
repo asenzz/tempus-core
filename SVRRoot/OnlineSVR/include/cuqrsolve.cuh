@@ -15,7 +15,7 @@ namespace solvers {
 
 class score_weights {
     static constexpr uint16_t streams_gpu = 4;
-    static const uint16_t n_gpus;
+    const uint16_t n_gpus;
     const uint32_t m, n, mn, mm;
     const uint64_t L_size;
 

@@ -33,6 +33,7 @@
 #include "kernel_path.hpp"
 #include "kernel_dtw.hpp"
 #include "kernel_deep_path.hpp"
+#include "kernel_tft.hpp"
 
 namespace svr {
 namespace kernel {
@@ -40,7 +41,7 @@ namespace kernel {
 template<typename T>
 class kernel_factory final {
 public:
-    std::unique_ptr<kernel_base<T>> create(const datamodel::SVRParameters &params);
+    std::unique_ptr<kernel_base<T>> create(datamodel::SVRParameters &params);
 
     ~kernel_factory();
 
@@ -68,11 +69,11 @@ public:
 
     ~IKernel() = default;
 
-    template<ckernel_base<T> K> static std::unique_ptr<K> get(const datamodel::SVRParameters &params);
+    template<ckernel_base<T> K> static std::unique_ptr<K> get(datamodel::SVRParameters &params);
 
-    static std::unique_ptr<kernel_base<T>> get(const datamodel::SVRParameters &params);
+    static std::unique_ptr<kernel_base<T>> get(datamodel::SVRParameters &params);
 
-    std::unique_ptr<kernel_base<T>> new_f(const datamodel::SVRParameters &params);
+    std::unique_ptr<kernel_base<T>> new_f(datamodel::SVRParameters &params);
 };
 
 }

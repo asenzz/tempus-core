@@ -172,7 +172,7 @@ void gpu_handler<ctx_per_gpu>::init_devices()
 
     int runtime_version;
     cudaRuntimeGetVersion(&runtime_version);
-    LOG4_DEBUG("CUDA Runtime Version: " << runtime_version);
+    LOG4_DEBUG("CUDA Runtime Version " << runtime_version);
     available_devices_.clear();
     max_running_gpu_threads_number_ = 0;
     max_gpu_data_chunk_size_ = std::numeric_limits<DTYPE(max_gpu_data_chunk_size_)>::max();

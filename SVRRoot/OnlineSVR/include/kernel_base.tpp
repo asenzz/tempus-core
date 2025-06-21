@@ -18,17 +18,22 @@ template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y)
     const uint32_t n = y.n_rows;
     const arma::Mat<T> y_t = y.t();
     arma::Mat<T> r(n, n, ARMA_DEFAULT_FILL);
-    OMP_FOR_i(n) r.row(i) = arma::mean(y.row(i)) - y_t;
+    OMP_FOR_i(n) r.row(i) = y(i, 0) - y_t;
     LOG4_TRACE("Prepared reference kernel matrix " << common::present(r) << " from labels " << common::present(y));
     return r;
 }
 
-template<typename T> const datamodel::SVRParameters &kernel_base<T>::get_parameters() const
+template<typename T> datamodel::SVRParameters &kernel_base<T>::get_parameters()
 {
     return parameters;
 }
 
-template<typename T> kernel_base<T>::kernel_base(const datamodel::SVRParameters &p) : parameters(p)
+template<typename T> datamodel::SVRParameters kernel_base<T>::get_parameters() const
+{
+    return parameters;
+}
+
+template<typename T> kernel_base<T>::kernel_base(datamodel::SVRParameters &p) : parameters(p)
 {}
 
 template<typename T> kernel_base<T>::~kernel_base() = default;

@@ -38,7 +38,7 @@ export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 export LD_PRELOAD="${LD_PRELOAD}:${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so"
 
 export VGRIND=/usr/local/bin/valgrind
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib"
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib:/opt/cudnn/lib"
 
 # Debugger
 # export DBG=/usr/bin/gdb # GNU debugger for GCC builds

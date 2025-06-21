@@ -70,7 +70,7 @@ InputQueueService::load(datamodel::InputQueue &input_queue)
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
     LOG4_TRACE("Loading " << input_queue);
     const tbb::mutex::scoped_lock lk(input_queue.get_update_mutex());
-    data_row_container &data = input_queue.get_data();
+    auto &data = input_queue.get_data();
     if (data.empty()) {
         if (input_queue.get_uses_fix_connection())
             input_queue.set_data(load_latest_from_mmf(input_queue, bpt::min_date_time));

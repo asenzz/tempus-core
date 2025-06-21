@@ -20,12 +20,12 @@
 namespace svr {
 namespace kernel {
 
-template<typename T> class kernel_path : public kernel_base<T>
+template<typename T> class kernel_path final : public kernel_base<T>
 {
 public:
-    explicit kernel_path(const datamodel::SVRParameters &p);
+    explicit kernel_path(datamodel::SVRParameters &p);
 
-    explicit kernel_path(const kernel_base<T> &k);
+    explicit kernel_path(kernel_base<T> &k);
 
 
     arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const override;

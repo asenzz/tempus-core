@@ -383,20 +383,25 @@ operator<<(std::basic_ostream<char> &s, const std::deque<std::shared_ptr<T>> &v)
     return s << svr::common::to_string(v);
 }
 
-template<typename T, typename C, typename Tr>
-std::basic_ostream<C, Tr> &operator<<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
-{
-    if (aset.size() < 2) return s << *aset.begin();
-    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << el << ", "; });
-    return s << *std::prev(aset.end());
-}
-
-template<typename C, typename Tr, typename T> std::basic_ostream<C, Tr> &
-operator<<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
+template<typename C, typename Tr, typename T, typename Less> std::basic_ostream<C, Tr> &operator<<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>, Less> &aset)
 {
     if (aset.size() < 2) return s << *aset.begin();
     for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << *el << ", "; });
     return s << **std::prev(aset.end());
+}
+
+template<typename C, typename Tr, typename T> std::basic_ostream<C, Tr> &operator<<(std::basic_ostream<C, Tr> &s, const std::set<std::shared_ptr<T>> &aset)
+{
+    if (aset.size() < 2) return s << *aset.begin();
+    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << *el << ", "; });
+    return s << **std::prev(aset.end());
+}
+
+template<typename T, typename C, typename Tr> std::basic_ostream<C, Tr> &operator<<(std::basic_ostream<C, Tr> &s, const std::set<T> &aset)
+{
+    if (aset.size() < 2) return s << *aset.begin();
+    for_each(aset.begin(), std::next(aset.rbegin()).base(), [&s](const auto &el) { s << el << ", "; });
+    return s << *std::prev(aset.end());
 }
 
 template<typename T, typename C, typename Ca> std::basic_ostream<C, Ca> &

@@ -76,6 +76,18 @@ public:
 
 class AppConfig : public PropertiesReader
 {
+    CONFPROP(float, nn_head_coef, .1)
+
+    CONFPROP(float, nn_hide_coef, 2)
+
+    CONFPROP(float, nn_learn_rate, 1e-3)
+
+    CONFPROP(uint16_t, nn_epochs, 100)
+
+    CONFPROP(uint16_t, opt_depth, 1)
+
+    CONFPROP(uint32_t, hdbs_points, 10)
+
     CONFPROP(float, tune_max_fback, 1)
 
     CONFPROP(float, weight_inertia, 0)
@@ -118,7 +130,7 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(uint16_t, db_num_threads, 8)
 
-    CONFPROP(uint32_t, tune_skip, 7500)
+    CONFPROP(uint32_t, tune_skip, 0)
 
     CONFPROP(uint32_t, align_window, 1000) // should be half of average of the decrement distance used across models
 
@@ -181,9 +193,7 @@ private: // TODO port properties below to use the CONFPROP macro
     float solve_iterations_coefficient_;
 
 public:
-    virtual ~AppConfig()
-    {
-    }
+    virtual ~AppConfig();
 
     explicit AppConfig(const std::string &app_config_file, const char delimiter = '=');
 
@@ -238,8 +248,6 @@ public:
     uint16_t get_oemd_tune_particles() const noexcept;
 
     uint16_t get_oemd_tune_iterations() const noexcept;
-
-    uint16_t get_weight_columns() const noexcept;
 
     float get_solve_iterations_coefficient() const noexcept;
 

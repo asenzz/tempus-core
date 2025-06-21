@@ -19,15 +19,14 @@
 namespace svr {
 namespace kernel {
 
-template<typename T> class kernel_deep_path : public kernel_base<T>
+template<typename T> class kernel_deep_path final : public kernel_base<T>
 {
 public:
-    explicit kernel_deep_path(const datamodel::SVRParameters &p);
+    explicit kernel_deep_path(datamodel::SVRParameters &p);
 
-    explicit kernel_deep_path(const kernel_base<T> &k);
+    explicit kernel_deep_path(kernel_base<T> &k);
 
-
-    void init_manifold(const mat_ptr X, const mat_ptr Y);
+    void init(const uint32_t parent_projection, datamodel::Dataset_ptr &p_dataset, const arma::mat &features_t, const arma::mat &labels, const bpt::ptime &last_time);
 
     arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const override;
 

@@ -48,7 +48,7 @@ G_apply_fir(
         RPTR(double) out,
         const uint32_t in_start)
 {
-    const auto i = blockIdx.x * blockDim.x + tid;
+    const auto i = blockIdx.x * blockDim.x + tid_;
     const auto in_i = in_start + i;
     if (in_i >= len) return;
 

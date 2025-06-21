@@ -29,7 +29,8 @@ typedef enum class kernel_type : int {
     PATH = 7,
     DEEP_PATH = 8,
     DTW = 9,
-    end = 10
+    TFT = 10,
+    end = 11
 } e_kernel_type;
 
 e_kernel_type operator++(e_kernel_type &k_type);
@@ -67,7 +68,7 @@ constexpr double C_default_svrparam_kernel_param2 = 1;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
-constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::PATH;
+constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::TFT;
 constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(C_default_svrparam_kernel_type);
 #ifdef VALGRIND_BUILD
 constexpr uint32_t C_default_svrparam_lag_count = 2;
@@ -128,12 +129,8 @@ class SVRParameters : public Entity
     uint16_t chunk_ix_ = C_default_svrparam_chunk_ix;
     uint16_t grad_level_ = C_default_svrparam_grad_level;
 
-    // TODO Implement manifold projection index
-
-    arma::vec epsco; // TODO Save to DB and init properly
     double svr_epsilon = C_default_svrparam_svr_epsilon;
     double svr_kernel_param = C_default_svrparam_kernel_param1;
-    arma::vec gamma; // TODO Save to DB and init properly
     double svr_kernel_param2 = C_default_svrparam_kernel_param2;
     double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio;
     std::set<uint16_t> adjacent_levels;
@@ -212,19 +209,9 @@ public:
 
     void decrement_gradient() noexcept;
 
-    void set_epsco(const arma::vec &epsco) noexcept;
-
-    arma::vec get_epsco() const noexcept;
-
     double get_svr_epsilon() const noexcept;
 
     void set_svr_epsilon(const double _svr_epsilon) noexcept;
-
-    arma::vec get_gamma() const noexcept;
-
-    arma::vec &get_gamma() noexcept;
-
-    void set_gamma(const arma::vec &gamma) noexcept;
 
     double get_svr_kernel_param() const noexcept;
 
@@ -235,8 +222,6 @@ public:
     void set_svr_kernel_param2(const double _svr_kernel_param2) noexcept;
 
     PROPERTY(double, svr_C, C_default_svrparam_svr_cost);
-
-    double get_svr_epsco() const noexcept;
 
     PROPERTY(double, kernel_param3, C_default_svrparam_kernel_param_tau);
 
@@ -285,6 +270,10 @@ public:
     std::string to_sql_string() const;
 
     bool from_sql_string(const std::string &sql_string);
+
+    PROPERTY(std::string, tft_model)
+
+    PROPERTY(uint32_t, tft_n_classes, 0)
 };
 
 std::ostream &operator<<(std::ostream &os, const SVRParameters &e);

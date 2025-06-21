@@ -14,11 +14,11 @@ namespace kernel {
 // Specializations
 #define T double
 
-template<> kernel_path<T>::kernel_path(const datamodel::SVRParameters &p) : kernel_base<T>(p)
+template<> kernel_path<T>::kernel_path(datamodel::SVRParameters &p) : kernel_base<T>(p)
 {
 }
 
-template<> kernel_path<T>::kernel_path(const kernel_base<T> &k) : kernel_base<T>(k.get_parameters())
+template<> kernel_path<T>::kernel_path(kernel_base<T> &k) : kernel_base<T>(k.get_parameters())
 {
 }
 

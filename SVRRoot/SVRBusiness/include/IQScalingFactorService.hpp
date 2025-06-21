@@ -52,7 +52,7 @@ public:
 
     static datamodel::t_iqscaler get_unscaler(const datamodel::Dataset &dataset, const std::string &table_name, const std::string &column_name);
 
-    bool check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns);
+    static bool check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns);
 
     static const std::function<double(double)> C_default_scaler;
 

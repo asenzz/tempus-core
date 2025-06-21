@@ -60,9 +60,13 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     }
     arma::rowvec dc_offset(iq_values.n_cols, ARMA_DEFAULT_FILL), scaling_factors(iq_values.n_cols, ARMA_DEFAULT_FILL);
     std::deque<datamodel::IQScalingFactor_ptr> result(columns_ct);
-    OMP_FOR_i(columns_ct) {
-        std::tie(dc_offset[i], scaling_factors[i]) = calc(iq_values.col(i), common::C_input_obseg_labels);
-        result[i] = ptr<svr::datamodel::IQScalingFactor>(0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), scaling_factors[i], dc_offset[i]);
+    // OMP_FOR_i(columns_ct)
+#pragma omp parallel for ADJ_THREADS(columns_ct) schedule(static, 1)
+    for (size_t i = 0; i < columns_ct; ++i) {
+        const auto [this_dc_offset, this_sf] = calc(iq_values.col(i), common::C_input_obseg_labels);
+        dc_offset[i] = this_dc_offset;
+        scaling_factors[i] = this_sf;
+        result[i] = ptr<svr::datamodel::IQScalingFactor>(0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), this_sf, this_dc_offset);
     }
     LOG4_DEBUG("Calculated input queue " << input_queue.get_table_name() << ", size " << input_queue.size() << ", dataset " << dataset_id <<
         " on last " << row_ct << " values, requested " << use_tail << ", DC offsets " << dc_offset << ", scaling factors " << scaling_factors <<
@@ -74,9 +78,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
 bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_ptr> &iqsf, const std::deque<std::string> &value_columns)
 {
     tbb::concurrent_vector<bool> present(value_columns.size(), false);
-#ifdef NDEBUG
     OMP_FOR_(value_columns.size() * iqsf.size(), SSIMD collapse(2))
-#endif
     for (const auto &sf: iqsf)
         for (size_t i = 0; i < value_columns.size(); ++i)
             if (sf->get_input_queue_column_name() == value_columns[i]

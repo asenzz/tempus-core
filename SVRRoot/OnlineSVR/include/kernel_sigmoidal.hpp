@@ -14,7 +14,7 @@ namespace kernel {
 
 template<typename T> class kernel_sigmoidal : public kernel_base<T> {
 public:
-    explicit kernel_sigmoidal(const datamodel::SVRParameters &p) : kernel_base<T>(p)
+    explicit kernel_sigmoidal(datamodel::SVRParameters &p) : kernel_base<T>(p)
     {}
 
     virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const

@@ -55,6 +55,8 @@ public:
 
     static datamodel::SVRParameters_ptr is_manifold(const datamodel::t_param_set &param_set);
 
+    static datamodel::SVRParameters_ptr is_tft(const datamodel::t_param_set &param_set);
+
     static uint16_t get_trans_levix(const uint16_t levels);
 
     static std::set<uint16_t> get_adjacent_indexes(const uint16_t level, const double ratio, const uint16_t level_count);

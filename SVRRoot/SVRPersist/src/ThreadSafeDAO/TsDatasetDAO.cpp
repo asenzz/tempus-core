@@ -19,14 +19,14 @@ size_t TsDatasetDAO::get_level_count(const bigint dataset_id)
 
 bool TsDatasetDAO::exists(const bigint dataset_id)
 {
-    std::scoped_lock<std::recursive_mutex> scoped_lock(mutex);
+    const std::scoped_lock scoped_lock(mutex);
     return dao->exists(dataset_id);
 }
 
 
 bool TsDatasetDAO::exists(const std::string &user_name, const std::string &dataset_name)
 {
-    std::scoped_lock<std::recursive_mutex> scoped_lock(mutex);
+    const std::scoped_lock scoped_lock(mutex);
     return dao->exists(user_name, dataset_name);
 }
 

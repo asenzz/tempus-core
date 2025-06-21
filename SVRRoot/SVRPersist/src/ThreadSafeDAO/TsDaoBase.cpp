@@ -3,9 +3,9 @@
 namespace svr {
 namespace dao {
     
-std::recursive_mutex &common_mutex_instance()
+std::mutex &common_mutex_instance()
 {
-    static std::recursive_mutex mtx;
+    static std::mutex mtx;
     return mtx;
 }
 

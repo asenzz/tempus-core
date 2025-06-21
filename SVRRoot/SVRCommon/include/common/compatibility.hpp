@@ -901,3 +901,13 @@ namespace boost {
 namespace std {
 #include "hashing.tpp"
 } // namespace std
+
+#if __GNUC__ >= 13
+#define GCC_PUSH_DIAGNOSTIC_DISABLE_DANGLING_REF _Pragma("GCC diagnostic push") \
+_Pragma("GCC diagnostic ignored \"-Wdangling-reference\"")
+
+#define GCC_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
+#else
+#define GCC_PUSH_DIAGNOSTIC_DISABLE_DANGLING_REF
+#define GCC_DIAGNOSTIC_POP
+#endif

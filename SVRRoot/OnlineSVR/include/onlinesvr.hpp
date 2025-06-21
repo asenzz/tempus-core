@@ -68,7 +68,7 @@ class OnlineSVR final : public Entity
     uint16_t gradient = C_default_svrparam_grad_level;
     uint16_t level = C_default_svrparam_decon_level;
     uint16_t step = C_default_svrparam_step;
-    uint16_t projection = 0;
+    PROPERTY(uint16_t, projection, 0);
 
     virtual void init_id() override;
 
@@ -83,6 +83,8 @@ class OnlineSVR final : public Entity
     arma::mat feature_chunk_t(const arma::uvec &ixs_i) const;
 
     arma::mat predict_chunk_t(const arma::mat &x_predict) const;
+
+    void init_kernel(const SVRParameters_ptr &p_params, const std::function<void()> &init_func);
 
 public:
     const float chunk_offlap;
@@ -148,8 +150,6 @@ public:
 
     void clear_kernel_matrix();
 
-    void init_manifold(SVRParameters_ptr &p, const bpt::ptime &last_manifold_time);
-
     DTYPE(OnlineSVR::param_set) get_param_set() const noexcept;
 
     DTYPE(OnlineSVR::param_set) &get_param_set() noexcept;
@@ -165,6 +165,8 @@ public:
     SVRParameters_ptr get_params_ptr(const uint16_t chunk_ix = 0) const;
 
     SVRParameters_ptr is_manifold() const;
+
+    SVRParameters_ptr is_tft() const;
 
     bool is_gradient() const;
 
@@ -193,7 +195,7 @@ public:
     void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::mat &new_w, const bpt::ptime &last_value_time,
                const bool temp_learn = false, const std::deque<uint32_t> &forget_ixs = {});
 
-    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &last_value_time,
+    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &time,
                      const matrices_ptr &precalc_kernel_matrices = {});
 
     arma::mat &get_features();
