@@ -75,6 +75,9 @@ TEST(manifold_tune_train_predict, basic_integration)
     omp_set_nested(true);
 
     context::AppContext::init_instance("../config/app.config");
+
+    // Save first N forecasts to database for later analysis
+    constexpr uint16_t C_save_forecast = 115;
     constexpr auto C_online_validate = false;
 #ifdef VALGRIND_BUILD
     constexpr unsigned C_test_decrement = 5;
@@ -313,7 +316,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", mean leverage " << leverage << /* net won to average drawdown ratio */ \
                        ", absolute leverage " << abs_leverage << /* net won to maximum drawdown ratio */ \
                        ", trade rating " << abs_leverage * positive_preds_pc * cml_alpha_pct);
-                if (i < common::C_forecast_focus && std::isnormal(recon_predicted[i]))
+                if (i < C_save_forecast && std::isnormal(recon_predicted[i]))
                     APP.request_service.save(ptr<datamodel::MultivalResponse>(0, 0, cur_time, column, recon_predicted[i]));
             }
             mae /= validated_ct;

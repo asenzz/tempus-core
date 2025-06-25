@@ -678,8 +678,8 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
 
 double alpha(const double reference_error, const double prediction_error)
 {
-    return 100. * (reference_error / prediction_error - 1.);
-    // return 100. * (1. - prediction_error / reference_error); // Alternative way to calculate alpha
+    return 100 * (reference_error / prediction_error - 1);
+    // return 100 * (1 - prediction_error / reference_error); // Alternative way to calculate alpha
 }
 
 double mape(const double absolute_error, const double absolute_label)

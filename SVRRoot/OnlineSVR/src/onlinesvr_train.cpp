@@ -127,8 +127,8 @@ void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
         p_labels_sf = business::DQScalingFactorService::find(features_sf, model_id, i, gradient, step, level, false, true);
         assert(p_labels_sf);
     }
-    business::DQScalingFactorService::scale_features(i, gradient, step, lag, features_sf, train_feature_chunks_t[i]);
-    business::DQScalingFactorService::scale_labels(*p_labels_sf, train_label_chunks[i]);
+    business::DQScalingFactorService::scale_features_I(i, gradient, step, lag, features_sf, train_feature_chunks_t[i]);
+    business::DQScalingFactorService::scale_labels_I(*p_labels_sf, train_label_chunks[i]);
     LOG4_TRACE("After scaling chunk " << i << ", train labels " << common::present(train_label_chunks[i]) << ", train features " <<
         common::present(train_feature_chunks_t[i]) << ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
 }
@@ -286,8 +286,8 @@ void OnlineSVR::learn(
                 new_ixs[r] = add_new_row_ix++ % new_x.n_rows;
             arma::mat new_chunk_features_t = new_x.rows(new_ixs).t();
             arma::mat new_chunk_labels = new_y.rows(new_ixs);
-            business::DQScalingFactorService::scale_labels(chunk_ix, *this, new_chunk_labels);
-            business::DQScalingFactorService::scale_features(chunk_ix, *this, new_chunk_features_t);
+            business::DQScalingFactorService::scale_labels_I(chunk_ix, *this, new_chunk_labels);
+            business::DQScalingFactorService::scale_features_I(chunk_ix, *this, new_chunk_features_t);
             K_chunk.resize(K_chunk.n_rows + chunk_shed_rows, K_chunk.n_cols + chunk_shed_rows);
             auto &params = get_params(i);
 #pragma omp task mergeable
@@ -304,8 +304,8 @@ void OnlineSVR::learn(
             ixs[chunk_ix].insert_rows(ixs[chunk_ix].n_rows, ixs[chunk_ix].n_rows + new_ixs);
             train_feature_chunks_t[chunk_ix].insert_cols(train_feature_chunks_t[chunk_ix].n_cols, new_chunk_features_t);
             train_label_chunks[chunk_ix].insert_rows(train_label_chunks[chunk_ix].n_rows, new_chunk_labels);
-            const auto epsco = calc_epsco(K_chunk, train_label_chunks[chunk_ix]);
-            K_chunk.diag().fill(epsco);
+//            const auto epsco = calc_epsco(K_chunk, train_label_chunks[chunk_ix]);
+//            K_chunk.diag().fill(epsco);
             weight_chunks[chunk_ix].insert_rows(weight_chunks[chunk_ix].n_rows, af.second.rows(new_ixs));
         }
     }
@@ -331,14 +331,14 @@ arma::mat OnlineSVR::instance_weight_matrix(const arma::uvec &ixs, const arma::m
 }
 
 
-arma::mat get_bounds(const arma::mat &A, const arma::mat &b)
+arma::mat get_bounds(const arma::mat &A, const arma::mat &b, const float lim_coef)
 {
     constexpr auto qalpha = 1;
 #if 0
     const auto limhi = common::meanabs_hiquant(b.mem, b.n_elem, qalpha) / common::meanabs_loquant(A.mem, A.n_elem, qalpha) / b.n_rows;
     const auto limlo = -limhi; // common::mean_loquant(b.mem, b.n_elem, qalpha) / common::mean_hiquant(A.mem, A.n_elem, qalpha) / b.n_rows;
 #else
-    const auto limhi = PROPS.get_lim_coef() * common::meanabs(b) / common::meanabs(A) / b.n_rows;
+    const auto limhi = lim_coef * common::meanabs(b) / common::meanabs(A) / b.n_elem;
     const auto limlo = -limhi;
 #endif
     assert(std::isnormal(limhi) && std::isnormal(limlo) && limlo != limhi);
@@ -355,18 +355,45 @@ arma::mat get_bounds(const arma::mat &A, const arma::mat &b)
 }
 
 
-double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
+double OnlineSVR::calc_weights(
+    const arma::mat &K, const arma::mat &L, const arma::uvec &chunk_ixs, arma::mat &weights, const uint32_t iter_opt, const uint16_t iter_irwls, const double limes)
 {
-    LOG4_BEGIN();
+    const uint32_t n_rows = K.n_rows;
+    const uint32_t n_cols = L.n_cols;
+    arma::mat residuals = L;
+    const auto residuals_ptr = residuals.mem;
+    const auto n_residuals = residuals.n_elem;
+    const auto rhs_size = n_residuals * sizeof(double);
+    const auto p_K = K.mem;
+    solvers::score_weights *sw;
+    uint32_t pop_opt;
+    if (chunk_ixs.n_elem >= 1750) {
+        sw = new solvers::score_weights(K, residuals, n_rows, n_cols, n_residuals, K.n_elem);
+        pop_opt = 700;
+    } else pop_opt = 1500;
+    /* Hybrid scoring both on CPU and GPU degrades tuning quality because of the precision offset introduced by difference in GPU precision, so do either but not both. */
+#define CO_ (optimizer::t_pprune_cost_fun)
+    const auto loss_fun =
+            n_rows < 1024 // On stack
+                ? CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
+                    const auto tmp = ALIGN_ALLOCA(double, rhs_size, MEM_ALIGN);
+                    self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
+                    *f = cblas_dasum(n_residuals, tmp, 1);
+    } : n_rows < 1750 ? // Heap
+    CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
+        const auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, rhs_size);
+        self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
+        *f = cblas_dasum(n_residuals, tmp, 1);
+        ALIGNED_FREE_(tmp);
+    } : // GPU
+    CO_ [&sw](CPTRd x, RPTR(double) f) { *f = (*sw)(x); };
 
-    const uint32_t n_rows = K_.n_rows;
-    const uint32_t n_cols = labels_.n_cols;
-    arma::mat K(arma::size(K_), ARMA_DEFAULT_FILL);
-    {
-        const arma::mat L_t = labels_.t();
-        OMP_FOR_i(n_rows) K.row(i) = K_.row(i) + L_t;
-    }
-    const arma::mat L = labels_ * n_rows;
+    auto best_mae = std::numeric_limits<double>::max();
+#ifdef INSTANCE_WEIGHTS
+    K %= instance_weight_matrix(chunk_ixs, *p_input_weights);
+    L *= p_input_weights->rows(ixs[chunk_ix]);
+#endif
+
     bool fresh_start;
     const auto w_cols = n_cols * PROPS.get_weight_columns();
     if (weights.n_rows != n_rows || weights.n_cols != w_cols) {
@@ -375,40 +402,18 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
     } else
         fresh_start = false;
 
-    arma::mat residuals = L;
-    const auto residuals_ptr = residuals.mem;
-    const auto n_residuals = residuals.n_elem;
-    const auto rhs_size = n_residuals * sizeof(double);
-
-    const auto p_K = K.mem;
-    // Hybrid scoring both on CPU and GPU degrades tuning quality because of the precision offset introduced by difference in GPU precision, so do either but not both.
-#define CO_ (optimizer::t_pprune_cost_fun)
-    const auto loss_fun =
-            n_rows < 1100
-                ? CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
-                    auto tmp = ALIGN_ALLOCA(double, rhs_size, MEM_ALIGN);
-                    self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
-                    *f = cblas_dasum(n_residuals, tmp, 1);
-                }
-                : CO_ [p_K, residuals_ptr, n_cols, n_rows, n_residuals, rhs_size](CPTRd x, RPTR(double) f) {
-                    auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, rhs_size);
-                    self_predict(n_rows, n_cols, p_K, x, residuals_ptr, tmp);
-                    *f = cblas_dasum(n_residuals, tmp, 1);
-                    ALIGNED_FREE_(tmp);
-                };
-
-    auto best_mae = std::numeric_limits<double>::max();
     auto best_c = PROPS.get_weight_columns();
     arma::mat x0(n_residuals, 1, ARMA_DEFAULT_FILL); // Starting points using IRWLS and/or linsolver, columns 1 or 2
     for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
         const auto start_col = wcol * n_cols;
         const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
-        const auto bounds = get_bounds(K, residuals);
+        const auto bounds = get_bounds(K, residuals, limes);
         if (wcol) {
             fresh_start = false;
             x0.set_size(n_residuals, 1);
             memcpy(x0.colptr(0), weights.colptr(start_col - n_cols), rhs_size);
         } else if (fresh_start) {
+#if 0 // Dual iterative reweighted random butterfly transform solver
             arma::mat prec;
             solvers::solve_irwls(K, K, residuals, prec, iter_irwls);
             if (arma::size(prec) != arma::size(residuals) || prec.has_nonfinite()) {
@@ -416,11 +421,14 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
                 x0.clear();
             } else
                 x0.col(0) = arma::vectorise(prec);
+#else
+            x0.clear();
+#endif
         } else {
             x0.set_size(n_residuals, 1);
             memcpy(x0.colptr(0), weights.mem, rhs_size);
         }
-#if 0 // PETSc solver seems unstable (GMRES with Jacobi)
+#if 0 // PETSc linear solver seems unstable (GMRES with Jacobi)
         if (x0.n_cols < 2 || x0.n_rows != n_rows) {
             x0.set_size(n_rows, 2);
             x0.zeros();
@@ -432,12 +440,12 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
 #endif
 
         static const auto max_weight_calc = CDIVI(C_n_cpu, PROPS.get_solve_particles());
-#if 1
+#if 1 // Pruned BiteOpt
         static std::counting_semaphore<> sem(max_weight_calc);
         sem.acquire();
         common::AppConfig::set_global_log_level(boost::log::trivial::info); {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 1500);
+                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, pop_opt);
             memcpy(weights.colptr(start_col), res.best_parameters.mem, rhs_size);
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
@@ -451,7 +459,6 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
         LOG4_TRACE("Best MAE " << best_mae << ", this MAE " << mae << ", improvement " << common::imprv(mae, best_mae) << "%, delta " << mae - best_mae << ", column " << wcol <<
             ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " << common::present(residuals) << ", labels " << common::present(L) <<
             ", weights " << common::present(weights.cols(start_col, end_col)) << ", max weight calculations " << max_weight_calc);
-        // On the first iteration, this MAE should be significantly lower than meanabs labels, approaching zero but thats not the case TODO investigate why it isn't the case
         if (mae < best_mae) {
             best_mae = mae;
             best_c = wcol;
@@ -463,111 +470,59 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
     LOG4_DEBUG("Final MAE " << best_mae << ", column " << best_c << ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " <<
         common::present(residuals) << ", labels " << common::present(L) << ", weights " << common::present(weights));
 
+    if (chunk_ixs.n_elem >= 1750) delete sw;
+    assert(std::isnormal(best_mae) && best_mae != common::C_bad_validation && !std::signbit(best_mae));
     return best_mae;
 }
-
-double OnlineSVR::d_calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights)
-{
-    LOG4_BEGIN();
-
-    const uint32_t n_rows = K_.n_rows;
-    const uint32_t n_cols = labels_.n_cols;
-    const arma::mat K = K_ + common::extrude_rows(labels_.t().eval(), n_rows);
-    const arma::mat L = labels_ * n_rows;
-    bool fresh_start;
-    const auto w_cols = n_cols * PROPS.get_weight_columns();
-    if (weights.n_rows != n_rows || weights.n_cols != w_cols) {
-        weights.set_size(n_rows, w_cols);
-        fresh_start = true;
-    } else
-        fresh_start = false;
-
-    arma::mat residuals = L;
-    const auto n_residuals = residuals.n_elem;
-
-    const solvers::score_weights sw(K, residuals, n_rows, n_cols, n_residuals, K.n_elem);
-    // Hybrid scoring both on CPU and GPU degrades tuning quality because of the precision offset introduced by difference in GPU precision, so do either but not both.
-    const auto loss_fun = CO_ [&sw](CPTRd x, RPTR(double) f) { *f = sw(x); };
-
-    auto best_mae = std::numeric_limits<double>::max();
-    auto best_c = PROPS.get_weight_columns();
-    arma::mat x0(n_residuals, 1, ARMA_DEFAULT_FILL); // Starting points using IRWLS and/or linsolver, columns 1 or 2
-    for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
-        const auto start_col = wcol * n_cols;
-        const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
-        arma::subview<double> sol_v = weights.cols(start_col, end_col);
-        const auto bounds = get_bounds(K, residuals);
-        if (wcol) {
-            fresh_start = false;
-            const auto prev_start_col = start_col - n_cols;
-            x0.col(0) = arma::vectorise(weights.cols(prev_start_col, prev_start_col + n_cols - 1));
-        } else if (fresh_start) {
-            arma::mat prec;
-            solvers::solve_irwls(K, K, residuals, prec, iter_irwls);
-            if (arma::size(prec) != arma::size(residuals) || prec.has_nonfinite()) {
-                LOG4_ERROR("Preconditioned matrix contains non-finite values.");
-                x0.col(0).zeros();
-            } else
-                x0.col(0) = arma::vectorise(prec);
-        } else
-            x0.col(0) = arma::vectorise(weights.head_cols(n_cols));
-
-        static const auto max_weight_calc = CDIVI(C_n_cpu, PROPS.get_solve_particles());
-        static std::counting_semaphore<> sem(max_weight_calc);
-        sem.acquire();
-        common::AppConfig::set_global_log_level(boost::log::trivial::info); {
-            const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 500);
-            memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
-        }
-        common::AppConfig::set_global_log_level(PROPS.get_log_level());
-        sem.release();
-        residuals -= K * sol_v;
-        const auto mae = common::meanabs(residuals);
-        LOG4_TRACE("Best MAE " << best_mae << ", this MAE " << mae << ", improvement " << common::imprv(mae, best_mae) << "%, delta " << mae - best_mae << ", column " << wcol <<
-            ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " << common::present(residuals) << ", labels " << common::present(L) <<
-            ", weights " << common::present(sol_v) << ", max weight calculations " << max_weight_calc);
-        // On the first iteration, this MAE should be significantly lower than meanabs labels, approaching zero but thats not the case TODO investigate why it isn't the case
-        if (mae < best_mae) {
-            best_mae = mae;
-            best_c = wcol;
-        }
-    }
-
-    if (best_c < PROPS.get_weight_columns() - 1) weights.shed_cols((best_c + 1) * n_cols, weights.n_cols - 1);
-
-    LOG4_DEBUG("Final MAE " << best_mae << ", column " << best_c << ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " <<
-        common::present(residuals) << ", labels " << common::present(L) << ", weights " << common::present(weights));
-
-    return best_mae;
-}
-
 
 void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls)
 {
     LOG4_BEGIN();
 
     assert(chunks_score.size() > chunk_ix);
-    const auto &params = get_params(chunk_ix);
-#ifdef INSTANCE_WEIGHTS
-    PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(
-            p_kernel_matrices->at(chunk_ix) * instance_weight_matrix(ixs[chunk_ix], *p_input_weights),
-            train_label_chunks[chunk_ix] * p_input_weights->rows(ixs[chunk_ix]),
-            iters_opt, iters_irwls, weight_chunks[chunk_ix]),
-          "Chunk " << chunk_ix << ", level " << level << ", gradient " << gradient << ", parameters " << params << ", instance weights " << common::present(*p_input_weights) <<
-                ", W " << common::present(weight_chunks[chunk_ix]));
-#else
-    if (ixs[chunk_ix].n_elem < 1750) {
-        PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
-                    "Calculate weights " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
-    } else {
-        PROFILE_MSG(chunks_score[chunk_ix] = d_calc_weights(p_kernel_matrices->at(chunk_ix), train_label_chunks[chunk_ix], iter_opt, iter_irwls, weight_chunks[chunk_ix]),
-                    "Calculate weights on device " << common::present(weight_chunks[chunk_ix]) << ", parameters " << params);
+    auto &params = get_params(chunk_ix);
+    arma::mat K(arma::size(p_kernel_matrices->at(chunk_ix)), ARMA_DEFAULT_FILL);
+    const auto n_rows = train_label_chunks[chunk_ix].n_rows;
+    {
+        const arma::mat L_t = train_label_chunks[chunk_ix].t();
+        OMP_FOR_i(n_rows) K.row(i) = p_kernel_matrices->at(chunk_ix).row(i) + L_t;
     }
-#endif
-    assert(std::isnormal(chunks_score[chunk_ix]) && chunks_score[chunk_ix] != common::C_bad_validation && !std::signbit(chunks_score[chunk_ix]));
+    const arma::mat L = train_label_chunks[chunk_ix] * n_rows;
 
-    LOG4_END();
+    // Tune lim
+    assert(p_labels->n_rows > PROPS.get_predict_focus());
+    const auto start_validate_ix = p_labels->n_rows - PROPS.get_predict_focus();
+    const arma::uvec validate_ixs = arma::regspace<arma::uvec>(start_validate_ix, p_labels->n_rows - 1);
+    const arma::uvec train_ixs = arma::find(ixs[chunk_ix] < start_validate_ix);
+    const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
+    arma::mat validate_K;
+    {
+        auto validate_features_t = feature_chunk_t(validate_ixs);
+        business::DQScalingFactorService::scale_features_I(chunk_ix, gradient, step, params.get_lag_count(), chunk_sf, validate_features_t);
+        validate_K = kernel::IKernel<double>::get(params)->kernel(validate_features_t, feature_chunk_t(train_ixs));
+    }
+    const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
+    const arma::mat validate_L = business::DQScalingFactorService::scale_labels(*p_labels_sf, p_labels->rows(validate_ixs) * n_rows);
+    const arma::mat train_K = K.submat(train_ixs, train_ixs);
+    const arma::mat train_L = L.rows(train_ixs);
+    const uint32_t validate_size = validate_L.n_elem * sizeof(double);
+    const auto limes_cb = [&, iter_opt, iter_irwls, validate_size](CRPTRd x, RPTR(double) f) {
+        arma::mat tune_W;
+        const auto diff_L = (double *) ALIGNED_ALLOC_(MEM_ALIGN, validate_size);
+        memcpy(diff_L, validate_L.mem, validate_size);
+        (void) calc_weights(train_K, train_L, train_ixs, tune_W, iter_opt, iter_irwls, *x);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, validate_K.n_rows, tune_W.n_cols, validate_K.n_cols, 1., validate_K.mem,
+            validate_K.n_rows, tune_W.mem, tune_W.n_rows, -1., diff_L, validate_K.n_rows);
+        *f = cblas_dasum(train_L.n_elem, diff_L, 1);
+        ALIGNED_FREE_(diff_L);
+    };
+    const optimizer::t_pprune_res limes_res = optimizer::pprune(optimizer::pprune::e_algo_type::e_biteopt,
+        PROPS.get_lim_particles(), {PROPS.get_limes_start(), PROPS.get_limes_end()}, limes_cb, PROPS.get_lim_iteration());
+    const auto limes = limes_res.best_parameters[0];
+    const auto mape = common::mape( limes_res.best_score / validate_L.n_elem, common::meanabs(validate_L));
+    chunks_score[chunk_ix] = calc_weights(K, L, ixs[chunk_ix], weight_chunks[chunk_ix], iter_opt, iter_irwls, limes);
+
+    LOG4_DEBUG("Calculated weights for " << params << ", limes " << limes << ", chunk score " << chunks_score[chunk_ix] << ", MAPE " << mape);
 }
 
 

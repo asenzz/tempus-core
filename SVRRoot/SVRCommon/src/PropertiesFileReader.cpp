@@ -264,7 +264,10 @@ const std::string &PropertiesReader::get_property_value(const std::string &prope
         file_loaded = true;
         LOG4_TRACE("Checking property file " << property_file_it->first);
         const auto property_it = property_file_it->second.find(key);
-        if (property_it != property_file_it->second.cend()) return property_it->second;
+        if (property_it != property_file_it->second.cend()) {
+            LOG4_TRACE("Found property " << key << " in file " << property_file_it->first << ", with value " << property_it->second);
+            return property_it->second;
+        }
     }
     LOG4_DEBUG("Loading property file " << property_file);
     if (!file_loaded && read_property_file(property_file)) {

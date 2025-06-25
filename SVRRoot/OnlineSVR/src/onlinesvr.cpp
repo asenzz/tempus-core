@@ -547,13 +547,6 @@ bool OnlineSVR::is_gradient() const
     return std::any_of(C_default_exec_policy, param_set.cbegin(), param_set.cend(), [](const auto &p) -> bool { return p->get_grad_level(); });
 }
 
-
-double OnlineSVR::calc_epsco(const arma::mat &K, const arma::mat &labels)
-{
-    return arma::mean(arma::mean(labels, 1) - arma::sum(K, 1) - arma::sum(arma::vectorise(labels)));
-}
-
-
 std::tuple<double, double> OnlineSVR::calc_gamma(const arma::mat &Z, const arma::mat &L)
 {
     const auto ref = kernel::get_reference_Z(L);

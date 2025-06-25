@@ -57,14 +57,15 @@ public:
 
     static datamodel::dq_scaling_factor_container_t calculate(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, const arma::mat &features_t, const arma::mat &labels);
 
-    static void scale_features(const uint16_t chunk_ix, const uint16_t grad_level, const uint16_t step, const uint16_t lag,
+    static void scale_features_I(const uint16_t chunk_ix, const uint16_t grad_level, const uint16_t step, const uint16_t lag,
                                const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t);
-    static void scale_features(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &features_t);
-    static void scale_labels(const uint16_t chunk, const uint16_t gradient, const uint16_t step, const uint16_t level, const datamodel::dq_scaling_factor_container_t &sf,
+    static void scale_features_I(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &features_t);
+    static void scale_labels_I(const uint16_t chunk, const uint16_t gradient, const uint16_t step, const uint16_t level, const datamodel::dq_scaling_factor_container_t &sf,
                              arma::mat &labels);
     static double scale_label(const datamodel::DQScalingFactor &sf, double &label);
-    static void scale_labels(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &labels);
-    static void scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels);
+    static void scale_labels_I(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &labels);
+    static arma::mat scale_labels(const datamodel::DQScalingFactor &sf, const arma::mat &labels);
+    static void scale_labels_I(const datamodel::DQScalingFactor &sf, arma::mat &labels);
     template<typename T> static inline void unscale_labels_I(const datamodel::DQScalingFactor &sf, T &labels)
     {
         (void) common::unscale_I<T>(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());

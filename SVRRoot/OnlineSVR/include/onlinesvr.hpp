@@ -204,11 +204,7 @@ public:
 
     static arma::vec calc_gammas(const arma::mat &Z, const arma::mat &L);
 
-    static double calc_epsco(const arma::mat &K, const arma::mat &labels);
-
-    static double calc_weights(const arma::mat &K, const arma::mat &labels, const uint32_t iters_opt, const uint16_t iters_irwls, arma::mat &weights);
-
-    static double d_calc_weights(const arma::mat &K_, const arma::mat &labels_, const uint32_t iter_opt, const uint16_t iter_irwls, arma::mat &weights);
+    static double calc_weights(const arma::mat &K, const arma::mat &L, const arma::uvec &chunk_ixs, arma::mat &weights, const uint32_t iter_opt, const uint16_t iter_irwls, const double limes);
 
     void calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls);
 
@@ -219,6 +215,8 @@ public:
     static void self_predict(const unsigned m, const unsigned n, CRPTRd K, CRPTRd w, CRPTRd rhs, RPTR(double) diff);
 
     static arma::mat self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs);
+
+    static arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uvec &ixs);
 
     static double score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs);
 

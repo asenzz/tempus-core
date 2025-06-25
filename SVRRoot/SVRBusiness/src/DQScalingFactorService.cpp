@@ -126,8 +126,10 @@ DQScalingFactorService::calculate(const uint16_t chunk_ix, const datamodel::Onli
     return res;
 }
 
-void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const uint16_t grad_level, const uint16_t step, const uint16_t lag,
-                                            const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t)
+
+// TODO Is gradient and step really needed, since param sets are per model.
+void DQScalingFactorService::scale_features_I(
+    const uint16_t chunk_ix, const uint16_t grad_level, const uint16_t step, const uint16_t lag, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &features_t)
 {
     assert(sf.size());
     const auto num_levels = features_t.n_rows / lag;
@@ -143,33 +145,38 @@ void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const uint1
     }
 }
 
-void DQScalingFactorService::scale_features(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &features_t)
+void DQScalingFactorService::scale_features_I(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &features_t)
 {
     if (features_t.empty()) return;
     const auto chunk_sf = slice(svr_model.get_scaling_factors(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_step());
-    scale_features(chunk_ix, svr_model.get_gradient_level(), svr_model.get_step(), svr_model.get_params_ptr(chunk_ix)->get_lag_count(), chunk_sf, features_t);
+    scale_features_I(chunk_ix, svr_model.get_gradient_level(), svr_model.get_step(), svr_model.get_params_ptr(chunk_ix)->get_lag_count(), chunk_sf, features_t);
 }
 
 void
-DQScalingFactorService::scale_labels(const uint16_t chunk, const uint16_t gradient, const uint16_t step, const uint16_t level, const datamodel::dq_scaling_factor_container_t &sf,
+DQScalingFactorService::scale_labels_I(const uint16_t chunk, const uint16_t gradient, const uint16_t step, const uint16_t level, const datamodel::dq_scaling_factor_container_t &sf,
                                      arma::mat &labels)
 {
     const auto p_sf_labels = find(sf, 0, chunk, gradient, step, level, false, true);
-    scale_labels(*p_sf_labels, labels);
+    scale_labels_I(*p_sf_labels, labels);
 }
 
-void DQScalingFactorService::scale_labels(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &labels)
+void DQScalingFactorService::scale_labels_I(const uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &labels)
 {
     if (labels.empty()) return;
     const auto p_sf_labels = find(svr_model.get_scaling_factors(), svr_model.get_model_id(), chunk_ix, svr_model.get_gradient_level(), svr_model.get_step(),
                                   svr_model.get_decon_level(), false, true);
-    scale_labels(*p_sf_labels, labels);
+    scale_labels_I(*p_sf_labels, labels);
 }
 
-void DQScalingFactorService::scale_labels(const datamodel::DQScalingFactor &sf, arma::mat &labels)
+void DQScalingFactorService::scale_labels_I(const datamodel::DQScalingFactor &sf, arma::mat &labels)
 {
     (void) scale_I(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
     if (labels.has_nonfinite()) LOG4_THROW("Scaled labels not sane, scaling factor labels " << sf << ", labels " << labels);
+}
+
+arma::mat DQScalingFactorService::scale_labels(const datamodel::DQScalingFactor &sf, const arma::mat &labels)
+{
+    return scale(labels, sf.get_labels_factor(), sf.get_dc_offset_labels());
 }
 
 double DQScalingFactorService::scale_label(const datamodel::DQScalingFactor &sf, double &label)

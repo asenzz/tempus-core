@@ -27,7 +27,7 @@ namespace svr {
 namespace datamodel {
 
 // Stretch, shift and transpose and transpose rows with indexes
-arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uvec &ixs)
+arma::mat OnlineSVR::sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uvec &ixs)
 {
     LOG4_BEGIN();
     arma::mat v(m.n_cols, ixs.size(), ARMA_DEFAULT_FILL);
@@ -80,7 +80,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
             assert(p_params);
             arma::mat scaled_x_predict_t = x_predict_t;
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
-            business::DQScalingFactorService::scale_features(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
+            business::DQScalingFactorService::scale_features_I(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
             arma::mat chunk_predict_K = kernel::IKernel<double>::get(*p_params)->kernel(
                 ccache(), scaled_x_predict_t, train_feature_chunks_t[chunk_ix], time, last_trained_time);
             assert(x_predict_t.n_cols == chunk_predict_K.n_rows);
@@ -133,9 +133,9 @@ t_gradient_data OnlineSVR::produce_residuals()
         arma::mat excluded_features_t = p_features->rows(chunk_excluded_rows).t();
         arma::mat excluded_labels = p_labels->rows(chunk_excluded_rows);
         const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, i, gradient, step);
-        business::DQScalingFactorService::scale_features(i, gradient, step, p_params->get_lag_count(), chunk_sf, excluded_features_t);
+        business::DQScalingFactorService::scale_features_I(i, gradient, step, p_params->get_lag_count(), chunk_sf, excluded_features_t);
         const auto p_sf = business::DQScalingFactorService::find(chunk_sf, model_id, i, gradient, step, level, false, true);
-        business::DQScalingFactorService::scale_labels(*p_sf, excluded_labels);
+        business::DQScalingFactorService::scale_labels_I(*p_sf, excluded_labels);
         arma::mat this_residuals = excluded_labels + p_params->get_svr_epsilon()
             - kernel::IKernel<double>::get(*p_params)->kernel(train_feature_chunks_t[i], excluded_features_t) * weight_chunks[i];
         business::DQScalingFactorService::unscale_labels_I(*p_sf, this_residuals);

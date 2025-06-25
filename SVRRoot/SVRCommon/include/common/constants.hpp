@@ -25,9 +25,6 @@ constexpr uint32_t C_min_cursor_rows = 1e4;
 const double C_input_obseg_labels = 1;
 constexpr double C_input_obseg_features = 1;
 
-// Save first N forecasts to database for later analysis
-constexpr uint16_t C_forecast_focus = 115;
-
 constexpr uint8_t C_tune_keep_preds = 2;
 const uint64_t C_num_combos = std::pow<uint64_t>(3, 22); // should be even power of TUNE_KEEP_PREDS eg. 3^22, 4^18
 
