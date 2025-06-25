@@ -84,8 +84,6 @@ class OnlineSVR final : public Entity
 
     arma::mat predict_chunk_t(const arma::mat &x_predict) const;
 
-    void init_kernel(const SVRParameters_ptr &p_params, const std::function<void()> &init_func);
-
 public:
     const float chunk_offlap;
 

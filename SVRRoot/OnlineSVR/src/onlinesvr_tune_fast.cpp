@@ -23,10 +23,12 @@
 #include "recombine_parameters.cuh"
 #include "common/logging.hpp"
 #include "kernel_factory.hpp"
+#include "kernel_gbm.hpp"
 
 namespace svr {
 namespace datamodel {
-// Returns column indexes of outliers
+
+// Returns indexes of outliers
 arma::uvec outlier_hdbscan(const arma::mat &features_t)
 {
     const auto min_points = std::min<uint32_t>(PROPS.get_hdbs_points(), features_t.n_cols);
@@ -38,7 +40,7 @@ arma::uvec outlier_hdbscan(const arma::mat &features_t)
     clustering::hdbscan_print_outlier_scores(scan->outlierScores, scan->numPoints);
 #endif
     auto ures = arma::regspace<arma::uvec>(0, scan->numPoints - 1);
-    std::ranges::stable_sort(ures, [&scan](const auto i1, const auto i2) { return scan->outlierScores[i1].score < scan->outlierScores[i2].score; });
+    std::ranges::sort(ures, [&scan](const auto i1, const auto i2) { return scan->outlierScores[i1].score < scan->outlierScores[i2].score; });
     LOG4_TRACE("Returning " << common::present(ures));
     return ures.tail_rows(PROPS.get_outlier_slack());
 }
@@ -94,15 +96,6 @@ arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, co
     return score;
 }
 
-void OnlineSVR::init_kernel(const SVRParameters_ptr &p_params, const std::function<void()> &init_func)
-{
-    assert(ixs.size() == 1);
-    assert(train_feature_chunks_t.size() == 1);
-    assert(train_label_chunks.size() == 1);
-    init_func();
-    p_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
-}
-
 void save_chunk_params(const SVRParameters_ptr &p_params)
 {
     if (APP.svr_parameters_service.exists(p_params))
@@ -112,9 +105,13 @@ void save_chunk_params(const SVRParameters_ptr &p_params)
 
 void OnlineSVR::tune()
 {
-    if (auto p_params = is_manifold()) {
-        init_kernel(p_params, [&]{kernel::IKernel<double>::get<kernel::kernel_deep_path<double>>(*p_params)->init(
-            projection, p_dataset, train_feature_chunks_t.front(), train_label_chunks.front(), last_trained_time); });
+    if (const auto p_params = is_manifold()) {
+        assert(ixs.size() == 1);
+        assert(train_feature_chunks_t.size() == 1);
+        assert(train_label_chunks.size() == 1);
+        PROFILE_(kernel::IKernel<double>::get<kernel::kernel_deep_path<double>>(*p_params)->init(
+            projection, p_dataset, train_feature_chunks_t.front(), train_label_chunks.front(), last_trained_time));
+        p_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
         return;
     }
 
@@ -150,10 +147,15 @@ void OnlineSVR::tune()
             LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
         }
         if (p_chunk_params->get_kernel_type() == kernel_type::TFT) {
-            kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]);
+            PROFILE_(kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
             p_chunk_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
-            save_chunk_params(p_chunk_params);
+            if (model_id) save_chunk_params(p_chunk_params);
             continue; // No tuning for TFT
+        } else if (p_chunk_params->get_kernel_type() == kernel_type::GBM) {
+            PROFILE_(kernel::IKernel<double>::get<kernel::kernel_gbm<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
+            p_chunk_params->set_svr_kernel_param(1);
+            if (model_id) save_chunk_params(p_chunk_params);
+            continue; // No tuning for GBM
         }
         tbb::mutex chunk_preds_l;
         auto best_score = std::numeric_limits<double>::max();

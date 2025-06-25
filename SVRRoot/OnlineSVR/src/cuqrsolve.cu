@@ -809,7 +809,7 @@ __global__ void G_meanabsdif(CRPTRd d_in1, CRPTRd d_in2, RPTR(double) d_result_s
 double cu_mae(CRPTRd d_in1, CRPTRd d_in2, const size_t n, const cudaStream_t custream)
 {
     auto const d_result_sum = cucalloc<double>(custream);
-    G_meanabsdif<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in1, d_in2, d_result_sum, n);
+    G_sumabsdif<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in1, d_in2, d_result_sum, n);
     double r;
     cufreecopy(&r, d_result_sum, custream);
     cu_errchk(cudaStreamSynchronize(custream));

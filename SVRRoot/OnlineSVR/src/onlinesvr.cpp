@@ -436,8 +436,8 @@ uint32_t OnlineSVR::get_num_chunks() const
 std::deque<arma::uvec> OnlineSVR::generate_indexes() const
 {
     const auto n_rows_dataset = p_labels->n_rows;
-    const auto interleave_sqrt = std::sqrt(PROPS.get_interleave());
-    if (is_manifold()) return {arma::regspace<arma::uvec>(0, interleave_sqrt, n_rows_dataset - 1)};
+    const auto interleave = PROPS.get_interleave();
+    if (is_manifold()) return {arma::regspace<arma::uvec>(0, interleave, n_rows_dataset - 1)};
     const auto decrement = (*param_set.cbegin())->get_svr_decremental_distance();
     // Make sure we train on the latest data
     const auto n_rows_train = get_full_train_len(n_rows_dataset, decrement);
@@ -448,7 +448,7 @@ std::deque<arma::uvec> OnlineSVR::generate_indexes() const
     std::deque<arma::uvec> indexes(num_chunks);
     const uint32_t this_chunk_size = n_rows_train / ((num_chunks + 1 / chunk_offlap - C_end_chunks) * chunk_offlap);
     const uint32_t outlier_slack = PROPS.get_outlier_slack();
-    const uint32_t skip = is_tft().get() == nullptr ? 1 : interleave_sqrt;
+    const uint32_t skip = is_tft().get() == nullptr ? 1 : interleave;
     LOG4_DEBUG("Num rows is " << n_rows_dataset << ", decrement " << decrement << ", rows trained " << n_rows_train << ", num chunks " << num_chunks << ", max chunk size " <<
             max_chunk_size << ", chunk size " << this_chunk_size << ", start offset " << start_offset << ", chunk offlap " << chunk_offlap << ", outlier slack " << outlier_slack <<
             ", skip " << skip);

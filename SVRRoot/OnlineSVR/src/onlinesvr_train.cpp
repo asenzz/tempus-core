@@ -42,7 +42,7 @@ OnlineSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const m
         LOG4_ERROR("Precalculated kernel matrices do not match needed chunks count!");
 
     LOG4_DEBUG("Initializing kernel matrices from scratch.");
-    if (!p_kernel_matrices) p_kernel_matrices = ptr<DTYPE(*p_kernel_matrices)>(num_chunks);
+    if (!p_kernel_matrices) p_kernel_matrices = ptr<DTYPE(*p_kernel_matrices) >(num_chunks);
     else if (p_kernel_matrices->size() != num_chunks) p_kernel_matrices->resize(num_chunks);
 
     if (weight_chunks.size() != num_chunks) weight_chunks.resize(num_chunks);
@@ -65,17 +65,21 @@ OnlineSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const m
         ", last value time " << time);
 
     if (needs_tuning()) {
-        if (precalc_kernel_matrices && precalc_kernel_matrices->size()) LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
+        if (precalc_kernel_matrices && precalc_kernel_matrices->size())
+            LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
         PROFILE_MSG(tune(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
     // OMP_FOR_i(num_chunks) {
     for (uint32_t i = 0; i < num_chunks; ++i) {
         auto p_params = get_params_ptr(i);
-        if (p_kernel_matrices->at(i).empty())
-            p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], time);
-        else
-            LOG4_DEBUG("Using pre-calculated kernel matrix " << arma::size(p_kernel_matrices->at(i)) << " for chunk " << i);
+        if (p_kernel_matrices->at(i).empty()) {
+            p_kernel_matrices->at(i) = p_params->get_kernel_type() == e_kernel_type::GBM || p_params->get_kernel_type() == e_kernel_type::TFT
+                        ? kernel::get_reference_Z<double>(train_label_chunks[i])
+                        : p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], time);
+        } else
+            LOG4_DEBUG("Using pre-calculated kernel " << arma::size(p_kernel_matrices->at(i)) << " for chunk " << i);
+        LOG4_TRACE("Difference from reference kernel " << common::present<double>(p_kernel_matrices->at(i) - kernel::get_reference_Z<double>(train_label_chunks[i])));
         calc_weights(i, ixs[i].n_rows * PROPS.get_solve_iterations_coefficient(), PROPS.get_stabilize_iterations_count());
     }
 
@@ -116,7 +120,8 @@ void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
         set_scaling_factors(features_sf);
         if (model_id)
             for (const auto &sf: features_sf) {
-                if (APP.dq_scaling_factor_service.exists(sf)) APP.dq_scaling_factor_service.remove(sf);
+                if (APP.dq_scaling_factor_service.exists(sf))
+                    APP.dq_scaling_factor_service.remove(sf);
                 APP.dq_scaling_factor_service.save(sf);
             }
         p_labels_sf = business::DQScalingFactorService::find(features_sf, model_id, i, gradient, step, level, false, true);
@@ -328,9 +333,14 @@ arma::mat OnlineSVR::instance_weight_matrix(const arma::uvec &ixs, const arma::m
 
 arma::mat get_bounds(const arma::mat &A, const arma::mat &b)
 {
-    constexpr auto qalpha = .9;
+    constexpr auto qalpha = 1;
+#if 0
     const auto limhi = common::meanabs_hiquant(b.mem, b.n_elem, qalpha) / common::meanabs_loquant(A.mem, A.n_elem, qalpha) / b.n_rows;
     const auto limlo = -limhi; // common::mean_loquant(b.mem, b.n_elem, qalpha) / common::mean_hiquant(A.mem, A.n_elem, qalpha) / b.n_rows;
+#else
+    const auto limhi = PROPS.get_lim_coef() * common::meanabs(b) / common::meanabs(A) / b.n_rows;
+    const auto limlo = -limhi;
+#endif
     assert(std::isnormal(limhi) && std::isnormal(limlo) && limlo != limhi);
     arma::mat r(b.n_rows, 2);
     if (limhi > limlo) {
@@ -393,20 +403,24 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
     for (DTYPE(best_c) wcol = 0; wcol < PROPS.get_weight_columns(); ++wcol) {
         const auto start_col = wcol * n_cols;
         const auto end_col = std::min<uint32_t>(weights.n_cols, start_col + n_cols) - 1;
-        arma::subview<double> sol_v = weights.cols(start_col, end_col);
         const auto bounds = get_bounds(K, residuals);
         if (wcol) {
             fresh_start = false;
-            const auto prev_start_col = start_col - n_cols;
             x0.set_size(n_residuals, 1);
-            x0.col(0) = arma::vectorise(weights.cols(prev_start_col, prev_start_col + n_cols - 1));
+            memcpy(x0.colptr(0), weights.colptr(start_col - n_cols), rhs_size);
         } else if (fresh_start) {
-            x0.reset();
+            arma::mat prec;
+            solvers::solve_irwls(K, K, residuals, prec, iter_irwls);
+            if (arma::size(prec) != arma::size(residuals) || prec.has_nonfinite()) {
+                LOG4_ERROR("Preconditioned matrix contains non-finite values.");
+                x0.clear();
+            } else
+                x0.col(0) = arma::vectorise(prec);
         } else {
             x0.set_size(n_residuals, 1);
-            x0.col(0) = arma::vectorise(weights.head_cols(n_cols));
+            memcpy(x0.colptr(0), weights.mem, rhs_size);
         }
-#if 0 // PETSc solver seems unstable
+#if 0 // PETSc solver seems unstable (GMRES with Jacobi)
         if (x0.n_cols < 2 || x0.n_rows != n_rows) {
             x0.set_size(n_rows, 2);
             x0.zeros();
@@ -423,20 +437,20 @@ double OnlineSVR::calc_weights(const arma::mat &K_, const arma::mat &labels_, co
         sem.acquire();
         common::AppConfig::set_global_log_level(boost::log::trivial::info); {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
-                                                                  {}, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 1500);
-            memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));
+                                                                  x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 1500);
+            memcpy(weights.colptr(start_col), res.best_parameters.mem, rhs_size);
         }
         common::AppConfig::set_global_log_level(PROPS.get_log_level());
         sem.release();
 #else
-        sol_v = x0.col(1);
+        assert(x0.n_rows = n_residuals && x0.n_cols);
+        memcpy(weights.colptr(start_col), x0.mem, rhs_size);
 #endif
-        residuals -= K * sol_v;
-
+        residuals -= K * weights.cols(start_col, end_col);
         const auto mae = common::meanabs(residuals);
         LOG4_TRACE("Best MAE " << best_mae << ", this MAE " << mae << ", improvement " << common::imprv(mae, best_mae) << "%, delta " << mae - best_mae << ", column " << wcol <<
             ", iterations " << iter_opt << ", IRWLS " << iter_irwls << ", fresh start " << fresh_start << ", residuals " << common::present(residuals) << ", labels " << common::present(L) <<
-            ", weights " << common::present(sol_v) << ", max weight calculations " << max_weight_calc);
+            ", weights " << common::present(weights.cols(start_col, end_col)) << ", max weight calculations " << max_weight_calc);
         // On the first iteration, this MAE should be significantly lower than meanabs labels, approaching zero but thats not the case TODO investigate why it isn't the case
         if (mae < best_mae) {
             best_mae = mae;
@@ -501,8 +515,7 @@ double OnlineSVR::d_calc_weights(const arma::mat &K_, const arma::mat &labels_, 
         static const auto max_weight_calc = CDIVI(C_n_cpu, PROPS.get_solve_particles());
         static std::counting_semaphore<> sem(max_weight_calc);
         sem.acquire();
-        common::AppConfig::set_global_log_level(boost::log::trivial::info);
-        {
+        common::AppConfig::set_global_log_level(boost::log::trivial::info); {
             const optimizer::t_pprune_res res = optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_solve_particles(), bounds, loss_fun, iter_opt, 0, 0,
                                                                   x0, {}, std::min<DTYPE(iter_opt) >(iter_opt, PROPS.get_opt_depth()), false, 500);
             memcpy(weights.colptr(start_col), res.best_parameters.mem, n_residuals * sizeof(double));

@@ -37,6 +37,8 @@ e_kernel_type fromstring(const std::string &kernel_type_str)
         kernel_type = e_kernel_type::DTW;
     else if (kernel_type_str == "TFT")
         kernel_type = e_kernel_type::TFT;
+    else if (kernel_type_str == "GBM")
+        kernel_type = e_kernel_type::GBM;
     else
         THROW_EX_FS(std::invalid_argument, "Incorrect kernel type.");
 
@@ -66,6 +68,8 @@ std::string tostring(const e_kernel_type kt)
             return "DTW";
         case e_kernel_type::TFT:
             return "TFT";
+        case e_kernel_type::GBM:
+            return "GBM";
         case e_kernel_type::end:
             return "e_kernel_type::end";
         default:

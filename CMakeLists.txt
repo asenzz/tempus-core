@@ -489,7 +489,7 @@ ENDIF ()
 SET(Boost_MIN_VERSION 1.80)
 SET(PQXX_LIBRARIES -lpqxx -lpq)
 SET(HDBSCAN_LIBRARIES hdbscan hdbscan_utils collections)
-LINK_LIBRARIES(highwayhash ${HDBSCAN_LIBRARIES} ${TORCH_LIBRARIES}) # hdf5_serial
+LINK_LIBRARIES(highwayhash _lightgbm ${HDBSCAN_LIBRARIES} ${TORCH_LIBRARIES}) # hdf5_serial
 
 FOREACH (module ${MODULES})
     INCLUDE_DIRECTORIES(${SVRROOT_DIR}/${module}/include)

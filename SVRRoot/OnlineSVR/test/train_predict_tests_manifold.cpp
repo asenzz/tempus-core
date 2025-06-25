@@ -79,7 +79,7 @@ TEST(manifold_tune_train_predict, basic_integration)
 #ifdef VALGRIND_BUILD
     constexpr unsigned C_test_decrement = 5;
 #else
-    const uint32_t C_test_decrement = 1000 + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
+    const uint32_t C_test_decrement = .5 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 #endif
 #define MAIN_QUEUE_RES 3600
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)

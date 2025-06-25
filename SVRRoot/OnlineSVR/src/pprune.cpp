@@ -182,21 +182,22 @@ pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const ar
 
     assert(maxfun >= depth && depth >= 1);
     assert(D > 0);
+
     if (n < 1) {
-        LOG4_WARN("Number of particles is zero, not optimizing.");
+        LOG4_WARN("Number of particles is zero, bailing.");
         return;
     }
-    if (x0.n_rows != D || x0.n_cols != n) {
-        arma::mat x0_backup;
-        if (x0.n_rows == D && x0.n_cols) x0_backup = x0;
-        const auto x0_n_cols = x0.n_cols;
-        x0.set_size(D, n - x0_n_cols);
-        common::equispaced(x0, bounds, pows);
-        if (x0_backup.n_elem) {
-            x0 = arma::join_horiz(x0, x0_backup);
-            result.best_parameters = x0_backup.col(0);
-        } else {
-            result.best_parameters = x0.col(0);
+    if (x0.n_rows != D) x0.clear();
+    if (x0.n_elem) {
+        result.best_parameters = arma::vectorise(x0.col(0));
+        if (x0.n_cols > n) {
+            LOG4_WARN("Initx has more columns than particles, trimming to " << n << " columns.");
+            x0.shed_cols(n, x0.n_cols - 1);
+        } else if (x0.n_cols < n) {
+            LOG4_DEBUG("Initx has less columns than particles, filling with equispaced points.");
+            arma::mat x0_eq(D, n - x0.n_cols, ARMA_DEFAULT_FILL);
+            common::equispaced(x0_eq, bounds, pows);
+            x0 = arma::join_horiz(x0_eq, x0);
         }
     } else {
         result.best_parameters.set_size(D);

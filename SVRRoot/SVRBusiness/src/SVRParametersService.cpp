@@ -26,7 +26,9 @@ datamodel::SVRParameters_ptr SVRParametersService::is_manifold(const datamodel::
 
 datamodel::SVRParameters_ptr SVRParametersService::is_tft(const datamodel::t_param_set &param_set)
 {
-    auto res = std::find_if(C_default_exec_policy, param_set.cbegin(), param_set.cend(), [](const auto &p) { return p->get_kernel_type() == datamodel::e_kernel_type::TFT; });
+    auto res = std::find_if(C_default_exec_policy, param_set.cbegin(), param_set.cend(), [](const auto &p) {
+        return p->get_kernel_type() == datamodel::e_kernel_type::TFT || p->get_kernel_type() == datamodel::e_kernel_type::GBM;
+    });
     return res == param_set.end() ? nullptr : *res;
 }
 

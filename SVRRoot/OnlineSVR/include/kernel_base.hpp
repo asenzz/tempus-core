@@ -9,6 +9,8 @@
 #include "model/SVRParameters.hpp"
 #include "calc_cache.hpp"
 
+#define COMPRESS_MODEL
+
 namespace svr {
 namespace kernel {
 

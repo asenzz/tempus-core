@@ -981,5 +981,11 @@ struct safe_double_less {
     bool operator()(const double left, const double right) const;
 };
 
+template<typename T> inline void mirror_copy(T *out, const T *const in, const uint32_t n, const uint32_t half_n)
+{
+    assert(n % 2 == 0);
+    for (uint32_t i = 0; i < n; ++i) out[i] = in[i < half_n ? i : n - i - 1];
+}
+
 }
 }

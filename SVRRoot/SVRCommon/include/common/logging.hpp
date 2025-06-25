@@ -166,6 +166,7 @@ extern const logging l__;
 std::string cufft_get_error_string(const cufftResult s);
 
 #ifdef PRODUCTION_BUILD
+
 #define cf_errchk(cmd) (cmd)
 #define ma_errchk(cmd) (cmd)
 #define ma_errchki(cmd) (cmd)
@@ -175,6 +176,8 @@ std::string cufft_get_error_string(const cufftResult s);
 #define ip_errchk(cmd) (cmd)
 #define vs_errchk(cmd) (cmd)
 #define np_errchk(cmd) (cmd)
+#define lg_errchk(cmd) (cmd)
+
 #else
 
 #ifndef np_errchk
@@ -220,6 +223,13 @@ std::string cufft_get_error_string(const cufftResult s);
         magma_int_t __err; \
         if ((__err = (cmd)) < MAGMA_SUCCESS || (INFO) != MAGMA_SUCCESS) \
             LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err) << ", info " << (INFO)); \
+    }
+#endif
+
+#ifndef lg_errchk
+#define lg_errchk(cmd) {               \
+        const auto __err = (cmd);      \
+        if (__err != 0) LOG4_THROW("LightGBM call " #cmd " failed with error " << __err << ", " << LGBM_GetLastError()); \
     }
 #endif
 

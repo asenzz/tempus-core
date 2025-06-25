@@ -1,4 +1,5 @@
 #pragma once
+#include "kernel_gbm.hpp"
 
 namespace svr {
 namespace kernel {
@@ -85,6 +86,9 @@ template<typename T> std::unique_ptr<kernel_base<T>> kernel_factory<T>::create(d
 
         case svr::datamodel::kernel_type::TFT:
             return std::make_unique<kernel_tft<T>>(params);
+
+        case svr::datamodel::kernel_type::GBM:
+            return std::make_unique<kernel_gbm<T>>(params);
 
         default:
             THROW_EX_FS(std::invalid_argument, "Incorrect kernel type " << params.get_kernel_type());

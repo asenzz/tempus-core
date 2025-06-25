@@ -30,7 +30,8 @@ typedef enum class kernel_type : int {
     DEEP_PATH = 8,
     DTW = 9,
     TFT = 10,
-    end = 11
+    GBM = 11,
+    end = 12
 } e_kernel_type;
 
 e_kernel_type operator++(e_kernel_type &k_type);
@@ -68,12 +69,12 @@ constexpr double C_default_svrparam_kernel_param2 = 1;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
 constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
-constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::TFT;
+constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::GBM;
 constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(C_default_svrparam_kernel_type);
 #ifdef VALGRIND_BUILD
 constexpr uint32_t C_default_svrparam_lag_count = 2;
 #else
-constexpr uint32_t C_default_svrparam_lag_count = 20; // All parameters should have the same lag count because of kernel function limitations
+constexpr uint32_t C_default_svrparam_lag_count = 80; // All parameters should have the same lag count because of kernel function limitations
 #endif
 const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 

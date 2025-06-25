@@ -76,13 +76,15 @@ public:
 
 class AppConfig : public PropertiesReader
 {
+    CONFPROP(float, lim_coef, .1)
+
     CONFPROP(float, nn_head_coef, .1)
 
     CONFPROP(float, nn_hide_coef, 2)
 
-    CONFPROP(float, nn_learn_rate, 1e-3)
+    CONFPROP(float, k_learn_rate, 1e-3)
 
-    CONFPROP(uint16_t, nn_epochs, 100)
+    CONFPROP(uint16_t, k_epochs, 100)
 
     CONFPROP(uint16_t, opt_depth, 1)
 
