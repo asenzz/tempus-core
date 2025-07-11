@@ -18,22 +18,22 @@ IQScalingFactorService::IQScalingFactorService(dao::IQScalingFactorDAO &iq_scali
 
 const std::function<double(double)> IQScalingFactorService::C_default_scaler = [](const double v) -> double { return v; };
 
-bool IQScalingFactorService::exists(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor)
+bool IQScalingFactorService::exists(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor) const
 {
     return iq_scaling_factor_dao_.exists(p_iq_scaling_factor->get_id());
 }
 
-int IQScalingFactorService::save(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor)
+int IQScalingFactorService::save(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor) const
 {
     return iq_scaling_factor_dao_.save(p_iq_scaling_factor);
 }
 
-int IQScalingFactorService::remove(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor)
+int IQScalingFactorService::remove(const datamodel::IQScalingFactor_ptr &p_iq_scaling_factor) const
 {
     return iq_scaling_factor_dao_.remove(p_iq_scaling_factor);
 }
 
-std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::find_all_by_dataset_id(const bigint dataset_id)
+std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::find_all_by_dataset_id(const bigint dataset_id) const
 {
     return iq_scaling_factor_dao_.find_all_by_dataset_id(dataset_id);
 }
@@ -63,7 +63,7 @@ std::deque<datamodel::IQScalingFactor_ptr> IQScalingFactorService::calculate(con
     // OMP_FOR_i(columns_ct)
 #pragma omp parallel for ADJ_THREADS(columns_ct) schedule(static, 1)
     for (size_t i = 0; i < columns_ct; ++i) {
-        const auto [this_dc_offset, this_sf] = calc(iq_values.col(i), common::C_input_obseg_labels);
+        const auto [this_dc_offset, this_sf] = calc<double>(iq_values.col(i), common::C_input_obseg_labels);
         dc_offset[i] = this_dc_offset;
         scaling_factors[i] = this_sf;
         result[i] = ptr<svr::datamodel::IQScalingFactor>(0, dataset_id, input_queue.get_table_name(), input_queue.get_value_column(i), this_sf, this_dc_offset);
@@ -90,7 +90,7 @@ bool IQScalingFactorService::check(const std::deque<datamodel::IQScalingFactor_p
 }
 
 
-void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const bool save_factors)
+void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const bool save_factors) const
 {
     if (check(dataset.get_iq_scaling_factors(input_queue), input_queue.get_value_columns())) return;
 
@@ -115,15 +115,15 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     if (!save_factors) return;
     const auto &dataset_iqsf = dataset.get_iq_scaling_factors(input_queue);
-#pragma omp parallel for ADJ_THREADS(dataset_iqsf.size()) schedule(static, 1)
+OMP_FOR(dataset_iqsf.size())
     for (const auto &p_sf: dataset_iqsf) {
-        if (exists(p_sf)) remove(p_sf);
-        save(p_sf);
+        if (exists(p_sf)) (void) remove(p_sf);
+        (void) save(p_sf);
     }
 }
 
 
-void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool save)
+void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const bool save) const
 {
     prepare(dataset, *dataset.get_input_queue(), save);
     OMP_FOR(dataset.get_aux_input_queues().size())

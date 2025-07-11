@@ -70,7 +70,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
     const auto l_cols = p_labels->n_cols;
     const auto active_chunks = get_predict_chunks();
     const auto chunk_divisor = 1. / active_chunks.size();
-// #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_columns())
+// #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers())
 // #pragma omp single
     {
         // OMP_TASKLOOP_1()
@@ -93,7 +93,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
                 t_omp_lock l1;
                 // OMP_TASKLOOP(weight_chunks[chunk_ix].n_cols / l_cols)
                 for (uint32_t start_col = 0; start_col < weight_chunks[chunk_ix].n_cols; start_col += l_cols) {
-                    const double pred = common::mean(weight_chunks[chunk_ix].cols(start_col, start_col + l_cols - 1) % (K_row_t + train_label_chunks[chunk_ix]));
+                    const double pred = common::mean<double>(weight_chunks[chunk_ix].cols(start_col, start_col + l_cols - 1) % (K_row_t + train_label_chunks[chunk_ix]));
                     l1.set();
                     multiplicated.row(predict_row) += pred;
                     l1.unset();
@@ -115,6 +115,70 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }
+
+#ifdef INTEGRATION_TEST
+
+arma::mat OnlineSVR::predict(const arma::mat &x_predict, const arma::mat &y_reference, const bpt::ptime &time)
+{
+    LOG4_BEGIN();
+    const auto x_predict_t = predict_chunk_t(x_predict);
+    arma::mat prediction;
+    t_omp_lock l2;
+    const auto l_cols = p_labels->n_cols;
+    const auto active_chunks = get_predict_chunks();
+    const auto chunk_divisor = 1. / active_chunks.size();
+// #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers())
+// #pragma omp single
+    {
+        // OMP_TASKLOOP_1()
+        for (uint32_t ch = 0; ch < active_chunks.size(); ++ch) {
+            const auto chunk_ix = active_chunks[ch];
+            const auto p_params = get_params_ptr(chunk_ix);
+            assert(p_params);
+            arma::mat scaled_x_predict_t = x_predict_t;
+            const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
+            const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
+            business::DQScalingFactorService::scale_features_I(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
+            arma::mat chunk_predict_K = kernel::IKernel<double>::get(*p_params)->kernel(
+                ccache(), scaled_x_predict_t, train_feature_chunks_t[chunk_ix], time, last_trained_time);
+            arma::mat scaled_ref_labels = y_reference;
+            business::DQScalingFactorService::scale_labels_I(*p_labels_sf, scaled_ref_labels);
+            const auto ref_K = kernel::get_reference_Z(scaled_ref_labels, train_label_chunks[chunk_ix]);
+            LOG4_TRACE("Difference between reference and predicted K " << common::present<double>(ref_K - chunk_predict_K) << ", reference " << common::present<double>(ref_K) <<
+                ", predicted " << common::present<double>(chunk_predict_K));
+            assert(x_predict_t.n_cols == chunk_predict_K.n_rows);
+            assert(weight_chunks[chunk_ix].n_cols % l_cols == 0);
+            arma::mat multiplicated(chunk_predict_K.n_rows, l_cols, arma::fill::zeros);
+            // OMP_TASKLOOP_(chunk_predict_K.n_rows,)
+            for (uint32_t predict_row = 0; predict_row < chunk_predict_K.n_rows; ++predict_row) {
+                arma::mat K_row_t = arma::trans(chunk_predict_K.row(predict_row));
+                if (l_cols > 1) K_row_t = common::extrude_cols(K_row_t, l_cols);
+                // t_omp_lock l1;
+                // OMP_TASKLOOP(weight_chunks[chunk_ix].n_cols / l_cols)
+                for (uint32_t start_col = 0; start_col < weight_chunks[chunk_ix].n_cols; start_col += l_cols) {
+                    const double pred = common::mean<double>(weight_chunks[chunk_ix].cols(start_col, start_col + l_cols - 1) % (K_row_t + train_label_chunks[chunk_ix]));
+                    // l1.set();
+                    multiplicated.row(predict_row) += pred;
+                    // l1.unset();
+                }
+            }
+            business::DQScalingFactorService::unscale_labels_I(*p_labels_sf, multiplicated);
+            if (chunks_score.size() > 1) multiplicated *= chunk_divisor * chunks_score[chunk_ix];
+            LOG4_TRACE("Chunk " << chunk_ix << " predicted " << common::present(multiplicated) << " from " << common::present(chunk_predict_K) << " with " <<
+                common::present(weight_chunks[chunk_ix]) << ", scaling factor " << *p_labels_sf << ", labels " << common::present(train_label_chunks[chunk_ix]) << ", features " <<
+                common::present(train_feature_chunks_t[chunk_ix]) << ", chunk divisor " << chunk_divisor << ", time " << time << ", column " << p_params->get_input_queue_column_name() <<
+                ", predict features " << common::present(scaled_x_predict_t));
+            l2.set();
+            if (prediction.empty()) prediction = multiplicated;
+            else prediction += multiplicated;
+            l2.unset();
+        }
+    }
+    LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
+    return prediction;
+}
+
+#endif
 
 // TODO Review and test
 t_gradient_data OnlineSVR::produce_residuals()

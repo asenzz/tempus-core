@@ -108,16 +108,20 @@ public:
     static void prepare_manifold_labels(
         datamodel::Model &model, arma::mat &all_labels, data_row_container &all_times_left, data_row_container &all_times_right, const datamodel::datarow_crange &main_data,
         const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, const uint16_t level, const bpt::time_duration &resolution_aux,
-        const bpt::ptime &last_modeled_value_time,
-        const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag);
+        const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag);
 
-    static void tune_features(arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times,
-                              const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res,
-                              const bpt::time_duration &main_queue_resolution);
+    static void tune_features(
+        arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
+        const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
 
-    static void prepare_features(arma::mat &features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux,
-                                 const datamodel::SVRParameters &params, const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res,
-                                 const bpt::time_duration &main_queue_resolution);
+    static void do_features(
+        arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels, const uint16_t n_queues,
+        const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period, const std::deque<uint32_t> &chunk_len_quantise,
+        const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<std::vector<t_feat_params> > &feat_params);
+
+    static void prepare_features(
+        arma::mat &features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux, const datamodel::SVRParameters &params,
+        const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
 
     static void prepare_weights(arma::mat &weights, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_decon_queues, const uint16_t steps,
                                 const bpt::time_duration &resolution_main);
@@ -126,10 +130,20 @@ public:
     get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, uint32_t dataset_rows = 0);
 
     static void predict(const datamodel::Ensemble &ensemble, datamodel::Model &model, const datamodel::t_level_predict_features &predict_features, const bpt::time_duration &resolution,
-        tbb::mutex &insmx, data_row_container &output_data);
+                        tbb::mutex &insmx, data_row_container &output_data);
+
+#ifdef INTEGRATION_TEST
+    static void predict(
+        const datamodel::Ensemble &ensemble, datamodel::Model &model, const datamodel::t_level_predict_features &predict_features, const bpt::time_duration &resolution, tbb::mutex &insmx,
+        const arma::mat &labels, data_row_container &output_data);
+
+    static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec> validate(
+        const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features, const arma::mat &labels,
+        const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times, const bool online, const bool verbose);
+#endif
 
     static std::tuple<mat_ptr, mat_ptr, mat_ptr, bpt::ptime> get_manifold_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model,
-        uint32_t dataset_rows = 0);
+                                                                                        uint32_t dataset_rows = 0);
 
     // A bit more expensive but checks for lag count values before found time
     static void check_feature_data(
@@ -169,16 +183,6 @@ public:
     static uint16_t to_level_ct(const uint16_t model_ct) noexcept;
 
     static uint16_t to_model_ct(const uint16_t level_ct) noexcept;
-
-    static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec> validate(const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble,
-        datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times,
-        const bool online, const bool verbose);
-
-    static void
-    do_features(
-        arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels, const uint16_t n_queues,
-        const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period, const std::deque<uint32_t> &chunk_len_quantise,
-        const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<std::vector<t_feat_params> > &feat_params);
 };
 } /* namespace business */
 } /* namespace svr */

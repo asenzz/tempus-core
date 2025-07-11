@@ -12,21 +12,20 @@ namespace svr {
 namespace common {
 
 // GPU Context, set the worker as blocked during its lifetime.
-template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_() :
-        context_id_(gpu_handler<ctx_per_gpu>::get().get_free_gpu())
+template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_() : context_id_(gpu_handler<ctx_per_gpu>::get().get_free_gpu())
 {
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
-template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_(const bool try_init) :
-        context_id_(try_init ? gpu_handler<ctx_per_gpu>::get().try_free_gpu() : gpu_handler<ctx_per_gpu>::get().get_free_gpu())
+template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_(const bool try_init) : context_id_(
+    try_init ? gpu_handler<ctx_per_gpu>::get().try_free_gpu() : gpu_handler<ctx_per_gpu>::get().get_free_gpu())
 {
     LOG4_TRACE("Enter ctx " << context_id_);
 }
 
-template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_(const gpu_context &context) :
-        context_id_(context.context_id_)
-{};
+template<const uint16_t ctx_per_gpu> __attribute_noinline__ gpu_context_<ctx_per_gpu>::gpu_context_(const gpu_context &context) : context_id_(context.context_id_)
+{
+};
 
 template<const uint16_t ctx_per_gpu> uint16_t gpu_context_<ctx_per_gpu>::id() const
 {
@@ -175,7 +174,7 @@ void gpu_handler<ctx_per_gpu>::init_devices()
     LOG4_DEBUG("CUDA Runtime Version " << runtime_version);
     available_devices_.clear();
     max_running_gpu_threads_number_ = 0;
-    max_gpu_data_chunk_size_ = std::numeric_limits<DTYPE(max_gpu_data_chunk_size_)>::max();
+    max_gpu_data_chunk_size_ = std::numeric_limits<DTYPE(max_gpu_data_chunk_size_) >::max();
     int gpu_devices_count;
     cu_errchk(cudaGetDeviceCount(&gpu_devices_count));
     for (DTYPE(gpu_devices_count) i = 0; i < gpu_devices_count; ++i) {
@@ -184,7 +183,9 @@ void gpu_handler<ctx_per_gpu>::init_devices()
         if (dev_mem < max_gpu_data_chunk_size_) max_gpu_data_chunk_size_ = dev_mem;
     }
     max_running_gpu_threads_number_ = available_devices_.size() * ctx_per_gpu;
-    LOG4_INFO("Max running GPU threads " << max_running_gpu_threads_number_ << ", device max allocate size is " << max_gpu_data_chunk_size_ / ctx_per_gpu << " bytes");
+    LOG4_INFO(
+        "Max running GPU threads " << max_running_gpu_threads_number_ << ", contexts per device " << ctx_per_gpu << ", device max allocate size is " << double(max_gpu_data_chunk_size_ /
+        ctx_per_gpu) / common::C_gigabyte << " GB");
 }
 
 
@@ -210,7 +211,6 @@ template<const uint16_t ctx_per_gpu> uint16_t gpu_handler<ctx_per_gpu>::stream_i
 
 // Use it to sort GPUs by fitness
 constexpr auto comp_cuda_dev = [](const device_info &lhs, const device_info &rhs) -> bool {
-
 #ifdef ENABLE_OPENCL
     if (!lhs.p_ocl_info->available()) return false;
 #endif
@@ -267,7 +267,7 @@ uint16_t gpu_handler<ctx_per_gpu>::try_free_gpu()
                                     [&](const auto &lhs, const auto &rhs) { return lhs.running_threads < rhs.running_threads; });
     if (it_gpus == available_devices_.cend() || it_gpus->running_threads >= ctx_per_gpu) {
         LOG4_WARN("No free GPU found, running threads " << available_devices_.front().running_threads << ", back " << available_devices_.back().running_threads <<
-                                                        ", it found " << (it_gpus == available_devices_.cend() ? "end" : "no end"));
+            ", it found " << (it_gpus == available_devices_.cend() ? "end" : "no end"));
         return C_no_gpu_id;
     }
     ++(it_gpus->running_threads);
@@ -356,7 +356,6 @@ size_t gpu_handler<ctx_per_gpu>::get_max_gpu_data_chunk_size() const
 {
     return max_gpu_data_chunk_size_ / ctx_per_gpu;
 }
-
 }
 
 #ifdef ENABLE_OPENCL
@@ -393,5 +392,4 @@ template<class T> void kernel_helper::set_args(const size_t args_sz, T t)
 }
 
 #endif
-
 }

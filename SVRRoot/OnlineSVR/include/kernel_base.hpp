@@ -16,6 +16,8 @@ namespace kernel {
 
 template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y);
 
+template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y1, const arma::Mat<T> &y2);
+
 template<typename T> void kernel_from_distances(RPTR(T) Kz, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree);
 
 template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree);

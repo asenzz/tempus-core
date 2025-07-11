@@ -79,7 +79,7 @@ __global__ void G_align_features(
 void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, float *const p_stretches, RPTR(uint32_t) p_shifts, const uint32_t n_rows, const uint32_t n_cols)
 {
     const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
-    const uint32_t align_window = (n_rows_integration - PROPS.get_shift_limit()) * PROPS.get_stretch_limit();
+    const uint32_t align_window = (n_rows_integration - PROPS.get_shift_limit() - PROPS.get_outlier_slack()) * PROPS.get_stretch_limit();
 #ifdef INTEGRATION_TEST
     LOG4_DEBUG("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols << ", align window " << align_window);
 #endif

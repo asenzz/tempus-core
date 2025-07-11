@@ -114,6 +114,7 @@ constexpr uint16_t C_default_level_count = 1;
 constexpr uint16_t C_default_hardware_concurrency = 16;
 const boost::posix_time::time_duration C_default_features_max_time_gap = boost::posix_time::hours(60);
 
+constexpr uint32_t C_gigabyte = 1024 * 1024 * 1024;
 }
 
 }

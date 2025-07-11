@@ -172,6 +172,8 @@ public:
 
     bool needs_tuning() const;
 
+    static void score_indexes(const arma::mat &features_t, const arma::mat &labels, arma::uvec &ixs);
+
     void tune();
 
     static uint32_t get_full_train_len(const uint32_t n_rows, const uint32_t decrement);
@@ -187,6 +189,12 @@ public:
     arma::uvec get_active_ixs() const;
 
     arma::mat predict(const arma::mat &x_predict, const bpt::ptime &time = bpt::not_a_date_time);
+
+#ifdef INTEGRATION_TEST
+
+    arma::mat predict(const arma::mat &x_predict, const arma::mat &y_reference, const bpt::ptime &time);
+
+#endif
 
     t_gradient_data produce_residuals();
 
@@ -204,7 +212,8 @@ public:
 
     static arma::vec calc_gammas(const arma::mat &Z, const arma::mat &L);
 
-    static double calc_weights(const arma::mat &K, const arma::mat &L, const arma::uvec &chunk_ixs, arma::mat &weights, const uint32_t iter_opt, const uint16_t iter_irwls, const double limes);
+    static double calc_weights(const arma::mat &K, const arma::mat &L, const arma::uvec &chunk_ixs, arma::mat &weights, const uint32_t iter_opt, const uint16_t iter_irwls,
+                               const double limes);
 
     void calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls);
 
@@ -212,13 +221,9 @@ public:
 
     void update_all_weights();
 
-    static void self_predict(const unsigned m, const unsigned n, CRPTRd K, CRPTRd w, CRPTRd rhs, RPTR(double) diff);
-
-    static arma::mat self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs);
-
     static arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uvec &ixs);
 
-    static double score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs);
+    static double score_weights(const uint32_t m, const uint32_t n, uint16_t layers, CRPTRd L_mean_mask, CRPTRd K, CRPTRd w,RPTR(double) tmp);
 
     template<typename T> static inline arma::Mat<T> prepare_labels(const arma::Mat<T> &labels)
     {
@@ -274,6 +279,7 @@ public:
 
     std::tuple<double, double, double> phase2(const double lambda) const;
 };
+
 } // datamodel
 } // svr
 

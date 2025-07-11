@@ -7,7 +7,6 @@
 
 namespace svr {
 namespace common {
-
 tbb::mutex log_level_mx;
 
 uint8_t AppConfig::S_log_threshold = (uint8_t) boost::log::trivial::severity_level::trace;
@@ -57,81 +56,131 @@ boost::log::trivial::severity_level AppConfig::set_global_log_level(const uint8_
 }
 
 size_t AppConfig::get_default_feature_quantization() const noexcept
-{ return feature_quantization_; }
+{
+    return feature_quantization_;
+}
 
 double AppConfig::get_prediction_horizon() const noexcept
-{ return prediction_horizon_; }
+{
+    return prediction_horizon_;
+}
 
 const std::string &AppConfig::get_db_connection_string() const noexcept
-{ return db_connection_string_; }
+{
+    return db_connection_string_;
+}
 
 bool AppConfig::get_set_thread_affinity() const noexcept
-{ return set_thread_affinity_; }
+{
+    return set_thread_affinity_;
+}
 
 size_t AppConfig::get_multistep_len() const noexcept
-{ return multistep_len; }
+{
+    return multistep_len;
+}
 
 size_t AppConfig::get_multiout() const noexcept
-{ return multiout; }
+{
+    return multiout;
+}
 
 size_t AppConfig::get_online_learn_iter_limit() const noexcept
-{ return online_learn_iter_limit_; }
+{
+    return online_learn_iter_limit_;
+}
 
 size_t AppConfig::get_stabilize_iterations_count() const noexcept
-{ return stabilize_iterations_count_; }
+{
+    return stabilize_iterations_count_;
+}
 
 double AppConfig::get_scaling_alpha() const noexcept
-{ return scaling_alpha_; }
+{
+    return scaling_alpha_;
+}
 
 bool AppConfig::get_tune_parameters() const noexcept
-{ return tune_parameters_; }
+{
+    return tune_parameters_;
+}
 
 bool AppConfig::get_recombine_parameters() const noexcept
-{ return recombine_parameters_; }
+{
+    return recombine_parameters_;
+}
 
 size_t AppConfig::get_slide_count() const noexcept
-{ return slide_count_; }
+{
+    return slide_count_;
+}
 
 size_t AppConfig::get_slide_skip() const noexcept
-{ return slide_skip_; }
+{
+    return slide_skip_;
+}
 
 size_t AppConfig::get_tune_run_limit() const noexcept
-{ return tune_run_limit_; }
+{
+    return tune_run_limit_;
+}
 
 boost::log::trivial::severity_level AppConfig::get_log_level() const noexcept
-{ return log_level_; }
+{
+    return log_level_;
+}
 
 bool AppConfig::get_self_request() const noexcept
-{ return self_request_; }
+{
+    return self_request_;
+}
 
 std::chrono::milliseconds AppConfig::get_loop_interval() const noexcept
-{ return loop_interval_; }
+{
+    return loop_interval_;
+}
 
 std::chrono::milliseconds AppConfig::get_stream_loop_interval() const noexcept
-{ return stream_loop_interval_; }
+{
+    return stream_loop_interval_;
+}
 
 bool AppConfig::get_daemonize() const noexcept
-{ return daemonize_; }
+{
+    return daemonize_;
+}
 
 uint16_t AppConfig::get_num_quantisations() const noexcept
-{ return num_quantisations_; }
+{
+    return num_quantisations_;
+}
 
 uint16_t AppConfig::get_quantisation_divisor() const noexcept
-{ return quantisation_divisor_; }
+{
+    return quantisation_divisor_;
+}
 
 uint16_t AppConfig::get_oemd_quantisation_skipdiv() const noexcept
-{ return oemd_quantisation_skipdiv_; }
+{
+    return oemd_quantisation_skipdiv_;
+}
 
 float AppConfig::get_solve_iterations_coefficient() const noexcept
-{ return solve_iterations_coefficient_; }
+{
+    return solve_iterations_coefficient_;
+}
 
 uint16_t AppConfig::get_oemd_tune_particles() const noexcept
-{ return oemd_tune_particles_; }
+{
+    return oemd_tune_particles_;
+}
 
 uint16_t AppConfig::get_oemd_tune_iterations() const noexcept
-{ return oemd_tune_iterations_; }
+{
+    return oemd_tune_iterations_;
+}
 
-size_t PropertiesReader::read_property_file(std::string property_file_name)
+size_t PropertiesReader::read_property_file(const std::string &property_file_name)
 {
     const tbb::mutex::scoped_lock lk(load_mx);
     if (property_files.find(property_file_name) != property_files.cend()) {
@@ -144,7 +193,8 @@ size_t PropertiesReader::read_property_file(std::string property_file_name)
 
     std::ifstream is_file(property_files_location + property_file_name);
     if (!is_file.is_open()) is_file.open(property_file_name);
-    if (!is_file.is_open()) THROW_EX_FS(std::invalid_argument, "Cannot read properties file " + property_file_name + " or " + property_files_location + property_file_name);
+    if (!is_file.is_open())
+        THROW_EX_FS(std::invalid_argument, "Cannot read properties file " + property_file_name + " or " + property_files_location + property_file_name);
     std::string line, multi_line;
     bool is_multi_line = false;
 
@@ -164,7 +214,8 @@ size_t PropertiesReader::read_property_file(std::string property_file_name)
             continue;
         }
 
-        if (is_multi_line) { // final line of multiline property
+        if (is_multi_line) {
+            // final line of multiline property
             line = multi_line + line;
             is_multi_line = false;
             multi_line.clear();
@@ -183,17 +234,16 @@ size_t PropertiesReader::read_property_file(std::string property_file_name)
     return items;
 }
 
-PropertiesReader::PropertiesReader(const char delimiter, const std::string &config_file) :
-        delimiter(delimiter), config_file(config_file)
+PropertiesReader::PropertiesReader(const char delimiter, const std::string &config_file) : delimiter(delimiter), config_file(config_file)
 {
-    if (config_file.empty()) THROW_EX_FS(std::invalid_argument, "Empty config file name");
+    if (config_file.empty())
+        THROW_EX_FS(std::invalid_argument, "Empty config file name");
     read_property_file(config_file);
     property_files_location = get_property<DTYPE(property_files_location) >(config_file, SQL_PROPERTIES_DIR_KEY, C_default_sql_properties_dir);
 }
 
 // TODO Move hardcoded values to header file using the CONFPROP macro
-AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
-        PropertiesReader(delimiter, app_config_file), dao_type(ConcreteDaoType::PgDao)
+AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) : PropertiesReader(delimiter, app_config_file), dao_type(ConcreteDaoType::PgDao)
 {
     feature_quantization_ = get_property<DTYPE(feature_quantization_) >(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str);
     prediction_horizon_ = get_property<DTYPE(prediction_horizon_) >(app_config_file, PREDICTION_HORIZON, C_default_prediction_horizon_str);
@@ -277,6 +327,5 @@ const std::string &PropertiesReader::get_property_value(const std::string &prope
     LOG4_TRACE("Property " << key << " not found, returning default value " << default_value);
     return default_value;
 }
-
 } /* namespace common */
 } /* namespace svr */

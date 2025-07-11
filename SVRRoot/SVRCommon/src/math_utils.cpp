@@ -14,7 +14,6 @@
 #include <xoshiro.h>
 
 namespace svr {
-
 std::vector<double> operator*(const std::vector<double> &v1, const double &m)
 {
     std::vector<double> ret(v1.size());
@@ -81,6 +80,18 @@ std::vector<double> operator^(const double a, const std::vector<double> &v)
 }
 
 namespace common {
+double pseudo_random_dev::operator()()
+{
+    state = std::fmod(state + .123456789, 1.);
+    return state;
+}
+
+double pseudo_random_dev::max(const double max)
+{
+    state = std::fmod(state + .123456789, 1.);
+    return max * state;
+}
+
 std::string present_chunk(const arma::uvec &u, const double head_factor)
 {
     const size_t head_n = u.n_rows * head_factor;
@@ -380,6 +391,12 @@ double meanabs(const arma::Mat<double> &m) // TODO Use iterator based functions
 }
 
 template<>
+float meanabs(const arma::Mat<float> &m) // TODO Use iterator based functions
+{
+    return cblas_sasum(m.n_elem, m.mem, 1) / m.n_elem;
+}
+
+template<>
 double meanabs(const typename std::vector<double>::const_iterator &begin, const typename std::vector<double>::const_iterator &end)
 {
     const auto n = end - begin;
@@ -435,25 +452,40 @@ double min(const arma::mat &input)
 #endif
 }
 
-double mean(const arma::mat &input)
-{
 #ifdef USE_IPP // IPP freezes when initialized in multiple shared objects
-    double r;
+
+#define TSCALAR double
+
+template<> double mean(const arma::Mat<TSCALAR> &input)
+{
+    TSCALAR r;
     ip_errchk(ippsMean_64f(input.mem, input.n_elem, &r));
     return r;
-#else
-    return arma::mean(arma::vectorise(input));
-#endif
 }
+
+#undef TSCALAR
+#define TSCALAR float
+
+template<> TSCALAR mean(const arma::Mat<TSCALAR> &input)
+{
+    TSCALAR r;
+    ip_errchk(ippsMean_32f(input.mem, input.n_elem, &r, IppHintAlgorithm::ippAlgHintAccurate));
+    return r;
+}
+
+#undef TSCALAR
+
+#endif
 
 double mean(const double *const input, const size_t len)
 {
 #ifdef USE_IPP // IPP freezes when initialized in multiple shared objects
     double r;
     ip_errchk(ippsMean_64f(input, len, &r));
+    LOG4_TRACE("Returning mean " << r << " for " << common::to_string(input, std::min<size_t>(len, 5)));
     return r;
 #else
-    LOG4_THROW("Not implemented!");
+    std::accumulate(C_default_exec_policy, input, input + len, 0.0) / len;
 #endif
 }
 
@@ -653,7 +685,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
         for (uint32_t j = 0; j < D; ++j) {
             const auto pow_j = pows.empty() ? 1. : pows[j];
 #ifdef PERFECT_REPRODUCIBILITY
-            if constexpr(false)
+            if constexpr (false)
 #else
             if (init_random || j >= max_D) // Use a pseudo-random number
 #endif

@@ -26,6 +26,10 @@ public:
     virtual void d_distances(CRPTR (T) d_X, CRPTR (T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR (T) d_Z, const cudaStream_t custream) const override;
 };
 
+std::string get_lgbm_core_parameters(const uint16_t gpu_id);
+
+std::string get_lgbm_dataset_parameters();
+
 } // kernel
 } // svr
 

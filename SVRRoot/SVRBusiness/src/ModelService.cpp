@@ -1,6 +1,5 @@
 #include "DeconQueueService.hpp"
 
-#include <DAO/EnsembleDAO.hpp>
 #include <execution>
 #include <model/Ensemble.hpp>
 #include <tuple>
@@ -17,7 +16,10 @@
 #include <armadillo>
 #include <boost/date_time/posix_time/ptime.hpp>
 #include <iostream>
-
+#ifdef INTEGRATION_TEST
+#include <LightGBM/c_api.h>
+#include "kernel_gbm.hpp"
+#endif
 #include "model/DataRow.hpp"
 #include "util/string_utils.hpp"
 #include "cuqrsolve.cuh"
@@ -31,7 +33,6 @@
 #include "util/time_utils.hpp"
 #include "util/validation_utils.hpp"
 #include "util/math_utils.hpp"
-#include "model/User.hpp"
 #include "DAO/DatasetDAO.hpp"
 #include "common/defines.h"
 #include "common/compatibility.hpp"
@@ -142,6 +143,57 @@ uint16_t ModelService::to_model_ix(const uint16_t level_ix, const uint16_t level
     return level_ix / 2 - (level_ix > trans_levix ? 1 : 0);
 }
 
+#ifdef INTEGRATION_TEST
+
+#define LGBM_MAXBIN "255"
+
+arma::mat aux_train_predict(const datamodel::SVRParameters &param, const arma::mat &features_, const arma::mat &labels_, const uint32_t start_ix_)
+{
+    const auto start_ix = start_ix_ - PROPS.get_shift_limit();
+    const arma::uvec all_ixs = arma::regspace<arma::uvec>(PROPS.get_shift_limit(), labels_.n_rows - 1);
+    const auto features_t = datamodel::OnlineSVR::sst(features_, param.get_feature_mechanics(), all_ixs);
+    const arma::mat labels = labels_.rows(all_ixs);
+    arma::uvec shifted_train_ixs = all_ixs.rows(0, start_ix - 1);
+    if (PROPS.get_outlier_slack()) datamodel::OnlineSVR::score_indexes(features_t.cols(0, start_ix - 1), labels.rows(0, start_ix - 1), shifted_train_ixs);
+    shifted_train_ixs -= PROPS.get_shift_limit();
+    arma::fmat train_features_t = arma::conv_to<arma::fmat>::from(features_t.cols(shifted_train_ixs));
+    arma::fmat train_labels = arma::conv_to<arma::fmat>::from(labels.rows(shifted_train_ixs));
+    arma::fmat predict_features_t = arma::conv_to<arma::fmat>::from(features_t.cols(start_ix, features_t.n_cols - 1));
+    arma::fmat predict_labels = arma::conv_to<arma::fmat>::from(labels.rows(start_ix, labels.n_rows - 1));
+#if SCALE_REF // scale>
+    const auto features_sf = business::DQScalingFactorService::calculate(0, param, train_features_t, train_labels);
+    const auto p_labels_sf = business::DQScalingFactorService::find(features_sf, 0, param.get_chunk_index(), param.get_grad_level(), param.get_step(), param.get_decon_level(), false, true);
+    business::DQScalingFactorService::scale_features_I(param.get_chunk_index(), param.get_grad_level(), param.get_step(), param.get_lag_count(), features_sf, train_features_t);
+    business::DQScalingFactorService::scale_labels_I(*p_labels_sf, train_labels);
+    business::DQScalingFactorService::scale_features_I(param.get_chunk_index(), param.get_grad_level(), param.get_step(), param.get_lag_count(), features_sf, predict_features_t);
+#endif
+    lg_errchk(LGBM_SetMaxThreads(C_n_cpu));
+    DatasetHandle train_dataset;
+    const auto lgbm_dataset_parameters = kernel::get_lgbm_dataset_parameters();
+    lg_errchk(LGBM_DatasetCreateFromMat(train_features_t.mem, C_API_DTYPE_FLOAT32, train_features_t.n_cols, train_features_t.n_rows, 1, // is_row_major = 1 (row-major order)
+        lgbm_dataset_parameters.c_str(), nullptr, &train_dataset));
+
+    lg_errchk(LGBM_DatasetSetField(train_dataset, "label", train_labels.mem, train_labels.n_rows, C_API_DTYPE_FLOAT32));
+
+    BoosterHandle booster;
+    const std::string lgbm_core_parameters = common::formatter() << "objective=regression tree_learner=data seed=123 learning_rate=" << PROPS.get_k_learn_rate() << " num_iterations=" <<
+        PROPS.get_k_epochs() << " early_stopping_round=200 metric=l2 force_col_wise=true num_threads=" << C_n_cpu << " device_type=gpu " << lgbm_dataset_parameters;
+    lg_errchk(LGBM_BoosterCreate(train_dataset, lgbm_core_parameters.c_str(), &booster));
+    int train_complete = 0;
+    auto iter = PROPS.get_k_epochs() + 1;
+    assert(iter);
+    while (train_complete != 1 && --iter) lg_errchk(LGBM_BoosterUpdateOneIter(booster, &train_complete));
+    arma::vec res(predict_features_t.n_cols, ARMA_DEFAULT_FILL);
+    int64_t out_len;
+    lg_errchk(LGBM_BoosterPredictForMat(booster, predict_features_t.mem, C_API_DTYPE_FLOAT32, predict_features_t.n_cols, predict_features_t.n_rows, 1, C_API_PREDICT_NORMAL, 0, 0, lgbm_core_parameters.c_str(), &out_len, res.memptr()));
+    lg_errchk(LGBM_BoosterFree(booster));
+    lg_errchk(LGBM_DatasetFree(train_dataset));
+#ifdef SCALE_REF
+    business::DQScalingFactorService::unscale_labels_I(*p_labels_sf, res);
+#endif
+    LOG4_DEBUG("Predicted " << common::present(res) << ", difference " << common::present<double>(arma::vectorise(predict_labels) - res) << ", reference " << common::present<float>(predict_labels));
+    return res;
+}
 
 // Utility function used in tests, does predict, unscale and then validate
 std::tuple<double, double, arma::vec, arma::vec, double, arma::vec>
@@ -154,47 +206,61 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
 
     const uint32_t ix_fini = labels.n_rows - 1;
     const uint32_t num_preds = labels.n_rows - start_ix;
-    const auto params = model.get_head_params();
-    const auto level = params.first->get_decon_level();
+    const auto param_pair = model.get_head_params();
+    const auto level = param_pair.first->get_decon_level();
 
     datamodel::t_level_predict_features predict_features({times.cbegin() + start_ix, times.cend()}, otr<arma::mat>(features.rows(start_ix, ix_fini)));
     LOG4_TRACE("Predicting features " << common::present<double>(*predict_features.p));
     data_row_container batch_predicted, cont_predicted_online;
     tbb::mutex mx;
-    PROFILE_MSG(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, batch_predicted),
+    PROFILE_MSG(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, labels.rows(start_ix, ix_fini), batch_predicted),
                 "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
-    if (batch_predicted.size() != num_preds)
-        LOG4_THROW("Predicted size " << batch_predicted.size() << " not sane " << arma::size(*predict_features.p));
+    arma::mat predict_lgbm;
+    PROFILE_(predict_lgbm = aux_train_predict(*param_pair.first, features, labels, start_ix));
+    if (batch_predicted.size() != num_preds || predict_lgbm.n_rows != num_preds || predict_lgbm.n_cols != 1)
+        LOG4_THROW("Predicted size " << batch_predicted.size() << " not sane " << arma::size(*predict_features.p) << ", LGBM predicted " << common::present(predict_lgbm));
+    predict_lgbm += last_knowns.rows(start_ix, ix_fini);
 
-    LOG4_DEBUG("Batch predicted " << batch_predicted.size() << " values, parameters " << *params.first);
+    LOG4_DEBUG("Batch predicted " << batch_predicted.size() << " values, parameters " << *param_pair.first);
     const auto stepping = model.get_gradient()->get_dataset()->get_multistep();
     arma::vec predicted_batch(num_preds), predicted_online(num_preds), actual = arma::mean(labels.rows(start_ix, ix_fini), 1), lastknown = last_knowns.rows(start_ix, ix_fini);
 #ifdef EMO_DIFF
     OMP_FOR_i(actual.n_cols) actual.col(i) += lastknown; // common::sexp<double>(actual.col(i)) + lastknown;
 #endif
-    double sum_absdiff_batch = 0, sum_absdiff_lk = 0, sum_abs_labels = 0, sum_absdiff_online = 0;
-    double batch_correct_directions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions = 0;
+    double sum_absdiff_batch = 0, sum_absdiff_lk = 0, sum_abs_labels = 0, sum_absdiff_online = 0, sum_absdiff_lgbm = 0;
+    double batch_correct_directions = 0, lgbm_correct_directions = 0, lgbm_correct_predictions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions = 0;
     for (uint32_t ix_future = start_ix; ix_future <= ix_fini; ++ix_future) {
         const auto ix = ix_future - start_ix;
         predicted_batch[ix] = stepping * batch_predicted[ix]->at(level);
         const double cur_absdiff_lk = std::abs(lastknown[ix] - actual[ix]);
         const double cur_absdiff_batch = std::abs(predicted_batch[ix] - actual[ix]);
+        const double cur_absdiff_lgbm = std::abs(predict_lgbm(ix, 0) - actual[ix]);
         const double cur_alpha_pct_batch = common::alpha(cur_absdiff_lk, cur_absdiff_batch);
+        const double cur_alpha_pct_lgbm = common::alpha(cur_absdiff_lk, cur_absdiff_lgbm);
         sum_abs_labels += std::abs(actual[ix]);
         sum_absdiff_batch += cur_absdiff_batch;
+        sum_absdiff_lgbm += cur_absdiff_lgbm;
         sum_absdiff_lk += std::abs(actual[ix] - lastknown[ix]);
         batch_correct_predictions += cur_absdiff_batch < cur_absdiff_lk;
         batch_correct_directions += std::signbit(predicted_batch[ix] - lastknown[ix]) == std::signbit(actual[ix] - lastknown[ix]);
+        lgbm_correct_predictions += cur_absdiff_lgbm < cur_absdiff_lk;
+        lgbm_correct_directions += std::signbit(predict_lgbm[ix] - lastknown[ix]) == std::signbit(actual[ix] - lastknown[ix]);
 
         const auto ix_div = ix + 1.;
         const bool print_line = verbose || ix_future == ix_fini || ix % 115 == 0;
         std::stringstream row_report;
         if (print_line)
-            row_report << "Position " << ix << ", level " << level << ", step " << model.get_step() << ", actual " << actual[ix] << ", batch predicted " << predicted_batch[ix]
-                    << ", last known " << lastknown[ix] << " batch MAE " << sum_absdiff_batch / ix_div << ", MAE last-known " << sum_absdiff_lk / ix_div
-                    << ", batch MAPE " << common::mape(sum_absdiff_batch, sum_abs_labels) << "pc, MAPE last-known " << common::mape(sum_absdiff_lk, sum_abs_labels) << "pc, batch alpha "
-                    << common::alpha(sum_absdiff_lk, sum_absdiff_batch) << "pc, current batch alpha " << cur_alpha_pct_batch << "pc, batch correct predictions "
-                    << 100. * batch_correct_predictions / ix_div << "pc, batch correct directions " << 100. * batch_correct_directions / ix_div << "pc";
+            row_report << "Position " << ix << ", level " << level << ", step " << model.get_step() <<
+                ", actual " << actual[ix] << ", batch predicted " << predicted_batch[ix] << ", LGBM predicted " << predict_lgbm[ix] << ", last known " << lastknown[ix] << \
+                " batch MAE " << sum_absdiff_batch / ix_div << ", MAE last-known " << sum_absdiff_lk / ix_div << " LGBM MAE " << sum_absdiff_lgbm / ix_div << \
+                ", LGBM MAPE " << common::mape(sum_absdiff_lgbm, sum_abs_labels) << \
+                "pc, batch MAPE " << common::mape(sum_absdiff_batch, sum_abs_labels) << \
+                "pc, MAPE last-known " << common::mape(sum_absdiff_lk, sum_abs_labels) << \
+                "pc, batch alpha " << common::alpha(sum_absdiff_lk, sum_absdiff_batch) << \
+                "pc, LGBM alpha " << common::alpha(sum_absdiff_lk, sum_absdiff_lgbm) << \
+                "pc, current batch alpha " << cur_alpha_pct_batch <<  "pc, current LGBM alpha " << cur_alpha_pct_lgbm << \
+                "pc, batch correct predictions " << 100. * batch_correct_predictions / ix_div << "pc, batch correct directions " << 100. * batch_correct_directions / ix_div << "pc" << \
+                "pc, LGBM correct predictions " << 100. * lgbm_correct_predictions / ix_div << "pc, LGBM correct directions " << 100. * lgbm_correct_directions / ix_div << "pc";
         if (online) {
             PROFILE_MSG(
                 ModelService::predict(
@@ -230,10 +296,11 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     const auto mape_lk = 100. * sum_absdiff_lk / sum_abs_labels;
     const auto &sum_absdiff = online ? sum_absdiff_online : sum_absdiff_batch;
     const auto &predicted = online ? predicted_online : predicted_batch;
-    LOG4_INFO("Parameters " << params << ", predictions start " << start_ix << ", last index " << ix_fini << ", concession " << common::present<double>(actual - predicted));
+    LOG4_INFO("Parameters " << param_pair << ", predictions start " << start_ix << ", last index " << ix_fini << ", concession " << common::present<double>(actual - predicted));
     return {sum_absdiff / double(num_preds), common::mape(sum_absdiff, sum_abs_labels), predicted, actual, mape_lk, lastknown};
 }
 
+#endif
 
 datamodel::DataRow::container::const_iterator
 ModelService::get_start(
@@ -1072,13 +1139,13 @@ ModelService::train_batch(
 arma::vec
 ModelService::get_last_knowns(const datamodel::Ensemble &ensemble, const uint16_t level, const data_row_container &times, const bpt::time_duration &resolution)
 {
-    arma::vec res(times.size());
+    arma::vec res(times.size(), arma::fill::zeros);
     const auto p_aux_decon = ensemble.get_label_aux_decon();
     if (!p_aux_decon || p_aux_decon->empty())
         LOG4_THROW("No label auxiliary data for ensemble " << ensemble);
-    const auto lastknown_offset = PROPS.get_prediction_horizon() * resolution;
+    const auto horizon_duration = resolution * PROPS.get_prediction_horizon();
     OMP_FOR_i_(res.size(), firstprivate(level)) {
-        const auto &row = (**lower_bound_before(*p_aux_decon, times[i]->get_value_time() - lastknown_offset));
+        const auto &row = (**lower_bound_before(*p_aux_decon, times[i]->get_value_time() - horizon_duration));
         res[i] = row[level];
         LOG4_TRACE("For time " << times[i]->get_value_time() << " found last known " << row.get_value_time() << " " << row.to_string());
     }
@@ -1115,6 +1182,38 @@ ModelService::predict(
     LOG4_TRACE("Predicted " << common::present(prediction) << " for " << predict_features.times.size() << " times, container " << common::to_string(out));
 }
 
+#ifdef INTEGRATION_TEST
+
+void ModelService::predict(
+    const datamodel::Ensemble &ensemble,
+    datamodel::Model &model,
+    const datamodel::t_level_predict_features &predict_features,
+    const bpt::time_duration &resolution,
+    tbb::mutex &insemx,
+    const arma::mat &labels,
+    data_row_container &out)
+{
+    arma::mat prediction(predict_features.p->n_rows, model.get_multiout());
+    tbb::mutex predict_lock;
+    const auto predict_time = predict_features.times.front()->get_value_time();
+    OMP_FOR(model.get_gradient_count())
+    for (const auto &p_svr: model.get_gradients()) {
+        const auto this_prediction = p_svr->predict(*predict_features.p, labels, predict_time);
+        const tbb::mutex::scoped_lock lk(predict_lock);
+        prediction += this_prediction;
+    }
+#ifdef EMO_DIFF
+    const auto lk = get_last_knowns(ensemble, model.get_decon_level(), predict_features.times, resolution);
+    OMP_FOR_i(prediction.n_cols) prediction.col(i) += lk; // common::sexp<double>(prediction.col(i)) + lk;
+#endif
+    const auto multistep = model.get_gradients().front()->get_dataset()->get_multistep();
+    if (multistep > 1) prediction /= multistep;
+    const tbb::mutex::scoped_lock lck(insemx);
+    datamodel::DataRow::insert_rows(out, prediction, predict_features.times, model.get_decon_level(), ensemble.get_level_ct(), true);
+    LOG4_TRACE("Predicted " << common::present(prediction) << " for " << predict_features.times.size() << " times, container " << common::to_string(out));
+}
+
+#endif
 
 void
 ModelService::check_feature_data(

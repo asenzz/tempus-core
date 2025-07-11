@@ -110,21 +110,16 @@ DeconQueueService::extract_copy_data(
 }
 
 
-datamodel::DeconQueue_ptr
-DeconQueueService::deconstruct(
-        datamodel::Dataset &dataset,
-        const datamodel::InputQueue &input_queue,
-        const std::string &column_name)
+datamodel::DeconQueue_ptr DeconQueueService::deconstruct(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const std::string &column_name)
 {
     LOG4_BEGIN();
     auto p_decon_queue = dataset.get_decon_queue(input_queue, column_name);
     if (!p_decon_queue) {
-        p_decon_queue = ptr<datamodel::DeconQueue>(
-                std::string{}, input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_spectral_levels());
+        p_decon_queue = ptr<datamodel::DeconQueue>(std::string{}, input_queue.get_table_name(), column_name, dataset.get_id(), dataset.get_spectral_levels());
         APP.decon_queue_service.load(*p_decon_queue);
         dataset.set_decon_queue(p_decon_queue);
     }
-#if 0 // TODO Implement and test when hardware resources are available to deconstruct high frequency (1 ms / 1000 Hz) data
+#if 0 // TODO Implement and test when hardware resources are available to deconstruct high frequency (1 ms / 1000 Hz) data, needed to avoid aliasing noise when deconstructing
     if (p_input_queue.is_tick_queue())
         deconstruct_ticks(input_queue, dataset, column_name, p_decon_queue->get_data());
     else
@@ -169,7 +164,7 @@ DeconQueueService::deconstruct(
 #endif
     const auto residuals = dataset.get_residuals_length(decon_queue.get_table_name());
     LOG4_DEBUG("Input data length " << input_queue.size() << ", columns " << input_queue.front()->size() << ", combined residual length " << residuals <<
-                                    ", input column index " << input_column_index << ", test offset " << test_offset << ", main to aux queue resolution ratio " << res_ratio);
+                            ", input column index " << input_column_index << ", test offset " << test_offset << ", main to aux queue resolution ratio " << res_ratio);
     const auto pre_decon_size = decon_queue.size();
 
 #if defined(VMD_ONLY) && !defined(EMD_ONLY)
@@ -219,9 +214,8 @@ void DeconQueueService::dummy_decon(
     OMP_FOR_i(inct) {
         std::vector v(levct, 0.);
         const auto p_inrow = *(initer + i);
-        for (size_t l = 0; l < levct; l += LEVEL_STEP)
-            if (l != trans_levix)
-                v[l] = iq_scaler(p_inrow->at(levix)) / modct;
+        for (DTYPE(levct) l = 0; l < levct; l += LEVEL_STEP)
+            if (l != trans_levix) v[l] = iq_scaler(p_inrow->at(levix)) / modct;
         *(outiter + i) = ptr<datamodel::DataRow>(p_inrow->get_value_time(), timenow, p_inrow->get_tick_volume(), v);
     }
 }

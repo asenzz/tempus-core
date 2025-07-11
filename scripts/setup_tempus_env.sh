@@ -105,7 +105,7 @@ export MPICH_MAX_THREAD_SAFETY=multiple
 export MPICH_ASYNC_PROGRESS=1
 export MPICH_NEMESIS_ASYNC_PROGRESS=1
 
-ulimit -s 8192
+ulimit -s unlimited
 ulimit -i unlimited
 ulimit -n 100000
 ulimit -c unlimited

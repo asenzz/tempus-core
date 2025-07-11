@@ -183,7 +183,6 @@ SVRParameters::SVRParameters(const SVRParameters &o) : SVRParameters(
     D_feedback = o.D_feedback;
     V_feedback = o.V_feedback;
     min_Z = o.min_Z;
-    max_Z = o.max_Z;
     tft_model = o.tft_model;
 }
 
@@ -209,7 +208,6 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &o)
     D_feedback = o.D_feedback;
     V_feedback = o.V_feedback;
     min_Z = o.min_Z;
-    max_Z = o.max_Z;
     svr_decremental_distance = o.svr_decremental_distance;
     svr_adjacent_levels_ratio = o.svr_adjacent_levels_ratio;
     adjacent_levels = o.adjacent_levels;
@@ -249,7 +247,6 @@ bool SVRParameters::operator==(const SVRParameters &o) const
            && svr_kernel_param == o.svr_kernel_param
            && svr_kernel_param2 == o.svr_kernel_param2
            && min_Z == o.min_Z
-           && max_Z == o.max_Z
            && kernel_param3 == o.kernel_param3
            && H_feedback == o.H_feedback
            && D_feedback == o.D_feedback
@@ -496,7 +493,7 @@ std::string SVRParameters::to_string() const
             << ", vertical path feedback " << V_feedback
             << ", decrement distance " << svr_decremental_distance
             << ", min Z " << min_Z
-            << ", max Z " << max_Z
+            << ", compressed model " << tft_model.size() << " bytes"
             << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
             << ", kernel type " << static_cast<int>(kernel_type)
             << ", lag count " << lag_count

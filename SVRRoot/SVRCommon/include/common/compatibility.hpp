@@ -74,6 +74,8 @@ namespace bpt = boost::posix_time;
 #define PROPERTY_2(T, X) private: T X; PROPERTY_PUBLISHED(T, X)
 #define PROPERTY_3(T, X, D) private: T X = D; PROPERTY_PUBLISHED(T, X)
 
+namespace svr {
+
 template<typename Derived, typename Base>
 std::unique_ptr<Derived> dynamic_ptr_cast(std::unique_ptr<Base> &&base)
 {
@@ -108,8 +110,24 @@ struct return_type<ReturnType(ClassType::*)(Args...) const>
 };
 
 
-namespace svr {
 constexpr double C_double_nan = std::numeric_limits<double>::quiet_NaN();
+
+
+inline void* pattern_fill(void* dest, const void* pattern, size_t pattern_size, const size_t total_size)
+{
+    if (pattern_size == 0 || total_size == 0) return dest;
+
+    auto out = static_cast<uint8_t*>(dest);
+    std::memcpy(out, pattern, pattern_size);
+
+    while (pattern_size < total_size) {
+        const auto to_copy = std::min(pattern_size, total_size - pattern_size);
+        std::memcpy(out + pattern_size, out, to_copy);
+        pattern_size += to_copy;
+    }
+    return dest;
+}
+
 
 template<typename... T>
 constexpr auto make_array(T &&... values) ->

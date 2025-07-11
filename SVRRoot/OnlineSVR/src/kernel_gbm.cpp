@@ -16,11 +16,27 @@
 namespace svr {
 namespace kernel {
 
-std::string get_gbm_parameters(const uint16_t gpu_id)
+#define LGBM_MAXBIN "255"
+
+std::string get_lgbm_dataset_parameters()
+{
+    return "max_bin=" LGBM_MAXBIN " use_missing=false save_binary=true";
+}
+
+std::string get_lgbm_core_parameters(const uint16_t gpu_id)
 {
     std::stringstream s;
-    s << "tree_learner=data deterministic=true objective=regression metric=l2 num_leaves=500 learning_rate=" << PROPS.get_k_learn_rate() << " force_col_wise=true num_threads="
-        << C_n_cpu << " num_iterations=" << PROPS.get_k_epochs() << " gpu_device_id=" << gpu_id; // device_type=cuda n_estimators=200
+    s << "objective=regression tree_learner=data seed=123 learning_rate=" << PROPS.get_k_learn_rate() << " num_iterations=" << PROPS.get_k_epochs()
+        << " early_stopping_round=200 metric=l2 num_leaves=256 feature_fraction=0.7 bagging_fraction=0.7 bagging_freq=25 force_col_wise=true device_type=gpu num_threads=" << C_n_cpu << " " << get_lgbm_dataset_parameters(); // early_stopping_round=200,  min_data_in_leaf=200
+#ifndef NDEBUG
+    s << " verbosity=2 ";
+#endif
+    /* device_type=cuda is buggy and crashes LightGBM, test and enable the following line when LGBM is fixed
+    s << "deterministic=true lambda_l1=0.1 lambda_l2=1.0 gpu_device_id=" << gpu_id << " device_type=cuda num_gpu=" << common::gpu_handler_1::get().get_gpu_devices_count();
+    */
+#ifdef INSTANCE_WEIGHTS
+    s << "weight_column=0"
+#endif
     return s.str();
 }
 
@@ -30,7 +46,7 @@ template<> kernel_gbm<T>::kernel_gbm(datamodel::SVRParameters &p) : kernel_base<
 {
 }
 
-template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const
+template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X /* predict features */, const arma::Mat<T> &Xy /* trained features */) const
 {
     LOG4_BEGIN();
     const int64_t n_samples = X.n_cols * Xy.n_cols;
@@ -47,22 +63,26 @@ template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X, const arma:
         decompressed_stream.flush();
         lg_errchk(LGBM_BoosterLoadModelFromString(decompressed_stream.str().data(), &num_iterations, &booster))
     }
-    arma::mat manifold_features_t(n_manifold_features, n_samples, ARMA_DEFAULT_FILL);
+    arma::fmat manifold_features_t(n_manifold_features, n_samples, ARMA_DEFAULT_FILL);
     OMP_FOR_(n_samples, collapse(2) SSIMD)
     for (uint32_t i = 0; i < X.n_cols; ++i)
         for (uint32_t j = 0; j < Xy.n_cols; ++j)
-            manifold_features_t.col(i + X.n_cols * j) = arma::join_cols(X.col(i), Xy.col(j));
+            manifold_features_t.col(i + X.n_cols * j) = arma::conv_to<arma::fvec>::from(arma::join_cols(X.col(i), Xy.col(j)));
 
-    arma::mat res(1, n_samples, ARMA_DEFAULT_FILL);
+    arma::mat res(X.n_cols, Xy.n_cols, ARMA_DEFAULT_FILL);
     int64_t out_len;
-    common::gpu_context ctx;
-    const auto gbm_parameters = get_gbm_parameters(ctx.phy_id());
-    lg_errchk(LGBM_BoosterPredictForMat(booster, manifold_features_t.mem, C_API_DTYPE_FLOAT64, n_samples, n_manifold_features, 1, C_API_PREDICT_NORMAL, 0, 0, gbm_parameters.c_str(), &out_len, res.memptr()));
-    res.reshape(X.n_cols, Xy.n_cols);
+    // common::gpu_context ctx;
+    const auto gbm_parameters = get_lgbm_core_parameters(0);
+    lg_errchk(LGBM_BoosterPredictForMat(booster, manifold_features_t.mem, C_API_DTYPE_FLOAT32, n_samples, n_manifold_features, 1, C_API_PREDICT_NORMAL, 0, 0, gbm_parameters.c_str(), &out_len, res.memptr()));
     LOG4_TRACE("Predicted " << out_len << ", labels " << common::present(res));
     LGBM_BoosterFree(booster);
 
     return res;
+}
+
+void lgbm_log(const char *const lgbm_message)
+{
+    LOG4_DEBUG(lgbm_message);
 }
 
 template<> void kernel_gbm<T>::init(const arma::Mat<T> &X_t, const arma::Mat<T> &Y)
@@ -73,30 +93,35 @@ template<> void kernel_gbm<T>::init(const arma::Mat<T> &X_t, const arma::Mat<T> 
     const uint32_t n_samples_2 = n_samples * n_samples;
     const uint32_t n_manifold_features = X_t.n_rows * 2;
     // LightGBM uses row-major matrices
-    arma::mat manifold_features_t(n_manifold_features, n_samples_2, ARMA_DEFAULT_FILL);
+    arma::fmat manifold_features_t(n_manifold_features, n_samples_2, ARMA_DEFAULT_FILL);
     arma::fmat manifold_labels(n_samples_2, Y.n_cols, ARMA_DEFAULT_FILL);
     OMP_FOR_(n_samples_2, collapse(2) firstprivate(n_samples_2) SSIMD)
     for (DTYPE(n_samples) i = 0; i < n_samples; ++i)
         for (DTYPE(n_samples) j = 0; j < n_samples; ++j) {
             const auto row = i + n_samples * j;
             manifold_labels.row(row) = arma::conv_to<arma::frowvec>::from(Y.row(i) - Y.row(j));
-            manifold_features_t.col(row) = arma::join_cols(X_t.col(i), X_t.col(j));
+            manifold_features_t.col(row) = arma::conv_to<arma::fvec>::from(arma::join_cols(X_t.col(i), X_t.col(j)));
         }
     lg_errchk(LGBM_SetMaxThreads(C_n_cpu));
     DatasetHandle train_dataset;
-    lg_errchk(LGBM_DatasetCreateFromMat(manifold_features_t.mem, C_API_DTYPE_FLOAT64,n_samples_2, n_manifold_features, 1, // is_row_major = 1 (row-major order)
-        "", nullptr, &train_dataset));
+    {
+        const auto gbm_dataset_parameters = get_lgbm_dataset_parameters();
+        lg_errchk(LGBM_DatasetCreateFromMat(manifold_features_t.mem, C_API_DTYPE_FLOAT32,n_samples_2, n_manifold_features, 1, // is_row_major = 1 (row-major order)
+            gbm_dataset_parameters.c_str(), nullptr, &train_dataset));
+    }
 
     lg_errchk(LGBM_DatasetSetField(train_dataset, "label", manifold_labels.mem, n_samples_2, C_API_DTYPE_FLOAT32));
 
+    lg_errchk(LGBM_RegisterLogCallback(lgbm_log));
+
     BoosterHandle booster;
     common::gpu_context ctx;
-    const auto gbm_parameters = get_gbm_parameters(ctx.phy_id());
+    const auto gbm_parameters = get_lgbm_core_parameters(ctx.phy_id());
     lg_errchk(LGBM_BoosterCreate(train_dataset, gbm_parameters.c_str(), &booster));
-    int update_finished = 0;
+    int train_finished = 0;
     auto iter = PROPS.get_k_epochs() + 1;
     assert(iter);
-    while (update_finished == 0 && --iter) lg_errchk(LGBM_BoosterUpdateOneIter(booster, &update_finished));
+    while (train_finished != 1 && --iter) lg_errchk(LGBM_BoosterUpdateOneIter(booster, &train_finished));
 
     int64_t model_size = 0;
     LGBM_BoosterSaveModelToString(booster, 0, 0, C_API_FEATURE_IMPORTANCE_SPLIT, 0, &model_size, nullptr);
@@ -113,6 +138,7 @@ template<> void kernel_gbm<T>::init(const arma::Mat<T> &X_t, const arma::Mat<T> 
     boost::iostreams::close(out);
     compressed_stream.flush();
     parameters.set_tft_model(compressed_stream.str());
+    LOG4_DEBUG("Saved LighGBM model with size " << model_size << " bytes to parameters " << parameters);
     LOG4_END();
 }
 

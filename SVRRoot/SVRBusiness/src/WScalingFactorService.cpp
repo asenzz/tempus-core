@@ -59,7 +59,7 @@ void WScalingFactorService::scale(const bigint dataset_id, arma::mat &weights)
     OMP_FOR_i(weights.n_cols) {
         auto sf = find(dataset_sf, i);
         if (!sf) {
-            const auto [s, dc] = calc(weights.col(i), common::C_input_obseg_labels);
+            const auto [s, dc] = calc<double>(weights.col(i), common::C_input_obseg_labels);
             sf = std::make_shared<datamodel::WScalingFactor>(0, dataset_id, i, s, dc);
             save(sf);
         }

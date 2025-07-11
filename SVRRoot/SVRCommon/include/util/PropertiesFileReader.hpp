@@ -46,11 +46,11 @@ class PropertiesReader
     const char delimiter;
     std::string property_files_location;
 
-    size_t read_property_file(std::string property_file_name);
+    size_t read_property_file(const std::string &property_file_name);
 
-    bool is_comment(const std::string &line);
+    static bool is_comment(const std::string &line);
 
-    bool is_multiline(const std::string &line);
+    static bool is_multiline(const std::string &line);
 
     const std::string &get_property_value(const std::string &property_file, const std::string &key, const std::string &default_value);
 
@@ -76,15 +76,11 @@ public:
 
 class AppConfig : public PropertiesReader
 {
-    CONFPROP(uint16_t, lim_particles, 5)
+    CONFPROP(float, solve_radius, .5)
 
-    CONFPROP(uint16_t, lim_iteration, 10)
+    CONFPROP(float, predict_focus, .25)
 
-    CONFPROP(uint16_t, predict_focus, 115)
-
-    CONFPROP(float, limes_start, .1)
-
-    CONFPROP(float, limes_end, .1)
+    CONFPROP(float, limes, 1)
 
     CONFPROP(float, nn_head_coef, .1)
 
@@ -146,7 +142,7 @@ class AppConfig : public PropertiesReader
 
     CONFPRO_(max_loop_count, -1) // -1 means no limit
 
-    CONFPROP(uint16_t, weight_columns, 1)
+    CONFPROP(uint16_t, weight_layers, 1)
 
     CONFPROP(uint16_t, tune_particles1, 10)
 

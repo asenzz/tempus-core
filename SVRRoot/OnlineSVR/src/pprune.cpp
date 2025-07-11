@@ -548,8 +548,7 @@ void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &c
 
 pprune::operator t_pprune_res() const noexcept
 {
-    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !common::isnormalz(result.total_iterations))
-        LOG4_THROW("No valid solution found.");
+    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !common::isnormalz(result.total_iterations)) LOG4_THROW("No valid solution found.");
     return result;
 }
 }

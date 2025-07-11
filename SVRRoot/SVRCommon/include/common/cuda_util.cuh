@@ -252,6 +252,7 @@ template<typename T> void cufreecopy(T *output, const T *source, const cudaStrea
 {
     cu_errchk(cudaMemcpyAsync(output, source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
     cu_errchk(cudaFreeAsync((void *) source, custream));
+    cu_errchk(cudaStreamSynchronize(custream));
 }
 
 template<typename T> std::vector<T> cufreecopy(const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)

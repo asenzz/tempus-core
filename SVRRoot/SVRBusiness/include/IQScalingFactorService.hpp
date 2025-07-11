@@ -26,19 +26,19 @@ class IQScalingFactorService : public ScalingFactorService {
 public:
     IQScalingFactorService(dao::IQScalingFactorDAO &iq_scaling_factor_dao) noexcept;
 
-    bool exists(const datamodel::IQScalingFactor_ptr &iq_scaling_factor);
+    bool exists(const datamodel::IQScalingFactor_ptr &iq_scaling_factor) const;
 
-    int save(const datamodel::IQScalingFactor_ptr &iq_scaling_factor);
+    int save(const datamodel::IQScalingFactor_ptr &iq_scaling_factor) const;
 
-    int remove(const datamodel::IQScalingFactor_ptr &iq_scaling_factor);
+    int remove(const datamodel::IQScalingFactor_ptr &iq_scaling_factor) const;
 
-    std::deque<datamodel::IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id);
+    std::deque<datamodel::IQScalingFactor_ptr> find_all_by_dataset_id(const bigint dataset_id) const;
 
     static std::deque<datamodel::IQScalingFactor_ptr> calculate(const datamodel::InputQueue &input_queue, const size_t dataset_id, const size_t use_tail);
 
-    void prepare(datamodel::Dataset &dataset, const bool save);
+    void prepare(datamodel::Dataset &dataset, const bool save) const;
 
-    void prepare(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const bool save);
+    void prepare(datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, const bool save) const;
 
     static datamodel::t_iqscaler get_scaler(const datamodel::IQScalingFactor &sf);
 

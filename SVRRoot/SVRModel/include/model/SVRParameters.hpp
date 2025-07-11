@@ -14,11 +14,11 @@
 
 namespace svr {
 namespace datamodel {
-
 class OnlineSVR;
 using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
 
-typedef enum class kernel_type : int {
+typedef enum class kernel_type : int
+{
     LINEAR = 0,
     POLYNOMIAL = 1,
     RBF = 2,
@@ -88,7 +88,9 @@ struct t_feature_mechanics
     arma::u32_vec shifts;
 
     bool needs_tuning() const noexcept;
+
     std::stringstream save() const;
+
     static t_feature_mechanics load(const std::string &bin_data);
 
     template<typename S> void save(const t_feature_mechanics &feature_mechanics, S &output_stream) const
@@ -105,9 +107,11 @@ struct t_feature_mechanics
         ar & shifts;
     }
 
-    bool operator == (const t_feature_mechanics &o) const;
+    bool operator ==(const t_feature_mechanics &o) const;
 };
+
 using t_feature_mechanics_ptr = std::shared_ptr<t_feature_mechanics>;
+
 std::ostream &operator <<(std::ostream &s, const t_feature_mechanics &fm);
 
 
@@ -140,29 +144,31 @@ class SVRParameters : public Entity
 
     t_feature_mechanics feature_mechanics; // TODO Save to DB and init properly
 public:
-    explicit SVRParameters() : Entity(0) {}
+    explicit SVRParameters() : Entity(0)
+    {
+    }
 
     SVRParameters(
-            const bigint id,
-            const bigint dataset_id,
-            const std::string &input_queue_table_name,
-            const std::string &input_queue_column_name,
-            const uint16_t level_ct,
-            const uint16_t decon_level,
-            const uint16_t step,
-            const uint16_t chunk_ix = C_default_svrparam_chunk_ix,
-            const uint16_t grad_level = C_default_svrparam_grad_level,
-            const double svr_C = C_default_svrparam_svr_cost,
-            const double svr_epsilon = C_default_svrparam_svr_epsilon,
-            const double svr_kernel_param = C_default_svrparam_kernel_param1,
-            const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
-            const double svr_kernel_param3 = C_default_svrparam_kernel_param_tau,
-            const uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
-            const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
-            const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
-            const uint32_t lag_count = C_default_svrparam_lag_count,
-            const std::set<uint16_t> &adjacent_levels = {},
-            const t_feature_mechanics &feature_mechanics = {});
+        const bigint id,
+        const bigint dataset_id,
+        const std::string &input_queue_table_name,
+        const std::string &input_queue_column_name,
+        const uint16_t level_ct,
+        const uint16_t decon_level,
+        const uint16_t step,
+        const uint16_t chunk_ix = C_default_svrparam_chunk_ix,
+        const uint16_t grad_level = C_default_svrparam_grad_level,
+        const double svr_C = C_default_svrparam_svr_cost,
+        const double svr_epsilon = C_default_svrparam_svr_epsilon,
+        const double svr_kernel_param = C_default_svrparam_kernel_param1,
+        const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
+        const double svr_kernel_param3 = C_default_svrparam_kernel_param_tau,
+        const uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
+        const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
+        const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
+        const uint32_t lag_count = C_default_svrparam_lag_count,
+        const std::set<uint16_t> &adjacent_levels = {},
+        const t_feature_mechanics &feature_mechanics = {});
 
     SVRParameters(const SVRParameters &o);
 
@@ -230,8 +236,6 @@ public:
 
     PROPERTY(double, min_Z, 0)
 
-    PROPERTY(double, max_Z, 1)
-
     PROPERTY(float, H_feedback, .3);
 
     PROPERTY(float, D_feedback, .34);
@@ -278,7 +282,5 @@ public:
 };
 
 std::ostream &operator<<(std::ostream &os, const SVRParameters &e);
-
 }
 }
-

@@ -14,42 +14,22 @@ namespace business {
 
 class ScalingFactorService {
 public:
-    static double calc_scaling_factor(const arma::mat &v, const double obseg = common::C_input_obseg_labels);
-    static double calc_dc_offset(const arma::mat &v);
-    static std::pair<double, double> calc(const arma::mat &v, const double obseg);
+    template<typename T> static double calc_scaling_factor(const arma::Mat<T> &v, const double obseg = common::C_input_obseg_labels);
+    template<typename T> static double calc_dc_offset(const arma::Mat<T> &v);
+    template<typename T> static std::pair<double, double> calc(const arma::Mat<T> &v, const double obseg);
 
-    template<typename T> inline static T scale(const T &v)
-    {
-        const auto [dc, sf] = calc(v, common::C_input_obseg_labels);
-        return common::scale(v, sf, dc);
-    }
-
-    template<typename T> inline static T &scale_I(T &v)
-    {
-        double sf, dc;
-        return scale_calc_I(v, sf, dc);
-    }
-
-    template<typename T> inline static T &scale_calc_I(T &v, double &sf, double &dc, const double obseg = common::C_input_obseg_labels)
-    {
-        std::tie(dc, sf) = calc(v, obseg);
-        return common::scale_I(v, sf, dc);
-    }
-
+    template<typename T> inline static T scale(const T &v);
+    template<typename T> inline static T &scale_I(T &v);
+    template<typename T> inline static T &scale_calc_I(T &v, double &sf, double &dc, const double obseg = common::C_input_obseg_labels);
     static void cu_scale_calc_I(RPTR(double) v, const size_t n, double &sf, double &dc, const cudaStream_t custream, const cublasHandle_t cublas_H);
 
-    template<typename T> inline static T scale(const T &v, const double sf, const double dc)
-    {
-        return common::scale<T>(v, sf, dc);
-    }
-
-    template<typename T> inline static T &scale_I(T &v, const double sf, const double dc)
-    {
-        return common::scale_I(v, sf, dc);
-    }
+    template<typename T> inline static T scale(const T &v, const double sf, const double dc);
+    template<typename T> inline static T &scale_I(T &v, const double sf, const double dc);
 };
 
 }
 }
+
+#include "ScalingFactorService.tpp"
 
 #endif //SVR_SCALINGFACTORSERVICE_HPP

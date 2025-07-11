@@ -154,7 +154,7 @@ uint16_t SVRParametersService::get_trans_levix(const uint16_t levels)
 #if defined(VMD_ONLY) || defined(EMD_ONLY)
     return std::numeric_limits<DTYPE(levels)>::max();
 #else
-    return levels >= MIN_LEVEL_COUNT ? levels / 2 : std::numeric_limits<DTYPE(levels)>::max();
+    return levels < MIN_LEVEL_COUNT ? std::numeric_limits<DTYPE(levels)>::max() : levels / 2;
 #endif
 }
 

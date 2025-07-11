@@ -17,7 +17,7 @@ constexpr uint16_t C_biteopt_depth = 1;
 struct t_pprune_res {
     double best_score = std::numeric_limits<double>::infinity();
     arma::vec best_parameters;
-    unsigned total_iterations = 0;
+    uint32_t total_iterations = 0;
 };
 
 typedef std::function<void(CPTRd x, double *const f)> t_pprune_cost_fun, *t_pprune_cost_fun_ptr;

@@ -36,7 +36,7 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
     if (direct_solve) {
         const arma::Mat<Tv> b_vec((double *) b_, m, n, false, true);
         const arma::Mat<Tv> K((double *) A_, m, m, false, true);
-        solvers::solve_irwls(K, K, b_vec, x0_vec, irwls_iter);
+        solvers::solve_irwls(K, b_vec, x0_vec, irwls_iter, PROPS.get_weight_layers());
         x0 = x0_vec.memptr();
         // LOG4_TRACE("Direct solve " << common::present(x0_vec) << ", labels " << common::present(b_vec) << ", K " << common::present(K));
     } else
@@ -213,7 +213,11 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 
 #endif
 
-    return datamodel::OnlineSVR::score_weights(m, n, A_, sol, b_);
+    const auto tmp = (double *) ALIGNED_ALLOC_(MEM_ALIGN, m * sizeof(double));
+    const auto L_mean_mask = common::mean_mask(arma::mat((double *)b, m * n, false, true), PROPS.get_solve_radius() * m);
+    const auto score = datamodel::OnlineSVR::score_weights(m, n, PROPS.get_weight_layers(), L_mean_mask.mem, A_, sol, tmp);
+    ALIGNED_FREE_(tmp);
+    return score;
 }
 }
 }

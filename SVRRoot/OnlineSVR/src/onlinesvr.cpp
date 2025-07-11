@@ -254,7 +254,7 @@ void OnlineSVR::set_scaling_factor(const DQScalingFactor_ptr &p_sf)
 
 void OnlineSVR::set_scaling_factors(const dq_scaling_factor_container_t &new_scaling_factors)
 {
-    business::DQScalingFactorService::add(scaling_factors, new_scaling_factors);
+    business::DQScalingFactorService::add(scaling_factors, new_scaling_factors, true);
 }
 
 bool OnlineSVR::needs_tuning(const t_param_set &param_set)
@@ -327,36 +327,20 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m,
 
 #endif
 
-arma::mat OnlineSVR::self_predict(const arma::mat &K, const arma::mat &w, const arma::mat &rhs)
-{
-    arma::mat diff(arma::size(rhs), ARMA_DEFAULT_FILL);
-    self_predict(K.n_rows, rhs.n_cols, K.mem, w.mem, rhs.mem, diff.memptr());
-    return diff;
-}
-
-void OnlineSVR::self_predict(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs, RPTR(double) diff)
-{
-    memcpy(diff, rhs, m * n * sizeof(double));
-    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, m, 1., K, m, w, m, -1., diff, m);
-}
-
-double OnlineSVR::score_weights(const uint32_t m, const uint32_t n, CRPTRd K, CRPTRd w, CRPTRd rhs)
+double OnlineSVR::score_weights(const uint32_t m, const uint32_t n, const uint16_t layers, CRPTRd L_mean_mask, CRPTRd K, CRPTRd w, RPTR(double) tmp)
 {
     const auto mn = m * n;
-    auto diff = (double *const) malloc(mn * sizeof(double));
-    self_predict(m, n, K, w, rhs, diff);
-    // const auto res =  common::medianabs(diff, mn);
-    const auto res = cblas_dasum(mn, diff, 1);
-    // const auto res = common::stdscore(diff, mn);
-    free(diff);
-    return res;
+    memcpy(tmp, L_mean_mask, mn * sizeof(double));
+    for (DTYPE(layers) i = 0; i < layers; ++i) {
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, m, 1, K, m, w + i * mn, m, -1, tmp, m);
+        if (i < layers - 1) cblas_dscal(mn, -1, tmp, 1);
+    }
+    return cblas_dasum(mn, tmp, 1);
 }
-
 
 // TODO Buggy, rewrite and test
 std::deque<arma::mat> OnlineSVR::solve_batched_irwls(
-        const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters, const magma_queue_t &magma_queue,
-        const size_t gpu_phy_id)
+        const std::deque<arma::mat> &K_epsco, const std::deque<arma::mat> &K, const std::deque<arma::mat> &rhs, const size_t iters, const magma_queue_t &magma_queue, const size_t gpu_phy_id)
 {
     auto solved = rhs;
     const auto batch_size = K.size();
@@ -417,7 +401,8 @@ arma::mat OnlineSVR::direct_solve(const arma::mat &a, const arma::mat &b)
 
 uint32_t OnlineSVR::get_full_train_len(const uint32_t n_rows, const uint32_t decrement)
 {
-    return n_rows > PROPS.get_shift_limit() ? std::min<uint32_t>(n_rows - PROPS.get_shift_limit(), decrement) : decrement;
+    const uint32_t overhead = PROPS.get_shift_limit() + PROPS.get_outlier_slack();
+    return n_rows > overhead ? std::min<uint32_t>(n_rows - overhead, decrement) : decrement;
 }
 
 uint32_t OnlineSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_size_)
@@ -442,7 +427,7 @@ std::deque<arma::uvec> OnlineSVR::generate_indexes() const
     // Make sure we train on the latest data
     const auto n_rows_train = get_full_train_len(n_rows_dataset, decrement);
     assert(n_rows_dataset >= n_rows_train);
-    const auto start_offset = n_rows_dataset - n_rows_train;
+    const auto start_offset = PROPS.get_shift_limit();
     const auto num_chunks = get_num_chunks(n_rows_train, max_chunk_size);
     assert(num_chunks);
     std::deque<arma::uvec> indexes(num_chunks);
@@ -456,6 +441,8 @@ std::deque<arma::uvec> OnlineSVR::generate_indexes() const
         const uint32_t start_row = start_offset + i * this_chunk_size * chunk_offlap;
         if (const auto end_row = start_row + this_chunk_size; end_row >= n_rows_dataset)
             indexes[i] = arma::regspace<arma::uvec>(start_row, skip, n_rows_dataset - 1);
+        else if (end_row + outlier_slack >= n_rows_dataset)
+            indexes[i] = arma::join_cols(arma::regspace<arma::uvec>(start_row, skip, end_row - 1), arma::regspace<arma::uvec>(end_row, n_rows_dataset - 1));
         else
             indexes[i] = arma::join_cols(arma::regspace<arma::uvec>(start_row, skip, end_row - 1), arma::regspace<arma::uvec>(end_row, end_row + outlier_slack - 1));
         if (!i || i == DTYPE(i)(num_chunks - 1)) LOG4_DEBUG("Chunk " << i << ", start row " << start_row << ", chunk len " << this_chunk_size << ", indexes " << common::present(indexes[i]));
@@ -463,8 +450,7 @@ std::deque<arma::uvec> OnlineSVR::generate_indexes() const
     return indexes;
 }
 
-arma::uvec
-OnlineSVR::get_other_ixs(const uint16_t i) const
+arma::uvec OnlineSVR::get_other_ixs(const uint16_t i) const
 {
     return ixs[i](arma::find(ixs[i] != arma::linspace<arma::uvec>(0, p_features->n_rows - 1, p_features->n_rows)));
 }

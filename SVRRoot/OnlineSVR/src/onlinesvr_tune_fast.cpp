@@ -70,36 +70,25 @@ arma::uvec outlier_bacon(const arma::mat &features_t)
     return arma::find(BaconWeights == 0);
 }
 
-// TODO Port outlier detection to CUDA
-arma::vec score_dataset(const arma::mat &labels, const arma::mat &features_t, const float dual_lag_ratio)
+// TODO Port to CUDA
+// Return indexes of best samples to train on
+void OnlineSVR::score_indexes(const arma::mat &features_t, const arma::mat &labels, arma::uvec &ixs)
 {
-    assert(dual_lag_ratio < .5);
-    const uint32_t lag = (labels.n_rows - 1) * dual_lag_ratio;
-    arma::vec score(labels.n_rows, ARMA_DEFAULT_FILL);
-    const auto lag_2 = 2 * lag;
-    OMP_FOR_i(labels.n_rows) {
-        uint32_t start_i, end_i;
-        if (i < lag) {
-            start_i = 0;
-            end_i = lag_2;
-        } else if (i >= labels.n_rows - lag) {
-            start_i = labels.n_rows - lag_2;
-            end_i = labels.n_rows - 1;
-        } else {
-            start_i = i - lag;
-            end_i = i + lag;
-        }
-        score[i] = 1. / std::abs(
-                       arma::mean(arma::vectorise(labels.row(i))) - arma::mean(arma::vectorise(labels.rows(start_i, end_i))) *
-                       arma::mean(arma::vectorise(features_t.col(i)) - arma::mean(arma::vectorise(features_t.cols(start_i, end_i)))));
-    }
-    return score;
+    assert(labels.n_rows == features_t.n_cols);
+    assert(labels.n_rows == ixs.n_elem);
+    const uint32_t n_rows = labels.n_rows;
+    arma::vec score(n_rows, arma::fill::zeros);
+    const float predict_focus = PROPS.get_predict_focus();
+    const uint32_t start_j = n_rows * (1 - predict_focus);
+    OMP_FOR_i(n_rows)
+        for (uint32_t j = start_j; j < n_rows; ++j)
+            score[i] += common::sumabs<double>(labels.row(i) - labels.row(j)); // * common::sumabs<double>(features_t.col(i) - features_t.col(j));
+    ixs = ixs.rows(arma::flipud(arma::stable_sort_index(score).eval().head_rows(n_rows - PROPS.get_outlier_slack())));
 }
 
 void save_chunk_params(const SVRParameters_ptr &p_params)
 {
-    if (APP.svr_parameters_service.exists(p_params))
-        APP.svr_parameters_service.remove(p_params);
+    if (APP.svr_parameters_service.exists(p_params)) APP.svr_parameters_service.remove(p_params);
     APP.svr_parameters_service.save(p_params);
 }
 
@@ -142,9 +131,11 @@ void OnlineSVR::tune()
         if (!p_chunk_params)
             LOG4_THROW("Template parameters for chunk " << chunk_ix << " not found");
         if (PROPS.get_outlier_slack()) {
-            ixs[chunk_ix].shed_rows(outlier_hdbscan(train_feature_chunks_t[chunk_ix]));
+            // ixs[chunk_ix].shed_rows(outlier_hdbscan(train_feature_chunks_t[chunk_ix]));
+            score_indexes(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix], ixs[chunk_ix]);
+            // business::DQScalingFactorService::reset(scaling_factors, level, chunk_ix, step, gradient);
             prepare_chunk(chunk_ix);
-            LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", chunk ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
+            LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
         }
         if (p_chunk_params->get_kernel_type() == kernel_type::TFT) {
             PROFILE_(kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));

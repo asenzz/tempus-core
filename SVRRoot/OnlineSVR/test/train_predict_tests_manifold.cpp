@@ -82,7 +82,7 @@ TEST(manifold_tune_train_predict, basic_integration)
 #ifdef VALGRIND_BUILD
     constexpr unsigned C_test_decrement = 5;
 #else
-    const uint32_t C_test_decrement = .5 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
+    const uint32_t C_test_decrement = 2 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 #endif
 #define MAIN_QUEUE_RES 3600
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
@@ -116,7 +116,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
                 "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
-        w.exec(q).no_rows();
+        (void) w.exec(q).no_rows();
         w.commit();
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << " while preparing test queue.");
@@ -141,9 +141,9 @@ TEST(manifold_tune_train_predict, basic_integration)
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
             data_row_container times;
-            arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_multistep()),
-                    recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep());
-            arma::vec recon_last_knowns(common::C_integration_test_validation_window);
+            arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros),
+                    recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros);
+            arma::vec recon_last_knowns(common::C_integration_test_validation_window, arma::fill::zeros);
             tbb::mutex recon_l;
             const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
             LOG4_TRACE("Got scaling factor " << *p_iqsf);
@@ -193,9 +193,9 @@ TEST(manifold_tune_train_predict, basic_integration)
             recon_actual = arma::mean(recon_actual, 1);
 
             LOG4_TRACE("Got scaling factor " << *p_iqsf);
-            business::IQScalingFactorService::unscale(*p_iqsf, recon_predicted);
-            business::IQScalingFactorService::unscale(*p_iqsf, recon_last_knowns);
-            business::IQScalingFactorService::unscale(*p_iqsf, recon_actual);
+            business::IQScalingFactorService::unscale_I(*p_iqsf, recon_predicted);
+            business::IQScalingFactorService::unscale_I(*p_iqsf, recon_last_knowns);
+            business::IQScalingFactorService::unscale_I(*p_iqsf, recon_actual);
             LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual - recon_predicted) << ", last known to actual difference " <<
                                                               common::present<double>(recon_actual - recon_last_knowns));
 
@@ -271,9 +271,9 @@ TEST(manifold_tune_train_predict, basic_integration)
                     LOG4_DEBUG("Direction correct at " << i);
                     ++pos_direct;
                 }
-                if (cur_recon_error > std::numeric_limits<double>::epsilon() || cur_recon_lk_error > std::numeric_limits<double>::epsilon())
-                    LOG4_WARN("Reconstruction difference at " << cur_time << " between actual price " << actual << " and recon price " << \
-                    recon_actual[i] << ", is " << cur_recon_diff << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i] << \
+                if (common::above_eps(cur_recon_error) || common::above_eps(cur_recon_lk_error))
+                    LOG4_WARN("Reconstruction difference at " << cur_time << " between actual " << actual << " and recon price " << \
+                    recon_actual[i] << " is " << cur_recon_diff << ", last-known price " << last_known << ", recon last-known " << recon_last_knowns[i] << \
                     ", last known difference " << last_known - recon_last_knowns[i]);
                 drawdown += this_drawdown;
                 MAXAS(max_drawdown, this_drawdown);
@@ -288,11 +288,12 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", actual price " << actual << \
                        ", recon actual price " << recon_actual[i] << \
                        ", predicted price " << recon_predicted[i] << \
+                       ", last-known time " << (**last_known_iter).get_value_time() << \
                        ", last known " << last_known << \
                        ", recon last known " << recon_last_knowns[i] << \
                        ", total MAE " << mae / i_div << \
                        ", total MAE last known " << mae_lk / i_div << \
-                       ", positive directions " << 100. * double(pos_direct) / i_div << "pc" \
+                       ", positive directions " << 100. * pos_direct / i_div << "pc" \
                        ", positive errors " << positive_preds_pc << "pc" \
                        ", current MAE " << cur_mae << \
                        ", current MAE last known " << cur_mae_lk << \
@@ -305,7 +306,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", recon error last-known " << cur_recon_lk_error << \
                        ", recon label MAE " << 100. * recon_mae / i_div << \
                        ", recon last-known MAE " << 100. * recon_lk_mae / i_div << \
-                       ", price hits " << 100. * double(price_hits) / i_div << "pc" \
+                       ", price hits " << 100. * price_hits / i_div << "pc" \
                        ", won " << pips_won << \
                        ", lost " << pips_lost << \
                        ", neto " << net_pips << \
