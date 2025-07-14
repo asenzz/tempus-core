@@ -76,6 +76,8 @@ public:
 
 class AppConfig : public PropertiesReader
 {
+    CONFPROP(uint32_t, gpu_chunk, 18000)
+
     CONFPROP(float, solve_radius, .5)
 
     CONFPROP(float, predict_focus, .25)

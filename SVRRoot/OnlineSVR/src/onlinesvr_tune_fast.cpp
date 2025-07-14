@@ -83,7 +83,7 @@ void OnlineSVR::score_indexes(const arma::mat &features_t, const arma::mat &labe
     OMP_FOR_i(n_rows)
         for (uint32_t j = start_j; j < n_rows; ++j)
             score[i] += common::sumabs<double>(labels.row(i) - labels.row(j)); // * common::sumabs<double>(features_t.col(i) - features_t.col(j));
-    ixs = ixs.rows(arma::flipud(arma::stable_sort_index(score).eval().head_rows(n_rows - PROPS.get_outlier_slack())));
+    ixs = ixs.rows(arma::sort(arma::stable_sort_index(score).eval().head_rows(n_rows - PROPS.get_outlier_slack())));
 }
 
 void save_chunk_params(const SVRParameters_ptr &p_params)

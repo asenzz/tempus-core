@@ -12,6 +12,7 @@
 #include "common/logging.hpp"
 #include "kernel_gbm.hpp"
 #include "appcontext.hpp"
+#include "../../SVRBusiness/include/ScalingFactorService.hpp"
 
 namespace svr {
 namespace kernel {
@@ -76,7 +77,8 @@ template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X /* predict f
     lg_errchk(LGBM_BoosterPredictForMat(booster, manifold_features_t.mem, C_API_DTYPE_FLOAT32, n_samples, n_manifold_features, 1, C_API_PREDICT_NORMAL, 0, 0, gbm_parameters.c_str(), &out_len, res.memptr()));
     LOG4_TRACE("Predicted " << out_len << ", labels " << common::present(res));
     LGBM_BoosterFree(booster);
-
+    assert(parameters.get_svr_kernel_param() != 0);
+    common::unscale_I(res, parameters.get_svr_kernel_param(), parameters.get_min_Z());
     return res;
 }
 
@@ -102,6 +104,12 @@ template<> void kernel_gbm<T>::init(const arma::Mat<T> &X_t, const arma::Mat<T> 
             manifold_labels.row(row) = arma::conv_to<arma::frowvec>::from(Y.row(i) - Y.row(j));
             manifold_features_t.col(row) = arma::conv_to<arma::fvec>::from(arma::join_cols(X_t.col(i), X_t.col(j)));
         }
+    double sf, dc;
+    business::ScalingFactorService::scale_calc_I(manifold_labels, sf, dc, common::C_input_obseg_labels);
+    LOG4_TRACE("Scaled manifold labels " << common::present(manifold_labels) << ", scaling factor " << sf << ", dc offset " << dc);
+    parameters.set_svr_kernel_param(sf);
+    parameters.set_min_Z(dc);
+
     lg_errchk(LGBM_SetMaxThreads(C_n_cpu));
     DatasetHandle train_dataset;
     {

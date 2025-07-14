@@ -70,7 +70,8 @@ OnlineSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const m
         PROFILE_MSG(tune(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
-    OMP_FOR_i(num_chunks) {
+#pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_gpu_chunk() / ixs.front().n_elem)) default(shared) firstprivate(num_chunks)
+    for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
         auto p_params = get_params_ptr(i);
         if (p_kernel_matrices->at(i).empty()) {
             p_kernel_matrices->at(i) = false /* p_params->get_kernel_type() == e_kernel_type::GBM || p_params->get_kernel_type() == e_kernel_type::TFT */
@@ -356,6 +357,16 @@ arma::mat get_bounds(const arma::mat &A, const arma::mat &b, const float lim_coe
 }
 
 
+uint32_t get_population_size(const uint32_t n_rows, const uint16_t layers)
+{
+    uint32_t pop_opt;
+    if (n_rows > 3500) pop_opt = 400;
+    else if (n_rows > 1750) pop_opt = 750;
+    else pop_opt = 1500;
+    pop_opt /= std::max(1., .5 * layers);
+    return std::max(pop_opt, 100u); // Minimum population size
+}
+
 double OnlineSVR::calc_weights(const arma::mat &K, const arma::mat &L, const arma::uvec &chunk_ixs, arma::mat &weights, const uint32_t iter_opt, const uint16_t iter_irwls, const double limes)
 {
 #ifdef INSTANCE_WEIGHTS // TODO Rewrite
@@ -374,7 +385,7 @@ double OnlineSVR::calc_weights(const arma::mat &K, const arma::mat &L, const arm
     solvers::score_weights *sw;
     constexpr uint32_t C_gpu_threshold = 1750; // Threshold for GPU usage, 1750 is a good value for most GPUs
     const bool use_gpu = n_rows >= C_gpu_threshold;
-    const uint32_t pop_opt = (use_gpu ? 750 : 1500) / std::max(1., .5 * layers);
+    const auto pop_opt = get_population_size(n_rows, layers);
     const auto L_mean_mask = common::mean_mask(L, PROPS.get_solve_radius() * (L.n_rows - 1));
     const auto L_mm_ptr = L_mean_mask.mem;
     /* Hybrid scoring both on CPU and GPU degrades tuning quality because of the precision offset introduced by difference in GPU precision, so do either but not both. */

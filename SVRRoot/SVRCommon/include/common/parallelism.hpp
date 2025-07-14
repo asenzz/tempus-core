@@ -173,14 +173,16 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 
 namespace svr {
 
-template<typename T> inline unsigned adj_threads(const std::is_signed<T> iterations)
+template<typename T> inline uint32_t adj_threads(const T iterations)
 {
-    return (unsigned) std::min<T>(iterations < 0 ? 0 : iterations, C_n_cpu);
-}
-
-template<typename T> inline unsigned adj_threads(const T iterations)
-{
-    return std::min<T>(iterations, C_n_cpu);
+    uint32_t res;
+    if (iterations > T(C_n_cpu))
+        res = C_n_cpu;
+    else if (iterations < T(1))
+        res = 1;
+    else
+        res = static_cast<uint32_t>(iterations);
+    return res;
 }
 
 #define ADJ_THREADS(T) num_threads(adj_threads(T))
@@ -194,21 +196,6 @@ public:
     void set();
     void unset();
     ~t_omp_lock();
-};
-
-
-class thread_calc {
-    std::deque<unsigned> level_threads;
-public:
-    void add_level_desired_threads(const unsigned t) { level_threads.emplace_back(adj_threads(t)); };
-    void add_level_desired_threads_min(const unsigned t, const unsigned u) { add_level_desired_threads(std::min(t, u)); };
-    unsigned get_remaining_threads() {
-        unsigned threads = C_n_cpu;
-        for (const auto t: level_threads) threads /= t;
-        return threads;
-    }
-    unsigned operator [] (const unsigned l) { return l < level_threads.size() ? level_threads[l] : get_remaining_threads(); }
-    unsigned sched(const unsigned l, const unsigned n) { return std::ceil(float(n) / float(operator[](l))); }
 };
 
 }
