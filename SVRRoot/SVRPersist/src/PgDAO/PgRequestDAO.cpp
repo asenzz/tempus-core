@@ -1,15 +1,13 @@
 #include "PgRequestDAO.hpp"
-#include <DAO/DataSource.hpp>
-#include <model/Request.hpp>
-#include <DAO/RequestRowMapper.hpp>
+#include "DAO/DataSource.hpp"
+#include "model/Request.hpp"
+#include "DAO/RequestRowMapper.hpp"
 
 namespace svr {
 namespace dao {
 
-PgRequestDAO::PgRequestDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
-        : RequestDAO(tempus_config, data_source)
+PgRequestDAO::PgRequestDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source) : RequestDAO(tempus_config, data_source)
 {}
-
 
 
 bigint PgRequestDAO::get_next_id()
@@ -57,11 +55,11 @@ bool PgRequestDAO::exists(const std::string &user, const bigint dataset_id, cons
 }
 
 bigint PgRequestDAO::make_request(
-            const std::string &user, const std::string &dataset_id_str, const std::string &value_time_start_str, const std::string &value_time_end_str,
-            const std::string &resolution_str, const std::string &value_columns)
+        const std::string &user, const std::string &dataset_id_str, const std::string &value_time_start_str, const std::string &value_time_end_str,
+        const std::string &resolution_str, const std::string &value_columns)
 {
     return data_source.query_for_type<bigint>("SELECT * FROM make_request(?, ?, ?, ?, ?, ?)",
-                              user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str, value_columns);
+                                              user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str, value_columns);
 }
 
 datamodel::MultivalRequest_ptr

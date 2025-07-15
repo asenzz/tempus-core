@@ -1,12 +1,13 @@
 #include "PgSVRParametersDAO.hpp"
 
-#include <DAO/SVRParametersRowMapper.hpp>
-#include <DAO/DataSource.hpp>
+#include "DAO/SVRParametersRowMapper.hpp"
+#include "DAO/DataSource.hpp"
 
-namespace svr { namespace dao {
+namespace svr {
+namespace dao {
 
-PgSVRParametersDAO::PgSVRParametersDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-: SVRParametersDAO(tempus_config, data_source)
+PgSVRParametersDAO::PgSVRParametersDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
+        : SVRParametersDAO(tempus_config, data_source)
 {}
 
 bigint PgSVRParametersDAO::get_next_id()
@@ -23,7 +24,7 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
 {
     if (!p_svr_parameters->get_id()) p_svr_parameters->set_id(get_next_id());
 
-    if(!exists(p_svr_parameters->get_id()))
+    if (!exists(p_svr_parameters->get_id()))
         return data_source.update(get_sql("save"),
                                   p_svr_parameters->get_id(),
                                   p_svr_parameters->get_dataset_id(),
@@ -37,6 +38,7 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
                                   p_svr_parameters->get_svr_epsilon(),
                                   p_svr_parameters->get_svr_kernel_param(),
                                   p_svr_parameters->get_svr_kernel_param2(),
+                                  p_svr_parameters->get_kernel_param3(),
                                   p_svr_parameters->get_svr_decremental_distance(),
                                   p_svr_parameters->get_svr_adjacent_levels_ratio(),
                                   static_cast<int>(p_svr_parameters->get_kernel_type()),
@@ -53,6 +55,7 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
                                   p_svr_parameters->get_svr_epsilon(),
                                   p_svr_parameters->get_svr_kernel_param(),
                                   p_svr_parameters->get_svr_kernel_param2(),
+                                  p_svr_parameters->get_kernel_param3(),
                                   p_svr_parameters->get_svr_decremental_distance(),
                                   p_svr_parameters->get_svr_adjacent_levels_ratio(),
                                   static_cast<int>(p_svr_parameters->get_kernel_type()),
@@ -60,23 +63,27 @@ int PgSVRParametersDAO::save(const datamodel::SVRParameters_ptr &p_svr_parameter
                                   p_svr_parameters->get_id());
 }
 
-int PgSVRParametersDAO::remove(const datamodel::SVRParameters_ptr& svr_parameters)
+int PgSVRParametersDAO::remove(const datamodel::SVRParameters_ptr &p_svr_parameters)
 {
-    return data_source.update(get_sql("remove_by_unique"), svr_parameters->get_dataset_id(), svr_parameters->get_input_queue_table_name(), svr_parameters->get_input_queue_column_name(), svr_parameters->get_decon_level(),
-                              svr_parameters->get_chunk_index(), svr_parameters->get_grad_level());
+    return data_source.update(
+            get_sql("remove_by_unique"), p_svr_parameters->get_dataset_id(),
+            p_svr_parameters->get_input_queue_table_name(), p_svr_parameters->get_input_queue_column_name(),
+            p_svr_parameters->get_decon_level(), p_svr_parameters->get_step(), p_svr_parameters->get_chunk_index(), p_svr_parameters->get_grad_level());
 }
 
 int PgSVRParametersDAO::remove_by_dataset_id(const bigint dataset_id)
 {
     return data_source.update(get_sql("remove_by_dataset_id"), dataset_id);
 }
+
 std::deque<datamodel::SVRParameters_ptr> PgSVRParametersDAO::get_all_svrparams_by_dataset_id(const bigint dataset_id)
 {
     SVRParametersRowMapper row_mapper;
     return data_source.query_for_deque(row_mapper, get_sql("get_all_by_dataset_id"), dataset_id);
 }
 
-std::deque<datamodel::SVRParameters_ptr> PgSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step)
+std::deque<datamodel::SVRParameters_ptr>
+PgSVRParametersDAO::get_svrparams(const bigint dataset_id, const std::string &input_queue_column_name, const size_t decon_level, const size_t step)
 {
     SVRParametersRowMapper row_mapper;
     return data_source.query_for_deque(row_mapper, get_sql("get_by_dataset_column_decon"), dataset_id, input_queue_column_name, decon_level, step);
@@ -87,4 +94,5 @@ size_t PgSVRParametersDAO::get_dataset_levels(const bigint dataset_id)
     return data_source.query_for_type<int>(get_sql("dataset_levels"), dataset_id);
 }
 
-} }
+}
+}

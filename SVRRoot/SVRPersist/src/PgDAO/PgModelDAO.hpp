@@ -1,15 +1,15 @@
 #ifndef PGMODELDAO_HPP
 #define PGMODELDAO_HPP
 
-#include <DAO/ModelDAO.hpp>
+#include "DAO/ModelDAO.hpp"
 #include "onlinesvr.hpp"
 
-namespace svr { namespace dao {
+namespace svr {
+namespace dao {
 
-class PgModelDAO: public ModelDAO
-{
+class PgModelDAO : public ModelDAO {
 public:
-    explicit PgModelDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgModelDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
 
     bigint get_next_id();
 
@@ -17,9 +17,9 @@ public:
 
     bool svr_exists(const bigint svr_id);
 
-    int save(const datamodel::Model_ptr& model);
+    int save(const datamodel::Model_ptr &model);
 
-    int remove(const datamodel::Model_ptr& model);
+    int remove(const datamodel::Model_ptr &model);
 
     int remove_by_ensemble_id(const bigint ensemble_id);
 

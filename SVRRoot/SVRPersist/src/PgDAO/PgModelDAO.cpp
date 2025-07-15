@@ -1,13 +1,13 @@
 #include "PgModelDAO.hpp"
 #include "PgDQScalingFactorDAO.hpp"
-#include <DAO/ModelRowMapper.hpp>
-#include <DAO/DataSource.hpp>
-#include <appcontext.hpp>
+#include "DAO/ModelRowMapper.hpp"
+#include "DAO/DataSource.hpp"
+#include "appcontext.hpp"
 
 namespace svr {
 namespace dao {
 
-PgModelDAO::PgModelDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+PgModelDAO::PgModelDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
         : ModelDAO(tempus_config, data_source)
 {}
 
@@ -35,37 +35,46 @@ int PgModelDAO::save(const datamodel::Model_ptr &model)
                 model->get_id(),
                 model->get_ensemble_id(),
                 model->get_decon_level(),
+                model->get_gradient_count(),
                 model->get_last_modified(),
                 model->get_last_modeled_value_time()
         );
     else
         res += data_source.update(
                 get_sql("update"),
+                model->get_ensemble_id(),
+                model->get_decon_level(),
+                model->get_gradient_count(),
                 model->get_last_modified(),
                 model->get_last_modeled_value_time(),
                 model->get_id()
         );
 
-#pragma omp parallel for num_threads(adj_threads(model->get_gradient_count())) schedule(static, 1)
+    OMP_FOR(model->get_gradient_count())
     for (const auto &p_svr: model->get_gradients()) {
+        const auto svr_model_data = pqxx::to_string(p_svr->save());
         if (!svr_exists(model->get_id()))
             res += data_source.update(
                     get_sql("save_svr"),
                     p_svr->get_id(),
                     p_svr->get_model_id(),
-                    p_svr->save());
+                    svr_model_data);
         else
             res += data_source.update(
                     get_sql("update_svr"),
                     p_svr->get_id(),
                     p_svr->get_model_id(),
-                    p_svr->save());
-        const auto p_saved_svr = p_svr->is_manifold() ? p_svr->get_manifold() : p_svr;
-        if (!p_saved_svr) continue;
-        std::for_each(C_default_exec_policy, p_saved_svr->get_scaling_factors().cbegin(), p_saved_svr->get_scaling_factors().cend(),
-                 [&](const auto &s) { if (APP.dq_scaling_factor_service.exists(s)) APP.dq_scaling_factor_service.remove(s); APP.dq_scaling_factor_service.save(s); });
-        std::for_each(C_default_exec_policy, p_saved_svr->get_param_set().cbegin(), p_saved_svr->get_param_set().cend(),
-              [&](const auto &s) { if (APP.svr_parameters_service.exists(s)) APP.svr_parameters_service.remove(s); APP.svr_parameters_service.save(s); });
+                    svr_model_data);
+        std::for_each(C_default_exec_policy, p_svr->get_scaling_factors().cbegin(), p_svr->get_scaling_factors().cend(),
+                      [&](const auto &s) {
+                          if (APP.dq_scaling_factor_service.exists(s)) APP.dq_scaling_factor_service.remove(s);
+                          APP.dq_scaling_factor_service.save(s);
+                      });
+        std::for_each(C_default_exec_policy, p_svr->get_param_set().cbegin(), p_svr->get_param_set().cend(),
+                      [&](const auto &s) {
+                          if (APP.svr_parameters_service.exists(s)) APP.svr_parameters_service.remove(s);
+                          APP.svr_parameters_service.save(s);
+                      });
     }
 
     return res;

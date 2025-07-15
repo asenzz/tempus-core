@@ -24,10 +24,13 @@ public:
                 row_set["svr_epsilon"].as<double>(datamodel::C_default_svrparam_svr_epsilon),
                 row_set["svr_kernel_param"].as<double>(datamodel::C_default_svrparam_kernel_param1),
                 row_set["svr_kernel_param2"].as<double>(datamodel::C_default_svrparam_kernel_param2),
+                row_set["svr_kernel_param3"].as<double>(datamodel::C_default_svrparam_kernel_param_tau),
                 row_set["svr_decremental_distance"].as<bigint>(datamodel::C_default_svrparam_decrement_distance),
                 row_set["svr_adjacent_levels_ratio"].as<double>(datamodel::C_default_svrparam_adjacent_levels_ratio),
                 static_cast<datamodel::e_kernel_type>(row_set["svr_kernel_type"].as<size_t>(datamodel::C_default_svrparam_kernel_type_uint)),
-                row_set["lag_count"].as<size_t>(datamodel::C_default_svrparam_lag_count)
+                row_set["lag_count"].as<size_t>(datamodel::C_default_svrparam_lag_count),
+                std::set<uint16_t>{},
+                datamodel::t_feature_mechanics::load(row_set["feature_mechanics"].as<std::string>(""))
         );
     }
 };

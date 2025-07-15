@@ -73,6 +73,13 @@ std::string &trim(std::string &s)
     return ltrim(rtrim(s));
 }
 
+std::string &lowertrim(std::string &s)
+{
+    ltrim(rtrim(s));
+    std::transform(std::execution::par_unseq, s.begin(), s.end(), s.begin(), ::tolower);
+    return s;
+}
+
 std::string tolower(std::string str)
 {
     std::transform(std::execution::par_unseq, str.begin(), str.end(), str.begin(), ::tolower);

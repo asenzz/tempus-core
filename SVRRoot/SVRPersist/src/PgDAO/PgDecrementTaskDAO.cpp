@@ -1,12 +1,12 @@
 #include "PgDecrementTaskDAO.hpp"
-#include <DAO/DataSource.hpp>
-#include <DAO/DecrementTaskRowMapper.hpp>
+#include "DAO/DataSource.hpp"
+#include "DAO/DecrementTaskRowMapper.hpp"
 
 namespace svr {
 namespace dao {
 
-PgDecrementTaskDAO::PgDecrementTaskDAO(svr::common::PropertiesFileReader& tempus_config, svr::dao::DataSource& data_source)
-: DecrementTaskDAO(tempus_config, data_source)
+PgDecrementTaskDAO::PgDecrementTaskDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
+        : DecrementTaskDAO(tempus_config, data_source)
 {}
 
 bigint PgDecrementTaskDAO::get_next_id()
@@ -19,10 +19,9 @@ bool PgDecrementTaskDAO::exists(const bigint id)
     return data_source.query_for_type<int>(AbstractDAO::get_sql("exists_by_id"), id) == 1;
 }
 
-int PgDecrementTaskDAO::save(const DecrementTask_ptr& decrementTask)
+int PgDecrementTaskDAO::save(const DecrementTask_ptr &decrementTask)
 {
-    if(!decrementTask->get_id())
-    {
+    if (!decrementTask->get_id()) {
         decrementTask->set_id(get_next_id());
         return data_source.update(AbstractDAO::get_sql("save"),
                                   decrementTask->get_id(),
@@ -41,7 +40,7 @@ int PgDecrementTaskDAO::save(const DecrementTask_ptr& decrementTask)
                                   decrementTask->get_vp_slide_period_sec().total_seconds(),
                                   decrementTask->get_values(),
                                   decrementTask->get_suggested_value()
-                                  );
+        );
     }
     return data_source.update(AbstractDAO::get_sql("update"),
                               decrementTask->get_dataset_id(),
@@ -60,15 +59,13 @@ int PgDecrementTaskDAO::save(const DecrementTask_ptr& decrementTask)
                               decrementTask->get_values(),
                               decrementTask->get_suggested_value(),
                               decrementTask->get_id()
-                              );
+    );
 
 }
 
-int PgDecrementTaskDAO::remove(const DecrementTask_ptr& decrementTask)
+int PgDecrementTaskDAO::remove(const DecrementTask_ptr &decrementTask)
 {
-    if(decrementTask->get_id() == 0)
-        return 0;
-
+    if (decrementTask->get_id() == 0) return 0;
     return data_source.update(AbstractDAO::get_sql("remove"), decrementTask->get_id());
 }
 

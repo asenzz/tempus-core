@@ -2,24 +2,25 @@
 
 #include <DAO/AbstractDAO.hpp>
 
-namespace svr { namespace datamodel {
+namespace svr {
+
+namespace datamodel {
 class Ensemble;
 class Dataset;
 class DeconQueue;
 using Ensemble_ptr = std::shared_ptr<Ensemble>;
 using Dataset_ptr = std::shared_ptr<Dataset>;
 using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
-} }
+}
 
-namespace svr {
 namespace dao {
 
 class EnsembleDAO : public AbstractDAO
 {
 public:
-    static EnsembleDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static EnsembleDAO * build(common::PropertiesReader& sql_properties, dao::DataSource& data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit EnsembleDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit EnsembleDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     virtual bigint get_next_id() = 0;
 
@@ -37,7 +38,7 @@ public:
     virtual int remove(const datamodel::Ensemble_ptr &Ensemble) = 0;
 };
 
-}
-}
+using EnsembleDAO_ptr = std::shared_ptr <dao::EnsembleDAO>;
 
-using EnsembleDAO_ptr = std::shared_ptr <svr::dao::EnsembleDAO>;
+}
+}

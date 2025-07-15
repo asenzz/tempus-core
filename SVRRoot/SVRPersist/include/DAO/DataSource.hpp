@@ -2,6 +2,7 @@
 
 
 #include <mutex>
+#include "appcontext.hpp"
 #include "common.hpp"
 #include "DAO/IRowMapper.hpp"
 #include "DAO/StatementPreparerDBTemplate.hpp"
@@ -123,7 +124,7 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
         if (result.empty()) LOG4_THROW("Failed getting result size, using query " << count_query);
         const auto result_size = result[0][0].as<size_t>(0);
         trx.reset();
-        const auto num_cursors = std::min<size_t>(common::C_cursors_per_query, result_size / common::C_min_cursor_rows + 1);
+        const auto num_cursors = std::min<uint32_t>(PROPS.get_db_num_threads(), result_size / common::C_min_cursor_rows + 1);
         const auto cursor_size = result_size / num_cursors;
         LOG4_DEBUG("Getting up to " << result_size << " rows for " << query);
         res.resize(result_size);

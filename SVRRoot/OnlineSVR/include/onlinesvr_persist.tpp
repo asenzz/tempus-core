@@ -10,12 +10,20 @@ namespace datamodel {
 template<class A> void
 OnlineMIMOSVR::serialize(A &ar, const unsigned version)
 {
+    // TODO Decide upon weight scaling factors serialization
+    ar & last_trained_time;
+    // TODO Solve dataset id saving
+    ar & column_name;
     ar & tmp_ixs;
     ar & samples_trained;
     ar & p_features;
     ar & p_labels;
+    ar & p_last_knowns;
     ar & p_manifold;
     ar & p_kernel_matrices;
+    ar & p_input_weights;
+    ar & train_label_chunks;
+    ar & train_feature_chunks_t;
     ar & weight_chunks;
     ar & chunks_score;
     ar & ixs;
@@ -23,9 +31,10 @@ OnlineMIMOSVR::serialize(A &ar, const unsigned version)
     ar & max_chunk_size;
     ar & gradient;
     ar & level;
+    ar & step;
+    ar & projection;
 }
 
-// TODO Rewrite using boost serialization or similar library
 template<typename S> void
 OnlineMIMOSVR::save(const OnlineMIMOSVR &osvr, S &output_stream)
 {
@@ -36,7 +45,7 @@ OnlineMIMOSVR::save(const OnlineMIMOSVR &osvr, S &output_stream)
 template<typename S> OnlineMIMOSVR_ptr
 OnlineMIMOSVR::load(S &input_stream)
 {
-    return ptr<OnlineMIMOSVR>(input_stream);
+    return ptr<OnlineMIMOSVR>(0, 0, input_stream);
 }
 
 } // datamodel

@@ -11,7 +11,7 @@ class PgInputQueueDAO : public InputQueueDAO
     bool row_exists(const std::string& table_name, const bpt::ptime& valueTime);
 
 public:
-    explicit PgInputQueueDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgInputQueueDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
 
     std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string& user_name) override;
     std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connection) override;

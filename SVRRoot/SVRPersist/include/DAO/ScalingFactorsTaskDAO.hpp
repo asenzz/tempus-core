@@ -1,29 +1,35 @@
 #pragma once
 
-#include <DAO/AbstractDAO.hpp>
+#include "DAO/AbstractDAO.hpp"
 
-namespace svr { namespace datamodel { class ScalingFactorsTask; } }
-using ScalingFactorsTask_ptr = std::shared_ptr<svr::datamodel::ScalingFactorsTask>;
+namespace svr {
+namespace datamodel { class ScalingFactorsTask; }
 
-namespace svr{
-namespace dao{
+using ScalingFactorsTask_ptr = std::shared_ptr<datamodel::ScalingFactorsTask>;
 
-class ScalingFactorsTaskDAO: public AbstractDAO
-{
+namespace dao {
+
+class ScalingFactorsTaskDAO : public AbstractDAO {
 public:
-    static ScalingFactorsTaskDAO * build(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static ScalingFactorsTaskDAO *
+    build(common::PropertiesReader &sql_properties, dao::DataSource &data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit ScalingFactorsTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit ScalingFactorsTaskDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
 
     virtual bigint get_next_id() = 0;
+
     virtual bool exists(const bigint id) = 0;
-    virtual int save(const ScalingFactorsTask_ptr& scalingFactorsTask) = 0;
-    virtual int remove(const ScalingFactorsTask_ptr& scalingFactorsTask) = 0;
+
+    virtual int save(const ScalingFactorsTask_ptr &scalingFactorsTask) = 0;
+
+    virtual int remove(const ScalingFactorsTask_ptr &scalingFactorsTask) = 0;
+
     virtual ScalingFactorsTask_ptr get_by_id(const bigint id) = 0;
 
 };
 
+using ScalingFactorsTaskDAO_ptr = std::shared_ptr<dao::ScalingFactorsTaskDAO>;
+
 } /* namespace dao */
 } /* namespace svr */
 
-using ScalingFactorsTaskDAO_ptr = std::shared_ptr<svr::dao::ScalingFactorsTaskDAO>;

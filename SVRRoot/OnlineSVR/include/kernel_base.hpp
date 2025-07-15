@@ -6,90 +6,70 @@
 #define SVR_KERNEL_BASE_HPP
 
 #include <armadillo>
-#include <viennacl/scalar.hpp>
-#include <viennacl/vector.hpp>
-#include <viennacl/matrix.hpp>
-#include <viennacl/linalg/inner_prod.hpp>
-#include <viennacl/linalg/norm_1.hpp>
-#include <viennacl/linalg/prod.hpp>
-
 #include "model/SVRParameters.hpp"
 #include "common/gpu_handler.hpp"
+#include "calc_cache.hpp"
 
-namespace svr
-{
+namespace svr {
+namespace kernel {
 
-datamodel::e_kernel_type get_kernel_type_from_string(const std::string &kernel_type_str);
-std::string kernel_type_to_string(const datamodel::e_kernel_type kernel_type);
+template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y);
 
-template<typename scalar_type>
-class kernel_base
-{
+template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean);
+
+template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const cudaStream_t custream);
+
+#define T double
+template<> void kernel_from_distances<T>(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean);
+
+template<> void d_kernel_from_distances<T>(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const cudaStream_t custream);
+#undef T
+
+template<typename T>
+class kernel_base {
 protected:
-    const datamodel::SVRParameters parameters;
+    const datamodel::SVRParameters &parameters;
 
 public:
-    const datamodel::SVRParameters &get_parameters() const
-    { return parameters; }
+    const datamodel::SVRParameters &get_parameters() const;
 
     kernel_base() = default;
 
-    explicit kernel_base(const datamodel::SVRParameters &p) : parameters(p)
-    {}
+    explicit kernel_base(const datamodel::SVRParameters &p);
 
-    virtual ~kernel_base()
-    {}
+    virtual ~kernel_base();
 
-    virtual viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &features)
-    {
-        LOG4_THROW("Not implemented");
-        return viennacl::matrix<scalar_type>();
-    }
+    void d_distances(CRPTR(T) d_X, const uint32_t m, const uint32_t n, RPTR(T) d_Z, const cudaStream_t custream) const;
 
-    virtual viennacl::matrix<scalar_type> distances(const viennacl::matrix<scalar_type> &features, const viennacl::matrix<scalar_type> &features2)
-    {
-        LOG4_THROW("Not implemented");
-        return viennacl::matrix<scalar_type>();
-    }
+    void d_kernel_from_distances(CRPTR(T) d_X, const uint32_t m, const uint32_t n, RPTR(T) d_Z, const cudaStream_t custream) const;
 
-    // virtual void operator()(const vmatrix<scalar_type> &features, vmatrix<scalar_type> &p_kernel_matrices) = 0; - not needed at this point, maybe we will put it back
-    virtual void operator()(const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) = 0;  // CPU based - to be avoided
+    arma::Mat<T> kernel(const arma::Mat<T> &X) const;
 
-    virtual viennacl::matrix<scalar_type> operator()(const viennacl::matrix<scalar_type> &features)
-    {
-        viennacl::matrix<scalar_type> kernel_matrix;
-        (*this)(features, kernel_matrix);
-        return kernel_matrix;
-    }
+    arma::Mat<T> distances(const arma::Mat<T> &X) const;
 
+    arma::Mat<T> kernel_from_distances(const arma::Mat<T> &Z) const;
 
-#ifdef ENABLE_OPENCL
+    arma::Mat<T> &kernel(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
 
-    //virtual vmatrix<scalar_type> operator()(
-        //viennacl::ocl::context &ctx, const vmatrix<scalar_type> &features, vmatrix<scalar_type> &p_kernel_matrices) = 0; // not needed at this point?
-        //if implemented, it should be done in this place and will remove code from build_kernel_matrix
-    // virtual void operator()(viennacl::ocl::context &ctx, const viennacl::matrix<scalar_type> &features, viennacl::matrix<scalar_type> &kernel_matrix) {};
+    arma::Mat<T> &kernel(business::calc_cache &cc, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time, const bpt::ptime &Xy_time) const;
 
-    virtual void operator()(const arma::mat & features, arma::mat & kernel_matrix)
-    { LOG4_THROW("Not implemented"); }
+    arma::Mat<T> &distances(business::calc_cache &cc, const arma::Mat<T> &X, const bpt::ptime &X_time) const;
 
-    virtual double operator()(const arma::rowvec &a,  const arma::rowvec &b)
-    { LOG4_THROW("Not implemented"); return std::numeric_limits<double>::signaling_NaN(); }
+    arma::Mat<T> &distances(business::calc_cache &cc, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &X_time, const bpt::ptime &Xy_time) const;
 
-    virtual void operator()(const arma::mat &x_train,  const arma::mat &x_test, arma::mat &kernel_matrix)
-    { LOG4_THROW("Not implemented"); }
+    virtual arma::Mat<T> kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const = 0; // K is a kernel matrix
 
-    virtual void operator()(
-            viennacl::ocl::context &ctx,
-            const viennacl::matrix<scalar_type> &x,
-            const viennacl::matrix<scalar_type> &y,
-            viennacl::matrix<scalar_type> &kernel_matrix)
-    { LOG4_THROW("Not implemented"); }
+    virtual arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const = 0; // Z is a distance matrix
 
-#endif
+    virtual void d_kernel(CRPTR(T) d_X, const uint32_t m, RPTR(T) d_K, const cudaStream_t custream) const = 0;
+
+    virtual void d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR(T) d_Z,
+                             const cudaStream_t custream) const = 0; // m is common rows count (features length), n is the number of columns or samples
 };
 
-
 }
+}
+
+#include "kernel_base.tpp"
 
 #endif //SVR_KERNEL_BASE_HPP

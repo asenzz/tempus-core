@@ -8,7 +8,7 @@ namespace svr { namespace dao {
 class AsyncUserDAO : public UserDAO
 {
 public:
-    AsyncUserDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source);
+    AsyncUserDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
     ~AsyncUserDAO();
 
     virtual User_ptr get_by_user_name(const std::string& user_name);
@@ -29,7 +29,8 @@ private:
     AsyncImpl & pImpl;
 };
 
-} }
+}
+}
 
 #endif /* ASYNCUSERDAO_H */
 

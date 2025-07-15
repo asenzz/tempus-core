@@ -1,5 +1,5 @@
 #include "AsyncRequestDAO.hpp"
-#include <model/Request.hpp>
+#include "model/Request.hpp"
 #include "AsyncImplBase.hpp"
 #include "../PgDAO/PgRequestDAO.hpp"
 
@@ -22,12 +22,12 @@ static const auto cmp_whole_value = [](datamodel::MultivalResponse_ptr const &lh
 
 struct AsyncRequestDAO::AsyncImpl
         : AsyncImplBase<datamodel::MultivalResponse_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgRequestDAO> {
-    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+    AsyncImpl(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
-AsyncRequestDAO::AsyncRequestDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+AsyncRequestDAO::AsyncRequestDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
         : RequestDAO(tempus_config, data_source), pImpl(*new AsyncImpl(tempus_config, data_source))
 {}
 
@@ -44,7 +44,7 @@ bigint AsyncRequestDAO::get_next_id()
 
 bigint AsyncRequestDAO::get_next_result_id()
 {
-    std::scoped_lock lg(pImpl.pgMutex);
+    const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.get_next_result_id();
 }
 
@@ -61,7 +61,7 @@ int AsyncRequestDAO::save(const datamodel::MultivalRequest_ptr &request)
 }
 
 bool AsyncRequestDAO::exists(const std::string &user, const bigint dataset_id, const boost::posix_time::ptime &start_time, const boost::posix_time::ptime &end_time,
-                                const bpt::time_duration &resolution, const std::string &value_columns)
+                             const bpt::time_duration &resolution, const std::string &value_columns)
 {
     const std::scoped_lock lg(pImpl.pgMutex);
     return pImpl.pgDao.exists(user, dataset_id, start_time, end_time, resolution, value_columns);

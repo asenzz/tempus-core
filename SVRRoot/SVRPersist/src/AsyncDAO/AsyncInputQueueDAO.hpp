@@ -10,7 +10,7 @@ namespace dao {
 class AsyncInputQueueDAO : public InputQueueDAO
 {
 public:
-    explicit AsyncInputQueueDAO(svr::common::PropertiesFileReader &properties, svr::dao::DataSource &source);
+    explicit AsyncInputQueueDAO(common::PropertiesReader &properties, dao::DataSource &source);
 
     ~AsyncInputQueueDAO() override;
 

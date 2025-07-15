@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DAO/IQScalingFactorDAO.hpp>
+#include "DAO/IQScalingFactorDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -8,7 +8,7 @@ namespace dao {
 class AsyncIQScalingFactorDAO : public IQScalingFactorDAO
 {
 public:
-    explicit AsyncIQScalingFactorDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source);
+    explicit AsyncIQScalingFactorDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source);
 
     ~AsyncIQScalingFactorDAO();
 

@@ -1,7 +1,7 @@
 #ifndef PGPREDICTIONTASKDAO_HPP
 #define PGPREDICTIONTASKDAO_HPP
 
-#include <DAO/PredictionTaskDAO.hpp>
+#include "DAO/PredictionTaskDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -9,7 +9,7 @@ namespace dao {
 class PgPredictionTaskDAO: public PredictionTaskDAO
 {
 public:
-    explicit PgPredictionTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgPredictionTaskDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     bigint get_next_id();
     bool exists(const bigint id);

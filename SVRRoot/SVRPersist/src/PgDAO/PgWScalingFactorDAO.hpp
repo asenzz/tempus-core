@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DAO/WScalingFactorDAO.hpp>
+#include "DAO/WScalingFactorDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -8,7 +8,7 @@ namespace dao {
 class PgWScalingFactorDAO : public WScalingFactorDAO
 {
 public:
-    explicit PgWScalingFactorDAO(common::PropertiesFileReader &tempus_config, DataSource &data_source);
+    explicit PgWScalingFactorDAO(common::PropertiesReader &tempus_config, DataSource &data_source);
 
     virtual bigint get_next_id();
 

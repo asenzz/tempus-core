@@ -6,7 +6,7 @@
 namespace svr {
 namespace dao {
 
-using svr::datamodel::SVRParameters;
+using datamodel::SVRParameters;
 
 namespace {
 static const auto cmp_primary_key = [] (datamodel::SVRParameters_ptr const &lhs, datamodel::SVRParameters_ptr const &rhs)
@@ -25,13 +25,13 @@ static const auto cmp_whole_value = [] (datamodel::SVRParameters_ptr const &lhs,
 struct AsyncSVRParametersDAO::AsyncImpl
         : AsyncImplBase<datamodel::SVRParameters_ptr, DTYPE(cmp_primary_key), DTYPE(cmp_whole_value), PgSVRParametersDAO>
 {
-    AsyncImpl(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+    AsyncImpl(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
             : AsyncImplBase(tempus_config, data_source, cmp_primary_key, cmp_whole_value, 10, 10)
     {}
 };
 
 
-AsyncSVRParametersDAO::AsyncSVRParametersDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
+AsyncSVRParametersDAO::AsyncSVRParametersDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source)
         : SVRParametersDAO(tempus_config, data_source), pImpl(*new AsyncSVRParametersDAO::AsyncImpl(tempus_config, data_source))
 {}
 

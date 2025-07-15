@@ -3,21 +3,21 @@
 #include "DAO/AbstractDAO.hpp"
 
 namespace svr {
+
 namespace datamodel {
 class OnlineMIMOSVR;
 using OnlineMIMOSVR_ptr = std::shared_ptr<OnlineMIMOSVR>;
 class Model;
 using Model_ptr = std::shared_ptr<Model>;
-}}
+}
 
-
-namespace svr { namespace dao {
+namespace dao {
 
 class ModelDAO: public AbstractDAO
 {
 public:
-    static ModelDAO *build(common::PropertiesFileReader& sql_properties, DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
-    explicit ModelDAO(common::PropertiesFileReader& sql_properties, DataSource& data_source);
+    static ModelDAO *build(common::PropertiesReader& sql_properties, DataSource& data_source, common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    explicit ModelDAO(common::PropertiesReader& sql_properties, DataSource& data_source);
     virtual bigint get_next_id() = 0;
     virtual bool exists(const bigint model_id) = 0;
     virtual int save(const datamodel::Model_ptr& model) = 0;
@@ -29,7 +29,7 @@ public:
     virtual std::deque<datamodel::OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id) = 0;
 };
 
-}
-}
+using ModelDAO_ptr = std::shared_ptr<dao::ModelDAO>;
 
-using ModelDAO_ptr = std::shared_ptr<svr::dao::ModelDAO>;
+}
+}

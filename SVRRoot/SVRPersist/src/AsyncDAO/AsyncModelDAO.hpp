@@ -1,23 +1,24 @@
 #ifndef ASYNCMODELDAO_HPP
 #define ASYNCMODELDAO_HPP
 
-#include <DAO/ModelDAO.hpp>
+#include "DAO/ModelDAO.hpp"
 
-namespace svr { namespace dao {
+namespace svr {
+namespace dao {
 
-class AsyncModelDAO: public ModelDAO
-{
+class AsyncModelDAO : public ModelDAO {
 public:
-    explicit AsyncModelDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit AsyncModelDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source);
+
     ~AsyncModelDAO();
 
     bigint get_next_id();
 
     bool exists(const bigint model_id);
 
-    int save(const datamodel::Model_ptr& model);
+    int save(const datamodel::Model_ptr &model);
 
-    int remove(const datamodel::Model_ptr& model);
+    int remove(const datamodel::Model_ptr &model);
 
     int remove_by_ensemble_id(const bigint ensemble_id);
 
@@ -28,9 +29,10 @@ public:
     std::deque<datamodel::Model_ptr> get_all_ensemble_models(const bigint ensemble_id);
 
     std::deque<datamodel::OnlineMIMOSVR_ptr> get_svr_by_model_id(const bigint model_id);
+
 private:
     struct AsyncImpl;
-    AsyncImpl & pImpl;
+    AsyncImpl &pImpl;
 };
 
 }

@@ -7,14 +7,12 @@
 namespace svr {
 namespace dao {
 
-using svr::common::ConcreteDaoType;
-
-InputQueueDAO *InputQueueDAO::build(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source, ConcreteDaoType dao_type, bool use_threadsafe_dao)
+InputQueueDAO *InputQueueDAO::build(common::PropertiesReader &tempus_config, dao::DataSource &data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao)
 {
     return AbstractDAO::build<InputQueueDAO, PgInputQueueDAO, AsyncInputQueueDAO, TsInputQueueDAO>(tempus_config, data_source, dao_type, use_threadsafe_dao);
 }
 
-InputQueueDAO::InputQueueDAO(svr::common::PropertiesFileReader &sql_properties, svr::dao::DataSource &data_source)
+InputQueueDAO::InputQueueDAO(common::PropertiesReader &sql_properties, dao::DataSource &data_source)
         : AbstractDAO(sql_properties, data_source, "InputQueueDAO.properties")
 {}
 

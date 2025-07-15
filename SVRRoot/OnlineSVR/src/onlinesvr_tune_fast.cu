@@ -19,104 +19,87 @@
 #include "common/gpu_handler.hpp"
 #include "common/constants.hpp"
 #include "cuqrsolve.cuh"
-#include "cuda_path.cuh"
+#include "cuda_path.hpp"
 #include "onlinesvr.hpp"
 #include "util/math_utils.hpp"
 #include "appcontext.hpp"
 #include "new_path_kernel.cuh"
+#include "kernel_factory.hpp"
 
 namespace svr {
 namespace datamodel {
 
-const uint16_t cuvalidate::n_gpus = common::gpu_handler<cuvalidate::streams_per_gpu>::get().get_gpu_devices_count();
+const uint16_t cusys::n_gpus = common::gpu_handler<cusys::streams_per_gpu>::get().get_gpu_devices_count();
 
-cuvalidate::cuvalidate(
-        const uint16_t lag,
-        const arma::mat &tune_cuml, const arma::mat &train_cuml,
-        const arma::mat &tune_features_t, const arma::mat &train_features_t,
-        const arma::mat &tune_label_chunk, const arma::mat &train_label_chunk,
-        const arma::mat &tune_W, const arma::mat &train_W, const solvers::mmm_t &train_L_m, const double labels_sf
-        ) :
-   m(tune_cuml.n_cols), mm(m * m), mm_size(mm * sizeof(double)), n(tune_label_chunk.n_cols), train_len(train_cuml.n_cols),
-   K_train_len(train_len * train_len), K_train_size(K_train_len * sizeof(double)), train_len_n(train_len * n), train_n_size(train_len_n * sizeof(double)),
-   tune_len(train_len - train_clamp), tune_len_n(tune_len * n), tune_n_size(tune_len_n * sizeof(double)), K_tune_len(tune_len * tune_len),
-   calc_start(0 /* train_len - C_test_len */), calc_len(train_len - calc_start), dim(tune_cuml.n_rows / lag), lag_tile_width(CDIV(lag, common::C_cu_tile_width)),
-   weighted(train_W.n_elem), labels_sf(labels_sf), train_L_m(train_L_m), iters_mul(common::C_itersolve_range / irwls_iters), train_F_rows(train_features_t.n_rows),
-   train_F_cols(train_features_t.n_cols), train_cuml_rows(train_cuml.n_rows), lag(lag), tune_F_rows(tune_features_t.n_rows), tune_F_cols(tune_features_t.n_cols),
-   tune_cuml_rows(tune_cuml.n_rows)
+SVRParameters cusys::make_tuning_template(const SVRParameters &sample_parameters)
 {
-    assert(tune_label_chunk.n_rows == m);
-    assert(train_cuml.n_rows == tune_cuml.n_rows);
-    assert(m - C_test_len - train_len == 0);
-    LOG4_TRACE("Train len " << train_len << ", tune len " << m << ", test len " << C_test_len << ", streams per GPU " << unsigned(streams_per_gpu));
+    SVRParameters template_parameters;
+    template_parameters.set_kernel_type(sample_parameters.get_kernel_type());
+    template_parameters.set_svr_kernel_param2(sample_parameters.get_svr_kernel_param2());
+    template_parameters.set_kernel_param3(sample_parameters.get_kernel_param3());
+    template_parameters.set_lag_count(sample_parameters.get_lag_count());
+    return template_parameters;
+}
+
+cusys::cusys(
+        const uint16_t lag, const arma::mat &train_cuml, const arma::mat &train_label_chunk, const arma::mat &train_W, const solvers::mmm_t &L3m, const SVRParameters &parameters) :
+        train_len(train_cuml.n_cols), K_train_len(train_len * train_len), K_train_size(K_train_len * sizeof(double)), n(train_label_chunk.n_cols), train_len_n(train_len * n),
+        train_n_size(train_len_n * sizeof(double)), tune_len(train_len - train_clamp), tune_len_n(tune_len * n), tune_n_size(tune_len_n * sizeof(double)),
+        K_tune_len(tune_len * tune_len), calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), dim(train_cuml.n_rows / lag),
+        lag_tile_width(CDIV(lag, common::C_cu_tile_width)), weighted(train_W.n_elem), L3m(L3m), train_F_rows(train_cuml.n_rows), train_F_cols(train_cuml.n_cols),
+        lag(lag), ref_K(kernel::get_reference_Z(train_label_chunk)), ref_K_mean(common::mean(ref_K)), ref_K_meanabs(common::meanabs(ref_K)),
+        template_parameters(make_tuning_template(parameters))
+{
+    LOG4_TRACE("Train len " << train_len << ", streams per GPU " << unsigned(streams_per_gpu) << ", calc len " << calc_len);
     dx.resize(n_gpus);
+    const auto K_train_l = common::extrude_cols<double>(train_label_chunk.t(), train_len);
+
+    const double as_err = common::sumabs<double>((K_train_l + ref_K) * arma::ones<arma::vec>(train_len) - train_len * train_label_chunk);
+    if (as_err > 0) LOG4_WARN("(K_train_l + ref_K) * ones are not equal to labels " << as_err / train_len << ", K_train_l " << common::present(K_train_l) + ", ref_K " <<
+        common::present(ref_K) << ", train_label_chunk " << common::present(train_label_chunk));
+
     OMP_FOR_i(n_gpus) {
-        {
+        { // Read-only buffers per device
             DEV_CUSTREAM(i);
             dx[i].d_train_label_chunk = cumallocopy(train_label_chunk, custream);
-            dx[i].d_tune_label_chunk = cumallocopy(tune_label_chunk, custream);
+            dx[i].d_K_train_l = cumallocopy(K_train_l, custream);
+            dx[i].d_ref_K = cumallocopy(ref_K, custream);
             dx[i].train_label_off = dx[i].d_train_label_chunk + calc_start;
-            if (weighted) {
-                dx[i].d_train_W = cumallocopy(train_W, custream);
-                dx[i].d_tune_W = cumallocopy(tune_W, custream);
-            }
-#ifdef NEW_PATH
-            dx[i].d_train_features_t = cumallocopy(train_features_t, custream);
-            dx[i].d_tune_features_t = cumallocopy(tune_features_t, custream);
-#else
-            dx[i].d_tune_cuml = cumallocopy(tune_cuml, custream);
+            if (weighted) dx[i].d_train_W = cumallocopy(train_W, custream);
             dx[i].d_train_cuml = cumallocopy(train_cuml, custream);
-#endif
             cusyndestroy(custream);
         }
-
         dx[i].sx.resize(streams_per_gpu);
         UNROLL(streams_per_gpu)
-        for (DTYPE(streams_per_gpu) j = 0; j < streams_per_gpu; ++j) {
+        for (DTYPE(streams_per_gpu) j = 0; j < streams_per_gpu; ++j) { // Read-write buffers, per stream
             auto &dxsx = dx[i].sx[j];
             magma_queue_create(i, &dxsx.ma_queue);
             dxsx.custream = magma_queue_get_cuda_stream(dxsx.ma_queue);
             dxsx.cublas_H = magma_queue_get_cublas_handle(dxsx.ma_queue);
             cu_errchk(cudaMallocAsync((void **) &dxsx.d_K_train, K_train_size, dxsx.custream));
             dxsx.K_train_off = dxsx.d_K_train + calc_start * train_len + calc_start;
-            cu_errchk(cudaMallocAsync((void **) &dxsx.d_K_epsco, mm_size, dxsx.custream));
-            cu_errchk(cudaMallocAsync((void **) &dxsx.d_best_weights, train_n_size, dxsx.custream));
-            cu_errchk(cudaMallocAsync((void **) &dxsx.j_K_work, K_train_size, dxsx.custream));
-            cu_errchk(cudaMallocAsync((void **) &dxsx.j_solved, train_n_size, dxsx.custream));
             cu_errchk(cudaMallocAsync((void **) &dxsx.j_work, train_n_size, dxsx.custream));
-#ifndef NEW_PATH
-            cu_errchk(cudaMallocAsync((void **) &dxsx.d_Kz_tune, mm_size, dxsx.custream));
-#endif
         }
-
     }
 }
 
-cuvalidate::~cuvalidate()
+cusys::~cusys()
 {
     OMP_FOR_i(n_gpus) {
         {
             DEV_CUSTREAM(i);
             cu_errchk(cudaFreeAsync(dx[i].d_train_cuml, custream));
-            cu_errchk(cudaFreeAsync(dx[i].d_train_features_t, custream));
-            cu_errchk(cudaFreeAsync(dx[i].d_tune_features_t, custream));
             cu_errchk(cudaFreeAsync(dx[i].d_train_label_chunk, custream));
-            cu_errchk(cudaFreeAsync(dx[i].d_tune_label_chunk, custream));
-            cu_errchk(cudaFreeAsync(dx[i].d_train_W, custream));
-            if (weighted) cu_errchk(cudaFreeAsync(dx[i].d_tune_W, custream));
-            cu_errchk(cudaFreeAsync(dx[i].d_tune_cuml, custream));
+            cu_errchk(cudaFreeAsync(dx[i].d_K_train_l, custream));
+            cu_errchk(cudaFreeAsync(dx[i].d_ref_K, custream));
+            if (weighted) cu_errchk(cudaFreeAsync(dx[i].d_train_W, custream));
             cusyndestroy(custream);
         }
 
         UNROLL(streams_per_gpu)
         for (DTYPE(streams_per_gpu) j = 0; j < streams_per_gpu; ++j) {
             auto &dxsx = dx[i].sx[j];
-            cu_errchk(cudaFreeAsync(dxsx.d_Kz_tune, dxsx.custream));
             cu_errchk(cudaFreeAsync(dxsx.d_K_train, dxsx.custream));
-            cu_errchk(cudaFreeAsync(dxsx.d_K_epsco, dxsx.custream));
-            cu_errchk(cudaFreeAsync(dxsx.d_best_weights, dxsx.custream));
-            cu_errchk(cudaFreeAsync(dxsx.j_K_work, dxsx.custream));
-            cu_errchk(cudaFreeAsync(dxsx.j_solved, dxsx.custream));
             cu_errchk(cudaFreeAsync(dxsx.j_work, dxsx.custream));
             magma_queue_destroy(dxsx.ma_queue);
         }
@@ -124,8 +107,7 @@ cuvalidate::~cuvalidate()
 }
 
 // TODO Fix Bug in debug build getting zero valued kernel matrices inside this function
-std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
-cuvalidate::operator()(const double lambda, const double gamma_bias, const double tau)
+std::tuple<double, double, double> cusys::operator()(const double lambda, const double tau) const
 {
     const common::gpu_context_<streams_per_gpu> ctx;
     const auto gpu_id = ctx.phy_id();
@@ -133,251 +115,21 @@ cuvalidate::operator()(const double lambda, const double gamma_bias, const doubl
     const auto stream_id = ctx.stream_id();
     const auto &dx_ = dx[gpu_id];
     const auto &dxsx = dx_.sx[stream_id];
-
-#ifdef NEW_PATH
-    auto const d_K_train = kernel::cu_compute_path_distances(
-            dx_.d_train_features_t, dx_.d_train_features_t, train_F_rows, train_F_rows, train_F_cols, train_F_cols, lag, lambda, 0, custream);
-#else
-    kernel::path::cu_distances_xy(train_len, train_len, train_cuml_rows, lag, dim, lag_tile_width, lambda, tau, dx_.d_train_cuml, dx_.d_train_cuml, dxsx.d_K_train, dxsx.custream);
-#endif
-
-    const auto gamma = solvers::cu_calc_gamma(dxsx.K_train_off, train_len, dx_.train_label_off, calc_len, n, gamma_bias, dxsx.custream);
-    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, dxsx.custream>>>(dxsx.d_K_train, K_train_len, gamma);
+    auto svr_parameters_ = template_parameters;
+    svr_parameters_.set_svr_kernel_param2(lambda);
+    svr_parameters_.set_kernel_param3(tau);
+    kernel::IKernel<double>::get(svr_parameters_)->d_distances(dx_.d_train_cuml, train_F_rows, train_F_cols, dxsx.d_K_train, dxsx.custream);
+    const auto mean = solvers::mean(dxsx.K_train_off, K_train_len, dxsx.custream) - ref_K_mean;
+    if (mean != 0) thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_train_len, dxsx.K_train_off,
+                                     [mean] __device__(const double x) { return x - mean; });
+    // solvers::cu_calc_gamma(dxsx.K_train_off, train_len, dx_.train_label_off, calc_len, n, dxsx.custream);
+    const auto gamma = solvers::meanabs(dxsx.K_train_off, K_train_len, dxsx.custream) / ref_K_meanabs;
+    if (gamma != 1) thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.K_train_off, dxsx.K_train_off + K_train_len, dxsx.K_train_off,
+                                      [gamma] __device__ (const double x) { return x / gamma; });
     if (weighted) thrust::transform(thrust::cuda::par.on(dxsx.custream), dxsx.d_K_train, dxsx.d_K_train + K_train_len, dx_.d_train_W, dxsx.d_K_train, thrust::multiplies<double>());
-    const auto epsco = solvers::cu_calc_epsco(dxsx.K_train_off, dx_.train_label_off, calc_len, n, train_len, dxsx.custream);
-    t_param_preds::t_predictions_ptr p_predictions;
-    if (PROPS.get_recombine_parameters()) {
-        p_predictions = new t_param_preds::t_predictions;
-        p_predictions->fill(nullptr);
-    } else p_predictions = nullptr;
-
-#ifdef NEW_PATH
-    d_Kz_tune = kernel::cu_compute_path_distances(dw.d_tune_features_t, dw.d_tune_features_t, tune_F_rows, tune_F_rows, tune_F_cols, tune_F_cols, lag, lambda, 0, custream);
-#else
-    kernel::path::cu_kernel_xy(m, m, tune_cuml_rows, lag, dim, lag_tile_width, lambda, tau, gamma, dx_.d_tune_cuml, dx_.d_tune_cuml, dxsx.d_Kz_tune, dxsx.custream);
-#endif
-    magma_int_t info;
-    double total_score = 0;
-    cu_errchk(cudaMemcpyAsync(dxsx.d_K_epsco, dxsx.d_Kz_tune, mm_size, cudaMemcpyDeviceToDevice, dxsx.custream));
-#ifdef INSTANCE_WEIGHTS
-    if (d_tune_W)
-        solvers::G_augment_K<<<CU_BLOCKS_THREADS_2D(m), 0, custream>>>(d_K_epsco, d_tune_W, epsco, m);
-    else
-#endif
-    solvers::G_set_diag<<<CU_BLOCKS_THREADS(m), 0, dxsx.custream>>>(dxsx.d_K_epsco, epsco, m);
-
-    UNROLL(C_max_j)
-    for (DTYPE(C_max_j) j = 0; j < C_max_j; ++j) {
-        const auto train_start = train_clamp + j * C_slide_skip;
-        const auto train_end = train_start + tune_len;
-        const auto test_start = train_end;
-        const auto test_len = m - test_start;
-        const auto test_len_n = test_len * n;
-        const auto test_n_size = test_len_n * sizeof(double);
-        assert(test_len <= train_len);
-#ifndef NDEBUG
-        LOG4_TRACE("Try " << j << ", train start " << train_start << ", train final " << train_end << ", test start " <<
-                          test_start << ", test len " << test_len << ", train len " << train_len << ", current score " << total_score);
-#endif
-        const auto best_solve_score = solvers::solve_hybrid(
-                dxsx.d_K_epsco + train_start + train_start * m, n, tune_len, dxsx.j_solved, magma_iters, OnlineMIMOSVR::C_rbt_threshold, dxsx.ma_queue, irwls_iters,
-                dx_.d_tune_label_chunk + train_start,
-                tune_n_size, dxsx.j_work, dxsx.custream, dxsx.cublas_H, dxsx.d_Kz_tune + train_start + train_start * m, labels_sf, tune_len_n, dxsx.d_best_weights, K_tune_len,
-                dxsx.j_K_work, info, iters_mul, m);
-        if (best_solve_score == common::C_bad_validation) {
-            LOG4_ERROR("Bad validation at slide " << j);
-            total_score = common::C_bad_validation;
-            break;
-        }
-        double predict_score;
-        if (PROPS.get_recombine_parameters()) {
-            cb_errchk(cublasDgemm(dxsx.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len, n, train_len, &one, dxsx.d_Kz_tune + test_start + train_start * m, m, dxsx.d_best_weights, train_len, &zero, dxsx.j_work, train_len));
-            predict_score = solvers::unscaled_distance(dx_.d_tune_label_chunk + test_start, dxsx.j_work, labels_sf, test_len, n, m, dxsx.custream);
-            if (!p_predictions->at(j)) p_predictions->at(j) = new arma::mat(test_len, n);
-            cu_errchk(cudaMemcpyAsync(p_predictions->at(j)->memptr(), dxsx.j_work, test_n_size, cudaMemcpyDeviceToHost, dxsx.custream));
-            cu_errchk(cudaStreamSynchronize(dxsx.custream));
-            *p_predictions->at(j) *= labels_sf;
-        } else {
-            copy_submat(dx_.d_tune_label_chunk, dxsx.j_work, m, test_start, 0, m, n, tune_len, cudaMemcpyDeviceToDevice, dxsx.custream);
-            cb_errchk(cublasDgemm(dxsx.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len, n, tune_len, &one, dxsx.d_Kz_tune + test_start + train_start * m, m, dxsx.d_best_weights, tune_len, &oneneg, dxsx.j_work, tune_len));
-#if 0 // Started crashing for no reason
-            cu_errchk(cudaStreamSynchronize(custream));
-            cb_errchk(cublasDasum(cublas_H, test_len_n, j_work, 1, &predict_score));
-            predict_score *= labels_sf / double(test_len_n);
-#else
-            // predict_score = labels_sf * solvers::swscore(dxsx.j_work, train_len, dw_.d_tune_label_chunk + test_start, m, test_len, n, dxsx.custream);
-            predict_score = labels_sf * solvers::meanabs(dxsx.j_work, test_len_n, dxsx.custream); // TODO Implement LD for j_work
-#endif
-        }
-        LOG4_TRACE("Try " << j << " kernel dimensions " << train_len << "x" << train_len << ", delta " << common::C_itersolve_delta << ", range " << common::C_itersolve_range <<
-                          ", solution " << train_len << "x" << n << ", test " << test_len << "x" << n << ", score " << best_solve_score << ", former total score " << total_score);
-        total_score += predict_score;
-    }
-    return {total_score / C_max_j, gamma, epsco, p_predictions};
+    const auto score = solvers::cu_mae(dxsx.d_K_train, dx_.d_ref_K, K_train_len, dxsx.custream);
+    return {score, gamma, mean};
 }
-
-#if 0
-// MAGMA batched solver is broken, do not use this method
-std::tuple<double, double, double, t_param_preds::t_predictions_ptr>
-cuvalidate_batched(const double lambda, const double gamma_param, const unsigned lag, const arma::mat &tune_cuml, const arma::mat &train_cuml,
-                                  const arma::mat &tune_label_chunk, const solvers::mmm_t &train_L_m, const double labels_sf, magma_queue_t ma_queue)
-{
-    constexpr unsigned irwls_iters = 3; // PROPS.get_online_learn_iter_limit();
-
-    constexpr double one = 1;
-    constexpr double oneneg = -1;
-    constexpr double zero = 0;
-
-    const unsigned train_len = train_cuml.n_cols;
-    const unsigned m = tune_cuml.n_cols;
-    const auto mm = m * m;
-    const auto mm_size = mm * sizeof(double);
-    const unsigned n = tune_label_chunk.n_cols;
-    const auto K_train_len = train_len * train_len;
-    const auto K_train_size = K_train_len * sizeof(double);
-    const auto train_len_n = train_len * n;
-    const auto train_n_size = train_len_n * sizeof(double);
-    assert(tune_label_chunk.n_rows == m);
-    assert(train_cuml.n_rows == tune_cuml.n_rows);
-
-    const unsigned dim = tune_cuml.n_rows / lag;
-    const unsigned lag_tile_width = cdiv(lag, common::C_cu_tile_width);
-    double *d_train_cuml, *d_K_train;
-    const auto custream = magma_queue_get_cuda_stream(ma_queue);
-    cu_errchk(cudaMallocAsync((void **) &d_train_cuml, train_cuml.n_elem * sizeof(double), custream));
-    cu_errchk(cudaMemcpyAsync(d_train_cuml, train_cuml.mem, train_cuml.n_elem * sizeof(double), cudaMemcpyHostToDevice, custream));
-    cu_errchk(cudaMallocAsync((void **) &d_K_train, K_train_size, custream));
-    kernel::path::cu_kernel_xy(train_len, train_len, train_cuml.n_rows, lag, dim, lag_tile_width, lambda, d_train_cuml, d_train_cuml, d_K_train, custream);
-    cu_errchk(cudaFreeAsync(d_train_cuml, custream));
-    const auto [mingamma, maxgamma] = solvers::cu_calc_minmax_gamma(d_K_train, train_L_m, train_len, K_train_len, custream);
-    const auto gamma = gamma_param * (maxgamma - mingamma) + mingamma;
-    solvers::G_kernel_from_distances_I<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(d_K_train, K_train_len, gamma);
-    const auto epsco = 1. - solvers::mean(d_K_train, K_train_len, custream);
-
-    double *d_K_tune, *d_tune_cuml;
-    cu_errchk(cudaMallocAsync((void **) &d_tune_cuml, tune_cuml.n_elem * sizeof(double), custream));
-    cu_errchk(cudaMemcpyAsync(d_tune_cuml, tune_cuml.mem, tune_cuml.n_elem * sizeof(double), cudaMemcpyHostToDevice, custream));
-    cu_errchk(cudaMallocAsync((void **) &d_K_tune, mm_size, custream));
-    kernel::path::cu_kernel_xy(m, m, tune_cuml.n_rows, lag, dim, lag_tile_width, lambda, gamma, d_tune_cuml, d_tune_cuml, d_K_tune, custream);
-    cu_errchk(cudaFreeAsync(d_tune_cuml, custream));
-
-    double total_score = 0;
-    assert(m - C_test_len - train_len == 0);
-    double *d_K_epsco, *d_tune_label_chunk;
-    cu_errchk(cudaMallocAsync((void **) &d_K_epsco, mm_size, custream));
-    cu_errchk(cudaMemcpyAsync(d_K_epsco, d_K_tune, mm_size, cudaMemcpyDeviceToDevice, custream));
-    solvers::G_set_diag<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_K_epsco, &epsco, m); // TODO Fix
-    cu_errchk(cudaMallocAsync((void **) &d_tune_label_chunk, m * n * sizeof(double), custream));
-    cu_errchk(cudaMemcpyAsync(d_tune_label_chunk, tune_label_chunk.mem, m * n * sizeof(double), cudaMemcpyHostToDevice, custream));
-
-    magma_int_t info;
-    const auto iters_mul = common::C_itersolve_range / double(irwls_iters);
-    auto const p_predictions = new t_param_preds::t_predictions;
-    p_predictions->fill(nullptr);
-    const auto cublas_H = magma_queue_get_cublas_handle(ma_queue);
-    std::array<double *, C_max_j> j_K_tune, j_K_epsco, j_solved, j_train_error, j_test_error, j_left, j_best_weights;
-    std::array<unsigned, C_max_j> train_start, train_end, test_start, test_len, test_len_n, test_n_size;
-#pragma vectorise C_max_j
-    for (unsigned j = 0; j < C_max_j; ++j) {
-        train_start[j] = j * C_slide_skip;
-        train_end[j] = train_start[j] + train_len;
-        test_start[j] = train_end[j];
-        test_len[j] = m - test_start[j];
-        test_len_n[j] = test_len[j] * n;
-        test_n_size[j] = test_len_n[j] * sizeof(double);
-        if (test_len[j] > train_len) LOG4_THROW("Test " << test_len[j] << " length should be smaller than train dimension " << train_len);
-        LOG4_TRACE("Try " << j << ", train start " << train_start[j] << ", train final " << train_end[j] << ", test start " <<
-                          test_start[j] << ", test len " << test_len[j] << ", train len " << train_len);
-        cu_errchk(cudaMallocAsync((void **) &j_best_weights[j], train_n_size, custream));
-        cu_errchk(cudaMallocAsync((void **) &j_left[j], K_train_size, custream));
-        cu_errchk(cudaMallocAsync((void **) &j_solved[j], train_n_size, custream));
-        cu_errchk(cudaMallocAsync((void **) &j_train_error[j], train_n_size, custream));
-        cu_errchk(cudaMallocAsync((void **) &j_test_error[j], test_len[j] * n * sizeof(double), custream));
-        j_K_tune[j] = d_K_tune + train_start[j] + train_start[j] * m;
-        j_K_epsco[j] = d_K_epsco + train_start[j] + train_start[j] * m;
-        copy_submat(d_tune_label_chunk, j_solved[j], m, train_start[j], 0, train_end[j], n, train_len, cudaMemcpyDeviceToDevice, custream);
-    }
-
-    cu_errchk(cudaStreamSynchronize(custream));
-    ma_errchk(magma_dgesv_rbt_batched(train_len, n, j_K_epsco.data(), m, j_solved.data(), train_len, &info, C_max_j, ma_queue));
-
-    std::array<double, C_max_j> best_solve_score;
-    best_solve_score.fill(std::numeric_limits<double>::infinity());
-    std::array<unsigned, C_max_j> best_iter;
-    best_iter.fill(0);
-    UNROLL(irwls_iters)
-    for (unsigned i = 1; i < irwls_iters + 1; ++i) {
-        UNROLL(C_max_j)
-        for (unsigned j = 0; j < C_max_j; ++j) copy_submat(d_tune_label_chunk, j_train_error[j], m, train_start[j], 0, train_end[j], n, train_len, cudaMemcpyDeviceToDevice, custream);
-        cb_errchk(cublasDgemmBatched(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, train_len, n, train_len, &one, j_K_tune.data(), m, j_solved.data(), train_len, &oneneg,
-                                     j_train_error.data(), train_len, C_max_j));
-        UNROLL(C_max_j)
-        for (unsigned j = 0; j < C_max_j; ++j) {
-            const auto solve_score = labels_sf * solvers::irwls_op1(j_train_error[j], train_len_n, custream);
-            if (!std::isnormal(solve_score))
-                LOG4_THROW("Score not normal " << solve_score << " for try " << j << ", iteration " << i << ", epsco " << epsco << ", gamma " << gamma << ", lambda "
-                                               << lambda << ", previous score " << total_score << ", train len " << train_len << ", tune len " << m);
-            else if (solve_score < best_solve_score[j]) {
-#ifndef NDEBUG
-                LOG4_TRACE("Try " << j << ", IRWLS iteration " << i << ", kernel dimensions " << train_len << "x" << train_len << ", former best score " <<
-                                best_solve_score << ", new best score " << solve_score << ", improvement " << 100. * (1. - solve_score / best_solve_score[j]) << " pct.");
-#endif
-                best_solve_score[j] = solve_score;
-                best_iter[j] = i;
-                cu_errchk(cudaMemcpyAsync(j_best_weights[j], j_solved[j], train_n_size, cudaMemcpyDeviceToDevice, custream));
-                // cu_errchk(cudaStreamSynchronize(custream));
-            }
-        }
-        if (i == irwls_iters) break;
-        const double iter_additive = common::C_itersolve_delta / (double(i) * iters_mul);
-        UNROLL(C_max_j)
-        for (unsigned j = 0; j < C_max_j; ++j)
-            solvers::G_irwls_op2<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(j_train_error[j], d_K_epsco + train_start[j] + train_start[j] * m, m,
-                d_tune_label_chunk + train_start[j], j_left[j], j_solved[j], iter_additive, train_len, train_len_n, K_train_len);
-        cu_errchk(cudaStreamSynchronize(custream));
-        ma_errchk(magma_dgesv_rbt_batched(train_len, n, j_left.data(), train_len, j_solved.data(), train_len, &info, C_max_j, ma_queue));
-    }
-    std::array<double, C_max_j> predict_score;
-    UNROLL(C_max_j)
-    for (unsigned j = 0; j < C_max_j; ++j) {
-        if (PROPS.get_recombine_parameters()) {
-            cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  test_len[j], n, train_len, &one, j_K_tune[j], train_len, j_best_weights[j], train_len, &zero, j_test_error[j], test_len[j]));
-            predict_score[j] = solvers::unscaled_distance(d_tune_label_chunk + test_start[j], j_test_error[j], labels_sf, test_len[j], n, m, custream);
-            if (!p_predictions->at(j)) p_predictions->at(j) = new arma::mat(test_len[j], n);
-            cu_errchk(cudaMemcpyAsync(p_predictions->at(j)->memptr(), j_test_error[j], test_n_size[j], cudaMemcpyDeviceToHost, custream));
-            *p_predictions->at(j) *= labels_sf;
-        } else {
-            copy_submat(d_tune_label_chunk, j_test_error[j], m, test_start[j], 0, m, n, train_len, cudaMemcpyDeviceToDevice, custream);
-            cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, test_len[j], n, train_len, &one, d_K_tune + test_start[j] + train_start[j] * m, m, j_best_weights[j],
-                                  train_len, &oneneg, j_test_error[j], test_len[j]));
-#if 0 // Started crashing for no reason
-            cb_errchk(cublasDasum(cublas_H, test_len_n, j_test_error, 1, &predict_score));
-            predict_score *= labels_sf / double(test_len_n);
-#else
-            predict_score[j] = labels_sf * solvers::meanabs(j_test_error[j], test_len_n[j], custream);
-#endif
-        }
-        // predict_score = 100. * predict_score / mae_lk[j]; // 100. * (predict_score + best_solve_score * solve_predict_ratio) / L_mean / 2.;
-        LOG4_TRACE("Try " << j << ", IRWLS best iteration " << best_iter[j] << ", kernel dimensions " << train_len << "x" << train_len << ", delta " <<
-                          common::C_itersolve_delta << ", range " << common::C_itersolve_range << ", solution " << train_len << "x" << n << ", test " << test_len[j] << "x"
-                          << n << ", score " << best_solve_score[j] << ", former total score " << total_score << " MAPE");
-        total_score += predict_score[j];
-        cu_errchk(cudaFreeAsync(j_best_weights[j], custream));
-        cu_errchk(cudaFreeAsync(j_left[j], custream));
-        cu_errchk(cudaFreeAsync(j_solved[j], custream));
-        cu_errchk(cudaFreeAsync(j_train_error[j], custream));
-        cu_errchk(cudaFreeAsync(j_test_error[j], custream));
-    }
-    cu_errchk(cudaFreeAsync(d_K_train, custream));
-    cu_errchk(cudaFreeAsync(d_tune_label_chunk, custream));
-    cu_errchk(cudaFreeAsync(d_K_epsco, custream));
-    cu_errchk(cudaFreeAsync(d_K_tune, custream));
-    return {total_score == common::C_bad_validation ? total_score : total_score / double(C_max_j), gamma, epsco, p_predictions};
-}
-#endif
 
 }
 }

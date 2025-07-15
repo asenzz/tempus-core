@@ -1,10 +1,13 @@
 #pragma once
 
+#include <boost/throw_exception.hpp>
+#include <boost/archive/binary_oarchive.hpp>
 #include <ostream>
 #include <string>
 #include "common/defines.h"
 #include "common/constants.hpp"
 #include "common/logging.hpp"
+#include "common/serialization.hpp"
 #include "model/Entity.hpp"
 
 //#define SMO_EPSILON 1e-3
@@ -12,59 +15,42 @@
 namespace svr {
 namespace datamodel {
 
-typedef enum class kernel_type : int
-{
-    LINEAR = 0,
-    POLYNOMIAL = 1,
-    RBF = 2,
-    RBF_GAUSSIAN = 3,
-    RBF_EXPONENTIAL = 4,
-    MLP = 5,
-    GA = 6, // global alignment
-    PATH = 7, // path kernel
-    DEEP_PATH = 8,
-    number_of_kernel_types = 9 // end of enum = invalid type
+typedef enum class kernel_type : int {
+    begin = 0,
+    LINEAR = 1,
+    POLYNOMIAL = 2,
+    RBF = 3,
+    RBF_GAUSSIAN = 4,
+    RBF_EXPONENTIAL = 5,
+    MLP = 6,
+    GA = 7,
+    PATH = 8,
+    DEEP_PATH = 9,
+    DTW = 10,
+    end = 11
 } e_kernel_type;
-
-template<typename ST>
-ST tostring(const datamodel::e_kernel_type kt)
-{
-    switch (kt) {
-        case e_kernel_type::LINEAR:
-            return "LINEAR";
-        case e_kernel_type::POLYNOMIAL:
-            return "POLYNOMIAL";
-        case e_kernel_type::RBF:
-            return "RBF";
-        case e_kernel_type::RBF_GAUSSIAN:
-            return "RBF_GAUSSIAN";
-        case e_kernel_type::RBF_EXPONENTIAL:
-            return "RBF_EXPONENTIAL";
-        case e_kernel_type::GA:
-            return "GA";
-        case e_kernel_type::PATH:
-            return "PATH";
-        case e_kernel_type::DEEP_PATH:
-            return "DEEP_PATH";
-        default:
-            return "UNKNOWN";
-    }
-}
 
 e_kernel_type operator++(e_kernel_type &k_type);
 
 e_kernel_type operator++(e_kernel_type &k_type, int);
 
+e_kernel_type fromstring(const std::string &kernel_type_str);
+
+std::string tostring(const e_kernel_type kt);
+
+std::ostream &operator<<(std::ostream &os, const e_kernel_type &kt);
+
 class SVRParameters;
 
-using SVRParameters_ptr = std::shared_ptr<datamodel::SVRParameters>;
+using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
 
 struct less_SVRParameters_ptr
 {
-    bool operator()(const datamodel::SVRParameters_ptr &lhs, const datamodel::SVRParameters_ptr &rhs) const;
+    bool operator()(const SVRParameters_ptr &lhs, const SVRParameters_ptr &rhs) const;
 };
 
-typedef std::set<datamodel::SVRParameters_ptr, less_SVRParameters_ptr> t_param_set;
+typedef std::set<SVRParameters_ptr, less_SVRParameters_ptr> t_param_set;
+
 typedef std::shared_ptr<t_param_set> t_param_set_ptr; // TODO Convert to a new class
 
 // Default SVR parameters
@@ -75,17 +61,19 @@ constexpr uint16_t C_default_svrparam_grad_level = 0;
 constexpr double C_default_svrparam_svr_cost = 0;
 constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
-constexpr double C_default_svrparam_kernel_param2 = 0;
+constexpr double C_default_svrparam_kernel_param2 = 2;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
-constexpr uint32_t C_default_svrparam_decrement_distance = common::C_best_decrement;
+constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
-constexpr svr::datamodel::e_kernel_type C_default_svrparam_kernel_type = svr::datamodel::e_kernel_type::PATH;
-constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(svr::datamodel::e_kernel_type::PATH);
+constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::PATH;
+constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(e_kernel_type::PATH);
 constexpr uint32_t C_default_svrparam_lag_count = 100; // All parameters should have the same lag count because of kernel function limitations
 const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
 struct t_feature_mechanics
 {
+    friend class boost::serialization::access;
+
     arma::u32_vec quantization; // Quantisation is per level - until computational resources allow for different quantisation per feature column
     arma::fvec stretches;
     std::deque<arma::uvec> trims;
@@ -93,6 +81,25 @@ struct t_feature_mechanics
     arma::fvec skips;
 
     bool needs_tuning() const noexcept;
+    std::stringstream save() const;
+    static t_feature_mechanics load(const std::string &bin_data);
+
+    template<typename S> void save(const t_feature_mechanics &feature_mechanics, S &output_stream) const
+    {
+        boost::archive::binary_oarchive oa(output_stream);
+        oa << feature_mechanics;
+    }
+
+    template<class A> void serialize(A &ar, const unsigned version)
+    {
+        ar & quantization;
+        ar & stretches;
+        ar & trims;
+        ar & shifts;
+        ar & skips;
+    }
+
+    bool operator == (const t_feature_mechanics &o) const;
 };
 
 
@@ -111,7 +118,6 @@ class SVRParameters : public Entity
     uint16_t grad_level_ = C_default_svrparam_grad_level;
     // TODO Implement manifold projection index
 
-    double svr_C = C_default_svrparam_svr_cost; // TODO Remove
     arma::vec epsco; // TODO Save to DB and init properly
     double svr_epsilon = C_default_svrparam_svr_epsilon;
     double svr_kernel_param = C_default_svrparam_kernel_param1;
@@ -141,11 +147,13 @@ public:
             const double svr_epsilon = C_default_svrparam_svr_epsilon,
             const double svr_kernel_param = C_default_svrparam_kernel_param1,
             const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
+            const double svr_kernel_param3 = C_default_svrparam_kernel_param_tau,
             const uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
             const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
             const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
             const uint32_t lag_count = C_default_svrparam_lag_count,
-            const std::set<uint16_t> &adjacent_levels = {});
+            const std::set<uint16_t> &adjacent_levels = {},
+            const t_feature_mechanics &feature_mechanics = {});
 
     SVRParameters(const SVRParameters &o);
 
@@ -193,10 +201,6 @@ public:
 
     void decrement_gradient() noexcept;
 
-    double get_svr_C() const noexcept;
-
-    void set_svr_C(const double _svr_C) noexcept;
-
     void set_epsco(const arma::vec &epsco) noexcept;
 
     arma::vec get_epsco() const noexcept;
@@ -218,6 +222,10 @@ public:
     double get_svr_kernel_param2() const noexcept;
 
     void set_svr_kernel_param2(const double _svr_kernel_param2) noexcept;
+
+    PROPERTY(double, svr_C, C_default_svrparam_svr_cost);
+
+    double get_svr_epsco() const noexcept;
 
     PROPERTY(double, kernel_param3, C_default_svrparam_kernel_param_tau);
 
@@ -260,39 +268,7 @@ public:
     bool from_sql_string(const std::string &sql_string);
 };
 
-
-template<typename T>
-std::basic_ostream<T> &operator<<(std::basic_ostream<T> &os, const SVRParameters &e)
-{
-    os << e.to_string();
-    return os;
-}
-
-struct t_param_preds
-{
-    typedef std::array<arma::mat *, C_max_j> t_predictions, *t_predictions_ptr;
-
-    double score = std::numeric_limits<double>::infinity();
-    svr::datamodel::SVRParameters params{};
-    t_predictions_ptr p_predictions = nullptr;
-
-    static void free_predictions(const t_predictions_ptr &p_predictions_);
-
-    void free();
-};
-
-typedef std::shared_ptr<t_param_preds> t_param_preds_ptr;
-
-
-struct t_parameter_predictions_set {
-    std::array<arma::mat, C_max_j> labels;
-    std::array<arma::mat, C_max_j> last_knowns;
-    std::array<t_param_preds, common::C_tune_keep_preds> param_pred;
-};
-
-using t_parameter_predictions_set_ptr = std::shared_ptr<t_parameter_predictions_set>;
-typedef std::unordered_map<uint16_t /* level */, t_parameter_predictions_set> t_level_tuned_parameters;
-using t_level_tuned_parameters_ptr = std::shared_ptr<t_level_tuned_parameters>;
+std::ostream &operator<<(std::ostream &os, const SVRParameters &e);
 
 }
 }

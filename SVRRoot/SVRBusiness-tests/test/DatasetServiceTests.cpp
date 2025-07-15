@@ -18,16 +18,6 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
     const uint32_t rowct = 34144256;
     double best_score = std::numeric_limits<double>::max();
     std::vector<svr::t_param_preds_cu> params_preds(colct * svr::common::C_tune_keep_preds);
-    for (uint32_t i = 0; i < colct * svr::common::C_tune_keep_preds; ++i) {
-        params_preds[i].params_ix = 0;
-        for (uint32_t j = 0; j < C_max_j; ++j) {
-            for (uint32_t el = 0; el < C_test_len; ++el) {
-                params_preds[i].labels[j][el] = 1;
-                params_preds[i].last_knowns[j][el] = 0;
-                params_preds[i].predictions[j][el] = 0;
-            }
-        }
-    }
 #if 0
     std::vector<uint8_t> combos(rowct * colct, uint8_t(1));
 #endif
@@ -36,14 +26,11 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
         combos[.5 * rowct * colct + colix] = 0;
 #endif
         params_preds[colix].params_ix = 77;
-        for (uint32_t j = 0; j < C_max_j; ++j)
-            for (uint32_t el = 0; el < C_test_len; ++el)
-                if (el % 2) params_preds[colix].predictions[j][el] = 100;
     }
     arma::uchar_mat combos(rowct, colct, arma::fill::ones);
     combos.row(combos.n_rows / 2).fill(0);
     std::vector<uint8_t> best_params_ixs(colct, uint8_t(0));
-    PROFILE_EXEC_TIME(svr::recombine_parameters(rowct, colct, combos.memptr(), params_preds.data(), &best_score, best_params_ixs.data()), "recombine_parameters");
+//    PROFILE_MSG(svr::recombine_parameters(rowct, colct, combos.memptr(), params_preds.data(), &best_score, best_params_ixs.data()), "recombine_parameters");
     LOG4_DEBUG("Best score " << best_score << ", best params ixs " << common::to_string(best_params_ixs));
 }
 
@@ -60,7 +47,7 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}
-            , svr::datamodel::Priority::Normal, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 4, "sym7");
+            , svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 
     ds->set_max_lookback_time_gap(svr::common::date_time_string_to_seconds("38,21:22:23"));
@@ -95,7 +82,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
     aci.input_queue_service.save(iq1);
 
     datamodel::Dataset_ptr ds1 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Low", user1Low->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}
-            , svr::datamodel::Priority::Low, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 4, "sym7");
+            , svr::datamodel::Priority::Low, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
     ds1->set_is_active(true);
 
     aci.dataset_service.save(ds1);
@@ -125,7 +112,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     datamodel::Dataset_ptr ds2 =
             std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Below", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{},
-                                                      svr::datamodel::Priority::BelowNormal, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 4, "sym7");
+                                                      svr::datamodel::Priority::BelowNormal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
     ds2->set_is_active(true);
 
     aci.dataset_service.save(ds2);
@@ -168,7 +155,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     ////////////////////////////////////////////////////////////////////////////
 
-    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, common::C_default_kernel_max_chunk_len, PROPS.get_multistep_len(), 4, "sym7");
+    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
     ds3->set_is_active(true);
 
     aci.dataset_service.save(ds3);

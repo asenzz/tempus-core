@@ -20,7 +20,7 @@ DaemonFacade::DaemonFacade() :
     self_request(PROPS.get_self_request())
 
 {
-    PROFILE_EXEC_TIME(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
+    PROFILE_MSG(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
     running = true;
     shm_io_thread = std::thread(&DaemonFacade::shm_io_callback, this);
     save_queues_thread = std::thread(&DaemonFacade::save_queues_callback, this);
@@ -88,7 +88,7 @@ void DaemonFacade::save_queues_callback()
 
         std::for_each(C_default_exec_policy, modified_queues.cbegin(), modified_queues.cend(), [](const auto &p_queue) {
                           const tbb::mutex::scoped_lock l2(p_queue->get_update_mutex());
-                          PROFILE_EXEC_TIME(APP.input_queue_service.save(p_queue), "Save input queue " << p_queue->get_table_name())
+                          PROFILE_MSG(APP.input_queue_service.save(p_queue), "Save input queue " << p_queue->get_table_name())
                       }
         );
         modified_queues.clear();
@@ -165,7 +165,7 @@ void DaemonFacade::start_loop()
     while (continue_loop()) {
         if (++ctr == 0) {
             const tbb::mutex::scoped_lock l(update_datasets_mx);
-            PROFILE_EXEC_TIME(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
+            PROFILE_MSG(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
         }
         for (business::DatasetService::DatasetUsers &dsu: datasets) {
 
@@ -178,8 +178,8 @@ void DaemonFacade::start_loop()
                 std::unordered_map<bigint, std::deque<datamodel::MultivalRequest_ptr>> user_requests;
                 for (const auto &p_user: dsu.users)
                     user_requests[p_user->get_id()] = context::AppContext::get_instance().request_service.get_active_multival_requests(*p_user, dataset);
-                PROFILE_EXEC_TIME(business::DatasetService::process(*dsu.p_dataset), "Process dataset");
-                for (const auto &p_user: dsu.users) PROFILE_EXEC_TIME(business::DatasetService::process_requests(*p_user, *dsu.p_dataset, user_requests[p_user->get_id()], nullptr),
+                PROFILE_MSG(business::DatasetService::process(*dsu.p_dataset), "Process dataset");
+                for (const auto &p_user: dsu.users) PROFILE_MSG(business::DatasetService::process_requests(*p_user, *dsu.p_dataset, user_requests[p_user->get_id()], nullptr),
                                                                       "Process multival requests " << p_user->get_user_name());
             } catch (const common::bad_model &ex) {
                 LOG4_ERROR("Bad model while processing dataset " << dsu.p_dataset->get_id() << " " << dsu.p_dataset->get_dataset_name()

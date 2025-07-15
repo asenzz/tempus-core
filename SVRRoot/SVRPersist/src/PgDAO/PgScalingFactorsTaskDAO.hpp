@@ -1,7 +1,7 @@
 #ifndef PGSCALINGFACTORSTASKDAO_HPP
 #define PGSCALINGFACTORSTASKDAO_HPP
 
-#include <DAO/ScalingFactorsTaskDAO.hpp>
+#include "DAO/ScalingFactorsTaskDAO.hpp"
 
 namespace svr {
 namespace dao {
@@ -9,7 +9,7 @@ namespace dao {
 class PgScalingFactorsTaskDAO: public ScalingFactorsTaskDAO
 {
 public:
-    explicit PgScalingFactorsTaskDAO(svr::common::PropertiesFileReader& sql_properties, svr::dao::DataSource& data_source);
+    explicit PgScalingFactorsTaskDAO(common::PropertiesReader& sql_properties, dao::DataSource& data_source);
 
     bigint get_next_id();
     bool exists(const bigint id);

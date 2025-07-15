@@ -68,7 +68,7 @@ run_file(
 
 TEST(path_tune_train_predict2, basic_integration)
 {
-    //svr::IKernel<double>::IKernelInit();
+    //svr::IKernel<double>::init();
    std::vector<std::vector<double>> predicted_mx(file_name_pairs.size());
     std::vector<double> predicted_prices;
 #if 0 // All levels?

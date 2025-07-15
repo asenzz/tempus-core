@@ -1,4 +1,9 @@
-SVRWorkspace contains the new platform for developing modular system.
+<h2 align="center">About Tempus</h2>
+
+Tempus is a project aimed at utilizing the cutting edge methods to apply non-linear regression problems. In it's core Tempus uses an advanced SVM implementation that fixes several inconsistencies of the original theory by prof. Vapnik and Chervonenkis to achieve forecast precision better than any other algorithm currently available in the field of statistical learning. This is accomplished by calculating the ideal kernel matrix for the given observations (labels) and then produce a kernel function fitted as tight as possible to it in order to extract all relevant information contained in the dataset. Having the ideal kernel matrix available for any given data allows this SVM implementation to nest several support vector machines into each other as kernel functions, or having a different statistical model produce the kernel function (eg. gradient boosted trees using <a href="https://github.com/microsoft/LightGBM">LightGBM</a> or a temporal fusion transformer using <a href="https://pytorch.org/">Torch</a>). Also, several conventional kernel methods are also implemented as part of Tempus, such are a fast variant of the <a href="https://www.scitepress.org/PublishedPapers/2013/42673/">Path Kernel (Baisero et al.)</a>, the Radial-basis function, the <a href="https://marcocuturi.net/GA.html">Global Alignment Kernel (Cuturi et al.)</a>. For this implementation there is no need to tune the regularization cost parameter, epsilon thresholding or do tuning of hyperparameters using a train-predict validation cycle. The model produced is optimal for the available data and hardware resources configured. Beside nesting of kernel functions, three other methods of scaling (or ensembling) are provided; in the spectral domain using a modified online empirical model decomposition, in the time domain or time slicing and sequential residuals or gradient boosting (the last one is work in progress). Each SVM model can have multiple weight layers according to the complexity of the trained data. Weights are produced by a standard non-linear Ax=b matrix solver - Pruned <a href="https://github.com/avaneev/biteopt">BiteOpt</a> which is based on the CMA-ES algorithm, but interfaces to <a href="https://petsc.org/release">PETSc</a>, <a href="https://github.com/icl-utk-edu/magma">MAGMA</a>, <a href="https://developer.nvidia.com/cusolver">CUSolver</a> and pruned <a href="https://github.com/libprima">PRIMA</a> are also available. Feature alignment and outlier filtering of the input data is implemented using the <a href="https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-summary-statistics-notes/2021-1/using-the-bacon-algorithm-for-outlier-detection.html">BACON</a> algorithm, <a href="https://github.com/ojmakhura/hdbscan">HDBScan</a> and simple Euclidean distance works good enough. This allows Tempus to efficiently model extremely noisy data.  
+An online learning mode is in the works.
+
+Tempus is a project that unites researchers and engineers from several countries and academic institutions in order to exchange ideas, learn and achieve the best performance in time series analysis using the latest methods in statistical analysis and signal processing. It makes use of HPC technologies such is OpenCL, Cilk Plus, CUDA and MPI to deliver maximum performance over highly scaled systems. Tempus can scale on many GPUs and and CPUs increasing precision and almost linear increase in performance in data processing.
 
 It consists of multiple modules (libraries):
 
@@ -21,42 +26,38 @@ Note:
 	- Change the value of *SQL_PROPERTIES_LOCATION* config variable according to the location on your disk (which is located in SVRWorkspace/SVRCommon/include/config/common.hpp)
 
 
-Tempus is a project that unites researchers and engineers from several countries and academic institutions in order to
-exchange ideas, learn and achieve the best performance in time series analysis using the latest methods in statistical analysis and signal processing.
-It makes of HPC technologies such is OpenCL, Cilk Plus, CUDA and MPI to deliver maximum performance over highly scaled systems.
-Our scalable, high performance support vector regression and decomposition methods allow us to achieve monthly average of 71% price
-hit-rate per 4H EUR USD bars from the freely available data on the DukasCopy website, on a 4 x V100, 256 GB RAM single server in near-real-time (2 minutes delay).
-Tempus can scale on hundreds of GPUs and thousands of CPUs increasing precision and almost linear increase in performance.
+<h2 align="center">History</h2>
 
-I would like to thank the Shehadi family for making this project possible.
+The first implementation of Tempus started as a spin off of my University diploma work on the subject of scaling support vectors machine using the Wavelet transform in 2011. Me and Viktor Gjorgjievski wrote the intial implementation as an open source project on sourceforge.net. Later on I closed the project and secured financing from the Papakaya company in the order of 1.2 million euros, including my own means. This allowed me to hire many professional contributor and consult known experts on the subject, engineers and professors. The final goal being prediction of financial indexes or indicators. Tempus can, even with a modest GPU server (24 TFLOPS) produce positive forecast alpha when applied to the XAUUSD index.
 
 Thanks to everyone involved at the Bulgarian Academy of Sciences lending their super computer,
 Ben Gurion University at Ber-Sheva for computing servers, FINKI Macedonia, Taras Shevchenko University.
 
-Authors:
+<h3>Authors:</h3>
 
-me - Lead dreamer, Kernel gamma systematic selection, ADA boosting of weights, optimal EMD coefficients, integration and testing
-prof Emanouil Atanasov - Design and implementation of chunking MIMO SVR, Online EVMD, kernels, CUDA and OpenCL parallelization
-Andrey Bezrukov - Project architecture and skeleton, optimization and parallelization
-Evgeniy Marinov - Actually accurate Online SVR
-Bojko Perfanov - SVR Epsilon and Cost path computation, (almost) boundless Wavelet decomposition à trous
-Sergej Kondratiuk - SMO and Online SVR pilot implementation, cascaded SVM
-Viktor Gjorgjievski - Initial project architecture design and implementation
-Taras Maliarcuk - Infrastructure and project architecture
-Guy Tal - Database and multithreading, optimization
-Stiljan Stojanov -  Implementation of the MIMO SVR, EVMD, kernels,
-Petar Simov - SVR and epsilon SVR path, infrastructure
-Dimitar Conov - GA kernel
-Stanislav Georgiev - Online SMO SVR, Wavelet decomposition
-Dimitar Slavchev - OpenCL kernels
-Vladimir Hizanov - Parameter tuning
+- me - Lead dreamer, Kernel gamma systematic selection, ADA boosting of weights, optimal EMD coefficients, integration and testing
+- prof Emanouil Atanasov - Design and implementation of chunking MIMO SVR, Online EVMD, kernels, CUDA and OpenCL parallelization
+- Andrey Bezrukov - Project architecture and skeleton, optimization and parallelization
+- Evgeniy Marinov - Actually accurate Online SVR
+- Bojko Perfanov - SVR Epsilon and Cost path computation, (almost) boundless Wavelet decomposition à trous
+- Sergej Kondratiuk - SMO and Online SVR pilot implementation, cascaded SVM
+- Viktor Gjorgjievski - Initial project architecture design and implementation
+- Taras Maliarcuk - Infrastructure and project architecture
+- Guy Tal - Database and multithreading, optimization
+- Stiljan Stojanov -  Implementation of the MIMO SVR, EVMD, kernels,
+- Petar Simov - SVR and epsilon SVR path, infrastructure
+- Dimitar Conov - GA kernel
+- Stanislav Georgiev - Online SMO SVR, Wavelet decomposition
+- Dimitar Slavchev - OpenCL kernels
+- Vladimir Hizanov - Parameter tuning
+
 Thanks to:
-Kristina Eskenazi - PR and connections
-Petar Ivanov - Web interface code
-George Kour - ML consulting
-prof Jihad El-Sana - Advice and support
-prof Dejan Gjorgjevik - Consultancy and support, referring students at FINKI Skopje
-prof William Cohen - ADA boost code
-Oleg Gumbar, Milen Hristov, Aleksandar Miladinov, Ali Kasmu - Sysadmins
-Vasil Savuliak - Referring people in Kiev
-Rajcho Mukelov - Crazy and moral values preaching
+- Kristina Eskenazi - PR and connections
+- Petar Ivanov - Web interface code
+- George Kour - ML consulting
+- prof Jihad El-Sana - Advice and support
+- prof Dejan Gjorgjevik - Consultancy and support, referring students at FINKI Skopje
+- prof William Cohen - ADA boost code
+- Oleg Gumbar, Milen Hristov, Aleksandar Miladinov, Ali Kasmu - Sysadmins
+- Vasil Savuliak - Referring people for the office in Kiev
+

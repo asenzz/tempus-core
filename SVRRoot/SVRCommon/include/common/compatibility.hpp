@@ -25,8 +25,12 @@
 
 namespace bpt = boost::posix_time;
 
+#define ARRAYLEN(X) (sizeof(X) / sizeof((X)[0]))
+#define ARMASIZEOF(X) (X).n_elem * sizeof((X)[0])
+
 #define DTYPE(T) std::decay_t<decltype(T)>
 #define CAST2(x) (DTYPE(x))
+#define PCAST(T, X) (*std::launder(reinterpret_cast<T *>(&(X))) )
 #define RELEASE_CONT(x) DTYPE((x)){}.swap((x));
 #define PRAGMASTR(_STR) _Pragma(TOSTR(_STR))
 #define CPTR(T) const T *const
@@ -36,7 +40,7 @@ namespace bpt = boost::posix_time;
 #define CRPTRd CRPTR(double)
 
 // General utility macro
-#define PP_CAT( A, B ) A ## B
+#define PP_CAT(A, B) A ## B
 #define PP_EXPAND(...) __VA_ARGS__
 
 // Macro overloading feature support
@@ -46,7 +50,7 @@ namespace bpt = boost::posix_time;
 #define PP_ZERO_ARGS_DETECT_PREFIX__ZERO_ARGS_DETECT_SUFFIX ,,,,,,,,,,,0
 
 #define PP_APPLY_ARG_N(ARGS) PP_EXPAND(PP_ARG_N ARGS)
-#define PP_ARG_N(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N,...) N
+#define PP_ARG_N(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N, ...) N
 #define PP_RSEQ_N 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 
 #define PP_OVERLOAD_SELECT(NAME, NUM) PP_CAT( NAME ## _, NUM)
@@ -65,14 +69,13 @@ namespace bpt = boost::posix_time;
 #define PROPERTY_3(T, X, D) private: T X = D; PROPERTY_PUBLISHED(T, X)
 
 
-template <typename T>
-struct return_type : return_type<decltype(&T::operator())>
-{};
+template<typename T>
+struct return_type : return_type<decltype(&T::operator())> {
+};
 // For generic types, directly use the result of the signature of its 'operator()'
 
-template <typename ClassType, typename ReturnType, typename... Args>
-struct return_type<ReturnType(ClassType::*)(Args...) const>
-{
+template<typename ClassType, typename ReturnType, typename... Args>
+struct return_type<ReturnType(ClassType::*)(Args...) const> {
     using type = ReturnType;
 };
 
@@ -98,47 +101,40 @@ namespace svr {
 
 constexpr double C_double_nan = std::numeric_limits<double>::quiet_NaN();
 
-template <typename... T>
-constexpr auto make_array(T&&... values) ->
-        std::array<
-            typename std::decay<
+template<typename... T>
+constexpr auto make_array(T &&... values) ->
+std::array<
+        typename std::decay<
                 typename std::common_type<T...>::type>::type,
-            sizeof...(T)> {
+        sizeof...(T)>
+{
     return {std::forward<T>(values)...};
 }
 
 template<typename T, typename Enable = void>
-struct is_smart_pointer
-{
-    enum
-    {
+struct is_smart_pointer {
+    enum {
         value = false
     };
 };
 
 template<typename T>
-struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::shared_ptr<typename T::element_type>>::value>::type>
-{
-    enum
-    {
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::shared_ptr<typename T::element_type>>::value>::type> {
+    enum {
         value = true
     };
 };
 
 template<typename T>
-struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::unique_ptr<typename T::element_type>>::value>::type>
-{
-    enum
-    {
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::unique_ptr<typename T::element_type>>::value>::type> {
+    enum {
         value = true
     };
 };
 
 template<typename T>
-struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::weak_ptr<typename T::element_type>>::value>::type>
-{
-    enum
-    {
+struct is_smart_pointer<T, typename std::enable_if<std::is_same<typename std::remove_cv<T>::type, std::weak_ptr<typename T::element_type>>::value>::type> {
+    enum {
         value = true
     };
 };
@@ -153,7 +149,7 @@ typedef arma::Col<std::time_t> tvec;
 std::string demangle(const std::string &name);
 
 template<typename T>
-bool operator != (const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
+bool operator!=(const std::set<std::shared_ptr<T>> &lhs, const std::set<std::shared_ptr<T>> &rhs)
 {
     if (lhs.size() != rhs.size()) return true;
     for (auto lhs_iter = lhs.begin(), rhs_iter = rhs.begin(); lhs_iter != lhs.end(), rhs_iter != rhs.end(); ++lhs_iter, ++rhs_iter) {
@@ -165,24 +161,22 @@ bool operator != (const std::set<std::shared_ptr<T>> &lhs, const std::set<std::s
 }
 
 
-bool operator != (const std::deque<std::string> &lhs, const std::deque<std::string> &rhs);
+bool operator!=(const std::deque<std::string> &lhs, const std::deque<std::string> &rhs);
 
-bool operator < (const arma::SizeMat &lhs, const arma::SizeMat &rhs);
+bool operator<(const arma::SizeMat &lhs, const arma::SizeMat &rhs);
 
-bool operator < (const std::set<size_t> &lhs, const std::set<size_t> &rhs);
+bool operator<(const std::set<size_t> &lhs, const std::set<size_t> &rhs);
 
 using type_info_ref = std::reference_wrapper<const std::type_info>;
 
-struct type_hasher
-{
+struct type_hasher {
     std::size_t operator()(type_info_ref code) const
     {
         return code.get().hash_code();
     }
 };
 
-struct equal_to
-{
+struct equal_to {
     bool operator()(type_info_ref lhs, type_info_ref rhs) const
     {
         return lhs.get() == rhs.get();
@@ -214,12 +208,12 @@ template<typename T, typename C> inline const T &operator^(const std::set<T, C> 
     return *std::next(s.cbegin(), i);
 }
 
-template<typename T> inline const T &operator^(const tbb::concurrent_set <T> &s, const size_t i)
+template<typename T> inline const T &operator^(const tbb::concurrent_set<T> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);
 }
 
-template<typename T, typename C> inline const T &operator^(const tbb::concurrent_set <T, C> &s, const size_t i)
+template<typename T, typename C> inline const T &operator^(const tbb::concurrent_set<T, C> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);
 }
@@ -259,49 +253,49 @@ template<typename K, typename V> inline V &operator^(std::unordered_map<K, V> &s
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> inline const K &operator%(const tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> inline const K &operator%(const tbb::concurrent_map<K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->first;
 }
 
-template<typename K, typename V> inline const V &operator^(const tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> inline const V &operator^(const tbb::concurrent_map<K, V> &s, const size_t i)
 {
     return std::next(s.cbegin(), i)->second;
 }
 
-template<typename K, typename V> inline V &operator^(tbb::concurrent_map <K, V> &s, const size_t i)
+template<typename K, typename V> inline V &operator^(tbb::concurrent_map<K, V> &s, const size_t i)
 {
     return std::next(s.begin(), i)->second;
 }
 
-template<typename K, typename V> inline const K &last(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const K &last(const tbb::concurrent_map<K, V> &s)
 {
     if (s.size() < 2) return *s.cbegin()->first;
     return std::prev(s.end())->first;
 }
 
-template<typename K, typename V> inline const V &back(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const V &back(const tbb::concurrent_map<K, V> &s)
 {
     if (s.size() < 2) return *s.cbegin()->second;
     return std::prev(s.cend())->second;
 }
 
-template<typename K, typename V> inline const K &first(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const K &first(const tbb::concurrent_map<K, V> &s)
 {
     return s.cbegin()->first;
 }
 
-template<typename K, typename V> inline const V &front(const tbb::concurrent_map <K, V> &s)
+template<typename K, typename V> inline const V &front(const tbb::concurrent_map<K, V> &s)
 {
     return s.cbegin()->second;
 }
 
-template<typename V> inline const V &front(const tbb::concurrent_set <V> &s)
+template<typename V> inline const V &front(const tbb::concurrent_set<V> &s)
 {
     return *s.cbegin();
 }
 
-template<typename V> inline const V &back(const tbb::concurrent_set <V> &s)
+template<typename V> inline const V &back(const tbb::concurrent_set<V> &s)
 {
     if (s.size() < 2) return *s.cbegin();
     return *std::prev(s.cend());
@@ -318,22 +312,36 @@ template<typename V, typename L> inline const V &back(const std::set<V, L> &s)
     return *std::prev(s.cend());
 }
 
+template<typename T> inline bool operator==(const arma::Mat<T> &lhs, const arma::Mat<T> &rhs)
+{
+    if (lhs.n_rows != rhs.n_rows || lhs.n_cols != rhs.n_cols) return false;
+    for (size_t i = 0; i < lhs.n_rows; ++i)
+        for (size_t j = 0; j < lhs.n_cols; ++j)
+            if (lhs(i, j) != rhs(i, j)) return false;
+    return true;
+}
 
-template<typename T> auto
-operator==(const std::deque<std::shared_ptr<T>> &lhs, const std::deque<std::shared_ptr<T>> &rhs)
+template<typename T> inline bool operator==(const std::deque<std::shared_ptr<T>> &lhs, const std::deque<std::shared_ptr<T>> &rhs)
 {
     if (lhs.size() != rhs.size()) return false;
     for (size_t i = 0; i < lhs.size(); ++i) {
-        if (bool(lhs.at(i)) == bool(rhs.at(i))
-            && *lhs.at(i) == *rhs.at(i))
-            continue;
+        if (bool(lhs.at(i)) == bool(rhs.at(i)) && *lhs.at(i) == *rhs.at(i)) continue;
         return false;
     }
     return true;
 }
 
-template<typename T> auto
-operator==(const std::deque<T> &lhs, const std::deque<T> &rhs)
+template<typename T> inline bool operator==(const std::deque<arma::Col<T>> &lhs, const std::deque<arma::Col<T>> &rhs)
+{
+    if (lhs.size() != rhs.size()) return false;
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (arma::all(lhs.at(i) == rhs.at(i))) continue;
+        return false;
+    }
+    return true;
+}
+
+template<typename T> inline bool operator==(const std::deque<T> &lhs, const std::deque<T> &rhs)
 {
     if (lhs.size() != rhs.size()) return false;
     for (size_t i = 0; i < lhs.size(); ++i) {
@@ -342,7 +350,6 @@ operator==(const std::deque<T> &lhs, const std::deque<T> &rhs)
     }
     return true;
 }
-
 
 namespace common {
 
@@ -368,7 +375,7 @@ max_size(const C &container)
 
 
 template<typename T>
-arma::uvec lower_bound(const arma::Mat <T> &m1, const arma::Mat <T> &m2)
+arma::uvec lower_bound(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
 {
     arma::uvec r;
 #pragma omp parallel for ordered schedule(static, 1 + m2.size() / C_n_cpu) num_threads(adj_threads(m2.size()))
@@ -422,8 +429,8 @@ clone_shared_ptr_elements(const std::deque<std::shared_ptr<T>> &arg)
 }
 
 template<typename T, typename L>
-tbb::concurrent_set <std::shared_ptr<T>, L> inline
-clone_shared_ptr_elements(const tbb::concurrent_set <std::shared_ptr<T>, L> &arg)
+tbb::concurrent_set<std::shared_ptr<T>, L> inline
+clone_shared_ptr_elements(const tbb::concurrent_set<std::shared_ptr<T>, L> &arg)
 {
     tbb::concurrent_set<std::shared_ptr<T>, L> res;
 #pragma omp parallel num_threads(adj_threads(arg.size()))
@@ -487,7 +494,7 @@ to_times(const std::map<bpt::ptime, std::shared_ptr<T>> &data_rows)
 
 
 template<typename T> void
-tovec(const arma::Mat <T> &input, std::vector<T> &output)
+tovec(const arma::Mat<T> &input, std::vector<T> &output)
 {
     output.resize(input.n_elem);
     output.shrink_to_fit();
@@ -495,7 +502,7 @@ tovec(const arma::Mat <T> &input, std::vector<T> &output)
 }
 
 template<typename T> std::vector<T>
-tovec(const arma::Mat <T> &input)
+tovec(const arma::Mat<T> &input)
 {
     std::vector<T> output(input.n_elem);
     tovec(input, output);
@@ -504,8 +511,8 @@ tovec(const arma::Mat <T> &input)
 
 viennacl::vector<double> tovcl(const arma::colvec &in);
 
-template<typename T> viennacl::matrix <T>
-tovcl(const arma::Mat <T> &in, const viennacl::ocl::context &cx)
+template<typename T> viennacl::matrix<T>
+tovcl(const arma::Mat<T> &in, const viennacl::ocl::context &cx)
 {
     cl_int rc;
     auto clbuf = (T *) clCreateBuffer(cx.handle().get(), CL_MEM_READ_WRITE, in.n_elem * sizeof(T), nullptr, &rc);
@@ -527,8 +534,8 @@ tovcl(const arma::Mat<T> &in)
 }
 
 
-template<typename T> arma::Col <T>
-toarmacol(const tbb::concurrent_vector <T> &v)
+template<typename T> arma::Col<T>
+toarmacol(const tbb::concurrent_vector<T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());
@@ -536,8 +543,8 @@ toarmacol(const tbb::concurrent_vector <T> &v)
     return r;
 }
 
-template<typename T> arma::Col <T>
-toarmacol(const tbb::concurrent_unordered_set <T> &v)
+template<typename T> arma::Col<T>
+toarmacol(const tbb::concurrent_unordered_set<T> &v)
 {
     arma::Col<T> r;
     r.set_size(v.size());
@@ -546,11 +553,10 @@ toarmacol(const tbb::concurrent_unordered_set <T> &v)
 }
 
 
-template<typename T> arma::Mat <T>
-toarma(const viennacl::matrix <T> &in)
+template<typename T> arma::Mat<T>
+toarma(const viennacl::matrix<T> &in)
 {
     arma::Mat<T> r(in.internal_size1(), in.internal_size2());
-
     switch (in.memory_domain()) {
         case viennacl::memory_types::OPENCL_MEMORY:
         case viennacl::memory_types::CUDA_MEMORY:
@@ -562,7 +568,7 @@ toarma(const viennacl::matrix <T> &in)
         default:
             throw std::invalid_argument("Unknown memory domain of matrix " + std::to_string(in.memory_domain()));
     }
-
+    // TODO Fix bug, copy using stride1 and stride2 in consideration depending on row major or col major
     if (in.row_major()) r = r.t();
     if (in.size1() != in.internal_size1()) r.shed_rows(in.size1(), in.internal_size1() - 1);
     if (in.size2() != in.internal_size2()) r.shed_cols(in.size2(), in.internal_size2() - 1);
@@ -591,8 +597,7 @@ typename Container::iterator remove_constness(Container &c, ConstIterator it)
 
 
 template<typename T>
-struct copyatomic
-{
+struct copyatomic {
     std::atomic<T> _a;
 
     copyatomic()
@@ -691,6 +696,55 @@ void remove_if(ContainerT &items, const PredicateT &predicate)
         } else
             ++it;
 }
+
+template<typename T> class threadsafe_uniform_int_distribution : public std::uniform_int_distribution<T> {
+    omp_lock_t *const _p_lock;
+public:
+    threadsafe_uniform_int_distribution(const T &a, const T &b): std::uniform_int_distribution<T>(a, b), _p_lock(new omp_lock_t())
+    {
+        omp_init_lock(_p_lock);
+    }
+
+    ~threadsafe_uniform_int_distribution()
+    {
+        omp_destroy_lock(_p_lock);
+        delete _p_lock;
+    }
+
+    template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator& __urng)
+    {
+        T result;
+        omp_set_lock(_p_lock);
+        result = std::uniform_int_distribution<T>::operator()(__urng);
+        omp_unset_lock(_p_lock);
+        return result;
+    }
+};
+
+template<typename T>
+class threadsafe_uniform_real_distribution : private std::uniform_real_distribution<T> {
+    omp_lock_t _lock;
+public:
+    threadsafe_uniform_real_distribution(const T &a, const T &b)
+            : std::uniform_real_distribution<T>(a, b)
+    {
+        omp_init_lock(&_lock);
+    }
+
+    ~threadsafe_uniform_real_distribution()
+    {
+        omp_destroy_lock(&_lock);
+    }
+
+    template<typename _UniformRandomBitGenerator> T operator()(_UniformRandomBitGenerator& __urng)
+    {
+        T result;
+        omp_set_lock(&_lock);
+        result = std::uniform_real_distribution<T>::operator()(__urng);
+        omp_unset_lock(&_lock);
+        return result;
+    }
+};
 
 } // namespace common
 } // namespace svr

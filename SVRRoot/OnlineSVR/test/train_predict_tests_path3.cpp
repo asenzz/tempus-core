@@ -22,7 +22,7 @@ double nm_wrapper3(const std::vector<double> &params, const arma::mat &learning_
     SVRParameters model_svr_parameters(
             0, 0, "", "", 0, 152168000, 0, params[0], 1, 20000, 0.640625, static_cast<const e_kernel_type>(7), 400);
     double mae = 0.;
-    PROFILE_EXEC_TIME(mae = train_predict_cycle(
+    PROFILE_MSG(mae = train_predict_cycle(
             model_svr_parameters, labels_mx, features_mx, n_total_samples, num_values_trained_batch,
             reference_data, learning_data), "Train predict cycle");
     return mae;
@@ -31,7 +31,7 @@ double nm_wrapper3(const std::vector<double> &params, const arma::mat &learning_
     SVRParameters model_svr_parameters(
             0, 0, "", "", 0, 0, 0, params[0], 1, DEFAULT_SVR_DECREMENT, DEFAULT_ADJACENT, static_cast<const e_kernel_type>(7),
             DEFAULT_LAG);
-    // PROFILE_EXEC_TIME(cur_variance_diff = svr::OnlineSVR::produce_kernel_matrices_variance(model_svr_parameters, learning_data, reference_data, false),
+    // PROFILE_MSG(cur_variance_diff = svr::OnlineSVR::produce_kernel_matrices_variance(model_svr_parameters, learning_data, reference_data, false),
 //                      "produce_kernel_matrices_variance");
     return cur_variance_diff;
 #endif
@@ -84,7 +84,7 @@ void run_file3(const std::pair<std::string /* labels full path */, std::string /
             model_svr_parameters.set_svr_C(cost);
             model_svr_parameters.set_svr_kernel_param(std::pow(model_svr_parameters.get_svr_kernel_param(), kernel_param_exp));
             double mae = 0.;
-            PROFILE_EXEC_TIME(mae = train_predict_cycle_smo(
+            PROFILE_MSG(mae = train_predict_cycle_smo(
                     model_svr_parameters, n_total_samples, num_values_trained_batch, all_labels_mx, all_features_mx), "Train predict cycle SMO");
             {
                 std::scoped_lock printout_guard(printout_mutex);
@@ -108,7 +108,7 @@ void run_file3(const std::pair<std::string /* labels full path */, std::string /
 
 TEST(path_tune_train_predict3, basic_integration)
 {
-    svr::IKernel<double>::IKernelInit();
+    svr::IKernel<double>::init();
     std::mutex printout_mutex;
     std::atomic<size_t> running_ct = 0;
 #if 0 // All levels?

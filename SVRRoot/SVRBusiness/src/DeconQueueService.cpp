@@ -66,7 +66,7 @@ void DeconQueueService::prepare_decon(datamodel::Dataset &dataset, const datamod
     if (first_offending == bpt::max_date_time) return;
     else if (first_offending == bpt::min_date_time && decon_queue.get_data().size()) decon_queue.get_data().clear();
     else if (decon_queue.size() && first_offending < decon_queue.back()->get_value_time())
-        decon_queue.get_data().erase(lower_bound_back(decon_queue.get_data(), first_offending), decon_queue.end());
+        decon_queue.get_data().erase(lower_bound(decon_queue.get_data(), first_offending), decon_queue.end());
     deconstruct(dataset, input_queue, decon_queue);
 
     LOG4_END();
@@ -158,7 +158,7 @@ DeconQueueService::deconstruct(
     const auto levct = dataset.get_spectral_levels();
     const auto resolution = input_queue.get_resolution();
     const auto main_resolution = dataset.get_input_queue()->get_resolution();
-    if (resolution == main_resolution || dataset.get_spectral_levels() < MIN_LEVEL_COUNT) // A hack to avoid proper deconstruction of unused data
+    if (dataset.get_input_queue()->get_table_name() == input_queue.get_table_name() || dataset.get_spectral_levels() < MIN_LEVEL_COUNT) // avoid deconstruction of unused data
         return dummy_decon(input_queue, decon_queue, input_column_index, levct, scaler);
 
     const double res_ratio = main_resolution / resolution;
@@ -171,14 +171,15 @@ DeconQueueService::deconstruct(
     LOG4_DEBUG("Input data length " << input_queue.size() << ", columns " << input_queue.front()->size() << ", combined residual length " << residuals <<
                                     ", input column index " << input_column_index << ", test offset " << test_offset << ", main to aux queue resolution ratio " << res_ratio);
     const auto pre_decon_size = decon_queue.size();
+
 #if defined(VMD_ONLY) && !defined(EMD_ONLY)
-    PROFILE_EXEC_TIME(dataset.get_cvmd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
+    PROFILE_MSG(dataset.get_cvmd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler), "CVMD transform");
 #endif
 #ifndef VMD_ONLY
 #if defined(EMD_ONLY)
-    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals, main_resolution), "OEMD transform");
+    PROFILE_MSG(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals, main_resolution), "OEMD transform");
 #else
-    PROFILE_EXEC_TIME(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals, resolution), "OEMD fat transform");
+    PROFILE_MSG(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals, resolution), "OEMD fat transform");
 #endif
 #endif
 
@@ -191,9 +192,9 @@ DeconQueueService::deconstruct(
         decon_queue.get_data().erase(decon_queue.begin(), (decon_queue.get_data().rbegin() + trim_diff).base());
     }
 
-    if (common::PropertiesFileReader::S_log_threshold > boost::log::trivial::severity_level::trace) return;
+    if (common::AppConfig::S_log_threshold > boost::log::trivial::severity_level::trace) return;
 
-    const auto chunk_len_res = common::C_default_kernel_max_chunk_len * res_ratio;
+    const auto chunk_len_res = PROPS.get_kernel_length() * res_ratio;
     const auto start_rms = decon_queue.size() > chunk_len_res ? decon_queue.size() - chunk_len_res : 0;
     OMP_FOR_i(dataset.get_spectral_levels())
         BOOST_LOG_TRIVIAL(trace) << BOOST_CODE_LOCATION % "RMS power for level " << i << " is " << common::meanabs(decon_queue.get_column_values(i, start_rms)) << ", start " << start_rms;
@@ -208,7 +209,7 @@ void DeconQueueService::dummy_decon(
 
     const auto &input_data = input_queue.get_data();
     const double modct = ModelService::to_model_ct(levct);
-    auto initer = decon_queue.empty() ? input_data.cbegin() : upper_bound_back(input_data, decon_queue.back()->get_value_time());
+    auto initer = decon_queue.empty() ? input_data.cbegin() : upper_bound(input_data, decon_queue.back()->get_value_time());
     const auto inct = std::distance(initer, input_data.cend());
     const auto prev_outct = decon_queue.size();
     decon_queue.get_data().resize(prev_outct + inct);
@@ -328,8 +329,7 @@ void DeconQueueService::reconstruct(
 
     const auto levct = decon.levels();
 
-    if (levct < 1)
-        LOG4_THROW("No levels to reconstruct.");
+    if (levct < 1) LOG4_THROW("No levels to reconstruct.");
 
     std::function<void(double &, const double)> op;
     if (levct > 1)
@@ -364,6 +364,7 @@ void DeconQueueService::reconstruct(
                 if (l != trans_levix)
                     op(v, d.get_value(l));
         }
+        LOG4_TRACE("Reconstructed value " << v << " for row " << i << " at " << d.get_value_time() << ", unscaled " << iq_unscaler(v));
         recon[startout + i] = otr<datamodel::DataRow>(d.get_value_time(), time_nau, d.get_tick_volume(), std::vector{iq_unscaler(v)});
     }
     LOG4_END();
@@ -378,7 +379,7 @@ DeconQueueService::load(datamodel::DeconQueue &decon_queue, const bpt::ptime &ti
     else {
         std::deque<datamodel::DataRow_ptr> new_data = decon_queue_dao.get_data(decon_queue.get_table_name(), time_from, time_to, limit);
         if (new_data.size() && new_data.front()->get_value_time() <= data.back()->get_value_time())
-            data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.cend());
+            data.erase(lower_bound(data, new_data.front()->get_value_time()), data.cend());
         data.insert(data.cend(), new_data.cbegin(), new_data.cend());
     }
 }
@@ -394,7 +395,7 @@ DeconQueueService::load_latest(datamodel::DeconQueue &decon_queue, const bpt::pt
     else {
         const auto new_data = decon_queue_dao.get_latest_data(decon_queue.get_table_name(), time_to, limit);
         if (!new_data.empty() and new_data.front()->get_value_time() <= data.back()->get_value_time())
-            data.erase(lower_bound_back(data, new_data.front()->get_value_time()), data.cend());
+            data.erase(lower_bound(data, new_data.front()->get_value_time()), data.cend());
         data.insert(data.cend(), new_data.cbegin(), new_data.cend());
         LOG4_DEBUG("Retrieved " << new_data.size() << " rows.");
     }

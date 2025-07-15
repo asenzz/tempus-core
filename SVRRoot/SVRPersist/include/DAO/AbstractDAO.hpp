@@ -10,42 +10,38 @@ namespace dao {
 class DataSource;
 
 class AbstractDAO {
-    svr::common::PropertiesFileReader& sql_properties;
+    common::PropertiesReader &sql_properties;
     const std::string properties_file_name;
+
 protected:
-    DataSource& data_source;
+    DataSource &data_source;
 
     virtual ~AbstractDAO();
-    explicit AbstractDAO(svr::common::PropertiesFileReader& sql_properties, DataSource& data_source, std::string properties_file_name);
+
+    explicit AbstractDAO(common::PropertiesReader &sql_properties, DataSource &data_source, const std::string &properties_file_name);
 
     template<class BasicDao, class PostgresDao, class AsyncDao, class ThreadSafeDao>
-    static BasicDao * build (svr::common::PropertiesFileReader& sql_properties, DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+    static BasicDao *build(common::PropertiesReader &sql_properties, DataSource &data_source, const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
 public:
-    DataSource& get_data_source(){ return data_source; }
-    virtual std::string get_sql(const std::string& sql_key);
+    DataSource &get_data_source();
+
+    virtual std::string get_sql(const std::string &sql_key);
 };
 
 
-template<class BasicDao, class PostgresDao, class AsyncDao, class ThreadSafeDao>
-BasicDao * AbstractDAO::build (svr::common::PropertiesFileReader& sql_properties, DataSource& data_source, svr::common::ConcreteDaoType dao_type, bool use_threadsafe_dao)
+template<class BasicDao, class PostgresDao, class AsyncDao, class ThreadSafeDao> BasicDao *
+AbstractDAO::build(
+        common::PropertiesReader &sql_properties,
+        DataSource &data_source,
+        const common::ConcreteDaoType dao_type,
+        const bool use_threadsafe_dao)
 {
-    BasicDao * basic_dao = nullptr;
-
-    if(dao_type == svr::common::ConcreteDaoType::AsyncDao)
-        basic_dao = new AsyncDao(sql_properties, data_source);
-    else
-        basic_dao = new PostgresDao(sql_properties, data_source);
-
-
-    if(use_threadsafe_dao)
-        return new ThreadSafeDao(sql_properties, data_source, std::unique_ptr<BasicDao>(basic_dao));
-
-    return basic_dao;
+    const auto basic_dao = dao_type == common::ConcreteDaoType::AsyncDao ? (BasicDao *) new AsyncDao(sql_properties, data_source) : (BasicDao *) new PostgresDao(sql_properties, data_source);
+    return use_threadsafe_dao ? new ThreadSafeDao(sql_properties, data_source, std::unique_ptr<BasicDao>(basic_dao)) : basic_dao;
 }
 
+using AbstractDAO_ptr = std::shared_ptr<dao::AbstractDAO>;
 
 } /* namespace dao */
 } /* namespace svr */
-
-using AbstractDAO_ptr = std::shared_ptr<svr::dao::AbstractDAO>;

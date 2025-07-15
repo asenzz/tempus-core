@@ -88,7 +88,7 @@ void memory_manager::check_memory()
             LOG4_TRACE(
                     "Changed mem_available to " << mem_available_ << ", RAM left, " << 100. * ram_left << "pc, free ram " << ram_free / gb_ram_unit_div <<
                                                 " GB" << ", total ram " << mem_info.mem_total / gb_ram_unit_div << " GB");
-            cv_.notify_all();
+            cv_.notify_one();
         }
         std::this_thread::sleep_for(sleep_interval);
     }
@@ -100,7 +100,7 @@ void memory_manager::barrier()
 {
     std::unique_lock wl(mx_);
     while (!mem_available_) cv_.wait(wl);
-    // mem_available_ = false;
+    mem_available_ = false;
 }
 
 

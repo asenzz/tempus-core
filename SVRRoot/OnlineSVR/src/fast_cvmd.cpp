@@ -299,7 +299,7 @@ fast_cvmd::transform(
         auto start_cvmd_init = input.cbegin() + std::max<ssize_t>(0, input.size() - CVMD_INIT_LEN - test_offset);
         auto end_cvmd_init = input.cend() - test_offset;
         if (std::distance(start_cvmd_init, end_cvmd_init) % 2) ++start_cvmd_init; // Ensure even distance
-        PROFILE_EXEC_TIME(initialize(datamodel::datarow_crange{start_cvmd_init, end_cvmd_init, input}, in_colix, decon.get_table_name(), scaler), "CVMD init");
+        PROFILE_MSG(initialize(datamodel::datarow_crange{start_cvmd_init, end_cvmd_init, input}, in_colix, decon.get_table_name(), scaler), "CVMD init");
     }
 
     const auto found_freqs = vmd_frequencies.find({decon.get_table_name(), levels});

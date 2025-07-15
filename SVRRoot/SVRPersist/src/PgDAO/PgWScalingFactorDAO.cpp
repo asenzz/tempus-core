@@ -1,11 +1,11 @@
 #include "PgWScalingFactorDAO.hpp"
-#include <DAO/DataSource.hpp>
-#include <DAO/WScalingFactorRowMapper.hpp>
+#include "DAO/DataSource.hpp"
+#include "DAO/WScalingFactorRowMapper.hpp"
 
 namespace svr {
 namespace dao {
 
-PgWScalingFactorDAO::PgWScalingFactorDAO(common::PropertiesFileReader &tempus_config, DataSource &data_source) :
+PgWScalingFactorDAO::PgWScalingFactorDAO(common::PropertiesReader &tempus_config, DataSource &data_source) :
         WScalingFactorDAO(tempus_config, data_source)
 {}
 

@@ -2,19 +2,21 @@
 
 #include "DAO/AbstractDAO.hpp"
 
-namespace svr { namespace datamodel { class IQScalingFactor; using IQScalingFactor_ptr = std::shared_ptr<IQScalingFactor>; }}
-
 namespace svr {
+namespace datamodel {
+class IQScalingFactor; using IQScalingFactor_ptr = std::shared_ptr<IQScalingFactor>;
+}
+
 namespace dao {
 
 class IQScalingFactorDAO : public AbstractDAO
 {
 public:
-    static IQScalingFactorDAO *build(common::PropertiesFileReader &tempus_config,
+    static IQScalingFactorDAO *build(common::PropertiesReader &tempus_config,
                                      DataSource &data_source,
-                                     common::ConcreteDaoType dao_type, bool use_threadsafe_dao);
+                                     const common::ConcreteDaoType dao_type, const bool use_threadsafe_dao);
 
-    explicit IQScalingFactorDAO(common::PropertiesFileReader &tempus_config,
+    explicit IQScalingFactorDAO(common::PropertiesReader &tempus_config,
                                 DataSource &data_source);
 
     virtual bigint get_next_id() = 0;

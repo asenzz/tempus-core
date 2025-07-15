@@ -3,9 +3,11 @@
 //
 #include <thrust/binary_search.h>
 #include <thrust/async/for_each.h>
-#include <cublas.h>
+#include <cublas_v2.h>
 #include "common/cuda_util.cuh"
 #include "align_features.cuh"
+#include "appcontext.hpp"
+
 
 namespace svr {
 
@@ -41,11 +43,10 @@ __device__ __forceinline__ double vec_dist(CRPTRd mean_L, CRPTRd features, const
 }
 
 
-__device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd features, const uint32_t validate_rows, const float st /* < 1 */, const float sk)
+__device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd features, const uint32_t validate_rows, const float st, const float sk, const uint32_t align_validate)
 {
     double res = 0;
-    UNROLL(C_align_validate)
-    for (uint32_t r = validate_rows - C_align_validate; r < validate_rows; ++r)
+    for (uint32_t r = validate_rows - align_validate; r < validate_rows; ++r)
         res += abs(labels[r] - features[STRETCHSKIP_(r)]);
     return res;
 }
@@ -53,20 +54,20 @@ __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd feature
 __global__ void G_align_features(
         CRPTRd features, CRPTRd labels,
         RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts, RPTR(float) skips,
-        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit)
+        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate,
+        const uint32_t shift_limit, const float stretch_multiplier)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
         CPTRd features_col = features + n_rows * i;
-        UNROLL(C_shift_lim / 10)
-        for (uint32_t sh = 0; sh < C_shift_lim; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
+        for (uint32_t sh = 0; sh < shift_limit; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
             CPTRd labels_sh = labels + sh;
             const auto validate_rows = n_rows - sh;
             UNROLL()
-            for (float st = 1; st > stretch_limit; st *= C_stretch_multiplier) {
+            for (float st = 1; st > stretch_limit; st *= stretch_multiplier) {
 // UNROLL()
 //                for (float sk = 1; sk < C_skip_limit; sk *= C_skip_multiplier) {
-                const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1);
+                const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1, align_validate);
                 if (score >= scores[i]) continue;
                 scores[i] = score;
                 if (shifts) shifts[i] = sh;
@@ -84,12 +85,10 @@ void align_features(
         RPTR(uint32_t) p_shifts, float *const p_skips, const uint32_t n_rows, const uint32_t n_cols)
 {
     const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
-    assert(n_rows_integration - C_shift_lim >= C_align_validate);
+    assert(n_rows_integration - PROPS.get_shift_limit() >= PROPS.get_align_window());
 
     LOG4_TRACE("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols);
-#ifndef REMOVE_OUTLIERS
-    if (n_rows < C_active_window) LOG4_THROW("Rows " << n_rows << " less than active window " << C_active_window);
-#endif
+
     CTX4_CUSTREAM;
     double *d_features;
     cu_errchk(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
@@ -103,7 +102,8 @@ void align_features(
     cu_errchk(cudaMallocAsync((void **) &d_skips, cols_size_float, custream));
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
-    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols, 0, C_stretch_limit);
+    G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(d_features, d_labels, d_scores, d_stretches, d_shifts, d_skips, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(),
+                                                                 PROPS.get_align_window(), PROPS.get_shift_limit(), PROPS.get_stretch_coef());
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
@@ -134,8 +134,8 @@ __global__ void G_quantise_features(
             auto const feat_i_j_rows = features + i + j * rows;
 #ifdef EMO_DIFF
             double prev_price = 0;
-            const auto j_interleave_quantise = d_feat_params_i->ix_start + j * interleave_quantise;
 #endif
+            const auto j_interleave_quantise = d_feat_params_i->ix_start + j * interleave_quantise;
             uint32_t ix_F = j_interleave_quantise;
             for (; ix_F < j_interleave_quantise + quantise && ix_F <= ix_end; ++ix_F) {
                 *feat_i_j_rows += d_decon_F[ix_F];
@@ -171,8 +171,9 @@ __global__ void G_quantise_features(
             features[out_i] = (features[out_i] - features[out_i - n_rows]) / quantise;
         }
 #else
-        for (auto j = n_cols_ - 1; j >= 0; --j) features[i + j * n_rows] /= quantise;
+        for (auto j = 0; j < n_cols_; ++j) features[i + j * n_rows] /= quantise;
 #endif
+        //features[i + ((d_feat_params_i->ix_end - ix_start) / quantise) * n_rows] = d_decon_F[d_feat_params_i->ix_end];
     }
 }
 

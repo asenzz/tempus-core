@@ -34,7 +34,7 @@ Dataset::Dataset() :
         Entity(),
         ccache(),
         gradients_(common::C_default_gradient_count),
-        max_chunk_size_(common::C_default_kernel_max_chunk_len),
+        max_chunk_size_(common::AppConfig::C_default_kernel_length),
         multistep_(common::C_default_multistep_len),
         spectrum_levels_(common::C_default_level_count),
         is_active_(false)

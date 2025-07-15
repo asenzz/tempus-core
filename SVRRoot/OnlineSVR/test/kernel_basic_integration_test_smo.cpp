@@ -48,7 +48,7 @@ kernel_basic_integration_test(
         const std::string &saved_model_file)
 {
     LOG4_BEGIN();
-    svr::IKernel<double>::IKernelInit();
+    svr::IKernel<double>::init();
 #if 0
     OnlineMIMOSVR_ptr mimo_model;
     try {
@@ -205,7 +205,7 @@ train_predict_cycle_online(
 {
     const auto training_features = features.row(validate_start_pos - 1);
     const auto training_labels = labels.row(validate_start_pos - 1);
-    PROFILE_EXEC_TIME(svr_model.learn(training_features, training_labels, true), "Online train");
+    PROFILE_MSG(svr_model.learn(training_features, training_labels, true), "Online train");
     return future_validate(validate_start_pos, svr_model, features, labels, true);
 }
 
@@ -222,7 +222,7 @@ double train_predict_cycle_smo(
     auto reference_data_batch = all_labels_mx.rows(0, num_values_trained_batch - 1);
     LOG4_DEBUG("Cycle parameters " << model_svr_parameters.to_sql_string());
     try {
-        PROFILE_EXEC_TIME(svr_model.train_batch(learning_data_batch, reference_data_batch.col(0)), "Batch train");
+        PROFILE_MSG(svr_model.train_batch(learning_data_batch, reference_data_batch.col(0)), "Batch train");
     } catch (...) {
         return 100;
     }

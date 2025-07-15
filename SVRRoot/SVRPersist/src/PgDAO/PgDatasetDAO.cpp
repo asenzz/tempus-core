@@ -1,12 +1,11 @@
 #include "PgDatasetDAO.hpp"
-#include <DAO/DatasetRowMapper.hpp>
-#include <DAO/DataSource.hpp>
+#include "DAO/DatasetRowMapper.hpp"
+#include "DAO/DataSource.hpp"
 
 namespace svr {
 namespace dao {
 
-PgDatasetDAO::PgDatasetDAO(svr::common::PropertiesFileReader &tempus_config, svr::dao::DataSource &data_source)
-        : DatasetDAO(tempus_config, data_source)
+PgDatasetDAO::PgDatasetDAO(common::PropertiesReader &tempus_config, dao::DataSource &data_source) : DatasetDAO(tempus_config, data_source)
 {}
 
 bool PgDatasetDAO::exists(const bigint dataset_id)

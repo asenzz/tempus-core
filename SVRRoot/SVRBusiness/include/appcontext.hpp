@@ -13,7 +13,7 @@
 
 namespace svr {
 namespace dao { class scoped_transaction_guard; }
-namespace common { class PropertiesFileReader; }
+namespace common { class AppConfig; }
 
 namespace context {
 
@@ -39,28 +39,28 @@ public:
     static inline AppContext &get_instance()
     { return *p_instance; }
 
-    static void init_instance(const std::string &config_path, bool use_threadsafe_dao = true);
+    static void init_instance(const std::string &config_path, const bool use_threadsafe_dao = true);
 
     static void destroy_instance();
 
-    svr::common::PropertiesFileReader &app_properties;
+    common::AppConfig &app_properties;
 
-    svr::business::UserService &user_service;
-    svr::business::InputQueueService &input_queue_service;
-    svr::business::SVRParametersService &svr_parameters_service;
-    svr::business::ModelService &model_service;
-    svr::business::DeconQueueService &decon_queue_service;
-    svr::business::EnsembleService &ensemble_service;
-    svr::business::DatasetService &dataset_service;
-    svr::business::RequestService &request_service;
-    svr::business::AuthenticationProvider &authentication_provider;
-    svr::business::PredictionTaskService &prediction_task_service;
-    svr::business::ScalingFactorsTaskService &scaling_factors_task_service;
-    svr::business::AutotuneTaskService &autotune_task_service;
-    svr::business::DecrementTaskService &decrement_task_service;
-    svr::business::IQScalingFactorService &iq_scaling_factor_service;
-    svr::business::WScalingFactorService &w_scaling_factor_service;
-    svr::business::DQScalingFactorService &dq_scaling_factor_service;
+    business::UserService &user_service;
+    business::InputQueueService &input_queue_service;
+    business::SVRParametersService &svr_parameters_service;
+    business::ModelService &model_service;
+    business::DeconQueueService &decon_queue_service;
+    business::EnsembleService &ensemble_service;
+    business::DatasetService &dataset_service;
+    business::RequestService &request_service;
+    business::AuthenticationProvider &authentication_provider;
+    business::PredictionTaskService &prediction_task_service;
+    business::ScalingFactorsTaskService &scaling_factors_task_service;
+    business::AutotuneTaskService &autotune_task_service;
+    business::DecrementTaskService &decrement_task_service;
+    business::IQScalingFactorService &iq_scaling_factor_service;
+    business::WScalingFactorService &w_scaling_factor_service;
+    business::DQScalingFactorService &dq_scaling_factor_service;
 
     void flush_dao_buffers();
 
@@ -70,7 +70,6 @@ public:
 struct AppContextDeleter {
     ~AppContextDeleter();
 };
-
 
 }
 }
