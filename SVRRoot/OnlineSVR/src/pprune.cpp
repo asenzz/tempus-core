@@ -394,7 +394,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
     }
     tbb::task_arena tta(adj_threads(n_particles));
     for (DTYPE(iter) j = 0; j < iter; ++j) {
-        PROFILE_INFO(tta.execute([&] {
+        PROFILE_TRACE(tta.execute([&] {
             tbb_zpfor_i__(n_particles,
                 for (DTYPE(depth) d = 0; d < depth; ++d) {
                     if (biteopt_particle[i][d].calfun_data->zombie) continue;

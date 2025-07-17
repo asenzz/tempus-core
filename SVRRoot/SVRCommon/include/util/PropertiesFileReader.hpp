@@ -158,6 +158,12 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(float, oemd_skipdiv, 1) // (0..num quantisations], higher means more refined
 
+    CONFPROP(float, oemd_acor_weig, 1) // OEMD tuning autocorrelation weight in validation score
+
+    CONFPROP(float, oemd_rel_pow_w, 1) // OEMD tuning relative power of output signal in validation score weight
+
+    CONFPROP(float, oemd_entweight, 0) // OEMD tuning entropy (complexity) weight in validation score
+
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
     static constexpr char STREAM_LOOP_INTERVAL[] = "STREAM_LOOP_INTERVAL_MS";

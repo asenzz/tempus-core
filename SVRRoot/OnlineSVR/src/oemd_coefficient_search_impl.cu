@@ -683,6 +683,10 @@ oemd_coefficients_search::evaluate_mask(
         return common::C_bad_validation;
     }
 
+    static const double rel_pow_w = PROPS.get_oemd_rel_pow_w();
+    static const double autocor_w = PROPS.get_oemd_acor_weig();
+    static const double inv_entropy_w = PROPS.get_oemd_entweight();
+
     const uint32_t mask_len = mask.size();
     CTX_CUSTREAM
     const auto d_mask = cumallocopy(mask, custream);
@@ -697,7 +701,7 @@ oemd_coefficients_search::evaluate_mask(
     const auto d_imf_len = workspace.size() - mask_offset;
     const auto d_imf = d_workspace + mask_offset;
 #if 1 // Component power
-    const auto meanabs_imf = solvers::meanabs(d_imf, d_imf_len, custream);
+    const auto meanabs_imf = std::abs(rel_pow_w) > std::numeric_limits<DTYPE(rel_pow_w)>::epsilon() ? solvers::meanabs(d_imf, d_imf_len, custream) : 1;
     if (!std::isnormal(meanabs_imf)) {
         LOG4_WARN("Bad IMF " << meanabs_imf << ", workspace " << common::present(workspace) << ", siftings " << siftings << ", mask size " << mask_len <<
                              ", attenuation " << att << ", pass frequency " << fp << ", stop frequency " << fs << ", prev mask len " << prev_masks_len);
@@ -778,14 +782,11 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaFreeAsync(d_labels, custream));
 
     // Spectral entropy
-    constexpr auto inv_entropy = 1.; // compute_spectral_entropy_cufft(d_imf, d_imf_len, custream);
+    const auto inv_entropy = std::abs(inv_entropy_w) > std::numeric_limits<DTYPE(inv_entropy_w)>::epsilon() ? compute_spectral_entropy_cufft(d_imf, d_imf_len, custream) : 1.;
     cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is a chunk of d_workspace
     cu_errchk(cudaStreamDestroy(custream));
 
     // Weights and final score
-    constexpr double autocor_w = .2;
-    constexpr double rel_pow_w = 1;
-    constexpr double inv_entropy_w = 0;
     const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(autocor, autocor_w) * std::pow(inv_entropy, inv_entropy_w);
     LOG4_TRACE("Returning autocorrelation " << autocor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy << ", meanabs imf " <<
                     meanabs_imf << ", meanabs input " << meanabs_input);
