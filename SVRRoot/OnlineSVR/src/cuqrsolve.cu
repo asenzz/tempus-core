@@ -114,8 +114,9 @@ double cu_calc_epsco(const double *const K, const double *const L, const uint32_
 
 score_weights::score_weights(
     const arma::mat &K, const arma::mat &L_mean_mask, const uint32_t m, const uint32_t n, const uint32_t mn, const uint16_t layers) :
-    n_gpus(common::gpu_handler_1::get().get_gpu_devices_count()), m(m), n(n), mn(mn), layers(layers), L_size(mn * sizeof(DTYPE(K)::elem_type))
+    n_gpus(common::gpu_handler_1::get().get_gpu_devices_count()), m(m), n(n), mn(mn), layers(layers), L_size(mn * sizeof(DTYPE(K)::elem_type)), W_size(layers * L_size)
 {
+    assert(layers);
     K_rhs_dev.resize(n_gpus);
     OMP_FOR_i(n_gpus) {
         DEV_CUSTREAM(i);
@@ -131,9 +132,10 @@ score_weights::score_weights(
             cb_errchk(cublasCreate(&cublas_H));
             cb_errchk(cublasSetStream(cublas_H, custream_j));
             cb_errchk(cublasSetPointerMode(cublas_H, CUBLAS_POINTER_MODE_HOST));
-            double *tmp_L;
+            double *tmp_L, *weights;
             cu_errchk(cudaMallocAsync((void **) &tmp_L, L_size, custream_j));
-            K_rhs_dev[i].stream_cublas.emplace_back(dev_ctx::stream_ctx{custream_j, cublas_H, tmp_L});
+            cu_errchk(cudaMallocAsync((void **) &weights, W_size, custream_j));
+            K_rhs_dev[i].stream_cublas.emplace_back(dev_ctx::stream_ctx{custream_j, cublas_H, tmp_L, weights});
         }
     }
 }
@@ -143,6 +145,7 @@ score_weights::~score_weights()
     OMP_FOR_i(n_gpus) {
         UNROLL(streams_gpu)
         for (auto &stream_cubla: K_rhs_dev[i].stream_cublas) {
+            cu_errchk(cudaFreeAsync((void *) stream_cubla.weights, stream_cubla.custream));
             cu_errchk(cudaFreeAsync((void *) stream_cubla.tmp_L, stream_cubla.custream));
             cb_errchk(cublasDestroy(stream_cubla.cublas_H));
             cusyndestroy(stream_cubla.custream);
@@ -169,17 +172,16 @@ double score_weights::operator()(CPTRd weights) const
     const auto &ctx_dev = K_rhs_dev[dev_phy_id];
     const auto &ctx_stream = ctx_dev.stream_cublas[ctx.stream_id()];
     cu_errchk(cudaSetDevice(dev_phy_id));
-    const auto d_weights = cumallocopy(weights, ctx_stream.custream, layers * mn);
+    cu_errchk(cudaMemcpyAsync(ctx_stream.weights, weights, W_size, cudaMemcpyHostToDevice, ctx_stream.custream));
     cu_errchk(cudaMemcpyAsync(ctx_stream.tmp_L, ctx_dev.L_mask, L_size, cudaMemcpyDeviceToDevice, ctx_stream.custream));
-    cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
+    // cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
     for (DTYPE(layers) i = 0; i < layers; ++i) {
-        cb_errchk(cublasDgemm(ctx_stream.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, ctx_dev.K, m, d_weights + i * mn, m, &oneminus, ctx_stream.tmp_L, m));
+        cb_errchk(cublasDgemm(ctx_stream.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, ctx_dev.K, m, ctx_stream.weights + i * mn, m, &oneminus, ctx_stream.tmp_L, m));
         if (i < layers - 1) cb_errchk(cublasDscal(ctx_stream.cublas_H, mn, &oneminus, ctx_stream.tmp_L, 1));
     }
     double total;
     cb_errchk(cublasDasum(ctx_stream.cublas_H, mn, ctx_stream.tmp_L, 1, &total));
     cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
-    cu_errchk(cudaFreeAsync(d_weights, ctx_stream.custream));
     LOG4_TRACE("Score " << total << " for weights " << common::to_string(weights, std::min<uint32_t>(4, mn)) << " on device " << dev_phy_id);
     return total;
 }
@@ -1622,7 +1624,7 @@ void solve_irwls(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, co
         (void) solvers::solve_hybrid(
             d_K, rhs.n_cols, K.n_rows, d_solved, maqueue, iters, d_labels, rhs_size, d_rwork, custream, cublas_H, d_K, 1,
             mn, d_best_solution_i, K.n_elem, d_Kwork, iters_mul);
-        if (layers > 1) {
+        if (i < layers - 1) {
             cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, K.n_rows, rhs.n_cols, K.n_cols, &one, d_K, K.n_rows, d_best_solution_i, K.n_rows, &one, d_labels, K.n_rows));
             cb_errchk(cublasDscal(cublas_H, mn, &oneminus, d_labels, 1));
         }

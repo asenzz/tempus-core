@@ -348,7 +348,7 @@ template<> float mean(const arma::Mat<float> &input);
 
 #endif // USE_IPP
 
-double mean(double *const input, size_t len);
+double mean(const double *input, size_t len);
 
 template<typename T> arma::Mat<T> mean_mask(const arma::Mat<T> &x, int32_t radius);
 

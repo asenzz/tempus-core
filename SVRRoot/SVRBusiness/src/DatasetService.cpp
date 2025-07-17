@@ -253,7 +253,7 @@ void DatasetService::process(datamodel::Dataset &dataset)
 
 #pragma omp parallel for schedule(static, 1) ADJ_THREADS_MIN(PROPS.get_paral_ensembles(), dataset.get_ensembles().size())
     for (auto &p_ensemble: dataset.get_ensembles())
-        PROFILE_MSG(EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
+        PROFILE_INFO(EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
     LOG4_END();
 }
 

@@ -122,12 +122,12 @@ OMP_FOR_i_(masks_siftings->masks.size(), ordered) {
         LOG4_DEBUG("Power level of mask " << i << " " << meanabs_mask << ", sum " << sum_mask << " should be one!");
     }
 
-    PROFILE_MSG(transformer->transform(*input, 0, 0, 0, TEST_RES, TEST_RES), "OEMD transformation.");
+    PROFILE_INFO(transformer->transform(*input, 0, 0, 0, TEST_RES, TEST_RES), "OEMD transformation.");
 
     auto delayed_input = input->clone(DECON_OFFSET);
     delayed_input->set_table_name(input->get_table_name());
     LOG4_DEBUG("Input size " << input->size() << ", delayed input size " << delayed_input->size() << ", residuals " << residuals_len << ", tail " << tail.size());
-    PROFILE_MSG(transformer->transform(*delayed_input, 0, 0, 0, TEST_RES, TEST_RES), "OEMD transformation with " << DECON_OFFSET << " offset.");
+    PROFILE_INFO(transformer->transform(*delayed_input, 0, 0, 0, TEST_RES, TEST_RES), "OEMD transformation with " << DECON_OFFSET << " offset.");
 
     LOG4_DEBUG("Input queue: " << *input);
     LOG4_DEBUG("Delayed input queue: " << *delayed_input);

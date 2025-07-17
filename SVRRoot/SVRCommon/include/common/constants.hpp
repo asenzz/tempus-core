@@ -97,7 +97,6 @@ constexpr char C_default_stream_loop_interval_ms[] = "10";
 constexpr char C_default_daemonize[] = "1";
 constexpr char C_default_num_quantisations[] = "10";
 constexpr char C_default_quantisation_divisor[] = "3";
-constexpr char C_default_oemd_quantisation_skipdiv[] = "20";
 constexpr char C_default_oemd_tune_particles[] = "16";
 constexpr char C_default_oemd_tune_iterations[] = "24";
 constexpr char C_default_tune_particles[] = "16";

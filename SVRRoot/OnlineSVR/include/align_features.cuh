@@ -48,8 +48,7 @@ void quantise_features(
 #ifdef __CUDACC__
 
 template<const bool do_label_bias = false> __global__ void G_quantise_labels(
-        CRPTRd d_in, RPTR(double) d_labels, const uint32_t rows, const uint32_t label_len,
-        CRPTR(t_label_ix) d_label_ixs, CRPTR(uint32_t) ix_end_F, const uint16_t multistep, const uint32_t step_ixs)
+    CRPTRd d_in, RPTR(double) d_labels, const uint32_t rows, CRPTR(t_label_ix) d_label_ixs, CRPTR(uint32_t) ix_end_F, const uint16_t multistep, const uint32_t step_ixs)
 {
     CU_STRIDED_FOR_i(rows) {
         UNROLL(36)

@@ -16,6 +16,7 @@
 #include "pprune.hpp"
 #include "common/compatibility.hpp"
 #include "common/defines.h"
+#include "common/logging.hpp"
 #include "util/math_utils.hpp"
 #include "util/string_utils.hpp"
 #include "sobol.hpp"
@@ -62,7 +63,7 @@ int kn_callback(KN_context_ptr kc,
     int num_iters, D;
     kn_errchk(KN_get_number_iters(kc, &num_iters));
     kn_errchk(KN_get_number_vars(kc, &D));
-    PROFILE_MSG((*p_cost_cb)(eval_request->x, eval_result->obj),
+    PROFILE_INFO((*p_cost_cb)(eval_request->x, eval_result->obj),
                 "Cost, score " << *eval_result->obj << ", index " << eval_request->threadID << ", iterations " << num_iters << ", parameters " <<
                 common::to_string(eval_request->x, std::min<uint32_t>(4, D)));
     return 0;
@@ -209,19 +210,19 @@ pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const ar
 
     switch (algo_type) {
         case e_algo_type::e_biteopt:
-            PROFILE_MSG(pprune_biteopt(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune BiteOpt " << n_particles << " particles, " << maxfun << " maxfun, " << depth << " depth");
+            PROFILE_INFO(pprune_biteopt(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune BiteOpt " << n_particles << " particles, " << maxfun << " maxfun, " << depth << " depth");
             break;
 
         case e_algo_type::e_knitro:
-            PROFILE_MSG(pprune_knitro(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune KNitro " << n_particles << " particles, " << maxfun << " maxfun");
+            PROFILE_INFO(pprune_knitro(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune KNitro " << n_particles << " particles, " << maxfun << " maxfun");
             break;
 
         case e_algo_type::e_prima:
-            PROFILE_MSG(pprune_prima(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune Prima " << n_particles << " particles, " << maxfun << " maxfun");
+            PROFILE_INFO(pprune_prima(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune Prima " << n_particles << " particles, " << maxfun << " maxfun");
             break;
 
         case e_algo_type::e_petsc:
-            PROFILE_MSG(pprune_petsc(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune PETSc " << n_particles << " particles, " << maxfun << " maxfun");
+            PROFILE_INFO(pprune_petsc(n_particles, cost_f, rhobeg, rhoend, x0), "PPrune PETSc " << n_particles << " particles, " << maxfun << " maxfun");
             break;
 
         default:
@@ -391,10 +392,9 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
             biteopt->init(*rnd, x0.colptr(i));
         }
     }
-
     tbb::task_arena tta(adj_threads(n_particles));
     for (DTYPE(iter) j = 0; j < iter; ++j) {
-        tta.execute([&] {
+        PROFILE_INFO(tta.execute([&] {
             tbb_zpfor_i__(n_particles,
                 for (DTYPE(depth) d = 0; d < depth; ++d) {
                     if (biteopt_particle[i][d].calfun_data->zombie) continue;
@@ -403,7 +403,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
                     biteopt->optimize(*rnd, d + 1 >= depth ? nullptr : biteopt_particle[i][d + 1].biteopt.get());
                 }
             )
-        });
+        }), "Cycle " << j << " of " << iter << ", particles " << n_particles << ", depth " << depth);
     }
     const auto D_size = D * sizeof(double);
     for (uint16_t i = 0; i < n_particles; ++i) {

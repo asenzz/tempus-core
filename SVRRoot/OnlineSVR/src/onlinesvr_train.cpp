@@ -67,15 +67,16 @@ OnlineSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const m
     if (needs_tuning()) {
         if (precalc_kernel_matrices && precalc_kernel_matrices->size())
             LOG4_WARN("Provided kernel matrices will be ignored because SVR parameters are not initialized.");
-        PROFILE_MSG(tune(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
+        PROFILE_INFO(tune(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
-#pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_gpu_chunk() / ixs.front().n_elem)) default(shared) firstprivate(num_chunks)
+// TODO Unstable when chunk >= 4000 samples
+// #pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_gpu_chunk() / ixs.front().n_elem)) default(shared) firstprivate(num_chunks)
     for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
         auto p_params = get_params_ptr(i);
         if (p_kernel_matrices->at(i).empty()) {
             p_kernel_matrices->at(i) = false /* p_params->get_kernel_type() == e_kernel_type::GBM || p_params->get_kernel_type() == e_kernel_type::TFT */
-                                           // Enable if inplace predict of the model is precise enough (without overfitting)
+                                           // Enable if inplace predict of the kernel model is precise enough (without overfitting)
                                            ? kernel::get_reference_Z<double>(train_label_chunks[i])
                                            : p_kernel_matrices->at(i) = kernel::IKernel<double>::get(*p_params)->kernel(ccache(), train_feature_chunks_t[i], time);
         } else
@@ -296,7 +297,7 @@ void OnlineSVR::learn(
 #pragma omp task mergeable
             {
                 arma::mat newold_K;
-                PROFILE_MSG(newold_K = kernel::IKernel<double>::get(params)->kernel(train_feature_chunks_t[chunk_ix], new_chunk_features_t),
+                PROFILE_INFO(newold_K = kernel::IKernel<double>::get(params)->kernel(train_feature_chunks_t[chunk_ix], new_chunk_features_t),
                             "Init predict kernel matrix for chunk " << chunk_ix);
                 K_chunk.submat(0, K_chunk.n_cols - chunk_shed_rows, K_chunk.n_rows - chunk_shed_rows - 1, K_chunk.n_cols - 1) = newold_K;
                 K_chunk.submat(K_chunk.n_rows - chunk_shed_rows, 0, K_chunk.n_rows - 1, K_chunk.n_cols - chunk_shed_rows - 1) = newold_K.t();
@@ -464,12 +465,13 @@ void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, c
     assert(chunks_score.size() > chunk_ix);
     auto &params = get_params(chunk_ix);
     const auto n_rows = train_label_chunks[chunk_ix].n_rows;
-    arma::mat K(arma::size(p_kernel_matrices->at(chunk_ix)), ARMA_DEFAULT_FILL); {
+    arma::mat augment_K(arma::size(p_kernel_matrices->at(chunk_ix)), ARMA_DEFAULT_FILL);
+    {
         const arma::mat L_t = train_label_chunks[chunk_ix].t();
-        OMP_FOR_i(n_rows) K.row(i) = p_kernel_matrices->at(chunk_ix).row(i) + L_t;
+        OMP_FOR_i(n_rows) augment_K.row(i) = p_kernel_matrices->at(chunk_ix).row(i) + L_t;
     }
     const arma::mat L = train_label_chunks[chunk_ix] * n_rows;
-    PROFILE_MSG(chunks_score[chunk_ix] = calc_weights(K, L, ixs[chunk_ix], weight_chunks[chunk_ix], iter_opt, iter_irwls, PROPS.get_limes()),
+    PROFILE_INFO(chunks_score[chunk_ix] = calc_weights(augment_K, L, ixs[chunk_ix], weight_chunks[chunk_ix], iter_opt, iter_irwls, PROPS.get_limes()),
                 "Calculate weights for " << params << ", chunk score " << chunks_score[chunk_ix] << ", chunk " << chunk_ix << ", iter_opt " << iter_opt <<
                 ", iter_irwls " << iter_irwls);
 }

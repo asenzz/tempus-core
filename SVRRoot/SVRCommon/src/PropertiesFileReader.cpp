@@ -160,11 +160,6 @@ uint16_t AppConfig::get_quantisation_divisor() const noexcept
     return quantisation_divisor_;
 }
 
-uint16_t AppConfig::get_oemd_quantisation_skipdiv() const noexcept
-{
-    return oemd_quantisation_skipdiv_;
-}
-
 float AppConfig::get_solve_iterations_coefficient() const noexcept
 {
     return solve_iterations_coefficient_;
@@ -266,7 +261,6 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     daemonize_ = get_property<DTYPE(daemonize_) >(app_config_file, DAEMONIZE, C_default_daemonize);
     num_quantisations_ = get_property<DTYPE(num_quantisations_) >(app_config_file, NUM_QUANTISATIONS, C_default_num_quantisations);
     quantisation_divisor_ = get_property<DTYPE(quantisation_divisor_) >(app_config_file, QUANTISATION_DIVISOR, C_default_quantisation_divisor);
-    oemd_quantisation_skipdiv_ = get_property<DTYPE(oemd_quantisation_skipdiv_) >(app_config_file, OEMD_QUANTISATION_SKIPDIV, C_default_oemd_quantisation_skipdiv);
     oemd_tune_particles_ = get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles);
     oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);
     solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);

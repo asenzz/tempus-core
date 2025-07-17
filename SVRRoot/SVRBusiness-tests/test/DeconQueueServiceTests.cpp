@@ -111,7 +111,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     load_input_queue(p_dataset, "../SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_3600_test_data.sql", p_all_data_inputqueue_1h);
 #ifdef TEST_DECON_SAVE
     svr::datamodel::DeconQueue_ptr p_1h_decon_queue;
-    PROFILE_MSG(p_1h_decon_queue = aci.decon_queue_service.deconstruct(p_all_data_inputqueue_1h, p_dataset, false).at(0),
+    PROFILE_INFO(p_1h_decon_queue = aci.decon_queue_service.deconstruct(p_all_data_inputqueue_1h, p_dataset, false).at(0),
                       "Deconstruction of 1H single column containing " << p_all_data_inputqueue_1h->size() << " rows.");
     APP.decon_queue_service.save(p_1h_decon_queue);
     return;
@@ -159,7 +159,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     LOG4_DEBUG("Residuals length " << residuals_length);
     APP.input_queue_service.clear(p_inputq);
     APP.input_queue_service.save(p_inputq);
-    PROFILE_MSG(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
+    PROFILE_INFO(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
                       "Deconstruction of single column containing " << p_inputq->size() << " rows.");
 
     ASSERT_EQ(p_online_decon_queue->size(), p_inputq->size() % 2 ? p_inputq->size() - 1 : p_inputq->size()) << "InputQueue size and deconstracted data size aren't equal";
@@ -174,7 +174,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
             row_iter != p_all_data_inputqueue->end(); ++row_iter) {
         p_inputq->get_data().push_back(*row_iter);
         if (++ctr < ONLINE_BATCH_LEN) continue;
-        PROFILE_MSG(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
+        PROFILE_INFO(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
                           "Deconstruction of single column containing " << (ctr == ONLINE_BATCH_LEN ? ONLINE_BATCH_LEN : 1) << " rows.");
         svr::business::EnsembleService::update_ensemble_decon_queues(p_dataset->get_ensembles(), {p_online_decon_queue});
     }
@@ -219,7 +219,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     aci.input_queue_service.save(p_inputq);
 
     datamodel::InputQueue_ptr recon_queue = p_inputq->clone_empty();
-    PROFILE_MSG(APP.decon_queue_service.reconstruct(
+    PROFILE_INFO(APP.decon_queue_service.reconstruct(
             *p_online_decon_queue,
             svr::business::recon_type_e::ADDITIVE,
             recon_queue->get_data(),

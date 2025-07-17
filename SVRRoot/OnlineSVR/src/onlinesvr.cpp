@@ -110,7 +110,7 @@ OnlineSVR::OnlineSVR(
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
-    PROFILE_MSG(
+    PROFILE_INFO(
             batch_train(p_xtrain, p_ytrain, nullptr, last_value_time, kernel_matrices),
             "Batch SVM train on " << arma::size(*p_ytrain) << " labels and " << arma::size(*p_xtrain) << " features, parameters " << *front(param_set));
 }
@@ -395,7 +395,7 @@ arma::mat OnlineSVR::direct_solve(const arma::mat &a, const arma::mat &b)
     LOG4_THROW("Deprecated");
     if (a.n_rows != b.n_rows) LOG4_THROW("Incorrect sizes a " << arma::size(a) << ", b " << arma::size(b));
     arma::mat solved = arma::zeros(arma::size(b));
-//    PROFILE_MSG(solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve");
+//    PROFILE_INFO(solvers::qrsolve(a.n_rows, b.n_cols, a.mem, b.mem, solved.memptr()), "qrsolve");
     return solved;
 }
 

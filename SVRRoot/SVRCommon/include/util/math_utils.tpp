@@ -8,26 +8,22 @@
 #include "math_utils.hpp"
 
 namespace svr {
-
-template <typename Dividend, typename Divisor> inline constexpr common_signed_t<Dividend, Divisor> cdivi(Dividend x, Divisor y)
+template<typename Dividend, typename Divisor> inline constexpr common_signed_t<Dividend, Divisor> cdivi(const Dividend x, const Divisor y)
 {
     if constexpr (std::is_unsigned_v<Dividend> && std::is_unsigned_v<Divisor>) {
         // quotient is always positive
-        return x / y + (x % y != 0);  // uint / uint
-    }
-    else if constexpr (std::is_signed_v<Dividend> && std::is_unsigned_v<Divisor>) {
+        return x / y + (x % y != 0); // uint / uint
+    } else if constexpr (std::is_signed_v<Dividend> && std::is_unsigned_v<Divisor>) {
         auto sy = static_cast<std::make_signed_t<Divisor>>(y);
         bool quotientPositive = x >= 0;
-        return x / sy + (x % sy != 0 && quotientPositive);  // int / uint
-    }
-    else if constexpr (std::is_unsigned_v<Dividend> && std::is_signed_v<Divisor>) {
+        return x / sy + (x % sy != 0 && quotientPositive); // int / uint
+    } else if constexpr (std::is_unsigned_v<Dividend> && std::is_signed_v<Divisor>) {
         auto sx = static_cast<std::make_signed_t<Dividend>>(x);
         bool quotientPositive = y >= 0;
-        return sx / y + (sx % y != 0 && quotientPositive);  // uint / int
-    }
-    else {
+        return sx / y + (sx % y != 0 && quotientPositive); // uint / int
+    } else {
         bool quotientPositive = (y >= 0) == (x >= 0);
-        return x / y + (x % y != 0 && quotientPositive);  // int / int
+        return x / y + (x % y != 0 && quotientPositive); // int / int
     }
 }
 
@@ -50,7 +46,6 @@ template<typename T> std::atomic<T> &operator&=(std::atomic<T> &lhs, const T &rh
 }
 
 namespace common {
-
 template<typename T> T absdiffratio(const T a, const T b)
 {
     if (a == 0 && b == 0) return 0;
@@ -171,7 +166,9 @@ template<typename T> inline T &sexp_I(T &&m)
 }
 
 template<typename T> bool isnormalz(const T v)
-{ return v == 0 || std::isnormal(v); }
+{
+    return v == 0 || std::isnormal(v);
+}
 
 template<typename T, typename U> double imprv(const T newv, const U oldv)
 {
@@ -768,7 +765,6 @@ template<typename T> inline bool above_eps(const T x)
 {
     return std::abs(x) > std::numeric_limits<T>::epsilon();
 }
-
 }
 }
 

@@ -134,7 +134,7 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 #endif
 
     // Solve the system
-    PROFILE_(KSPSolve(ksp, b, x));
+    PROFIL3(KSPSolve(ksp, b, x));
 
     // Get convergence information
     KSPConvergedReason reason;

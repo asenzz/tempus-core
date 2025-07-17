@@ -88,7 +88,7 @@ firefly::firefly(const unsigned D, const unsigned n, const unsigned MaxGeneratio
         if (D < 5 && i < 5) LOG4_TRACE("Particle " << i << ", parameters " << ffa.col(i));
     }
 
-    PROFILE_MSG(
+    PROFILE_INFO(
             ffa_main(), "FFA with particles " << n << ", iterations " << MaxGeneration << ", dimensions " << D << ", alpha " << alpha <<
                                               ", betamin " << betamin << ", gamma " << gamma << ", final score " << best_score);
 }
@@ -177,7 +177,7 @@ void firefly::ffa_main()
         alpha = alpha_new(alpha, MaxGeneration);
 
         // evaluate new solutions
-        PROFILE_MSG(run_iteration(), "Iteration " << t << " of " << MaxGeneration << " on " << n << " particles, " << D << " dimensions");
+        PROFILE_INFO(run_iteration(), "Iteration " << t << " of " << MaxGeneration << " on " << n << " particles, " << D << " dimensions");
 
         // ranking fireflies by their light intensity
         sort_ffa();

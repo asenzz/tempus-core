@@ -30,7 +30,7 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
     arma::uchar_mat combos(rowct, colct, arma::fill::ones);
     combos.row(combos.n_rows / 2).fill(0);
     std::vector<uint8_t> best_params_ixs(colct, uint8_t(0));
-//    PROFILE_MSG(svr::recombine_parameters(rowct, colct, combos.memptr(), params_preds.data(), &best_score, best_params_ixs.data()), "recombine_parameters");
+//    PROFILE_INFO(svr::recombine_parameters(rowct, colct, combos.memptr(), params_preds.data(), &best_score, best_params_ixs.data()), "recombine_parameters");
     LOG4_DEBUG("Best score " << best_score << ", best params ixs " << common::to_string(best_params_ixs));
 }
 

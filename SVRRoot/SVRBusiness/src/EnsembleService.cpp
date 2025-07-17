@@ -239,7 +239,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
 {
     auto p_input_queue = p_dataset->get_input_queue();
     std::deque<datamodel::DeconQueue_ptr> main_decon_queues, aux_decon_queues;
-    if (load_data) PROFILE_MSG(APP.input_queue_service.load(*p_input_queue), "Loading " << p_input_queue->get_table_name());
+    if (load_data) PROFILE_INFO(APP.input_queue_service.load(*p_input_queue), "Loading " << p_input_queue->get_table_name());
     get_decon_queues_from_input_queue(*p_dataset, *p_input_queue, main_decon_queues);
     OMP_FOR(p_dataset->get_aux_input_queues().size())
     for (const auto &p_aux_input_queue: p_dataset->get_aux_input_queues()) {

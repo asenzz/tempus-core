@@ -213,10 +213,10 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     LOG4_TRACE("Predicting features " << common::present<double>(*predict_features.p));
     data_row_container batch_predicted, cont_predicted_online;
     tbb::mutex mx;
-    PROFILE_MSG(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, labels.rows(start_ix, ix_fini), batch_predicted),
+    PROFILE_INFO(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, labels.rows(start_ix, ix_fini), batch_predicted),
                 "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
     arma::mat predict_lgbm;
-    PROFILE_(predict_lgbm = aux_train_predict(*param_pair.first, features, labels, start_ix));
+    PROFIL3(predict_lgbm = aux_train_predict(*param_pair.first, features, labels, start_ix));
     if (batch_predicted.size() != num_preds || predict_lgbm.n_rows != num_preds || predict_lgbm.n_cols != 1)
         LOG4_THROW("Predicted size " << batch_predicted.size() << " not sane " << arma::size(*predict_features.p) << ", LGBM predicted " << common::present(predict_lgbm));
     predict_lgbm += last_knowns.rows(start_ix, ix_fini);
@@ -262,7 +262,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
                 "pc, batch correct predictions " << 100. * batch_correct_predictions / ix_div << "pc, batch correct directions " << 100. * batch_correct_directions / ix_div << "pc" << \
                 "pc, LGBM correct predictions " << 100. * lgbm_correct_predictions / ix_div << "pc, LGBM correct directions " << 100. * lgbm_correct_directions / ix_div << "pc";
         if (online) {
-            PROFILE_MSG(
+            PROFILE_INFO(
                 ModelService::predict(
                     ensemble, model,
                     datamodel::t_level_predict_features{
@@ -271,7 +271,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
                     dataset.get_input_queue()->get_resolution(), mx, cont_predicted_online),
                 "Online predict " << ix << " of 1 row, " << features.n_cols << " feature columns, " << labels.n_cols << " labels per row, level " << level <<
                 ", step " << model.get_step() << " at " << times[ix_future]);
-            PROFILE_MSG(
+            PROFILE_INFO(
                 ModelService::train_online(model, features.row(ix_future), labels.row(ix_future), weights.row(ix_future),
                     times[ix_future]->get_value_time()),
                 "Online learn " << ix << " of 1 row, " << features.n_cols << " feature columns, " << labels.n_cols << " labels per row, level " << level <<
@@ -784,7 +784,7 @@ ModelService::prepare_labels(
     memcpy(all_last_knowns.memptr(), last_knowns.data(), req_rows * sizeof(double));
     std::vector<double> labels_aux_in(aux_data.distance());
     OMP_FOR_i(aux_data.distance()) labels_aux_in[i] = aux_data[i]->at(level);
-    PROFILE_(quantise_labels(label_len, labels_aux_in, label_ixs, ix_F_end, all_labels.memptr(), multistep));
+    PROFIL3(quantise_labels(label_len, labels_aux_in, label_ixs, ix_F_end, all_labels.memptr(), multistep));
     assert(!all_labels.has_nonfinite() && !all_last_knowns.has_nonfinite());
     if (all_labels.empty() or all_last_knowns.empty())
         LOG4_WARN("No new data to prepare for training, labels " << arma::size(all_labels) << ", last-knowns " << arma::size(all_last_knowns));
@@ -792,9 +792,9 @@ ModelService::prepare_labels(
         LOG4_TRACE("Prepared level " << level << ", labels " << common::present(all_labels) << ", last-knowns " << common::present(all_last_knowns));
 }
 
-void ModelService::tune_features(arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times,
-                                 const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const bpt::time_duration &max_gap, const bpt::time_duration &resolution_aux,
-                                 const bpt::time_duration &main_queue_resolution)
+void ModelService::tune_features(
+    arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
+    const bpt::time_duration &max_gap, const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
 {
     LOG4_BEGIN();
     assert(labels.n_rows == label_times.size());
@@ -885,7 +885,7 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
                 arma::mat features(n_rows, coef_lag, ARMA_DEFAULT_FILL);
                 OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, quantise, coef_lag_, coef_lag))
                 for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix])
-                    PROFILE_MSG(quantise_features(
+                    PROFILE_INFO(quantise_features(
                                 decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i, n_rows, in_rows[qix], adj_ix,
                                 coef_lag_, coef_lag, quantise, features.memptr()),
                             "Quantise features " << chunk_len_quantise[qix] << ", quantise " << quantise);
@@ -895,7 +895,7 @@ void ModelService::tune_features(arma::mat &out_features, const arma::mat &label
                 arma::u32_vec shifts(coef_lag, ARMA_DEFAULT_FILL);
                 OMP_TASKLOOP_1(firstprivate(coef_lag, chunk_len_align, n_rows, quantise))
                 for (DTYPE(coef_lag) i = 0; i < coef_lag; i += chunk_len_align)
-                    PROFILE_MSG(align_features(
+                    PROFILE_INFO(align_features(
                                     features.colptr(i), mean_L.mem, scores.memptr() + i, stretches.memptr() + i, shifts.memptr() + i, n_rows,
                                     std::min<uint32_t>(i + chunk_len_align, coef_lag) - i), "Align features " << n_rows << "x" << chunk_len_align << ", quantize " << quantise);
 
@@ -965,7 +965,7 @@ void ModelService::do_features(
                 for (auto &f: feat_params_qix_qt) f.ix_start = f.ix_end - coef_lag_q + 1;
                 arma::mat level_features(n_rows, coef_lag, ARMA_DEFAULT_FILL);
                 OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, coef_lag_, coef_lag))
-                for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix]) PROFILE_MSG(
+                for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix]) PROFILE_INFO(
                     quantise_features(decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i,
                                         n_rows, in_rows[qix], adj_ix, coef_lag_, coef_lag, quantise, level_features.memptr()),
                                                                                            "Prepare quantised features " << chunk_len_quantise[qix]);
@@ -1090,17 +1090,17 @@ ModelService::train_online(datamodel::Model &model, const arma::mat &features, c
         if (is_gradient) residuals = learn_labels - m->predict(features, last_value_time);
 #ifdef LAST_KNOWN_LABEL
             if (learn_labels.n_rows > 1)
-                PROFILE_MSG(m->learn(features.rows(0, features.n_rows - 2),
+                PROFILE_INFO(m->learn(features.rows(0, features.n_rows - 2),
                                            learn_labels.rows(0, learn_labels.n_rows - 2),
                                            last_knowns.rows(0, learn_labels.n_rows - 2),
                                            new_last_modeled_value_time),
                               "Online SVM train gradient " << i);
-            PROFILE_MSG(m->learn(
+            PROFILE_INFO(m->learn(
                    features.row(features_data.n_rows - 1), learn_labels.row(learn_labels.n_row - 1),
                    last_knowns.row(learn_labels.n_rows - 1), new_last_modeled_value_time, true),
                               "Online SVM train last-known gradient " << i);
 #else
-        PROFILE_MSG(m->learn(features, learn_labels, weights, last_value_time), "Online SVM train gradient " << g);
+        PROFILE_INFO(m->learn(features, learn_labels, weights, last_value_time), "Online SVM train gradient " << g);
 #endif
         if (is_gradient) learn_labels = residuals;
     }
@@ -1123,7 +1123,7 @@ ModelService::train_batch(
         const auto p_gradient = model.get_gradient(gix);
         if (!p_gradient)
             LOG4_THROW("SVR model for gradient " << gix << " not initialized " << model);
-        PROFILE_MSG(p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, p_weights, last_value_time),
+        PROFILE_INFO(p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, p_weights, last_value_time),
                     "Train batch, gradient " << gix << ", labels " << arma::size(*gradient_data.p_labels) << ", features " << arma::size(*gradient_data.p_features) << ", last value time " <<
                     last_value_time);
 

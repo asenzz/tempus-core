@@ -68,7 +68,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
         prepare_forecast_request(iq, pred_time);
 
         di.trigger_next_iteration(); di.wait_iteration_finished();
-        di.trigger_next_iteration(); PROFILE_MSG(di.wait_iteration_finished(), "Predicting " << pred_time);
+        di.trigger_next_iteration(); PROFILE_INFO(di.wait_iteration_finished(), "Predicting " << pred_time);
 
         double mae = 0, mae_ohlc = 0, last_known_mae = 0, last_known_ohlc = 0;
         std::tie( mae, mae_ohlc, last_known_mae, last_known_ohlc) = verify_results(pred_time, new_iq, new_iq_aux);

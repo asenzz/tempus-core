@@ -72,24 +72,24 @@ public:
 
 TEST_F(cvmd_transform_test, test_transform_correctness)
 {
-    PROFILE_MSG(SetUp(transform_input_filename), "Test setup");
+    PROFILE_INFO(SetUp(transform_input_filename), "Test setup");
     auto start = std::chrono::steady_clock::now();
     const auto iq_scaling_factors = business::IQScalingFactorService::calculate(input, 0, std::numeric_limits<size_t>::max());
     LOG4_DEBUG("IQ scaling factor " << iq_scaling_factors.front()->to_string());
     const auto scaler = business::IQScalingFactorService::get_scaler(*iq_scaling_factors.front());
     const auto unscaler = business::IQScalingFactorService::get_unscaler(*iq_scaling_factors.front());
 #ifndef ORIG_VMD
-    PROFILE_MSG(transformer.initialize(input, 0, decon.get_table_name(), scaler), "VMD initialize");
+    PROFILE_INFO(transformer.initialize(input, 0, decon.get_table_name(), scaler), "VMD initialize");
 #endif
-    PROFILE_MSG(transformer.transform(input, decon, 0, 0, scaler), "VMD batch transform");
+    PROFILE_INFO(transformer.transform(input, decon, 0, 0, scaler), "VMD batch transform");
 #ifdef TEST_TIME_INVARIANCE
     constexpr size_t C_decon_offset = 5000;
 
-    // PROFILE_MSG(transformer2.initialize(input_trimmed.get_data(), "Test table 2"), "VMD initialize trimmed");
+    // PROFILE_INFO(transformer2.initialize(input_trimmed.get_data(), "Test table 2"), "VMD initialize trimmed");
     transformer2.set_vmd_frequencies(transformer.get_vmd_frequencies());
     input_trimmed = input;
     input_trimmed.get_data().erase(input_trimmed.begin(), input_trimmed.begin() + C_decon_offset);
-    PROFILE_MSG(transformer2.transform(input_trimmed.get_data(), decon_trimmed, 0, 0, scaler), "VMD batch transform trimmed");
+    PROFILE_INFO(transformer2.transform(input_trimmed.get_data(), decon_trimmed, 0, 0, scaler), "VMD batch transform trimmed");
     auto start_t = transformer.get_residuals_length("dont find") + C_decon_offset;
     if (start_t > decon_trimmed.size()) start_t = 0;
     const auto test_len = decon_trimmed.size() - start_t;

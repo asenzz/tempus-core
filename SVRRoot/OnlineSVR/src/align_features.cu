@@ -46,8 +46,7 @@ __device__ __forceinline__ double vec_dist(CRPTRd mean_L, CRPTRd features, const
 __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd features, const uint32_t validate_rows, const float st, const float sk, const uint32_t align_validate)
 {
     double res = 0;
-    for (uint32_t r = validate_rows - align_validate; r < validate_rows; ++r)
-        res += abs(labels[r] - features[STRETCHSKIP_(r)]);
+    for (uint32_t r = validate_rows - align_validate; r < validate_rows; ++r) res += abs(labels[r] - features[STRETCHSKIP_(r)]);
     return res;
 }
 
@@ -80,6 +79,7 @@ void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, floa
 {
     const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
     const uint32_t align_window = (n_rows_integration - PROPS.get_shift_limit() - PROPS.get_outlier_slack()) * PROPS.get_stretch_limit();
+    assert(n_rows_integration - PROPS.get_shift_limit() >= align_window);
 #ifdef INTEGRATION_TEST
     LOG4_DEBUG("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols << ", align window " << align_window);
 #endif
@@ -128,9 +128,9 @@ __global__ void G_quantise_features(
 #ifdef EMO_DIFF
             double prev_price = 0;
 #endif
-            const auto j_interleave_quantise = d_feat_params_i->ix_start + j * interleave_quantise;
-            uint32_t ix_F = j_interleave_quantise;
-            for (; ix_F < j_interleave_quantise + quantise && ix_F <= ix_end; ++ix_F) {
+            const auto j_interleave_quantise_start = d_feat_params_i->ix_start + j * interleave_quantise;
+            auto ix_F = j_interleave_quantise_start;
+            for (; ix_F < j_interleave_quantise_start + quantise && ix_F <= ix_end; ++ix_F) {
                 *feat_i_j_rows += d_decon_F[ix_F];
 #ifdef EMO_DIFF
                 prev_price += d_decon_F[ix_F - quantise];
@@ -138,7 +138,7 @@ __global__ void G_quantise_features(
             }
 
 #ifdef EMO_DIFF
-            *feat_i_j_rows = (*feat_i_j_rows - prev_price) / (ix_F - j_interleave_quantise);
+            *feat_i_j_rows = (*feat_i_j_rows - prev_price) / (ix_F - j_interleave_quantise_start);
 #else
             *feat_i_j_rows /= (ix_F - j_interleave_quantise);
 #endif
@@ -166,7 +166,7 @@ __global__ void G_quantise_features(
 #else
         for (auto j = 0; j < n_cols_; ++j) features[i + j * n_rows] /= quantise;
 #endif
-        //features[i + ((d_feat_params_i->ix_end - ix_start) / quantise) * n_rows] = d_decon_F[d_feat_params_i->ix_end];
+        // features[i + ((d_feat_params_i->ix_end - ix_start) / quantise) * n_rows] = d_decon_F[d_feat_params_i->ix_end];
     }
 }
 
@@ -205,7 +205,7 @@ void quantise_labels(const uint32_t label_len, const std::vector<double> &in, co
     const auto d_in = cumallocopy(in, custream);
     constexpr bool do_label_bias = C_label_bias > 0;
     G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>(
-            d_in, d_labels, rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
+        d_in, d_labels, rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
 #ifndef NDEBUG
     cu_errchk(cudaDeviceSynchronize());
     cu_errchk(cudaPeekAtLastError());

@@ -156,6 +156,8 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(float, chunk_overlap, .0) // 0..1, higher means more chunks
 
+    CONFPROP(float, oemd_skipdiv, 1) // (0..num quantisations], higher means more refined
+
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
     static constexpr char STREAM_LOOP_INTERVAL[] = "STREAM_LOOP_INTERVAL_MS";
@@ -178,7 +180,6 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char SELF_REQUEST[] = "SELF_REQUEST";
     static constexpr char NUM_QUANTISATIONS[] = "NUM_QUANTISATIONS"; // Higher number of quantisations means more precision (more resource usage)
     static constexpr char QUANTISATION_DIVISOR[] = "QUANTISATION_DIVISOR"; // Lower divisor means fine grained quantisations (more resource usage, 1 quant increment until 2 * divisor)
-    static constexpr char OEMD_QUANTISATION_SKIPDIV[] = "OEMD_QUANTISATION_SKIPDIV"; // Higher skipdiv finer OEMD FIR coefficients tuning
     static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
     static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
@@ -197,7 +198,7 @@ private: // TODO port properties below to use the CONFPROP macro
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     bool daemonize_;
     uint16_t num_quantisations_, quantisation_divisor_;
-    uint16_t oemd_quantisation_skipdiv_, oemd_tune_particles_, oemd_tune_iterations_;
+    uint16_t oemd_tune_particles_, oemd_tune_iterations_;
     float solve_iterations_coefficient_;
 
 public:
@@ -250,8 +251,6 @@ public:
     uint16_t get_num_quantisations() const noexcept;
 
     uint16_t get_quantisation_divisor() const noexcept;
-
-    uint16_t get_oemd_quantisation_skipdiv() const noexcept;
 
     uint16_t get_oemd_tune_particles() const noexcept;
 

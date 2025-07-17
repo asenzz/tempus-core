@@ -684,7 +684,7 @@ oemd_coefficients_search::evaluate_mask(
     }
 
     const uint32_t mask_len = mask.size();
-    CTX4_CUSTREAM
+    CTX_CUSTREAM
     const auto d_mask = cumallocopy(mask, custream);
     const auto d_workspace = cumallocopy(workspace, custream);
     double *d_tmp;
@@ -714,8 +714,10 @@ oemd_coefficients_search::evaluate_mask(
 
     double *d_features, *d_scores;
     auto feat_params_it = feat_params.cbegin();
-    while (feat_params_it != feat_params.cend() && feat_params_it->ix_end <= max_row_len + mask_offset) ++feat_params_it;
-    if (feat_params.cend() - feat_params_it < PROPS.get_align_window()) LOG4_THROW("Align validate " << PROPS.get_align_window() << " to large for " << feat_params.cend() - feat_params_it);
+    while (feat_params_it < feat_params.cend() && feat_params_it->ix_end < max_row_len + mask_offset) ++feat_params_it;
+    static const auto align_window = PROPS.get_align_window();
+    if (feat_params.cend() - feat_params_it < align_window)
+        LOG4_THROW("Align validate " << align_window << " too large for " << feat_params.cend() - feat_params_it);
     const std::span feat_params_trimmed(feat_params_it, feat_params.cend());
     const uint32_t validate_rows = feat_params_trimmed.size();
     auto d_labels = cucalloc<double>(custream, validate_rows);
@@ -725,7 +727,7 @@ oemd_coefficients_search::evaluate_mask(
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
     RELEASE_CONT(ix_end_F);
     G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
-            d_imf, d_labels, validate_rows, label_len, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
+        d_imf, d_labels, validate_rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
     cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
     cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
     const uint32_t full_feat_cols = PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count;
@@ -737,42 +739,47 @@ oemd_coefficients_search::evaluate_mask(
     cu_errchk(cudaMallocAsync((void **) &d_features, features_size, custream));
     cu_errchk(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(double), custream));
     std::vector<t_feat_params> feat_params_q(feat_params_trimmed.begin(), feat_params_trimmed.end());
-    LOG4_TRACE("Allocating " << cols_rows_q << " features and " << feat_cols_ileave << " scores, rows " << validate_rows << ", feat params " << feat_params_q.size());
-    const auto times_offset = times.cbegin() + mask_offset;
-    const auto d_times = cumallocopy(times_offset, times.cend(), custream);
-    const auto skipdiv = PROPS.get_oemd_quantisation_skipdiv();
-    const auto num_quantisations = PROPS.get_num_quantisations();
+    const auto skipdiv = PROPS.get_oemd_skipdiv();
     const auto &quantisations = business::ModelService::get_quantisations();
+    const uint16_t num_quantisations = quantisations.size();
+    static const auto stretch_coef = PROPS.get_stretch_coef();
+    static const auto shift_limit = PROPS.get_shift_limit();
+    static const auto stretch_limit = PROPS.get_stretch_limit();
+    LOG4_TRACE("Allocating " << cols_rows_q << " features and " << feat_cols_ileave << " scores, rows " << validate_rows << ", feat params " << feat_params_q.size() << ", shift limit " <<
+        shift_limit << ", align_window " << align_window << ", num_quantisations " << num_quantisations << ", skipdiv " << skipdiv);
+    if (validate_rows - shift_limit < align_window)
+        LOG4_THROW("Validate rows " << validate_rows << ", shift limit " << shift_limit << ", increase ALIGN_WINDOW " << align_window << " to above " << validate_rows - shift_limit);
     UNROLL(2)
-    for (uint8_t q = 0; q < num_quantisations; q += std::max(1., double(q) / skipdiv)) {
+    for (DTYPE(num_quantisations) q = 0; q < num_quantisations; q += std::max<DTYPE(q)>(1, q / skipdiv)) {
         const auto qt = quantisations[q];
-        LOG4_TRACE("Quantisation " << qt << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<
-                        ", mask offset " << mask_offset);
         OMP_FOR_i(validate_rows) feat_params_q[i].ix_start = feat_params_q[i].ix_end - full_feat_cols * qt + 1 - mask_offset;
         const auto d_feat_params_q = cumallocopy(feat_params_q, custream);
         cu_errchk(cudaMemsetAsync(d_features, 0, features_size, custream));
-        G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
-                d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
+        G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
         cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
         G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-            d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, PROPS.get_stretch_coef(),
-            PROPS.get_align_window(), PROPS.get_shift_limit(), PROPS.get_stretch_coef());
+            d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, stretch_limit,
+            align_window, shift_limit, stretch_coef);
         double score;
         if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
             thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
             score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
         } else
             score = solvers::sum(d_scores, feat_cols_ileave, custream);
-        if (score < autocor) autocor = score;
+        if (score < autocor) {
+            LOG4_TRACE("Quantisation " << qt << ", index " << q << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<
+                        ", mask offset " << mask_offset << ", score " << score << ", best autocor " << autocor);
+            autocor = score;
+        }
+        assert(score != 0);
     }
-    cu_errchk(cudaFreeAsync(d_times, custream));
     cu_errchk(cudaFreeAsync(d_scores, custream));
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
 
     // Spectral entropy
     constexpr auto inv_entropy = 1.; // compute_spectral_entropy_cufft(d_imf, d_imf_len, custream);
-    cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is part of d_workspace
+    cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is a chunk of d_workspace
     cu_errchk(cudaStreamDestroy(custream));
 
     // Weights and final score
@@ -930,8 +937,7 @@ oemd_coefficients_search::run(
         std::deque<bpt::ptime> r;
         UNROLL(64)
         for (boost::posix_time::ptime it_time(times.front().date(), bpt::hours(times.front().time_of_day().hours()) + onehour);
-             it_time < times.back();
-             it_time += label_duration)
+             it_time < times.back(); it_time += label_duration)
             r.emplace_back(it_time);
         return r;
     }();
@@ -975,8 +981,8 @@ oemd_coefficients_search::run(
 
     LOG4_DEBUG(
             "Optimizing " << masks.size() << " masks for queue " << queue_name << ", tail len " << tail.size() << ", window len " << window_len << ", window start " << window_start
-                          << ", window end " << window_end << ", levels " << levels << ", input column index " << in_colix << ", label ixs " << label_ixs.size() <<
-                          ", first label last feature ix " << feat_params.front().ix_end);
+            << ", window end " << window_end << ", levels " << uint16_t(levels) << ", input column index " << in_colix << ", label ixs " << label_ixs.size() <<
+            ", first label last feature ix " << feat_params.front().ix_end);
 
     CTX4_CUSTREAM;
     UNROLL()
@@ -1006,10 +1012,12 @@ oemd_coefficients_search::run(
 #endif
                         evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, meanabs_input, times_i, label_ixs, feat_params);
             };
-            /* arma::vec x0(3, ARMA_DEFAULT_FILL);
+            /*
+            arma::vec x0(3, ARMA_DEFAULT_FILL);
             x0[0] = .5;
             x0[1] = .5 * C_freq_ceil; // common::constrain(dominant_frequency(workspace_window, .95, custream), 1. / workspace_len, 1.);
-            x0[2] = .01; */
+            x0[2] = .01;
+            */
             arma::mat bounds(3, 2, ARMA_DEFAULT_FILL);
             bounds(0, 0) = 1e-1; // Min gain
             bounds(0, 1) = 1; // Max gain

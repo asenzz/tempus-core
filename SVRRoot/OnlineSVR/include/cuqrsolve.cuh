@@ -15,7 +15,8 @@ class score_weights
 {
     static constexpr uint16_t streams_gpu = 4;
     const uint16_t n_gpus, layers;
-    const uint32_t m, n, mn, L_size;
+    const uint32_t m, n, mn;
+    const uint64_t L_size, W_size;
 
     struct dev_ctx
     {
@@ -23,7 +24,7 @@ class score_weights
         {
             cudaStream_t custream;
             cublasHandle_t cublas_H;
-            double *tmp_L;
+            double *tmp_L, *weights;
         };
 
         double *K, *L_mask;

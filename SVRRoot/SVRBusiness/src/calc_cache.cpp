@@ -167,10 +167,10 @@ mat_ptr calc_cache::get_features(
     const auto prepare_f = [&, needs_tuning] {
         auto p_features = ptr<arma::mat>();
         if (needs_tuning) {
-            PROFILE_MSG(
+            PROFILE_INFO(
                 ModelService::tune_features(*p_features, labels, params, label_times, aux_decon_queues, max_lookback_time_gap, aux_resolution, main_resolution),
                 "Tune features for " << params);
-        } else PROFILE_MSG(
+        } else PROFILE_INFO(
             ModelService::prepare_features(*p_features, label_times, aux_decon_queues, params, max_lookback_time_gap, aux_resolution, main_resolution),
             "Prepare features " << params);
         const auto p_feature_mechanics = ptr<datamodel::t_feature_mechanics>(params.get_feature_mechanics());

@@ -35,11 +35,11 @@ oemd_coefficients_search::do_quality(const std::vector<cufftDoubleComplex> &h_ma
 {
     const double coeff = double(h_mask_fft.size()) / 250.;
     double result = 0;
-    constexpr auto cplx_one = std::complex<double>(1.);
+    constexpr std::complex<double> cplx_one(1., 0.);
     const uint32_t end_i = h_mask_fft.size() * 2. * lambda1 / coeff;
     OMP_FOR_(end_i, simd reduction(+:result))
     for (DTYPE(end_i) i = 0; i < end_i; ++i) {
-        std::complex<double> zz(1 - h_mask_fft[i].x, -h_mask_fft[i].y);
+        const std::complex<double> zz(1 - h_mask_fft[i].x, -h_mask_fft[i].y);
         std::complex<double> p(1, 0);
         // UNROLL()
         for (DTYPE(siftings) k = 0; k < siftings; ++k) p *= zz;

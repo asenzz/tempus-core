@@ -98,7 +98,7 @@ void OnlineSVR::tune()
         assert(ixs.size() == 1);
         assert(train_feature_chunks_t.size() == 1);
         assert(train_label_chunks.size() == 1);
-        PROFILE_(kernel::IKernel<double>::get<kernel::kernel_deep_path<double>>(*p_params)->init(
+        PROFIL3(kernel::IKernel<double>::get<kernel::kernel_deep_path<double>>(*p_params)->init(
             projection, p_dataset, train_feature_chunks_t.front(), train_label_chunks.front(), last_trained_time));
         p_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
         return;
@@ -138,12 +138,12 @@ void OnlineSVR::tune()
             LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
         }
         if (p_chunk_params->get_kernel_type() == kernel_type::TFT) {
-            PROFILE_(kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
+            PROFIL3(kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
             p_chunk_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
             if (model_id) save_chunk_params(p_chunk_params);
             continue; // No tuning for TFT
         } else if (p_chunk_params->get_kernel_type() == kernel_type::GBM) {
-            PROFILE_(kernel::IKernel<double>::get<kernel::kernel_gbm<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
+            PROFIL3(kernel::IKernel<double>::get<kernel::kernel_gbm<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
             p_chunk_params->set_svr_kernel_param(1);
             if (model_id) save_chunk_params(p_chunk_params);
             continue; // No tuning for GBM

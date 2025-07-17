@@ -63,9 +63,9 @@ void prepare_test_queue(datamodel::Dataset &dataset, datamodel::InputQueue &inpu
     static tbb::mutex m;
     const tbb::mutex::scoped_lock l(m);
     const auto table_name = input_queue.get_table_name();
-    PROFILE_MSG(APP.input_queue_service.load(input_queue), "Loading " << table_name);
-    PROFILE_MSG(APP.iq_scaling_factor_service.prepare(dataset, input_queue, false), "Prepare input scaling factors for " << table_name);
-    PROFILE_MSG(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
+    PROFILE_INFO(APP.input_queue_service.load(input_queue), "Loading " << table_name);
+    PROFILE_INFO(APP.iq_scaling_factor_service.prepare(dataset, input_queue, false), "Prepare input scaling factors for " << table_name);
+    PROFILE_INFO(business::DeconQueueService::deconstruct(dataset, input_queue, decon), "Deconstruct " << decon.get_table_name());
 }
 
 TEST(manifold_tune_train_predict, basic_integration)
@@ -80,17 +80,17 @@ TEST(manifold_tune_train_predict, basic_integration)
     constexpr uint16_t C_save_forecast = 115;
     constexpr auto C_online_validate = false;
 #ifdef VALGRIND_BUILD
-    constexpr unsigned C_test_decrement = 5;
+    constexpr uint32_t C_test_decrement = 5;
 #else
-    const uint32_t C_test_decrement = 2 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
+    const uint32_t C_test_decrement = .5 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 #endif
 #define MAIN_QUEUE_RES 3600
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
-    const auto C_placement_delay = bpt::seconds(2);
+    const bpt::seconds C_placement_delay(2);
     const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_validation_window;
     const std::string C_test_input_name = "q_svrwave_test_xauusd_avg_";
-    const std::string C_test_input_table_name = C_test_input_name + STR_MAIN_QUEUE_RES;
-    const std::string C_test_aux_input_table_name = C_test_input_name + "1";
+    const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
+    const std::string C_test_aux_input_table_name(C_test_input_name + "1");
     constexpr uint16_t C_test_levels = 1;
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
@@ -99,7 +99,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const uint32_t C_test_data_len_h = C_overload_factor * (C_test_labels_len_h + cdiv(C_decon_tail + C_max_features_len, MAIN_QUEUE_RES));
     const auto C_test_data_len_h_str = std::to_string(C_test_data_len_h);
     constexpr uint32_t C_dataset_id = 0xDeadBeef;
-    const auto C_dataset_id_str = std::to_string(C_dataset_id);
+    const std::string C_dataset_id_str(std::to_string(C_dataset_id));
     constexpr char C_last_test_time[] = "2025-01-13 01:00:00";
 
     try {
