@@ -11,7 +11,7 @@ cd "${DAEMON_DIR}" || exit
 killwait ${BIN}
 rm -f /dev/shm/sem.svrwave_gpu_sem
 
-echo Test window is $SVRWAVE_TEST_WINDOW.
+echo Test window is ${}SVRWAVE_TEST_WINDOW}.
 if [[ $1 == "-d" ]]; then # Debug
   echo "TBB does exception testing on start, ignore the first exception!"
 	${DBG} --ex 'catch throw' --ex run --directory=${PWD}/../SVRRoot --se ./${BIN} --args ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"

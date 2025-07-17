@@ -178,3 +178,22 @@ echo always > /sys/kernel/mm/transparent_hugepage/enabled
 echo 1 > /proc/sys/vm/page_lock_unfairness
 echo 0 > /proc/sys/kernel/numa_balancing
 sysctl vm.vfs_cache_pressure=50
+
+
+# Shared memory used by SVRDaemon and MQL connector for fast communication
+
+TEMPUS_SHDATA_DIR=/dev/shm/tempus
+if [ ! -d "${TEMPUS_SHDATA_DIR}" ]; then
+  mkdir -p "${TEMPUS_SHDATA_DIR}"
+fi
+
+DATAIN_FILE=${TEMPUS_SHDATA_DIR}/datain
+if [ ! -f "${DATAIN_FILE}" ]; then
+  touch "${DATAIN_FILE}"
+fi
+
+RESP_FILE=${TEMPUS_SHDATA_DIR}/resp
+if [ ! -f "${RESP_FILE}" ]; then
+  touch "${RESP_FILE}"
+fi
+

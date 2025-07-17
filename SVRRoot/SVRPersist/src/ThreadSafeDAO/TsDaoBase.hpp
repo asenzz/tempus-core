@@ -7,21 +7,20 @@
 namespace svr {
 namespace dao {
 
-std::mutex &common_mutex_instance();
+std::recursive_mutex &common_mutex_instance();
 
 template<class ConcreteDao> class TsDaoBase {
 protected:
-    std::mutex &mutex;
+    std::recursive_mutex &mutex;
     std::unique_ptr<ConcreteDao> dao;
 public:
     explicit TsDaoBase(std::unique_ptr<ConcreteDao> dao) : mutex(common_mutex_instance()), dao(std::move(dao))
     {}
 
-    template<class Result, class Method, class ...Args>
-    Result ts_call(Method method,
-                   Args ...args) // TODO Replace with a different kind of wrapper, because this way, binding to template parameter we effectively disable function overloading
+    // TODO Replace with a different kind of wrapper, because this way, binding to template parameter we effectively disable function overloading
+    template<class Result, class Method, class ...Args> Result ts_call(Method method, Args ...args)
     {
-        const std::scoped_lock lock(mutex);
+        const std::scoped_lock l_(mutex);
         auto fun = std::bind(method, dao.get(), args...);
         return fun();
     }

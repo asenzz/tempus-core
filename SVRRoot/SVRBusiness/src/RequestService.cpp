@@ -39,8 +39,7 @@ datamodel::MultivalRequest_ptr RequestService::get_latest_multival_request(svr::
     return request_dao.get_latest_multival_request(user.get_user_name(), dataset.get_id());
 }
 
-std::deque<datamodel::MultivalRequest_ptr> RequestService::get_active_multival_requests(
-        svr::datamodel::User const &user, svr::datamodel::Dataset const &dataset)
+std::deque<datamodel::MultivalRequest_ptr> RequestService::get_active_multival_requests(svr::datamodel::User const &user, svr::datamodel::Dataset const &dataset)
 {
     return request_dao.get_active_multival_requests(user.get_user_name(), dataset.get_id());
 }

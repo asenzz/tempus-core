@@ -603,7 +603,7 @@ ModelService::get_manifold_training_data(datamodel::Dataset &dataset, const data
 #ifdef INTEGRATION_TEST
     const auto main_cend = label_decon.get_data().cend() - common::C_integration_test_validation_window;
 #else
-    cosnt auto main_cend = label_decon.get_data().cend();
+    const auto main_cend = label_decon.get_data().cend();
 #endif
     const datamodel::datarow_crange labels_range{
         ModelService::get_start(label_decon.get_data().cbegin(), main_cend, dataset_rows, model.get_last_modeled_value_time(), main_resolution), main_cend, label_decon};

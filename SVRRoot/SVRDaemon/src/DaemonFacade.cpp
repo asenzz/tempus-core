@@ -11,15 +11,19 @@
 #include "DaemonFacade.hpp"
 
 namespace svr::daemon {
-
-DaemonFacade::DaemonFacade() :
-    loop_interval(PROPS.get_loop_interval()),
-    stream_loop_interval(PROPS.get_stream_loop_interval()),
-    loop_count(0),
-    max_loop_count(PROPS.get_max_loop_count()),
-    self_request(PROPS.get_self_request())
+DaemonFacade::DaemonFacade() : loop_interval(PROPS.get_loop_interval()),
+                               stream_loop_interval(PROPS.get_stream_loop_interval()),
+                               loop_count(0),
+                               max_loop_count(PROPS.get_max_loop_count()),
+                               self_request(PROPS.get_self_request())
 
 {
+    // configure the daemon
+    if (PROPS.get_daemonize()) {
+        do_fork();
+        LOG4_INFO("Daemon process started");
+    }
+
     PROFILE_INFO(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
     running = true;
     shm_io_thread = std::thread(&DaemonFacade::shm_io_callback, this);
@@ -113,8 +117,7 @@ void DaemonFacade::process_streams()
                     if (p_queue->back()->get_value_time() >= t.second.rows.front()->get_value_time())
                         p_queue->get_data().erase(lower_bound(p_queue->get_data(), t.second.rows.front()->get_value_time()), p_queue->end());
                     p_queue->get_data().insert(p_queue->end(), std::make_move_iterator(t.second.rows.begin()), std::make_move_iterator(t.second.rows.end()));
-                }
-                {
+                } {
                     const tbb::mutex::scoped_lock l2(save_queues_mx);
                     modified_queues.emplace(p_queue);
                 }
@@ -126,8 +129,10 @@ void DaemonFacade::process_streams()
             if (self_request && p_dataset->get_aux_input_queue()->size() &&
                 last_aux_time - p_dataset->get_last_self_request() >= resolution &&
                 last_aux_time >= last_input_res_2 - (resolution * PROPS.get_prediction_horizon())) {
-                const std::deque self_requests{otr<datamodel::MultivalRequest>(
-                        0, "", p_dataset->get_id(), timenau, last_input_res_2, last_input_res_2 + resolution, resolution, p_dataset->get_input_queue()->get_value_columns())};
+                const std::deque self_requests{
+                    otr<datamodel::MultivalRequest>(
+                        0, "", p_dataset->get_id(), timenau, last_input_res_2, last_input_res_2 + resolution, resolution, p_dataset->get_input_queue()->get_value_columns())
+                };
                 business::t_stream_results stream_results;
                 for (const auto &p_user: du.users)
                     business::DatasetService::process_requests(*p_user, *p_dataset, self_requests, &stream_results);
@@ -149,12 +154,6 @@ void DaemonFacade::shm_io_callback()
 
 void DaemonFacade::start_loop()
 {
-    // configure the daemon
-    if (PROPS.get_daemonize()) {
-        do_fork();
-        LOG4_INFO("Daemon process started");
-    }
-
     syslog(LOG_NOTICE, "Daemon loop started");
 
 #ifndef NDEBUG
@@ -168,22 +167,21 @@ void DaemonFacade::start_loop()
             PROFILE_INFO(APP.dataset_service.update_active_datasets(datasets), "Update active datasets");
         }
         for (business::DatasetService::DatasetUsers &dsu: datasets) {
-
 #ifndef NDEBUG
             di.wait();
 #endif
 
             auto &dataset = *dsu.p_dataset;
             try {
-                boost::unordered_flat_map<bigint, std::deque<datamodel::MultivalRequest_ptr>> user_requests;
+                boost::unordered_flat_map<bigint, std::deque<datamodel::MultivalRequest_ptr> > user_requests;
                 for (const auto &p_user: dsu.users)
                     user_requests[p_user->get_id()] = context::AppContext::get_instance().request_service.get_active_multival_requests(*p_user, dataset);
                 PROFILE_INFO(business::DatasetService::process(*dsu.p_dataset), "Process dataset");
                 for (const auto &p_user: dsu.users) PROFILE_INFO(business::DatasetService::process_requests(*p_user, *dsu.p_dataset, user_requests[p_user->get_id()], nullptr),
-                                                                      "Process multival requests " << p_user->get_user_name());
+                                                                 "Process multival requests " << p_user->get_user_name());
             } catch (const common::bad_model &ex) {
                 LOG4_ERROR("Bad model while processing dataset " << dsu.p_dataset->get_id() << " " << dsu.p_dataset->get_dataset_name()
-                                                                 << " level " << ex.get_decon_level() << ", column " << ex.get_column_name() << " error " << ex.what());
+                    << " level " << ex.get_decon_level() << ", column " << ex.get_column_name() << " error " << ex.what());
             } catch (const std::exception &ex) {
                 LOG4_ERROR("Failed processing dataset " << dsu.p_dataset->get_id() << " " << dsu.p_dataset->get_dataset_name() << " " << ex.what());
             }
@@ -210,15 +208,17 @@ bool DaemonFacade::continue_loop()
 
 #ifndef NDEBUG
 
-struct diagnostic_interface_zwei::diagnostic_interface_impl final {
+struct diagnostic_interface_zwei::diagnostic_interface_impl final
+{
     static const std::string their_pipe_name, mine_pipe_name;
 
     std::ifstream their_pipe;
     std::ofstream mine_pipe;
 
     diagnostic_interface_impl(std::ifstream &their_pipe, std::ofstream &mine_pipe)
-            : their_pipe(std::move(their_pipe)), mine_pipe(std::move(mine_pipe))
-    {}
+        : their_pipe(std::move(their_pipe)), mine_pipe(std::move(mine_pipe))
+    {
+    }
 
     ~diagnostic_interface_impl()
     {
@@ -291,5 +291,4 @@ void diagnostic_interface_zwei::wait()
 }
 
 #endif // NDEBUG
-
 }
