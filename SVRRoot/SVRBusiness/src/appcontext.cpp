@@ -1,5 +1,10 @@
 #include "appcontext.hpp"
 
+#include <magma_auxiliary.h>
+#include <mpi.h>
+#include <ipp/ippcore.h>
+#include <sys/mman.h>
+
 #include "DAO/UserDAO.hpp"
 #include "DAO/DataSource.hpp"
 #include "DAO/SVRParametersDAO.hpp"
@@ -137,7 +142,20 @@ AppContext::AppContext(const std::string &config_path, const bool use_threadsafe
           iq_scaling_factor_service(*new business::IQScalingFactorService(p_impl.iq_scaling_factor_dao)),
           w_scaling_factor_service(*new business::WScalingFactorService(p_impl.w_scaling_factor_dao)),
           dq_scaling_factor_service(*new business::DQScalingFactorService(p_impl.dq_scaling_factor_dao))
-{}
+{
+    omp_set_nested(true);
+
+#ifdef USE_MPI
+    static int zero = 0;
+    int provided = 0;
+    mpi_errchk(MPI_Init_thread(&zero, nullptr, MPI_THREAD_MULTIPLE, &provided));
+    if (provided != MPI_THREAD_MULTIPLE) LOG4_ERROR("The MPI implementation " << provided << " does not support MPI_THREAD_MULTIPLE.");
+#endif
+
+    mlockall(MCL_CURRENT | MCL_FUTURE);
+    ip_errchk(ippInit());
+    ma_errchk(magma_init());
+}
 
 AppContext::~AppContext()
 {
@@ -157,13 +175,17 @@ AppContext::~AppContext()
     delete &input_queue_service;
     delete &user_service;
     delete &p_impl;
+
+    munlockall();
+
+#ifdef USE_MPI
+    MPI_Finalize();
+#endif
 }
 
 void AppContext::init_instance(const std::string &config_path, bool use_threadsafe_dao)
 {
-    if (AppContext::p_instance)
-        LOG4_THROW("AppContext instance has already been initialized");
-
+    if (AppContext::p_instance) LOG4_THROW("AppContext instance has already been initialized");
     AppContext::p_instance = new AppContext(config_path, use_threadsafe_dao);
 }
 

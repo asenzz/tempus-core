@@ -1,4 +1,3 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(connector-tester)
 
 INCLUDE(../../../cmake/SourceList.cmake)

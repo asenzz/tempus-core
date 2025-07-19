@@ -1,21 +1,16 @@
-#include <petscksp.h>
-#include <petscsnes.h>
 #include <algorithm>
 #include <oneapi/mkl.hpp>
 
 #define ARMA_DONT_USE_LAPACK
 #undef ARMA_USE_LAPACK
 
-#include <mpi.h>
 #include <armadillo>
-#include <ipp/ipp.h>
 #include <cmath>
 #include <deque>
 #include <execution>
 #include <magma_v2.h>
 #include <memory>
 #include <sys/mman.h>
-#include <mpi.h>
 #include "common/compatibility.hpp"
 #include "common/gpu_handler.hpp"
 #include "appcontext.hpp"
@@ -26,7 +21,6 @@
 #include "model/Entity.hpp"
 #include "model/SVRParameters.hpp"
 #include "util/math_utils.hpp"
-#include "calc_cache.hpp"
 #include "kernel_factory.hpp"
 #include "pprune.hpp"
 
@@ -38,41 +32,6 @@
 namespace svr {
 namespace datamodel {
 
-
-class onlinesvr_lib_init {
-public:
-    onlinesvr_lib_init()
-    {
-        mlockall(MCL_CURRENT | MCL_FUTURE);
-        ip_errchk(ippInit());
-
-        ma_errchk(magma_init());
-#ifdef USE_MPI
-        static int zero = 0;
-        int provided = 0;
-        MPI_Init_thread(&zero, nullptr, MPI_THREAD_MULTIPLE, &provided);
-        if (provided != MPI_THREAD_MULTIPLE) LOG4_ERROR("The MPI implementation " << provided << " does not support MPI_THREAD_MULTIPLE.");
-
-        // Get MPI rank and size
-        int rank, size;
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        MPI_Comm_size(MPI_COMM_WORLD, &size);
-        if (rank == 0) LOG4_DEBUG("Running with " << size << " MPI processes.");
-#endif
-    }
-
-    ~onlinesvr_lib_init()
-    {
-#ifdef USE_MPI
-        MPI_Finalize();
-#endif
-        munlockall();
-    }
-};
-
-const auto __lib_init = []() {
-    return onlinesvr_lib_init();
-}();
 
 OnlineSVR::OnlineSVR() : Entity(0), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
 {

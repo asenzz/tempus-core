@@ -62,7 +62,7 @@ void DaemonFacade::do_fork()
 
     /* Open the log file */
     openlog("SVRDaemon", LOG_PID, LOG_DAEMON);
-    syslog(LOG_NOTICE, "Daemon process started");
+    syslog(LOG_NOTICE, "Tempus process started");
 
     /* Change the file mode masks */
     umask(0);
@@ -175,7 +175,7 @@ void DaemonFacade::start_loop()
             try {
                 boost::unordered_flat_map<bigint, std::deque<datamodel::MultivalRequest_ptr> > user_requests;
                 for (const auto &p_user: dsu.users)
-                    user_requests[p_user->get_id()] = context::AppContext::get_instance().request_service.get_active_multival_requests(*p_user, dataset);
+                    user_requests[p_user->get_id()] = context::AppContext::get().request_service.get_active_multival_requests(*p_user, dataset);
                 PROFILE_INFO(business::DatasetService::process(*dsu.p_dataset), "Process dataset");
                 for (const auto &p_user: dsu.users) PROFILE_INFO(business::DatasetService::process_requests(*p_user, *dsu.p_dataset, user_requests[p_user->get_id()], nullptr),
                                                                  "Process multival requests " << p_user->get_user_name());

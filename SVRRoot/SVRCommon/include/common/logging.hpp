@@ -268,4 +268,12 @@ constexpr unsigned C_cu_alloc_retries = 1e2;
             LOG4_ERROR("Cusolver call " #cmd " failed with " << int(__err));  \
 }
 #endif
+
+#ifndef mpi_errchk
+#define mpi_errchk(cmd) { \
+    int __err = (cmd); \
+    if (__err != MPI_SUCCESS) LOG4_THROW("MPU call " #cmd " failed with error " << __err); \
+}
+#endif
+
 #endif

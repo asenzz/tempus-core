@@ -118,8 +118,8 @@ constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 #define tbb_stpfor__(TY, IX, FROM, TO, STEP, ...)  non_stpfor__(TYPE, IX, FROM, TO, STEP, __VA_ARGS__)
 #else
 #define tbb_stpfor__(TY, IX, FROM, TO, STEP, ...) \
-        tbb::parallel_for(tbb::blocked_range<TY>(FROM, TO, STEP), [&](const tbb::blocked_range<TY> &__brange_##IX) \
-            { for (TY IX = __brange_##IX.begin(); IX < __brange_##IX.end(); IX += STEP) \
+        tbb::parallel_for(tbb::blocked_range<TY>(FROM, TO, STEP), [&](const tbb::blocked_range<TY> &__brange_##IX) { \
+            for (TY IX = __brange_##IX.begin(); IX < __brange_##IX.end(); IX += STEP) \
             { __VA_ARGS__; }} ); // Custom stepping is impossible with random starts
 #endif
 #define tbb_tpfor__(TY, IX, FROM, TO, ...) tbb_stpfor__(TY, IX, FROM, TO, 1, __VA_ARGS__)
@@ -175,14 +175,11 @@ namespace svr {
 
 template<typename T> inline uint32_t adj_threads(const T iterations)
 {
-    uint32_t res;
     if (iterations > T(C_n_cpu))
-        res = C_n_cpu;
-    else if (iterations < T(1))
-        res = 1;
-    else
-        res = static_cast<uint32_t>(iterations);
-    return res;
+        return C_n_cpu;
+    if (iterations < T(1))
+        return 1;
+    return static_cast<uint32_t>(iterations);
 }
 
 #define ADJ_THREADS(T) num_threads(adj_threads(T))

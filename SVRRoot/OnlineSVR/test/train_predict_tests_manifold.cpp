@@ -72,8 +72,6 @@ TEST(manifold_tune_train_predict, basic_integration)
 {
     LOG4_BEGIN();
 
-    omp_set_nested(true);
-
     context::AppContext::init_instance("../config/app.config");
 
     // Save first N forecasts to database for later analysis

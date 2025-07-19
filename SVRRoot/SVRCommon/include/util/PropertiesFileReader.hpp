@@ -214,6 +214,12 @@ public:
 
     static uint8_t S_log_threshold;
 
+    static int get_mpi_rank();
+
+    static int get_mpi_size();
+
+    static int get_mpi_comm();
+
     ConcreteDaoType get_dao_type() const noexcept;
 
     size_t get_default_feature_quantization() const noexcept;

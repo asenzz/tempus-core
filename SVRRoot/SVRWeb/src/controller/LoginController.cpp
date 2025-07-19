@@ -32,8 +32,8 @@ void LoginController::handle_login_post() {
     LOG4_DEBUG("Login POST Request received");
     std::string username = request().post("username");
     std::string password = request().post("password");
-    if(AppContext::get_instance().authentication_provider.login(username, password)){
-        User_ptr user = AppContext::get_instance().user_service.get_user_by_user_name(username);
+    if(AppContext::get().authentication_provider.login(username, password)){
+        User_ptr user = AppContext::get().user_service.get_user_by_user_name(username);
         session()["user"] = username;
         switch(user->get_role()){
             case svr::datamodel::ROLE::ADMIN:

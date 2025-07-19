@@ -12,7 +12,7 @@ namespace web {
 void DatasetController::show(const std::string dataset_name) {
     content::Dataset model;
     model.pageTitle = "Dataset";
-    datamodel::Dataset_ptr dataset = AppContext::get_instance().dataset_service.get_user_dataset(DEFAULT_WEB_USER /* session()["user"] */, dataset_name);
+    datamodel::Dataset_ptr dataset = AppContext::get().dataset_service.get_user_dataset(DEFAULT_WEB_USER /* session()["user"] */, dataset_name);
 
     if(dataset.get() == nullptr){
         model.pageError = "No such dataset exists!";
@@ -62,12 +62,12 @@ void DatasetController::handle_create_post() {
 
     if(model.form.validate()){
         model.load_form_data();
-        if(AppContext::get_instance().dataset_service.exists(DEFAULT_WEB_USER /* session()["user"] */, model.object->get_dataset_name())){
+        if(AppContext::get().dataset_service.exists(DEFAULT_WEB_USER /* session()["user"] */, model.object->get_dataset_name())){
             model.form.name.valid(false);
             model.form.name.error_message("The Dataset with name " + model.object->get_dataset_name() + " already created!");
         } else{
             model.object->set_user_name(DEFAULT_WEB_USER /* session()["user"] */);
-            if(!AppContext::get_instance().dataset_service.save(model.object)){
+            if(!AppContext::get().dataset_service.save(model.object)){
                 model.pageError = "Error saving dataset: Please try again later!";
             } else{
                 std::stringstream url;

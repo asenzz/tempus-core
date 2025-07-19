@@ -28,15 +28,15 @@ Note:
 
 <h2 align="center">History</h2>
 
-The first implementation of Tempus started as a spin off of my University diploma work on the subject of scaling support vectors machine using the Wavelet transform in 2011. Me and Viktor Gjorgjievski wrote the intial implementation as an open source project on sourceforge.net. Later on I closed the project and secured financing from the Papakaya company in the order of 1.2 million euros, including my own means. This allowed me to hire many professional contributor and consult known experts on the subject, engineers and professors. The final goal being prediction of financial indexes or indicators. Tempus can, even with a modest GPU server (24 TFLOPS) produce positive forecast alpha when applied to the XAUUSD index.
+The first implementation of Tempus started as a spin off of my University diploma work on the subject of scaling support vectors machine using the Wavelet transform in 2011. I pushlished the intial implementation as an open source project on sourceforge.net, main contributors being me and first employee Viktor. Later on I closed the project and secured financing from the Papakaya company in the order of 1.2 million euros, including my own means. This allowed me to hire many professional contributors and consult known experts on the subject, engineers and professors. The final goal being prediction of financial indexes or indicators. Tempus can, even with a modest GPU server (24 TFLOPS) produce positive forecast alpha when applied to the XAUUSD index.
 
-Thanks to everyone involved at the Bulgarian Academy of Sciences lending their super computer,
-Ben Gurion University at Ber-Sheva for computing servers, FINKI Macedonia, Taras Shevchenko University.
+Thanks to everyone involved at the Bulgarian Academy of Sciences permitting access to their super computer,
+Ben Gurion University at Ber-Sheva for another computing server, students at FINKI Skopje and Taras Shevchenko University.
 
 <h3>Authors:</h3>
 
-- me - Lead dreamer, Kernel gamma systematic selection, ADA boosting of weights, optimal EMD coefficients, integration and testing
-- prof Emanouil Atanasov - Design and implementation of chunking MIMO SVR, Online EVMD, kernels, CUDA and OpenCL parallelization
+- me - Lead programmer, design, testing, implementation and optimizing.
+- prof Emanouil Atanasov - Design and implementation of chunking MIMO SVR, IRWLS hybrid direct solver, Online VMD, fast Path kernel approximation, hyperparameter optimization, CUDA and OpenCL parallelization
 - Andrey Bezrukov - Project architecture and skeleton, optimization and parallelization
 - Evgeniy Marinov - Actually accurate Online SVR
 - Bojko Perfanov - SVR Epsilon and Cost path computation, (almost) boundless Wavelet decomposition à trous
@@ -44,7 +44,7 @@ Ben Gurion University at Ber-Sheva for computing servers, FINKI Macedonia, Taras
 - Viktor Gjorgjievski - Initial project architecture design and implementation
 - Taras Maliarcuk - Infrastructure and project architecture
 - Guy Tal - Database and multithreading, optimization
-- Stiljan Stojanov -  Implementation of the MIMO SVR, EVMD, kernels,
+- Stilyan Stojanov -  Implementation of the MIMO SVR, EVMD, kernels,
 - Petar Simov - SVR and epsilon SVR path, infrastructure
 - Dimitar Conov - GA kernel
 - Stanislav Georgiev - Online SMO SVR, Wavelet decomposition
@@ -57,7 +57,7 @@ Thanks to:
 - George Kour - ML consulting
 - prof Jihad El-Sana - Advice and support
 - prof Dejan Gjorgjevik - Consultancy and support, referring students at FINKI Skopje
-- prof William Cohen - ADA boost code
-- Oleg Gumbar, Milen Hristov, Aleksandar Miladinov, Ali Kasmu - Sysadmins
-- Vasil Savuliak - Referring people for the office in Kiev
+- prof William Cohen - for the ADA boost code
+- Oleg Gumbar, Milen Hristov, Aleksandar Miladinov, Ali Kasmu - Sysadmins in Papakaya
+- Vasil Savuliak - for referring people to the office in Kiev
 

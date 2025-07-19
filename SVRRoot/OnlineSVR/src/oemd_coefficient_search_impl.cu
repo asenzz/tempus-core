@@ -767,7 +767,7 @@ oemd_coefficients_search::evaluate_mask(
         if (validate_rows - shift_limit < align_window)
             LOG4_THROW("Validate rows " << validate_rows << ", shift limit " << shift_limit << ", increase ALIGN_WINDOW " << align_window << " to above " << validate_rows - shift_limit);
         UNROLL(2)
-        for (DTYPE(num_quantisations) q = 0; q < num_quantisations; q += std::max<DTYPE(q) >(1, q / skipdiv)) {
+        for (DTYPE(num_quantisations) q = 0; q < num_quantisations; q += std::max<DTYPE(q) >(1, CAST2(skipdiv)q / skipdiv)) {
             const auto qt = quantisations[q];
             OMP_FOR_i(validate_rows) feat_params_q[i].ix_start = feat_params_q[i].ix_end - full_feat_cols * qt + 1 - mask_offset;
             const auto d_feat_params_q = cumallocopy(feat_params_q, custream);

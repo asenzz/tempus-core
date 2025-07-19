@@ -1,5 +1,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include "util/PropertiesFileReader.hpp"
+
+#include <mpi.h>
+
 #include "common/logging.hpp"
 #include "common/constants.hpp"
 #include "util/string_utils.hpp"
@@ -264,6 +267,27 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     oemd_tune_particles_ = get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles);
     oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);
     solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);
+}
+
+int AppConfig::get_mpi_rank()
+{
+    int rank;
+    mpi_errchk(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+    LOG4_DEBUG("Running on MPI rank " << rank);
+    return rank;
+}
+
+int AppConfig::get_mpi_size()
+{
+    int size;
+    mpi_errchk(MPI_Comm_size(MPI_COMM_WORLD, &size));
+    LOG4_DEBUG("Running with " << size << " MPI processes.");
+    return size;
+}
+
+int AppConfig::get_mpi_comm()
+{
+    return MPI_COMM_WORLD;
 }
 
 ConcreteDaoType AppConfig::get_dao_type() const noexcept

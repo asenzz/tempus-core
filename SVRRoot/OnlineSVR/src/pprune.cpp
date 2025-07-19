@@ -2,6 +2,7 @@
 // Created by zarko on 3/24/24.
 //
 
+#include <mpi.h>
 #include <oneapi/tbb/mutex.h>
 #include <deque>
 #include <prima/prima.h>
@@ -14,12 +15,12 @@
 
 #include "model/DBTable.hpp"
 #include "pprune.hpp"
+#include "appcontext.hpp"
 #include "common/compatibility.hpp"
 #include "common/defines.h"
 #include "common/logging.hpp"
 #include "util/math_utils.hpp"
 #include "util/string_utils.hpp"
-#include "sobol.hpp"
 
 namespace svr {
 namespace optimizer {
@@ -375,12 +376,16 @@ struct t_biteopt_prune
 
 void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
-    LOG4_BEGIN();
+    const auto rank = PROPS.get_mpi_rank();
+    const auto world_size = PROPS.get_mpi_size();
+    const auto start_particle = rank * n_particles / world_size;
+    const auto end_particle = rank == world_size - 1 ? n_particles : (rank + 1) * n_particles / world_size;
+    LOG4_DEBUG("PPrune BiteOpt, particles " << n_particles << ", start " << start_particle << ", end " << end_particle << ", rank " << rank << ", world size " << world_size);
 
     auto p_particles = ptr<std::deque<t_calfun_data_ptr> >(n_particles);
     std::deque<std::deque<t_biteopt_prune> > biteopt_particle(n_particles, std::deque<t_biteopt_prune>(depth));
     OMP_FOR_(n_particles * depth, SSIMD firstprivate(n_particles, maxfun, no_elect, C_rand_disperse) collapse(2))
-    for (uint32_t i = 0; i < n_particles; ++i) {
+    for (uint32_t i = start_particle; i < end_particle; ++i) {
         for (uint32_t d = 0; d < depth; ++d) {
             auto &rnd = biteopt_particle[i][d].rnd;
             auto &biteopt = biteopt_particle[i][d].biteopt;
@@ -395,7 +400,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
     tbb::task_arena tta(adj_threads(n_particles));
     for (DTYPE(iter) j = 0; j < iter; ++j) {
         PROFILE_TRACE(tta.execute([&] {
-            tbb_zpfor_i__(n_particles,
+            tbb_pfor_i__(start_particle, end_particle,
                 for (DTYPE(depth) d = 0; d < depth; ++d) {
                     if (biteopt_particle[i][d].calfun_data->zombie) continue;
                     const auto &biteopt = biteopt_particle[i][d].biteopt;
@@ -406,7 +411,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
         }), "Cycle " << j << " of " << iter << ", particles " << n_particles << ", depth " << depth);
     }
     const auto D_size = D * sizeof(double);
-    for (uint16_t i = 0; i < n_particles; ++i) {
+    for (auto i = start_particle; i < end_particle; ++i) {
         for (DTYPE(depth) d = 0; d < depth; ++d) {
             auto &rnd = biteopt_particle[i][d].rnd;
             auto &biteopt = biteopt_particle[i][d].biteopt;
@@ -420,6 +425,25 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
             biteopt.reset();
             delete biteopt_particle[i][d].calfun_data;
         }
+    }
+
+    if (world_size > 1) {
+        const auto result_len = result.best_parameters.size() + 2;
+        std::vector<DTYPE(result.best_score)> mpi_best_result(result_len);
+        mpi_best_result[0] = result.best_score;
+        mpi_best_result[1] = result.total_iterations;
+        memcpy(mpi_best_result.data() + 2, result.best_parameters.mem, D_size);
+        if (!rank) {
+            DTYPE(mpi_best_result) mpi_all_results(result_len * world_size);
+            mpi_errchk(MPI_Gather(mpi_best_result.data(), result_len, MPI_DOUBLE, mpi_all_results.data(), world_size, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
+            for (DTYPE(world_size) i = 0; i < world_size; ++i) {
+                if (mpi_all_results[i * result_len] >= result.best_score) continue;
+                result.best_score = mpi_all_results[i * result_len];
+                result.total_iterations = mpi_all_results[i * result_len + 1];
+                memcpy(result.best_parameters.memptr(), mpi_all_results.data() + i * result_len + 2, D_size);
+            }
+        } else
+            mpi_errchk(MPI_Gather(mpi_best_result.data(), result_len, MPI_DOUBLE, nullptr, 0, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
     }
 
     result.total_iterations = maxfun;

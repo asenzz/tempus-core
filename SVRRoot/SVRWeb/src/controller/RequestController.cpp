@@ -92,7 +92,7 @@ void RequestView::getMultivalResults(json::object data)
 
     const auto dataset_id = boost::lexical_cast<bigint>(data["dataset"].str());
 
-    const auto request = AppContext::get_instance().request_service.get_multival_request(user, dataset_id, value_time_start, value_time_end);
+    const auto request = AppContext::get().request_service.get_multival_request(user, dataset_id, value_time_start, value_time_end);
     if (!request) {
         const std::string error = "No such request has been submitted: user: " + std::string(user) + " dataset_id: " + to_string(dataset_id)
                                   + " start time: " + to_simple_string(value_time_start) + " end time: " + to_simple_string(value_time_end);
@@ -103,7 +103,7 @@ void RequestView::getMultivalResults(json::object data)
 
     const auto request_columns = from_sql_array(request->value_columns);
     const uint32_t expected_rows_ct = request_columns.size() * ((value_time_end - value_time_start) / resolution);
-    const auto responses = AppContext::get_instance().request_service.get_multival_results(
+    const auto responses = AppContext::get().request_service.get_multival_results(
             user, dataset_id, value_time_start, value_time_end, resolution.total_seconds());
     if (responses.empty() || expected_rows_ct > responses.size()) {
         const std::string error = common::formatter() << "Couldn't find enough responses " << responses.size() << " matching the requested " << expected_rows_ct << " for " << request->to_string();
@@ -118,7 +118,7 @@ void RequestView::getMultivalResults(json::object data)
     const auto &resolution_str = data["resolution"].str();
     const auto &value_time_start_str = data["value_time_start"].str();
     const auto &value_time_end_str = data["value_time_end"].str();
-    const auto responses = AppContext::get_instance().request_service.get_multival_results(
+    const auto responses = AppContext::get().request_service.get_multival_results(
             user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str);
     if (responses.empty()) {
         const std::string error =

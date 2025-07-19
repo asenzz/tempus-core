@@ -1,4 +1,3 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 IF(USE_CUDA)
 	PROJECT(OnlineSVR LANGUAGES CUDA CXX)
     LINK_LIBRARIES(CUDA::cudart CUDA::cublas CUDA::cufftw CUDA::cusolver CUDA::nppc CUDA::npps) # CUDA::cuda_driver
@@ -13,7 +12,11 @@ INCLUDE(../../cmake/SourceList.cmake)
 FIND_PACKAGE(prima REQUIRED)
 # FIND_PACKAGE(Bandicoot REQUIRED)
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS thread system iostreams REQUIRED CONFIG)
-LINK_LIBRARIES(${DEPENDENCIES} magma MKL::MKL TBB::tbb ${JEMALLOC_LIBRARIES} ${Boost_LIBRARIES} prima::primac Ginkgo::ginkgo) # bandicoot
+LINK_LIBRARIES(${DEPENDENCIES} magma MKL::MKL TBB::tbb ${JEMALLOC_LIBRARIES} ${Boost_LIBRARIES} prima::primac) # bandicoot
+
+IF(NOT USE_PETSC)
+    LINK_LIBRARIES(Ginkgo::ginkgo)
+ENDIF()
 
 IF (EXPERIMENTAL_FEATURES)
     # FIND_PACKAGE(OSQP REQUIRED)
@@ -24,8 +27,8 @@ IF (EXPERIMENTAL_FEATURES)
     FIND_PACKAGE(Python3 REQUIRED)
     INCLUDE_DIRECTORIES("${MATLAB_INCLUDE_DIR}" "${PYINCLUDES}" "/usr/include/python3.6m") # "/usr/local/include/eigen3" "/usr/local/include/google/protobuf"
     #FIND_PACKAGE(Torch REQUIRED)
-    LINK_LIBRARIES(fftw3 MatlabDataArray MatlabEngine python3.6m) # osqp::osqpstatic clblast tensorflow_all ${TORCH_LIBRARIES}
-    APPEND(TEST_DEPENDENCIES ${PROJECT_NAME} python3.6m) # tensorflow_all ${TORCH_LIBRARIES}
+    LINK_LIBRARIES(fftw3 MatlabDataArray MatlabEngine python3.6m) # osqp::osqpstatic clblast tensorflow_all
+    APPEND(TEST_DEPENDENCIES ${PROJECT_NAME} python3.6m) # tensorflow_all
 ENDIF()
 
 IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")

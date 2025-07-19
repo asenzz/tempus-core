@@ -35,7 +35,7 @@ void InputQueueController::show(std::string queue_name)
     session()["user"] = DEFAULT_WEB_USER;
     content::InputQueue model;
     model.pageTitle = "InputQueue Details";
-    const auto queue = AppContext::get_instance().input_queue_service.get_queue_metadata(queue_name);
+    const auto queue = AppContext::get().input_queue_service.get_queue_metadata(queue_name);
     if (queue.get() != nullptr && queue->get_owner_user_name() == DEFAULT_WEB_USER /* session()["user"] */ )
         model.object = queue;
     else
@@ -88,14 +88,14 @@ void InputQueueController::handle_create_post()
     session()["user"] = DEFAULT_WEB_USER;
     if (model.form.validate()) {
         model.load_form_data();
-        if (AppContext::get_instance().input_queue_service.exists(DEFAULT_WEB_USER /* session()["user"] */, model.object->get_logical_name(), model.object->get_resolution())) {
+        if (AppContext::get().input_queue_service.exists(DEFAULT_WEB_USER /* session()["user"] */, model.object->get_logical_name(), model.object->get_resolution())) {
             model.form.logical_name.valid(false);
             model.form.resolution.valid(false);
             model.pageError = "Queue with name " + model.object->get_logical_name() + " and resolution " + bpt::to_simple_string(model.object->get_resolution())
                               + " is already created!";
         } else {
             model.object->set_owner_user_name(DEFAULT_WEB_USER /* session()["user"] */);
-            if (!AppContext::get_instance().input_queue_service.save(model.object)) {
+            if (!AppContext::get().input_queue_service.save(model.object)) {
                 model.pageError = "Error while saving p_input_queue! Please try again later!";
             } else {
                 std::stringstream url;
@@ -122,12 +122,12 @@ InputQueueView::InputQueueView(cppcms::service &srv) : cppcms::rpc::json_rpc_ser
 
 void InputQueueView::showInputQueue(std::string queueTableName)
 {
-    return_result(AppContext::get_instance().input_queue_service.load(queueTableName, bpt::min_date_time, bpt::max_date_time, 0));
+    return_result(AppContext::get().input_queue_service.load(queueTableName, bpt::min_date_time, bpt::max_date_time, 0));
 }
 
 void InputQueueView::getValueColumnsModel(std::string queue_table_name)
 {
-    const auto p_queue = AppContext::get_instance().input_queue_service.get_queue_metadata(queue_table_name);
+    const auto p_queue = AppContext::get().input_queue_service.get_queue_metadata(queue_table_name);
     if (!p_queue) {
         return_error("Queue was not found!");
         return;
@@ -158,7 +158,7 @@ parse_time_range(session_interface &session, cppcms::json::object obj, string &l
     resolution = seconds(boost::lexical_cast<long>(obj["period"].str()));
 
     session["user"] = DEFAULT_WEB_USER;
-    queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
+    queue = AppContext::get().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
     if (!queue) {
         LOG4_ERROR("No Input Queue has been setup for symbol " << logical_name << " and resolution " << to_simple_string(resolution));
         return {};
@@ -189,7 +189,7 @@ void InputQueueView::getNextTimeRangeToBeSent(cppcms::json::object obj)
         return;
     }
     LOG4_TRACE("Offered time range from " << time_range->first << " to " << time_range->second);
-    const auto newest_row = AppContext::get_instance().input_queue_service.find_newest_record(queue);
+    const auto newest_row = AppContext::get().input_queue_service.find_newest_record(queue);
     if (newest_row) time_range->first = newest_row->get_value_time();
     if (time_range->first >= time_range->second) {
         const string msg = "No data needed for queue " + queue->get_table_name() + " already have up to " + to_simple_string(time_range->first);
@@ -223,7 +223,7 @@ void InputQueueView::reconcileHistoricalData(cppcms::json::object obj)
         return;
     }
 
-    time_range = AppContext::get_instance().input_queue_service.get_missing_hours(queue, time_range.get());
+    time_range = AppContext::get().input_queue_service.get_missing_hours(queue, time_range.get());
 
     json::value response;
 
@@ -234,7 +234,7 @@ void InputQueueView::reconcileHistoricalData(cppcms::json::object obj)
         return;
     }
 
-    AppContext::get_instance().input_queue_service.purge_missing_hours(queue);
+    AppContext::get().input_queue_service.purge_missing_hours(queue);
 
     response["message"] = "Reconciliation done";
     return_result(response);
@@ -327,7 +327,7 @@ void InputQueueView::historyData(cppcms::json::object data)
     session()["user"] = DEFAULT_WEB_USER;
     const auto resolution = seconds(boost::lexical_cast<uint32_t>(data["period"].str()));
     LOG4_DEBUG("Resolution " << resolution);// << " data " << data);
-    auto p_queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
+    auto p_queue = AppContext::get().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
     if (!p_queue) {
         const std::string err_msg = "Queue for " + session()["user"] + " " + symbol + " " + bpt::to_simple_string(resolution) + " not found!";
         LOG4_ERROR(err_msg);
@@ -394,7 +394,7 @@ void InputQueueView::historyData(cppcms::json::object data)
 
         LOG4_DEBUG("Saving " << p_queue->size() << " rows");
         size_t saved_rows;
-        if ((saved_rows = AppContext::get_instance().input_queue_service.save(p_queue)) > 0) {
+        if ((saved_rows = AppContext::get().input_queue_service.save(p_queue)) > 0) {
             response["message"] = "OK";
             response["savedRows"] = saved_rows;
             LOG4_DEBUG("Saved " << saved_rows << " rows.");
@@ -420,7 +420,7 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     const auto resolution = seconds(boost::lexical_cast<uint32_t>(obj["period"].str()));
     // session()["user"] = DEFAULT_WEB_USER;
     // TODO Replace with specialized stored procedure
-    const auto p_queue = AppContext::get_instance().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
+    const auto p_queue = AppContext::get().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
     if (!p_queue) {
         const std::string msg = "Queue for " DEFAULT_WEB_USER /* session()["user"] */ " " + logical_name + " " + to_simple_string(resolution) + " not found!";
         LOG4_ERROR(msg);

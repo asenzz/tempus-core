@@ -15,7 +15,7 @@ void UserController::show(std::string user_name) {
     content::User user;
     user.pageTitle = "User Details";
 
-    User_ptr user_ = AppContext::get_instance().user_service.get_user_by_user_name(user_name);
+    User_ptr user_ = AppContext::get().user_service.get_user_by_user_name(user_name);
 
     if(user_.get() == nullptr){
         user.pageError = "No user with such id exists!";
@@ -43,7 +43,7 @@ void UserController::showAll() {
 }
 
 void UserView::getAllUsers() {
-    return_result(AppContext::get_instance().user_service.get_all_users());
+    return_result(AppContext::get().user_service.get_all_users());
 }
 
 void UserController::handle_create_get() {
@@ -58,11 +58,11 @@ void UserController::handle_create_post() {
 
     if(user.form.validate()){
         user.load_form_data();
-        if(AppContext::get_instance().user_service.exists(user.object->get_user_name())){
+        if(AppContext::get().user_service.exists(user.object->get_user_name())){
             user.form.username.error_message("The username is already taken!");
             user.form.username.valid(false);
         }
-        else if(AppContext::get_instance().user_service.save(user.object) == 0){
+        else if(AppContext::get().user_service.save(user.object) == 0){
             user.pageError = "Cannot save user! Please try again later or contact the administrator.";
         } else{
             LOG4_DEBUG("Created successfully user with id " << user.object->get_id());

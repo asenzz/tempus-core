@@ -31,8 +31,8 @@ void ConnectorLoginController::handle_login_post()
     std::string username = request().post("username");
     std::string password = request().post("password");
     LOG4_DEBUG("MT4Login POST Request received " << username << ":" << password);
-    if(AppContext::get_instance().authentication_provider.login(username, password)) {
-        User_ptr user = AppContext::get_instance().user_service.get_user_by_user_name(username);
+    if(AppContext::get().authentication_provider.login(username, password)) {
+        User_ptr user = AppContext::get().user_service.get_user_by_user_name(username);
         session()["user"] = username;
         switch (user->get_role()) {
             case svr::datamodel::ROLE::ADMIN:

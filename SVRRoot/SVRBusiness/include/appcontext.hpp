@@ -5,7 +5,7 @@
 #include "business.hpp"
 #include "WScalingFactorService.hpp"
 
-#define APP svr::context::AppContext::get_instance()
+#define APP svr::context::AppContext::get()
 #define PROPS APP.app_properties
 
 // To pass application properties initialize Service
@@ -36,7 +36,7 @@ class AppContext {
     AppContextImpl &p_impl;
 
 public:
-    static inline AppContext &get_instance()
+    static inline AppContext &get()
     { return *p_instance; }
 
     static void init_instance(const std::string &config_path, const bool use_threadsafe_dao = true);
