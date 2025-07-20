@@ -1,0 +1,2106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AnalysisUIOptions">
+    <option name="ANALYZE_INJECTED_CODE" value="false" />
+    <option name="SCOPE_TYPE" value="3" />
+  </component>
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="BranchesTreeState">
+    <expand>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="GROUP_NODE:origin" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </expand>
+    <select>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="BRANCH:v1.0" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </select>
+  </component>
+  <component name="CMakePresetLoader">{
+  &quot;useNewFormat&quot;: true
+}</component>
+  <component name="CMakeReloadState">
+    <option name="reloaded" value="true" />
+  </component>
+  <component name="CMakeRunConfigurationManager">
+    <generated>
+      <config projectName="SVR" targetName="SVRBusiness" />
+      <config projectName="SVR" targetName="SVRPersist-unit-tests" />
+      <config projectName="SVR" targetName="SVRPersist" />
+      <config projectName="SVR" targetName="SVRWebSkin" />
+      <config projectName="SVR" targetName="connector-tester" />
+      <config projectName="SVR" targetName="SVRDaemon" />
+      <config projectName="SVR" targetName="SVRFix-unit-tests" />
+      <config projectName="SVR" targetName="SVRModel-unit-tests" />
+      <config projectName="SVR" targetName="SVRCommon" />
+      <config projectName="SVR" targetName="SVRModel" />
+      <config projectName="SVR" targetName="victor-tester" />
+      <config projectName="SVR" targetName="OnlineSVR-unit-tests" />
+      <config projectName="SVR" targetName="SVRFix" />
+      <config projectName="SVR" targetName="SVRFix-shared" />
+      <config projectName="SVR" targetName="OnlineSVR" />
+      <config projectName="SVR" targetName="SVRWeb" />
+      <config projectName="SVR" targetName="SVRCommon-unit-tests" />
+      <config projectName="SVR" targetName="SVRDaemon-blackbox-tests" />
+      <config projectName="SVR" targetName="SVRBusiness-tests" />
+    </generated>
+  </component>
+  <component name="CMakeSettings" AUTO_RELOAD="true">
+    <configurations>
+      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build" CONFIG_NAME="Release" />
+    </configurations>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="cc8418c2-62f8-4b92-86c8-7b9409132682" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_grad.cpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/recombine_parameters.cuh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/recombine_parameters.cu" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/src/Entity.cpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/generate_forecasts.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/OnlineSMOSVR.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/OnlineSMOSVR.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/OnlineSMOSVR.tcc" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/OnlineSMOSVR.tcc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/cvmd.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/cvmd.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/FileSMO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/FileSMO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/csmosolver.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/csmosolver.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/r_matrix.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/r_matrix.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/r_matrix_impl.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/r_matrix_impl.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/svm.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/svm.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/svm_batch.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/svm_batch.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/syncarray.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/syncarray.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/syncmem.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/syncmem.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated/thundersvm.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/thundersvm.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/device_ptr.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/device_ptr.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/fast_cvmd.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/fast_cvmd.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/firefly.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/firefly.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_base.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_base.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_factory.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_factory.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_factory.tcc" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_factory.tcc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_global_alignment.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_global_alignment.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_linear.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_linear.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_path.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_path.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_polynomial.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_polynomial.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_radial_basis.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_radial_basis.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_radial_basis_exponential.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_radial_basis_exponential.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_radial_basis_gaussian.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_radial_basis_gaussian.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_sigmoidal.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/kernel_sigmoidal.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/oemd_coefficients.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/oemd_coefficients.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/oemd_coefficients_search.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/oemd_coefficients_search.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/online_emd_impl.cuh" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/online_emd_impl.cuh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr_persist.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr_persist.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/smo.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/smo.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/smo_exception.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/smo_exception.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/smo_kernel.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/_deprecated/smo_kernel.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/Train.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_train.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/cuda_path.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/cuda_path.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/cuqrsolve.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/cuqrsolve.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/Forget.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/Forget.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/ForgetSMO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/ForgetSMO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/OnlineSMOSVR.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/OnlineSMOSVR.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/StabilizeSMO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/StabilizeSMO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/TrainSMO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/TrainSMO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/VariationsSMO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/VariationsSMO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/csmosolver.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/csmosolver.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/cvmd.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/cvmd.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/oemd_split.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/oemd_split.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/online_emd_impl.cu_emo" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/online_emd_impl.cu_emo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/r_matrix.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/r_matrix.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/smo.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/smo.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/smo_kernel.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/smo_kernel.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/svm.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/svm.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/svm_batch.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/svm_batch.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/syncarray.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/syncarray.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/deprecated/syncmem.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/_deprecated/syncmem.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/fast_cvmd.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/fast_cvmd.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/firefly.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/firefly.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/manifolds.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/manifolds.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/oemd_coefficients.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/oemd_coefficients.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/oemd_coefficients_search.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/oemd_coefficients_search.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/oemd_scoring.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/oemd_scoring.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/online_emd.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/online_emd.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/online_emd_impl.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/online_emd_impl.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/online_emd_impl_multigpu.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/online_emd_impl_multigpu.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/optimizer.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/optimizer.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/predict.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_predict.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/OnlineSVRTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/OnlineSVRTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/cvmd_tests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/cvmd_tests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/kernel_GA_test.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/kernel_GA_test.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/kernel_basic_integration_test.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/kernel_basic_integration_test.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/kernel_basic_integration_test.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/kernel_basic_integration_test.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/r_matrix_tests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/_deprecated/r_matrix_tests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_lstm.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_lstm.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_manifold.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_manifold.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_path.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_path.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_path2.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_path2.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBenchmarks/src/SVRModel_benchmarks.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBenchmarks/src/SVRModel_benchmarks.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/DatasetServiceTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/DatasetServiceTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/DeconQueueDeconstructionTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/DeconQueueDeconstructionTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/EnsembleServiceTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/EnsembleServiceTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/ModelServiceTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/ModelServiceTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/include/DaoTestFixture.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/include/DaoTestFixture.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/include/dbutils.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/include/dbutils.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/src/dbutils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/src/dbutils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/DatasetService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/DatasetService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/DeconQueueService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/DeconQueueService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/ModelService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/ModelService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/RequestService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/RequestService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/SVRParametersService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/SVRParametersService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DQScalingFactorService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DQScalingFactorService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DatasetService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DatasetService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DatasetServiceTuning.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DatasetServiceTuning.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/InputQueueService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/InputQueueService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelServiceTune.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelServiceTune.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/RequestService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/RequestService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/SVRParametersService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/SVRParametersService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/Logging.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/Logging.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/compatibility.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/compatibility.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/constants.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/constants.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/cuda_util.cuh" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/cuda_util.cuh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/defines.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/defines.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/exceptions.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/exceptions.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/gpu_handler.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/gpu_handler.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/parallelism.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/parallelism.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/math_utils.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/math_utils.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/compatibility.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/compatibility.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/gpu_handler.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/gpu_handler.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/math_utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/math_utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/string_utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/string_utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRDaemon-blackbox-tests/test/BatchOnlineTrainingTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRDaemon-blackbox-tests/test/BatchOnlineTrainingTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRDaemon-blackbox-tests/test/include/DaoTestFixture.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRDaemon-blackbox-tests/test/include/DaoTestFixture.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRDaemon/src/DaemonFacade.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRDaemon/src/DaemonFacade.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/DBTable.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/DBTable.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/DataRow.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/DataRow.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Dataset.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Dataset.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/DeconQueue.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/DeconQueue.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Ensemble.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Ensemble.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Entity.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Entity.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Model.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Model.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Request.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/Request.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/SVRParameters.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/SVRParameters.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vektor.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vektor.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vektor.tcc" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vektor.tcc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vektor_vmatrix_arma/vektor.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vektor_vmatrix_arma/vektor.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vektor_vmatrix_arma/vektor.tcc" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vektor_vmatrix_arma/vektor.tcc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vektor_vmatrix_arma/vmatrix.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vektor_vmatrix_arma/vmatrix.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vektor_vmatrix_arma/vmatrix.tcc" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vektor_vmatrix_arma/vmatrix.tcc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vmatrix.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vmatrix.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/vmatrix.tcc" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated/vmatrix.tcc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/src/DataRow.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/src/DataRow.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/src/Dataset.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/src/Dataset.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/src/DeconQueue.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/src/DeconQueue.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/test/MatrixTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/test/_deprecated/MatrixTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/test/VectorTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/test/_deprecated/VectorTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ModelRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ModelRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/RequestRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/RequestRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersDAO.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersDAO.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/postgres/RequestDAO.properties" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/postgres/RequestDAO.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/postgres/SVRParametersDAO.properties" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/postgres/SVRParametersDAO.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/AsyncDAO/AsyncSVRParametersDAO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/AsyncDAO/AsyncSVRParametersDAO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/PgDAO/PgRequestDAO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/PgDAO/PgRequestDAO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/PgDAO/PgSVRParametersDAO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/PgDAO/PgSVRParametersDAO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/include/CLI.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/include/CLI.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/include/paramtune.h" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/include/paramtune.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/src/CLI.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/src/CLI.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/src/main.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/src/paramtune.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/src/paramtune.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/deconstracted_data.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/deconstracted_data.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/include/test-config.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/include/test-config.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/input_data.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/input_data.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/src/AWhiteBoxTesting.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/src/AWhiteBoxTesting.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/src/TestsRunner.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/src/TestsRunner.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/src/gradientDescent.py" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/src/gradientDescent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/src/pso_tests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/src/pso_tests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/paramtune/test/train_data.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/_deprecated/paramtune/test/train_data.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/libs/emo_param_optimizer/model.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/libs/emo_param_optimizer/model.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/libs/libsvm-tempus/FAQ.html" beforeDir="false" afterPath="$PROJECT_DIR$/libs/libsvm-tempus/FAQ.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run_business_tests.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/run_business_tests.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run_daemon.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/run_daemon.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/setup_tempus_env.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/setup_tempus_env.sh" afterDir="false" />
+    </list>
+    <list id="b911cfe9-5e99-464b-b960-ad0631e8da5f" name="Frequently changed" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+    <option name="indexerUseModules" value="false" />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Release" />
+  <component name="ExportToHTMLSettings">
+    <option name="OUTPUT_DIRECTORY" value="$PROJECT_DIR$/exportToHTML" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="PREVIOUS_COMMIT_AUTHORS">
+      <list>
+        <option value="Zarko Asen &lt;zarko@papakaya.bg&gt;" />
+        <option value="Jarko Asenov &lt;zarko@papakaya.com&gt;" />
+        <option value="Zarko Asen &lt;zarko@papakaya.com&gt;" />
+      </list>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="SIGN_OFF_COMMIT" value="true" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file:///usr/include/rapidcsv.h" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="JsbtTreeLayoutManager">
+    <layout place="tools.popupGrunt">
+      <scroll-view-position x="0" y="0" />
+    </layout>
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="OCResolveContextSettings">
+    <option name="configuration" value="0-Release-OnlineSVR" />
+  </component>
+  <component name="ProjectId" id="1oGCCBXnOjCmhqo7crRM4JoUpzc" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="autoscrollFromSource" value="true" />
+    <option name="autoscrollToSource" value="true" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;TODO_SCOPE&quot;: &quot;All Places&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;ctest.advertisement.all.test.configuration.is.created&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;v1.0&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/usr/include/rapidcsv.h&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;structure.view.defaults.are.configured&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  },
+  &quot;keyToStringList&quot;: {
+    &quot;DatabaseDriversLRU&quot;: [
+      &quot;postgresql&quot;
+    ],
+    &quot;com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File&quot;: [
+      &quot;ObjectiveC&quot;
+    ]
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/src" />
+      <recent name="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common" />
+      <recent name="$PROJECT_DIR$/SVRRoot/opencl-libsvm/libsvm/kernels" />
+      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/include" />
+      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/SVRRoot/SVRModel/test/_deprecated" />
+      <recent name="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/_deprecated" />
+      <recent name="$PROJECT_DIR$/SVRRoot/deprecated" />
+      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/deprecated" />
+      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/deprecated" />
+    </key>
+  </component>
+  <component name="RunManager" selected="CMake Application.SVRFix-unit-tests">
+    <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="OnlineSVR" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-shared">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-shared">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-shared">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-shared">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWeb">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWebSkin" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWebSkin" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWebSkin">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWebSkin" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWebSkin" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWebSkin">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWebSkin" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWebSkin" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWebSkin">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWebSkin" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWebSkin" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWebSkin">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWeb">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWeb">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWeb">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="connector-tester">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="connector-tester">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="connector-tester">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="connector-tester">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="victor-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="victor-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="victor-tester">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="victor-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="victor-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="victor-tester">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="victor-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="victor-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="victor-tester">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="victor-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="victor-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="victor-tester">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="All CTest" type="CTestRunConfiguration" factoryName="CTestRun" PROGRAM_PARAMS="--extra-verbose" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$CMakeCurrentLocalGenerationDir$" PASS_PARENT_ENVS_2="true" CONFIG_NAME="Release" RUN_PATH="$CTestCurrentExecutableName$" EXPLICIT_BUILD_TARGET_NAME="all" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="All CTest" type="CTestRunConfiguration" factoryName="CTestRun" PROGRAM_PARAMS="--extra-verbose" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$CMakeCurrentLocalGenerationDir$" PASS_PARENT_ENVS_2="true" CONFIG_NAME="Release" RUN_PATH="$CTestCurrentExecutableName$" EXPLICIT_BUILD_TARGET_NAME="all" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="All CTest" type="CTestRunConfiguration" factoryName="CTestRun" PROGRAM_PARAMS="--extra-verbose" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$CMakeCurrentLocalGenerationDir$" PASS_PARENT_ENVS_2="true" CONFIG_NAME="Release" RUN_PATH="$CTestCurrentExecutableName$" EXPLICIT_BUILD_TARGET_NAME="all" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="All CTest" type="CTestRunConfiguration" factoryName="CTestRun" PROGRAM_PARAMS="--extra-verbose" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$CMakeCurrentLocalGenerationDir$" PASS_PARENT_ENVS_2="true" CONFIG_NAME="Release" RUN_PATH="$CTestCurrentExecutableName$" EXPLICIT_BUILD_TARGET_NAME="all" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="average_price_range" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/average_price_range.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="average_price_range" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/average_price_range.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="average_price_range" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/average_price_range.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="average_price_range" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/average_price_range.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="show_graph" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/show_graph.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="show_graph" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/show_graph.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="show_graph" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/show_graph.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="show_graph" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/show_graph.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_linear" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_linear.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_linear" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_linear.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_linear" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_linear.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_linear" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_linear.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_pt_2" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_pt_2.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_pt_2" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_pt_2.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_pt_2" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_pt_2.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_pt_2" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_pt_2.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_xgboost" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_xgboost.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_xgboost" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_xgboost.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_xgboost" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_xgboost.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_predict_test_xgboost" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="tempus-core" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_test_xgboost.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="CMake Application.connector-tester" />
+      <item itemvalue="CMake Application.OnlineSVR" />
+      <item itemvalue="CMake Application.OnlineSVR-unit-tests" />
+      <item itemvalue="CMake Application.SVRBusiness" />
+      <item itemvalue="CMake Application.SVRBusiness-tests" />
+      <item itemvalue="CMake Application.SVRCommon" />
+      <item itemvalue="CMake Application.SVRCommon-unit-tests" />
+      <item itemvalue="CMake Application.SVRDaemon" />
+      <item itemvalue="CMake Application.SVRDaemon-blackbox-tests" />
+      <item itemvalue="CMake Application.SVRFix" />
+      <item itemvalue="CMake Application.SVRFix-shared" />
+      <item itemvalue="CMake Application.SVRFix-unit-tests" />
+      <item itemvalue="CMake Application.SVRModel" />
+      <item itemvalue="CMake Application.SVRModel-unit-tests" />
+      <item itemvalue="CMake Application.SVRPersist" />
+      <item itemvalue="CMake Application.SVRPersist-unit-tests" />
+      <item itemvalue="CMake Application.SVRWeb" />
+      <item itemvalue="CMake Application.SVRWebSkin" />
+      <item itemvalue="CMake Application.victor-tester" />
+      <item itemvalue="CTest Application.All CTest" />
+      <item itemvalue="Python.show_graph" />
+      <item itemvalue="Python.average_price_range" />
+      <item itemvalue="Python.test_linear" />
+      <item itemvalue="Python.train_predict_test_pt_2" />
+      <item itemvalue="Python.train_predict_test_xgboost" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.train_predict_test_xgboost" />
+        <item itemvalue="Python.train_predict_test_pt_2" />
+        <item itemvalue="Python.test_linear" />
+        <item itemvalue="Python.average_price_range" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="project-level" UseSingleDictionary="true" transferred="true" />
+  <component name="StructureViewFactory">
+    <option name="ACTIVE_ACTIONS" value=",ALPHA_COMPARATOR" />
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="cc8418c2-62f8-4b92-86c8-7b9409132682" name="Default Changelist" comment="" />
+      <changelist id="b911cfe9-5e99-464b-b960-ad0631e8da5f" name="Frequently changed" comment="" />
+      <created>1612903409896</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1612903409896</updated>
+      <workItem from="1612903412563" duration="123000" />
+      <workItem from="1612903585040" duration="13000" />
+      <workItem from="1612903624750" duration="112000" />
+      <workItem from="1612903794315" duration="45000" />
+      <workItem from="1612904083105" duration="123000" />
+      <workItem from="1612904243638" duration="148000" />
+      <workItem from="1612904415638" duration="150000" />
+      <workItem from="1612904566840" duration="1369000" />
+      <workItem from="1612909381437" duration="28384000" />
+      <workItem from="1613039601705" duration="127535000" />
+      <workItem from="1613347363945" duration="134212000" />
+      <workItem from="1613671548321" duration="30545000" />
+      <workItem from="1613709034708" duration="9465000" />
+      <workItem from="1613738477294" duration="1282000" />
+      <workItem from="1613752140709" duration="11367000" />
+      <workItem from="1613793007521" duration="46974000" />
+      <workItem from="1613919317997" duration="45155000" />
+      <workItem from="1614198984006" duration="3414000" />
+      <workItem from="1614236132437" duration="15537000" />
+      <workItem from="1614279620459" duration="10298000" />
+      <workItem from="1614296801172" duration="31783000" />
+      <workItem from="1614449431367" duration="46064000" />
+      <workItem from="1614671003887" duration="3167000" />
+      <workItem from="1614674383105" duration="695000" />
+      <workItem from="1614677397807" duration="127956000" />
+      <workItem from="1615279786498" duration="28692000" />
+      <workItem from="1615439772035" duration="573057000" />
+      <workItem from="1617582970380" duration="10883000" />
+      <workItem from="1617678839128" duration="89000000" />
+      <workItem from="1618037123480" duration="92947000" />
+      <workItem from="1618331584269" duration="290645000" />
+      <workItem from="1619325996733" duration="108422000" />
+      <workItem from="1619599810642" duration="6973000" />
+      <workItem from="1619656975291" duration="24128000" />
+      <workItem from="1619695862958" duration="704000" />
+      <workItem from="1619696967948" duration="22077000" />
+      <workItem from="1619836059157" duration="508000" />
+      <workItem from="1619836608387" duration="11677000" />
+      <workItem from="1619865883902" duration="19453000" />
+      <workItem from="1619968286673" duration="6104000" />
+      <workItem from="1620017568909" duration="1019000" />
+      <workItem from="1620032147245" duration="610000" />
+      <workItem from="1620040339163" duration="666000" />
+      <workItem from="1620041164697" duration="28223000" />
+      <workItem from="1620116252928" duration="81316000" />
+      <workItem from="1620358322465" duration="63400000" />
+      <workItem from="1620563793010" duration="26458000" />
+      <workItem from="1620633344739" duration="41090000" />
+      <workItem from="1620754967795" duration="2179000" />
+      <workItem from="1620768714121" duration="5809000" />
+      <workItem from="1620801028550" duration="6192000" />
+      <workItem from="1620810795848" duration="16245000" />
+      <workItem from="1620836358209" duration="75767000" />
+      <workItem from="1621132210387" duration="25520000" />
+      <workItem from="1621210861345" duration="10302000" />
+      <workItem from="1621222254282" duration="10330000" />
+      <workItem from="1621247630071" duration="17361000" />
+      <workItem from="1621307642273" duration="21033000" />
+      <workItem from="1621385517019" duration="384000" />
+      <workItem from="1621420490423" duration="41176000" />
+      <workItem from="1621568405194" duration="54762000" />
+      <workItem from="1621660715479" duration="16391000" />
+      <workItem from="1621779015641" duration="112850000" />
+      <workItem from="1622049953701" duration="6304000" />
+      <workItem from="1622091664620" duration="8272000" />
+      <workItem from="1622126559001" duration="37326000" />
+      <workItem from="1622297207202" duration="3208000" />
+      <workItem from="1622301225226" duration="98000" />
+      <workItem from="1622357564053" duration="4864000" />
+      <workItem from="1622393498043" duration="12671000" />
+      <workItem from="1622457362949" duration="1547000" />
+      <workItem from="1622463254369" duration="26161000" />
+      <workItem from="1622559424776" duration="14332000" />
+      <workItem from="1622578685113" duration="23510000" />
+      <workItem from="1622692517903" duration="22856000" />
+      <workItem from="1622759044374" duration="16445000" />
+      <workItem from="1622817205259" duration="42957000" />
+      <workItem from="1622906934603" duration="11889000" />
+      <workItem from="1622919715984" duration="69972000" />
+      <workItem from="1623056885062" duration="59031000" />
+      <workItem from="1623243798947" duration="43700000" />
+      <workItem from="1623469969383" duration="36361000" />
+      <workItem from="1623669492215" duration="53334000" />
+      <workItem from="1623885733753" duration="14942000" />
+      <workItem from="1623988054813" duration="8925000" />
+      <workItem from="1624014087098" duration="18318000" />
+      <workItem from="1624181886305" duration="8283000" />
+      <workItem from="1624214992295" duration="16020000" />
+      <workItem from="1624330438281" duration="1691000" />
+      <workItem from="1624342048236" duration="32283000" />
+      <workItem from="1624455289607" duration="2692000" />
+      <workItem from="1624508157578" duration="24362000" />
+      <workItem from="1624544714252" duration="16733000" />
+      <workItem from="1624631238836" duration="22588000" />
+      <workItem from="1624820519244" duration="1520000" />
+      <workItem from="1624865521492" duration="22898000" />
+      <workItem from="1624956721204" duration="23343000" />
+      <workItem from="1625102108334" duration="227594000" />
+      <workItem from="1626198531255" duration="75822000" />
+      <workItem from="1626407327465" duration="3115000" />
+      <workItem from="1626411470805" duration="149602000" />
+      <workItem from="1627159066738" duration="123606000" />
+      <workItem from="1627544051501" duration="91466000" />
+      <workItem from="1627907350920" duration="49147000" />
+      <workItem from="1628248642266" duration="293376000" />
+      <workItem from="1629724468935" duration="151911000" />
+      <workItem from="1630262956024" duration="1837000" />
+      <workItem from="1630264917048" duration="12038000" />
+      <workItem from="1630318899957" duration="310000" />
+      <workItem from="1630319269866" duration="82000" />
+      <workItem from="1630319474383" duration="66000" />
+      <workItem from="1630319568514" duration="6983000" />
+      <workItem from="1630330138539" duration="11308000" />
+      <workItem from="1630393698515" duration="34558000" />
+      <workItem from="1630683499894" duration="174243000" />
+      <workItem from="1631545230974" duration="222237000" />
+      <workItem from="1633660505037" duration="3094000" />
+      <workItem from="1633669280623" duration="16000" />
+      <workItem from="1633669952942" duration="150697000" />
+      <workItem from="1634785787444" duration="110184000" />
+      <workItem from="1635250410816" duration="64387000" />
+      <workItem from="1635385336921" duration="1154000" />
+      <workItem from="1635387067042" duration="216218000" />
+      <workItem from="1636280790512" duration="850000" />
+      <workItem from="1636301399883" duration="570632000" />
+      <workItem from="1641161130136" duration="246366000" />
+      <workItem from="1642913638629" duration="19078000" />
+      <workItem from="1642977683628" duration="297027000" />
+      <workItem from="1645115396221" duration="172520000" />
+      <workItem from="1645674731683" duration="63385000" />
+      <workItem from="1646021455109" duration="34324000" />
+      <workItem from="1646189953445" duration="37735000" />
+      <workItem from="1646373973367" duration="113900000" />
+      <workItem from="1647494555400" duration="22250000" />
+      <workItem from="1647619499520" duration="145440000" />
+      <workItem from="1648733625830" duration="27658000" />
+      <workItem from="1649241574494" duration="22437000" />
+      <workItem from="1649539214794" duration="12177000" />
+      <workItem from="1649861357645" duration="120000" />
+      <workItem from="1649950259612" duration="4390000" />
+      <workItem from="1650031751572" duration="918000" />
+      <workItem from="1650032724065" duration="1329000" />
+      <workItem from="1650359364720" duration="712000" />
+      <workItem from="1650376365424" duration="1447000" />
+      <workItem from="1650442495876" duration="2254000" />
+      <workItem from="1650809034717" duration="9384000" />
+      <workItem from="1651209662698" duration="384000" />
+      <workItem from="1651220210127" duration="1022000" />
+      <workItem from="1651311481811" duration="1686000" />
+      <workItem from="1651485345867" duration="16463000" />
+      <workItem from="1651916485892" duration="6372000" />
+      <workItem from="1652060297944" duration="6111000" />
+      <workItem from="1652082135051" duration="2355000" />
+      <workItem from="1652086136376" duration="1304000" />
+      <workItem from="1652101193003" duration="7297000" />
+      <workItem from="1652195406780" duration="426000" />
+      <workItem from="1652219418110" duration="801000" />
+      <workItem from="1652333385897" duration="3058000" />
+      <workItem from="1652382121198" duration="3242000" />
+      <workItem from="1652437178499" duration="65000" />
+      <workItem from="1652442327310" duration="626000" />
+      <workItem from="1652463438205" duration="12736000" />
+      <workItem from="1652777029965" duration="1256000" />
+      <workItem from="1652807370835" duration="12997000" />
+      <workItem from="1652855080116" duration="464000" />
+      <workItem from="1652873026693" duration="4981000" />
+      <workItem from="1652917770709" duration="9514000" />
+      <workItem from="1653108311979" duration="824000" />
+      <workItem from="1653125066444" duration="70086000" />
+      <workItem from="1653483111291" duration="1846000" />
+      <workItem from="1653484997888" duration="212362000" />
+      <workItem from="1655027103752" duration="11023000" />
+      <workItem from="1655141264630" duration="24256000" />
+      <workItem from="1655439756052" duration="179386000" />
+      <workItem from="1664281546414" duration="227911000" />
+      <workItem from="1665287205198" duration="54523000" />
+      <workItem from="1665558239990" duration="106473000" />
+      <workItem from="1666680737073" duration="343692000" />
+      <workItem from="1670070320084" duration="136680000" />
+      <workItem from="1670870299470" duration="64611000" />
+      <workItem from="1671222235265" duration="250353000" />
+      <workItem from="1672077053876" duration="46257000" />
+      <workItem from="1672554286953" duration="16723000" />
+      <workItem from="1672590006271" duration="16000" />
+      <workItem from="1672590264171" duration="260000" />
+      <workItem from="1672590654667" duration="43463000" />
+      <workItem from="1672812130458" duration="1548000" />
+      <workItem from="1672823865462" duration="405000" />
+      <workItem from="1672824743627" duration="3557000" />
+      <workItem from="1672833061294" duration="3955000" />
+      <workItem from="1672877202304" duration="7641000" />
+      <workItem from="1673055775934" duration="832000" />
+      <workItem from="1673056988338" duration="267902000" />
+      <workItem from="1673648029353" duration="1104000" />
+      <workItem from="1673650532238" duration="1417000" />
+      <workItem from="1673652188021" duration="8176000" />
+      <workItem from="1673662695573" duration="1478000" />
+      <workItem from="1673664306201" duration="18725000" />
+      <workItem from="1673702279481" duration="18809000" />
+      <workItem from="1673733033463" duration="6355000" />
+      <workItem from="1673744239116" duration="56388000" />
+      <workItem from="1673868472923" duration="13761000" />
+      <workItem from="1673887376923" duration="3087000" />
+      <workItem from="1673891191693" duration="40946000" />
+      <workItem from="1673960705785" duration="299938000" />
+      <workItem from="1674502673387" duration="618000" />
+      <workItem from="1674503613273" duration="19000" />
+      <workItem from="1674503730128" duration="23159000" />
+      <workItem from="1674531893695" duration="862000" />
+      <workItem from="1674535101096" duration="46587000" />
+      <workItem from="1674656398590" duration="187066000" />
+      <workItem from="1675141399455" duration="200065000" />
+      <workItem from="1675541163910" duration="72606000" />
+      <workItem from="1675812553889" duration="10625000" />
+      <workItem from="1675827259645" duration="59859000" />
+      <workItem from="1675999751950" duration="30336000" />
+      <workItem from="1676140240919" duration="12725000" />
+      <workItem from="1676165830326" duration="3199000" />
+      <workItem from="1676210121226" duration="59705000" />
+      <workItem from="1676294240326" duration="90352000" />
+      <workItem from="1676460971521" duration="1301000" />
+      <workItem from="1676462315101" duration="115740000" />
+      <workItem from="1677060277187" duration="968000" />
+      <workItem from="1677079477919" duration="12151000" />
+      <workItem from="1677187670834" duration="3457000" />
+      <workItem from="1677237896962" duration="19496000" />
+      <workItem from="1677440538742" duration="10904000" />
+      <workItem from="1677555607928" duration="5439000" />
+      <workItem from="1677577283857" duration="3083000" />
+      <workItem from="1677584980704" duration="37925000" />
+      <workItem from="1677702685535" duration="31105000" />
+      <workItem from="1677840495871" duration="15230000" />
+      <workItem from="1677870432947" duration="1000" />
+      <workItem from="1677871043047" duration="11244000" />
+      <workItem from="1677962014645" duration="34110000" />
+      <workItem from="1678044503066" duration="59020000" />
+      <workItem from="1678205918899" duration="3000" />
+      <workItem from="1678206102459" duration="20723000" />
+      <workItem from="1678301449883" duration="23375000" />
+      <workItem from="1678404772079" duration="6875000" />
+      <workItem from="1678444200294" duration="1223000" />
+      <workItem from="1678459442930" duration="4000" />
+      <workItem from="1678459932492" duration="15772000" />
+      <workItem from="1678520531461" duration="50469000" />
+      <workItem from="1678689978306" duration="1000" />
+      <workItem from="1678690082545" duration="773000" />
+      <workItem from="1678697263253" duration="37730000" />
+      <workItem from="1678831134105" duration="3550000" />
+      <workItem from="1678881399222" duration="7990000" />
+      <workItem from="1678974614914" duration="4428000" />
+      <workItem from="1679005547471" duration="719000" />
+      <workItem from="1679042110359" duration="2408000" />
+      <workItem from="1679052260520" duration="1865000" />
+      <workItem from="1679057028708" duration="612000" />
+      <workItem from="1679062994555" duration="857000" />
+      <workItem from="1679072428665" duration="17762000" />
+      <workItem from="1679190677886" duration="4509000" />
+      <workItem from="1679213743089" duration="8209000" />
+      <workItem from="1679292837870" duration="141000" />
+      <workItem from="1679306809663" duration="2001000" />
+      <workItem from="1679313772959" duration="1479000" />
+      <workItem from="1679382186940" duration="1171000" />
+      <workItem from="1679386175560" duration="2000" />
+      <workItem from="1679391291657" duration="2000" />
+      <workItem from="1679393560291" duration="713000" />
+      <workItem from="1679398450156" duration="858000" />
+      <workItem from="1679400813836" duration="1348000" />
+      <workItem from="1679406161472" duration="126000" />
+      <workItem from="1679411773130" duration="138000" />
+      <workItem from="1679431089437" duration="251000" />
+      <workItem from="1679431864034" duration="1721000" />
+      <workItem from="1679433998516" duration="1740000" />
+      <workItem from="1679438047323" duration="1979000" />
+      <workItem from="1679445326956" duration="10587000" />
+      <workItem from="1679488143909" duration="1524000" />
+      <workItem from="1679501703703" duration="3088000" />
+      <workItem from="1679566919345" duration="9000" />
+      <workItem from="1679567525767" duration="22110000" />
+      <workItem from="1679685283433" duration="1221000" />
+      <workItem from="1679702215388" duration="7000" />
+      <workItem from="1679702434955" duration="11302000" />
+      <workItem from="1679813444517" duration="1010000" />
+      <workItem from="1679814880388" duration="1648000" />
+      <workItem from="1679839726890" duration="29288000" />
+      <workItem from="1679990425408" duration="13097000" />
+      <workItem from="1680075821965" duration="665000" />
+      <workItem from="1680080805186" duration="3000" />
+      <workItem from="1680090197865" duration="266000" />
+      <workItem from="1680090754470" duration="23027000" />
+      <workItem from="1680176602331" duration="5377000" />
+      <workItem from="1680245037899" duration="882000" />
+      <workItem from="1680262978693" duration="30999000" />
+      <workItem from="1680372594194" duration="4078000" />
+      <workItem from="1680412178524" duration="16163000" />
+      <workItem from="1680508519546" duration="35739000" />
+      <workItem from="1680599845041" duration="8982000" />
+      <workItem from="1680654052906" duration="37611000" />
+      <workItem from="1680773185550" duration="10686000" />
+      <workItem from="1680877677705" duration="13879000" />
+      <workItem from="1680963581711" duration="21705000" />
+      <workItem from="1681112170805" duration="19492000" />
+      <workItem from="1681210336467" duration="30970000" />
+      <workItem from="1681368704793" duration="8172000" />
+      <workItem from="1681499308180" duration="19462000" />
+      <workItem from="1681652699140" duration="22616000" />
+      <workItem from="1681760954856" duration="7391000" />
+      <workItem from="1683118777197" duration="5614000" />
+      <workItem from="1683210535284" duration="29407000" />
+      <workItem from="1683402178378" duration="3298000" />
+      <workItem from="1683459155436" duration="5939000" />
+      <workItem from="1683484220140" duration="8083000" />
+      <workItem from="1683551740572" duration="3782000" />
+      <workItem from="1683580059085" duration="644000" />
+      <workItem from="1683597537873" duration="2000" />
+      <workItem from="1683597589514" duration="1000" />
+      <workItem from="1683615620328" duration="1812000" />
+      <workItem from="1683642318863" duration="5038000" />
+      <workItem from="1683724138253" duration="1829000" />
+      <workItem from="1683743416230" duration="94869000" />
+      <workItem from="1684001729120" duration="21000" />
+      <workItem from="1684002544417" duration="56091000" />
+      <workItem from="1684249377567" duration="98474000" />
+      <workItem from="1684482903688" duration="3384000" />
+      <workItem from="1684490871316" duration="3887000" />
+      <workItem from="1684498610303" duration="89159000" />
+      <workItem from="1684801102009" duration="37553000" />
+      <workItem from="1684996336263" duration="4288000" />
+      <workItem from="1685018402478" duration="106301000" />
+      <workItem from="1685591834069" duration="797000" />
+      <workItem from="1685605166975" duration="58275000" />
+      <workItem from="1685816655514" duration="482000" />
+      <workItem from="1685830724962" duration="2120000" />
+      <workItem from="1685833211428" duration="4000" />
+      <workItem from="1685834339374" duration="136470000" />
+      <workItem from="1686577918366" duration="4027000" />
+      <workItem from="1686616996950" duration="1000" />
+      <workItem from="1686623125990" duration="46955000" />
+      <workItem from="1686823595466" duration="25083000" />
+      <workItem from="1687131506456" duration="130215000" />
+      <workItem from="1687447405942" duration="5968000" />
+      <workItem from="1687510108427" duration="224219000" />
+      <workItem from="1688783972921" duration="135000" />
+      <workItem from="1688784231410" duration="14000" />
+      <workItem from="1688784406218" duration="15828000" />
+      <workItem from="1688810782722" duration="35000" />
+      <workItem from="1688810933323" duration="34233000" />
+      <workItem from="1688919385327" duration="2000" />
+      <workItem from="1688920240726" duration="2107000" />
+      <workItem from="1688931760427" duration="998000" />
+      <workItem from="1688980400632" duration="1199000" />
+      <workItem from="1689001612987" duration="55000" />
+      <workItem from="1689005265562" duration="472000" />
+      <workItem from="1689048943266" duration="54828000" />
+      <workItem from="1689128295031" duration="71512000" />
+      <workItem from="1689301584615" duration="6341000" />
+      <workItem from="1689309248746" duration="2545000" />
+      <workItem from="1689317748018" duration="11850000" />
+      <workItem from="1689333670486" duration="13031000" />
+      <workItem from="1689364185245" duration="131000" />
+      <workItem from="1689391913819" duration="44986000" />
+      <workItem from="1689455489218" duration="15158000" />
+      <workItem from="1689548955782" duration="2867000" />
+      <workItem from="1689560053665" duration="13652000" />
+      <workItem from="1689610165769" duration="15768000" />
+      <workItem from="1689744703420" duration="12269000" />
+      <workItem from="1689822183953" duration="74516000" />
+      <workItem from="1690085402840" duration="10409000" />
+      <workItem from="1690172370580" duration="10577000" />
+      <workItem from="1690228967280" duration="12066000" />
+      <workItem from="1690286455011" duration="29214000" />
+      <workItem from="1690485335943" duration="2386000" />
+      <workItem from="1690516560657" duration="6531000" />
+      <workItem from="1690538219976" duration="49815000" />
+      <workItem from="1690687357100" duration="8725000" />
+      <workItem from="1690714205365" duration="24216000" />
+      <workItem from="1690814548781" duration="50382000" />
+      <workItem from="1691005342308" duration="97000" />
+      <workItem from="1691006647611" duration="55000" />
+      <workItem from="1691007182897" duration="862000" />
+      <workItem from="1691008358233" duration="1116000" />
+      <workItem from="1691032747600" duration="28738000" />
+      <workItem from="1691220232438" duration="226000" />
+      <workItem from="1691225418635" duration="4968000" />
+      <workItem from="1691254836713" duration="4000" />
+      <workItem from="1691256003064" duration="14859000" />
+      <workItem from="1691327651709" duration="18986000" />
+      <workItem from="1691411885564" duration="15407000" />
+      <workItem from="1691491759198" duration="18023000" />
+      <workItem from="1691576770358" duration="8599000" />
+      <workItem from="1691732933440" duration="408000" />
+      <workItem from="1691745448961" duration="3000" />
+      <workItem from="1691763942070" duration="1000" />
+      <workItem from="1691885305629" duration="2026000" />
+      <workItem from="1691903753694" duration="1554000" />
+      <workItem from="1692041814160" duration="1577000" />
+      <workItem from="1692070112479" duration="5124000" />
+      <workItem from="1692174669816" duration="2527000" />
+      <workItem from="1692196191132" duration="585000" />
+      <workItem from="1692197063721" duration="11705000" />
+      <workItem from="1692270738805" duration="44129000" />
+      <workItem from="1692505761120" duration="9039000" />
+      <workItem from="1692529564101" duration="2276000" />
+      <workItem from="1692560953831" duration="1196000" />
+      <workItem from="1692568665676" duration="11586000" />
+      <workItem from="1692610456442" duration="17848000" />
+      <workItem from="1692713694844" duration="791000" />
+      <workItem from="1692725392325" duration="2619000" />
+      <workItem from="1692742594243" duration="2708000" />
+      <workItem from="1692775740742" duration="5022000" />
+      <workItem from="1692852456784" duration="1726000" />
+      <workItem from="1692860808607" duration="6019000" />
+      <workItem from="1692879180583" duration="1258000" />
+      <workItem from="1692888534433" duration="9590000" />
+      <workItem from="1692953020346" duration="3413000" />
+      <workItem from="1692971778297" duration="52656000" />
+      <workItem from="1693247669671" duration="3577000" />
+      <workItem from="1693259157725" duration="3882000" />
+      <workItem from="1693284869571" duration="1198000" />
+      <workItem from="1693289858764" duration="2984000" />
+      <workItem from="1693331560904" duration="1072000" />
+      <workItem from="1693395705808" duration="9000" />
+      <workItem from="1693444584620" duration="5353000" />
+      <workItem from="1693482037807" duration="5224000" />
+      <workItem from="1693625931600" duration="19634000" />
+      <workItem from="1693744493082" duration="1294000" />
+      <workItem from="1693767267559" duration="152000" />
+      <workItem from="1693767974193" duration="6000" />
+      <workItem from="1693768321218" duration="1036000" />
+      <workItem from="1693769967167" duration="3033000" />
+      <workItem from="1693782482306" duration="59073000" />
+      <workItem from="1694097754553" duration="33554000" />
+      <workItem from="1694287992368" duration="4743000" />
+      <workItem from="1694321891222" duration="43874000" />
+      <workItem from="1694684025969" duration="1026000" />
+      <workItem from="1694692506091" duration="415000" />
+      <workItem from="1694694259676" duration="2000" />
+      <workItem from="1694700125121" duration="8509000" />
+      <workItem from="1694739892727" duration="7743000" />
+      <workItem from="1694783376569" duration="23855000" />
+      <workItem from="1694877773695" duration="2590000" />
+      <workItem from="1694906149131" duration="717000" />
+      <workItem from="1694923222997" duration="580000" />
+      <workItem from="1694926594976" duration="1123000" />
+      <workItem from="1694931822696" duration="2000" />
+      <workItem from="1694935293588" duration="3176000" />
+      <workItem from="1695020742711" duration="2000" />
+      <workItem from="1695021137438" duration="1222000" />
+      <workItem from="1695071906147" duration="731000" />
+      <workItem from="1695084733468" duration="993000" />
+      <workItem from="1695124820665" duration="839000" />
+      <workItem from="1695127699422" duration="752000" />
+      <workItem from="1695163053592" duration="2000" />
+      <workItem from="1695199492690" duration="4000" />
+      <workItem from="1695279878970" duration="173000" />
+      <workItem from="1695400419435" duration="5094000" />
+      <workItem from="1695413211311" duration="8062000" />
+      <workItem from="1695489490326" duration="1467000" />
+      <workItem from="1695492483373" duration="1758000" />
+      <workItem from="1695507753881" duration="3809000" />
+      <workItem from="1695556790937" duration="7000" />
+      <workItem from="1695562545957" duration="213000" />
+      <workItem from="1695566492384" duration="3000" />
+      <workItem from="1695569235316" duration="1951000" />
+      <workItem from="1695578466053" duration="3000" />
+      <workItem from="1695596940202" duration="20998000" />
+      <workItem from="1695823708716" duration="258000" />
+      <workItem from="1695837397684" duration="7781000" />
+      <workItem from="1695895092958" duration="2046000" />
+      <workItem from="1695938603368" duration="33841000" />
+      <workItem from="1696133514781" duration="2971000" />
+      <workItem from="1696164128131" duration="3447000" />
+      <workItem from="1696212916329" duration="2000" />
+      <workItem from="1696213399230" duration="2783000" />
+      <workItem from="1696229556072" duration="7808000" />
+      <workItem from="1696269904522" duration="3000" />
+      <workItem from="1696295309171" duration="97000" />
+      <workItem from="1696313585651" duration="591000" />
+      <workItem from="1696331015710" duration="19574000" />
+      <workItem from="1696430175713" duration="1361000" />
+      <workItem from="1696442519776" duration="983000" />
+      <workItem from="1696445454963" duration="11184000" />
+      <workItem from="1696514837962" duration="3000" />
+      <workItem from="1696517515618" duration="1271000" />
+      <workItem from="1696521173110" duration="2000" />
+      <workItem from="1696527661021" duration="10441000" />
+      <workItem from="1696597275696" duration="11891000" />
+      <workItem from="1696659534606" duration="5412000" />
+      <workItem from="1696676810144" duration="7698000" />
+      <workItem from="1696719719361" duration="2000" />
+      <workItem from="1696720573387" duration="7642000" />
+      <workItem from="1696759197468" duration="2026000" />
+      <workItem from="1696768158079" duration="622000" />
+      <workItem from="1696780945858" duration="7562000" />
+      <workItem from="1696856217523" duration="732000" />
+      <workItem from="1696878665521" duration="11462000" />
+      <workItem from="1697025521466" duration="12194000" />
+      <workItem from="1697132665471" duration="4000" />
+      <workItem from="1697135373394" duration="12186000" />
+      <workItem from="1697278980630" duration="4000" />
+      <workItem from="1697280909279" duration="19157000" />
+      <workItem from="1697423988739" duration="2254000" />
+      <workItem from="1697444005599" duration="4000" />
+      <workItem from="1697444312359" duration="1051000" />
+      <workItem from="1697454165109" duration="4991000" />
+      <workItem from="1697477104025" duration="9740000" />
+      <workItem from="1697618687645" duration="10812000" />
+      <workItem from="1697659412442" duration="9074000" />
+      <workItem from="1697775639081" duration="3994000" />
+      <workItem from="1697839489728" duration="1962000" />
+      <workItem from="1697937579544" duration="1330000" />
+      <workItem from="1697950911861" duration="3000" />
+      <workItem from="1697964774361" duration="2168000" />
+      <workItem from="1697990961966" duration="1857000" />
+      <workItem from="1698068565670" duration="5388000" />
+      <workItem from="1698148111893" duration="23282000" />
+      <workItem from="1698334619229" duration="2470000" />
+      <workItem from="1698379730486" duration="693000" />
+      <workItem from="1698401688405" duration="559000" />
+      <workItem from="1698402538355" duration="1298000" />
+      <workItem from="1698469134793" duration="1132000" />
+      <workItem from="1698491864374" duration="55807000" />
+      <workItem from="1698741933249" duration="45426000" />
+      <workItem from="1698938003505" duration="19370000" />
+      <workItem from="1699107650465" duration="23066000" />
+      <workItem from="1699212834869" duration="5148000" />
+      <workItem from="1699296746137" duration="4181000" />
+      <workItem from="1699331423265" duration="180000" />
+      <workItem from="1699331646932" duration="674000" />
+      <workItem from="1699391856293" duration="9408000" />
+      <workItem from="1699630866188" duration="6974000" />
+      <workItem from="1699897024019" duration="45000" />
+      <workItem from="1699975509995" duration="63000" />
+      <workItem from="1699975727172" duration="20000" />
+      <workItem from="1699976394227" duration="139000" />
+      <workItem from="1699976706757" duration="576000" />
+    </task>
+    <task id="LOCAL-00001" summary="Stabilized data preparation across running instances: VMD memory corruption fixed, decon queue saving fixed, scaling factors calculation fixed to a predetermined number of rows, added more detailed logging info.">
+      <created>1625999927377</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1625999927377</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Perfect reproducibility of results between backtest, tune and production use. Several improvements in precision and logging.">
+      <created>1626301238944</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1626301238944</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Online train fixed (to test), cascading fixed (to test), sliding validation window, configurable scaling alpha.">
+      <created>1627393232477</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1627393232477</updated>
+    </task>
+    <task id="LOCAL-00004" summary="To test, initial implementation of minute-to-hour forecast, various speedups and fixes, reverted this branch to EURUSD forecast.">
+      <created>1627570655005</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1627570655005</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Non-overlaping cascades achieve lower RMSE, early of gu variable finder.">
+      <created>1628674607520</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1628674607520</updated>
+    </task>
+    <task id="LOCAL-00006" summary="CVMD multithreaded works with my OSQP CUDA MT branch.">
+      <created>1628770272489</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1628770272489</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Precision calculating script, minor refactoring.">
+      <created>1628834389530</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1628834389530</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Fixes related to one minute forecasts.">
+      <created>1629093535586</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1629093535586</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Fixes to decon queue phase save, find nearest row to time, CVMD matrix size, calc precision tail.">
+      <created>1629376676604</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1629376676604</updated>
+    </task>
+    <task id="LOCAL-00010" summary="Loading and saving of decon queues, DQ scaling factors fixed, other minor tweak.">
+      <created>1629544390248</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1629544390248</updated>
+    </task>
+    <task id="LOCAL-00011" summary="Quantized features, speed up scaling, memory use optimization during batch train and tune.">
+      <created>1629812830115</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1629812830115</updated>
+    </task>
+    <task id="LOCAL-00012" summary="LibPQXX upgraded to latest version 7.7, fixed several database related issues, improvements to database access, memory use improvement in pseudo online batch train, other cleanup and refactoring.">
+      <created>1630700349444</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1630700349444</updated>
+    </task>
+    <task id="LOCAL-00013" summary="Several fixes related to database and logging improvement, deconrecon test fixed. Business test run script added in scripts.">
+      <created>1630867420095</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1630867420095</updated>
+    </task>
+    <task id="LOCAL-00014" summary="Critical fixes and optimizations to one minute features.">
+      <created>1631181302409</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1631181302409</updated>
+    </task>
+    <task id="LOCAL-00015" summary="..">
+      <created>1631267013375</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1631267013375</updated>
+    </task>
+    <task id="LOCAL-00016" summary="Scripts updated.">
+      <created>1631374623388</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1631374623388</updated>
+    </task>
+    <task id="LOCAL-00017" summary="Second hour prediction and related fixes.">
+      <created>1632220308662</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1632220308662</updated>
+    </task>
+    <task id="LOCAL-00018" summary="Support for one second input queue resolution, replaces Nelder-Mead with particle swarm optimization in new tune process, PSO using CILKPlus, other fixes, improvements and refactoring.">
+      <created>1633331626200</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1633331626200</updated>
+    </task>
+    <task id="LOCAL-00019" summary="Fixes to SVRWeb.">
+      <created>1633410365277</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1633410365277</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Fixes and optimizations related to one second data.">
+      <created>1633867954374</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1633867954374</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Save decon data, online training fixed and fully functional, support vector manifolds improvement.">
+      <created>1636032383012</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1636032383012</updated>
+    </task>
+    <task id="LOCAL-00022" summary="Manifold labels WIP, parameter search process is fine tuned.">
+      <created>1637058232913</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1637058232913</updated>
+    </task>
+    <task id="LOCAL-00023" summary="DB connection check fixed, arbitrary delayed predictions, saving of CVMD data fixed.">
+      <created>1637747325986</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1637747325986</updated>
+    </task>
+    <task id="LOCAL-00024" summary="Code cleanup and detailed reporting in back-test, loading of phases fixed in CVMD.">
+      <created>1641480421390</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1641480421390</updated>
+    </task>
+    <task id="LOCAL-00025" summary="Needless scaling removed, optimized save of input queue.">
+      <created>1643143340700</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1643143340701</updated>
+    </task>
+    <task id="LOCAL-00026" summary="Tail not trimmed when backtesting (bug in trimming), FFTOEMD, temporary learn, PSO ring topology.">
+      <created>1648624808508</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1648624808508</updated>
+    </task>
+    <task id="LOCAL-00027" summary="Tail not trimmed when backtesting (bug in trimming), FFTOEMD, temporary learn, PSO ring topology.">
+      <created>1650818168673</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1650818168673</updated>
+    </task>
+    <task id="LOCAL-00028" summary="1.0rc3">
+      <created>1669102881974</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1669102881974</updated>
+    </task>
+    <task id="LOCAL-00029" summary="OEMD find FIR coefs and FastVMD">
+      <created>1672585539783</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1672585539783</updated>
+    </task>
+    <task id="LOCAL-00030" summary="1.0rc5">
+      <created>1675231134468</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1675231134468</updated>
+    </task>
+    <task id="LOCAL-00031" summary="OEMD FIR coefs search polishing, normalized reference kernel matrix is cached, other minor changes">
+      <created>1675427314386</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1675427314386</updated>
+    </task>
+    <task id="LOCAL-00032" summary="Fixes and optimizations.">
+      <created>1675489594675</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1675489594675</updated>
+    </task>
+    <task id="LOCAL-00033" summary="First gamma then cost tuning. (Not stable)">
+      <created>1687158727260</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1687158727260</updated>
+    </task>
+    <option name="localTasksCounter" value="34" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName="*.config" />
+    <option featureType="com.intellij.fileTypeFactory" implementationName="*.properties" />
+  </component>
+  <component name="VCPKGProject">
+    <isAutomaticEditVcpkgJson value="false" />
+    <isAutomaticCheckingOnLaunch value="false" />
+    <isAutomaticFoundErrors value="true" />
+    <isAutomaticFoundErrors value="true" />
+  </component>
+  <component name="Vcs.Log.History.Properties">
+    <option name="COLUMN_ID_ORDER">
+      <list>
+        <option value="Default.Root" />
+        <option value="Default.Author" />
+        <option value="Default.Date" />
+        <option value="Default.Subject" />
+        <option value="Space.CommitStatus" />
+      </list>
+    </option>
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="CUSTOM_BOOLEAN_PROPERTIES">
+                <map>
+                  <entry key="Show.Git.Branches" value="true" />
+                </map>
+              </option>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="release" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <confirmRemoveEmptyChangelist value="2" />
+    <MESSAGE value="Loading and saving of decon queues, DQ scaling factors fixed, other minor tweak." />
+    <MESSAGE value="Quantized features, speed up scaling, memory use optimization during batch train and tune." />
+    <MESSAGE value="LibPQXX upgraded to latest version 7.7, fixed several database related issues, improvements to database access, memory use improvement in pseudo online batch train, other cleanup and refactoring." />
+    <MESSAGE value="Several fixes related to database and logging improvement, deconrecon test fixed. Business test run script added in scripts." />
+    <MESSAGE value="Critical fixes and optimizations to one minute features." />
+    <MESSAGE value=".." />
+    <MESSAGE value="Scripts updated." />
+    <MESSAGE value="Second hour prediction and related fixes." />
+    <MESSAGE value="Support for one second input queue resolution, replaces Nelder-Mead with particle swarm optimization in new tune process, PSO using CILKPlus, other fixes, improvements and refactoring." />
+    <MESSAGE value="Fixes to SVRWeb." />
+    <MESSAGE value="Fixes and optimizations related to one second data." />
+    <MESSAGE value="Save decon data, online training fixed and fully functional, support vector manifolds improvement." />
+    <MESSAGE value="Manifold labels WIP, parameter search process is fine tuned." />
+    <MESSAGE value="DB connection check fixed, arbitrary delayed predictions, saving of CVMD data fixed." />
+    <MESSAGE value="Code cleanup and detailed reporting in back-test, loading of phases fixed in CVMD." />
+    <MESSAGE value="Needless scaling removed, optimized save of input queue." />
+    <MESSAGE value="Suggested index model forget, tail on, model update features." />
+    <MESSAGE value="Tail not trimmed when backtesting (bug in trimming), FFTOEMD, temporary learn, PSO ring topology." />
+    <MESSAGE value="1.0rc3" />
+    <MESSAGE value="1.0rc4" />
+    <MESSAGE value="OEMD find FIR coefs and FastVMD" />
+    <MESSAGE value="1.0rc5" />
+    <MESSAGE value="OEMD FIR coefs search polishing, normalized reference kernel matrix is cached, other minor changes" />
+    <MESSAGE value="Fixes and optimizations." />
+    <MESSAGE value="First gamma then cost tuning. (Not stable)" />
+    <option name="LAST_COMMIT_MESSAGE" value="First gamma then cost tuning. (Not stable)" />
+    <option name="OPTIMIZE_IMPORTS_BEFORE_PROJECT_COMMIT" value="true" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>

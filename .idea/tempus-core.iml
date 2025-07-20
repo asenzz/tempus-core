@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module classpath="CMake" type="CPP_MODULE" version="4">
+  <component name="FacetManager">
+    <facet type="Python" name="Python facet">
+      <configuration sdkName="Python 3.6 (tempus-core)" />
+    </facet>
+  </component>
+  <component name="SonarLintModuleSettings">
+    <option name="uniqueId" value="1293fb3d-05cc-4c58-9d9d-8e01e182e933" />
+  </component>
+</module>

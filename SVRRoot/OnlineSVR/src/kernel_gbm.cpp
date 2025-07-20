@@ -28,7 +28,8 @@ std::string get_lgbm_core_parameters(const uint16_t gpu_id)
 {
     std::stringstream s;
     s << "objective=regression tree_learner=data seed=123 learning_rate=" << PROPS.get_k_learn_rate() << " num_iterations=" << PROPS.get_k_epochs()
-        << " early_stopping_round=200 metric=l2 num_leaves=256 feature_fraction=0.7 bagging_fraction=0.7 bagging_freq=25 force_col_wise=true device_type=gpu num_threads=" << C_n_cpu << " " << get_lgbm_dataset_parameters(); // early_stopping_round=200,  min_data_in_leaf=200
+        << " early_stopping_round=200 metric=l2 num_leaves=256 feature_fraction=0.7 bagging_fraction=0.7 bagging_freq=25 force_col_wise=true device_type=gpu num_threads=" <<
+            C_n_cpu << " " << get_lgbm_dataset_parameters() << " gpu_device_id=" << gpu_id; //  min_data_in_leaf=200
 #ifndef NDEBUG
     s << " verbosity=2 ";
 #endif
@@ -72,8 +73,8 @@ template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X /* predict f
 
     arma::mat res(X.n_cols, Xy.n_cols, ARMA_DEFAULT_FILL);
     int64_t out_len;
-    // common::gpu_context ctx;
-    const auto gbm_parameters = get_lgbm_core_parameters(0);
+    common::gpu_context ctx;
+    const auto gbm_parameters = get_lgbm_core_parameters(ctx.phy_id());
     lg_errchk(LGBM_BoosterPredictForMat(booster, manifold_features_t.mem, C_API_DTYPE_FLOAT32, n_samples, n_manifold_features, 1, C_API_PREDICT_NORMAL, 0, 0, gbm_parameters.c_str(), &out_len, res.memptr()));
     LOG4_TRACE("Predicted " << out_len << ", labels " << common::present(res));
     LGBM_BoosterFree(booster);
