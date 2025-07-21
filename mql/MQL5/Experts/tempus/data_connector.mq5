@@ -28,6 +28,7 @@ input bool      OneSecondData  = false; // Output one second data
 input string    TimeZoneInfo   = "UTC"; // Time zone
 input double    PredictHorizon = .2; // Forecast delay in seconds, Horizon .2 = 720 seconds on a 1 hour time frame
 input bool      Use_Streams    = false;
+input datetime  Earliest_Datetime = 0; // Starting bar datetime, set to 0 for all bars
 
 #include <tempus/constants.mqh>
 #include <tempus/api.mqh>
@@ -103,7 +104,7 @@ int OnInit()
         return INIT_PARAMETERS_INCORRECT;
 #endif
     const string period_str = OneSecondData ? C_one_str : C_period_seconds_str;
-    if (!svr_client.send_history()) return INIT_FAILED;
+    if (!svr_client.send_history(Earliest_Datetime)) return INIT_FAILED;
 
     EventSetTimer(C_period_seconds);
 

@@ -83,7 +83,7 @@ public:
     void             send_bar(const bool finalize, const AveragePrice &avg_price, const AveragePrice &avg_aux_price, const string &col_name, const string &col_aux_name);
     void             send_bars(const bool finalize, const aprice &prices[], const uint &volumes[], const aprice &pricesaux[], const uint &volumesaux[], const datetime &times[], const string &col_name, const string &aux_col_name);
     void             send_bars(const bool finalize, const aprice &prices[], const datetime &times[], const uint &volumes[]);
-    bool             send_history();
+    bool             send_history(const datetime earliest_time);
     bool             send_history(const datetime start_time, datetime end_time);
 
     static int       copy_rates_safe(const string &symbol, const ENUM_TIMEFRAMES time_frame, const datetime start, const datetime end, MqlRates &rates[]);

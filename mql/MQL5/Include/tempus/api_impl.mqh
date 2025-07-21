@@ -413,13 +413,14 @@ int tempusapi::find_bar(const datetime start_time)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool tempusapi::send_history()
+bool tempusapi::send_history(const datetime earliest_time)
 {
     datetime start_time, end_time;
-    while(next_time_range(start_time, end_time))
-        if(!send_history(start_time, end_time))
-            return false;
-
+    while(next_time_range(start_time, end_time)) {
+        if (end_time < earliest_time) return false;
+        if (start_time < earliest_time) start_time = earliest_time;
+        if (!send_history(start_time, end_time)) return false;
+    }
     return true;
 }
 

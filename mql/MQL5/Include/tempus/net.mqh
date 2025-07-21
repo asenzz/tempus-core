@@ -31,7 +31,7 @@
 #define DWORD uint
 #define DWORD_PTR uint
 #define LPDWORD int&
-#define LPVOID uchar&
+#define LPVOID char&
 #define LPSTR string&
 #define LPCWSTR const string&
 #define LPCTSTR const string&
@@ -266,7 +266,7 @@ public:
     string           GetServerCookieValue(const int hRequest); // get cookie from response
     long             GetStatusCode(const int hRequest); // get response status code
     long             GetContentSize(const int hURL); //get content size
-    int              FileToArray(const string &FileName, uchar &data[]); // copying file to the array
+    int              FileToArray(const string &FileName, char &data[]); // copying file to the array
     string           ToJSON(const Hash &params);
 };
 
@@ -358,7 +358,7 @@ string MqlNet::Post(const string &this_path, const string &this_body, long &http
 {
 #ifdef WININET_DLL
     int res, hRequest, hSend;       // To receive the operation execution result
-    char postData[];                // Data array to send POST requests
+    char post_data[];                // Data array to send POST requests
     char responseData[];
     string responseHeaders;
 
@@ -366,9 +366,9 @@ string MqlNet::Post(const string &this_path, const string &this_body, long &http
 
     string auth;
 
-    ArrayResize(postData, StringLen(this_body) - 1);
-    StringToCharArray(this_body, postData, 0, WHOLE_ARRAY, CP_UTF8);
-    postData[ArraySize(postData) - 1] = ' ';
+    ArrayResize(post_data, StringLen(this_body) - 1);
+    StringToCharArray(this_body, post_data, 0, WHOLE_ARRAY, CP_UTF8);
+    post_data[ArraySize(post_data) - 1] = ' ';
 
     ResetLastError();
 
@@ -381,7 +381,7 @@ string MqlNet::Post(const string &this_path, const string &this_body, long &http
         }
     }
 
-    uint recv_timeout = RECEIVE_TIMEOUT;
+    int recv_timeout = RECEIVE_TIMEOUT;
     InternetSetOptionW(Connect, INTERNET_OPTION_RECEIVE_TIMEOUT, recv_timeout, sizeof(recv_timeout));
     LOG_DEBUG("Opening request...");
     hRequest = HttpOpenRequestW(Connect, C_post_verb, this_path, C_http_ver, 0, 0, RegularConnectionFlags | ( INTERNET_FLAG_SECURE * session_secure ), 0);
@@ -393,7 +393,7 @@ string MqlNet::Post(const string &this_path, const string &this_body, long &http
     }
     LOG_DEBUG("Sending request...");
 // send request
-    hSend = HttpSendRequestW(hRequest, head_www_form, len_head, postData, ArraySize(postData));
+    hSend = HttpSendRequestW(hRequest, head_www_form, len_head, post_data, ArraySize(post_data));
     if (!hSend) {
         LOG_SYS_ERR("HttpSendRequestW failed " + string(hSend));
         InternetCloseHandle(hRequest);
@@ -482,7 +482,7 @@ bool MqlNet::RpcCall_(string this_path, const string &method, const Hash &params
     static int flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION | ( INTERNET_FLAG_SECURE * session_secure ) ;
 
     uint retries = 0;
-    static uint recv_timeout = RECEIVE_TIMEOUT;
+    static int recv_timeout = RECEIVE_TIMEOUT;
     static const int sizeof_recv_timeout = sizeof(recv_timeout);
 
 #ifdef DEBUG_CONNECTOR
@@ -520,7 +520,7 @@ bool MqlNet::RpcCall_(string this_path, const string &method, const Hash &params
         return false;
     }
 
-    uchar jsonArray[];
+    char jsonArray[];
     LOG_DEBUG("Sending " + json);
     StringToCharArray(json, jsonArray);
     jsonArray[ArraySize(jsonArray) - 1] = ' ';
@@ -595,8 +595,8 @@ bool MqlNet::RpcCall(const string &this_path, const string &method, const Hash &
 string MqlNet::ReadResponse(const int hRequest)
 {
 #define BUFSIZ 1024
-    int lReturn;
-    uchar sBuffer[BUFSIZ];
+    int lReturn = 0;
+    char sBuffer[BUFSIZ];
     string response;
     while (InternetReadFile(hRequest, sBuffer, BUFSIZ, lReturn) != false && lReturn > 0)
         StringAdd(response, CharArrayToString(sBuffer, 0, lReturn));
@@ -611,7 +611,7 @@ bool MqlNet::Request(const string &this_verb, const string &this_path, string &r
         return false;
     }
     
-    uchar data[];
+    char data[];
     if (fromFile) {
         if (FileToArray(addData, data) < 0) {
             LOG_SYS_ERR("FileToArray failed");
@@ -692,12 +692,12 @@ bool MqlNet::OpenURL(const string &URL, string &response, const bool toFile)
 void MqlNet::ReadPage(const int hRequest, string &response, const bool toFile)
 {
 // read page
-    uchar ch[100];
+    char ch[100];
     string toStr = "";
-    int dwBytes, h;
+    int dwBytes = 0, h;
     while (InternetReadFile(hRequest, ch, 100, dwBytes)) {
         if (dwBytes <= 0) break;
-        toStr = toStr + CharArrayToString(ch, 0, dwBytes);
+        toStr += CharArrayToString(ch, 0, dwBytes);
     }
     if (toFile) {
         h = FileOpen(response, FILE_BIN | FILE_WRITE);
@@ -712,18 +712,15 @@ void MqlNet::ReadPage(const int hRequest, string &response, const bool toFile)
 string MqlNet::HttpQueryInfo(const int hRequest, const int HTTP_QUERY)
 {
     int len = 2048, ind = 0;
-    uchar buf[2048];
+    char buf[2048];
     BOOL Res = HttpQueryInfoW(hRequest, HTTP_QUERY, buf, len, ind);
     if (Res == 0) {
         LOG_SYS_ERR("Failed");
         return C_empty_string;
     }
     string s;
-    for (int i = 0; i < len; i++) {
-        uchar uc = (uchar) buf[i];
-        if (uc != 0)
-            StringAdd(s, CharToString(uc));
-    }
+    for (int i = 0; i < len; i++)
+        if (buf[i] != 0) StringAdd(s, CharToString(buf[i]));
     if (StringLen(s) <= 0) return C_empty_string;
     return (s);
 }
@@ -747,7 +744,7 @@ long MqlNet::GetContentSize(const int hRequest)
 }
 
 //----------------------------------------------------- FileToArray
-int MqlNet::FileToArray(const string &FileName, uchar &data[])
+int MqlNet::FileToArray(const string &FileName, char &data[])
 {
     int h, i, size;
     h = FileOpen(FileName, FILE_BIN | FILE_READ);
@@ -756,7 +753,7 @@ int MqlNet::FileToArray(const string &FileName, uchar &data[])
     size = (int) FileSize(h);
     ArrayResize(data, (int) size);
     for (i = 0; i < size; i++)
-        data[i] = (uchar) FileReadInteger(h, CHAR_VALUE);
+        data[i] = (char) FileReadInteger(h, CHAR_VALUE);
     FileClose(h);
     return (size);
 }
