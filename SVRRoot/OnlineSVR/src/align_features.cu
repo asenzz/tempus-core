@@ -4,9 +4,10 @@
 #include <thrust/binary_search.h>
 #include <thrust/async/for_each.h>
 #include <cublas_v2.h>
-#include "common/cuda_util.cuh"
 #include "align_features.cuh"
+#include "common/cuda_util.cuh"
 #include "appcontext.hpp"
+#include "ScalingFactorService.hpp"
 
 
 namespace svr {
@@ -182,6 +183,8 @@ void quantise_features(CPTRd decon, CPTR(t_feat_params) feat_params,
     const auto d_feat_params = cumallocopy(feat_params, custream, end_row + 1);
     G_quantise_features<<<CU_BLOCKS_THREADS(clamp_n(n_rows_chunk)), 0, custream>>>(
             d_decon_F, d_feat_params, n_rows_chunk, quantise, start_row, n_cols_coef_, d_features);
+    double stub_sf, stub_dc;
+    business::ScalingFactorService::cu_scale_calc_I(d_features, n_rows_chunk * n_cols_coef_, stub_sf, stub_dc, custream);
     cu_errchk(cudaFreeAsync(d_decon_F, custream));
     cu_errchk(cudaFreeAsync(d_feat_params, custream));
 #ifdef EMO_DIFF

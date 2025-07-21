@@ -21,7 +21,8 @@ public:
     template<typename T> inline static T scale(const T &v);
     template<typename T> inline static T &scale_I(T &v);
     template<typename T> inline static T &scale_calc_I(T &v, double &sf, double &dc, const double obseg = common::C_input_obseg_labels);
-    static void cu_scale_calc_I(RPTR(double) v, const size_t n, double &sf, double &dc, const cudaStream_t custream, const cublasHandle_t cublas_H);
+    template<typename T> inline static T scale_calc(T v, double &sf, double &dc, const double obseg = common::C_input_obseg_labels);
+    static void cu_scale_calc_I(RPTR(double) v, const size_t n, double &sf, double &dc, const cudaStream_t custream);
 
     template<typename T> inline static T scale(const T &v, const double sf, const double dc);
     template<typename T> inline static T &scale_I(T &v, const double sf, const double dc);

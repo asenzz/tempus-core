@@ -12,8 +12,8 @@ namespace business {
 
 template<typename T> inline T ScalingFactorService::scale(const T &v)
 {
-    const auto [dc, sf] = calc(v, common::C_input_obseg_labels);
-    return common::scale(v, sf, dc);
+    double sf, dc;
+    return scale_calc(v, sf, dc);
 }
 
 template<typename T> inline T &ScalingFactorService::scale_I(T &v)
@@ -24,8 +24,20 @@ template<typename T> inline T &ScalingFactorService::scale_I(T &v)
 
 template<typename T> inline T &ScalingFactorService::scale_calc_I(T &v, double &sf, double &dc, const double obseg)
 {
-    std::tie(dc, sf) = calc(v, obseg);
-    return common::scale_I(v, sf, dc);
+    dc = calc_dc_offset(v);
+    v -= dc; // Remove DC offset
+    sf = calc_scaling_factor(v, obseg);
+    LOG4_TRACE("DC offset " << dc << ", scaling factor " << sf << ", values " << common::present(v));
+    return v /= sf; // Scale the values
+}
+
+template<typename T> inline T ScalingFactorService::scale_calc(T v, double &sf, double &dc, const double obseg)
+{
+    dc = calc_dc_offset(v);
+    v -= dc; // Remove DC offset
+    sf = calc_scaling_factor(v, obseg);
+    LOG4_TRACE("DC offset " << dc << ", scaling factor " << sf << ", values " << common::present(v));
+    return v /= sf;
 }
 
 template<typename T> inline T ScalingFactorService::scale(const T &v, const double sf, const double dc)

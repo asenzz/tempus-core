@@ -824,7 +824,7 @@ void ModelService::tune_features(
     const uint16_t n_chunks_align = cdiv(align_features_size, max_gpu_chunk_size);
     const uint32_t chunk_len_align = cdiv(coef_lag, n_chunks_align);
     const auto stripe_period = resolution_aux * coef_lag_;
-    const arma::vec mean_L = arma::mean(labels, 1);
+    const auto mean_L = ScalingFactorService::scale<arma::vec>(arma::mean(labels, 1));
     const auto [min_it, max_it] = std::minmax_element(C_default_exec_policy, label_times.cbegin(), label_times.cend(),
                                                       [](const auto &a, const auto &b) { return a->get_value_time() < b->get_value_time(); });
     const auto earliest_label_horizon = (**min_it).get_value_time() - horizon_duration;

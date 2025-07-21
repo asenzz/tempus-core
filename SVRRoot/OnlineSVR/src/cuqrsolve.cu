@@ -839,9 +839,9 @@ G_sumabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
 #define stride_reduce_sum(block_low_)                        \
         if (block_size >= block_low_) {                      \
             constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid_ + stride2;          \
-            if (tid_ < stride2 && tid_stride2 < sh_limit)     \
-                sumdata[tid_] += sumdata[tid_stride2];        \
+            const auto tid_stride2 = tid_ + stride2;         \
+            if (tid_ < stride2 && tid_stride2 < sh_limit)    \
+                sumdata[tid_] += sumdata[tid_stride2];       \
             __syncthreads();                                 \
         }
 
@@ -859,9 +859,14 @@ G_sumabs(CRPTRd d_input, RPTR(double) d_result_sum, const uint32_t n)
 
 double sumabs(CPTRd d_in, const size_t n, const cudaStream_t stm)
 {
-    double sum, *d_sum = cucalloc<double>(stm);
+    double sum;
+#if 0
+    double *d_sum = cucalloc<double>(stm);
     G_sumabs<common::C_cu_block_size><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_sum, n);
     cufreecopy(&sum, d_sum, stm);
+#else
+    sum = thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, double(0), [] __host__ __device__ (const double a, const double b) { return abs(a + b); });
+#endif
     cu_errchk(cudaStreamSynchronize(stm));
     return sum;
 }
