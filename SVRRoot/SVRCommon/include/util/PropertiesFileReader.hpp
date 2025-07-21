@@ -164,6 +164,8 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(float, oemd_entweight, 0) // OEMD tuning entropy (complexity) weight in validation score
 
+    CONFPROP(float, oemd_freq_ceil, .25) // OEMD tuning frequency ceiling, [0..0.5]
+
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
     static constexpr char STREAM_LOOP_INTERVAL[] = "STREAM_LOOP_INTERVAL_MS";
