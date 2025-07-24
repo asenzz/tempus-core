@@ -184,38 +184,34 @@ __host__ __device__ inline constexpr unsigned clamp_n(const unsigned n)
 { return _MIN(n, svr::common::C_cu_clamp_n); }
 
 
-template<typename T> inline T *
-cumallocopy(const std::vector<T> &v, const cudaStream_t custream = nullptr)
+template<typename T> inline T *cumallocopy(const std::vector<T> &v, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     T *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * sizeof(T), custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * element_size, custream));
+    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
-template<typename T> inline T *
-cumallocopy(const std::span<T> &v, const cudaStream_t custream = nullptr)
+template<typename T> inline T *cumallocopy(const std::span<T> &v, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     std::decay_t<T> *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * sizeof(T), custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * element_size, custream));
+    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
-template<typename T> inline T *
-cumallocopy(const arma::Mat<T> &v, const cudaStream_t custream = nullptr)
+template<typename T> inline T *cumallocopy(const arma::Mat<T> &v, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     T *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, v.n_elem * sizeof(T), custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.mem, v.n_elem * sizeof(T), cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    cu_errchk(cudaMallocAsync((void **) &ptr, v.n_elem * element_size, custream));
+    cu_errchk(cudaMemcpyAsync(ptr, v.mem, v.n_elem * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
-template<typename I, typename T = typename I::value_type> inline T *
-cumallocopy(const I &begin, const I &end, const cudaStream_t custream = nullptr)
+template<typename I, typename T = typename I::value_type> inline T *cumallocopy(const I &begin, const I &end, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     T *ptr;
-    const auto size = std::distance(begin, end) * sizeof(T);
+    const auto size = std::distance(begin, end) * element_size;
     cu_errchk(cudaMallocAsync((void **) &ptr, size, custream));
     cu_errchk(cudaMemcpyAsync(ptr, &*begin, size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;

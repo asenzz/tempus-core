@@ -82,7 +82,7 @@ TEST(manifold_tune_train_predict, basic_integration)
 #else
     const uint32_t C_test_decrement = .5 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
 #endif
-#define MAIN_QUEUE_RES 3600
+#define MAIN_QUEUE_RES 43200
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
     const bpt::seconds C_placement_delay(2);
     const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_validation_window;
@@ -98,7 +98,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const auto C_test_data_len_h_str = std::to_string(C_test_data_len_h);
     constexpr uint32_t C_dataset_id = 0xDeadBeef;
     const std::string C_dataset_id_str(std::to_string(C_dataset_id));
-    constexpr char C_last_test_time[] = "2025-01-13 01:00:00";
+    constexpr char C_last_test_time[] = "2025-07-21 22:29:58";
 
     try {
         pqxx::connection c(PROPS.get_db_connection_string());

@@ -42,8 +42,7 @@ void online_emd::transform(datamodel::DeconQueue &decon_queue, const uint32_t de
 #ifdef INTEGRATION_TEST
 
     datamodel::datarow_crange in_range_test(start_decon_iter, decon_queue.end() - test_offset, decon_queue.get_data());
-    if (in_range_test.distance() < ssize_t(residuals_ct))
-        business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
+    if (in_range_test.distance() < ssize_t(residuals_ct)) business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
     const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, std::identity(), resolution, main_resolution);
 
 #else
@@ -129,22 +128,24 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
 }
 
 t_oemd_coefficients_ptr online_emd::get_masks(
-        const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name, const uint16_t in_colix,
+        const datamodel::datarow_crange &input, const std::vector<double> &tail, std::string queue_name, const uint16_t in_colix,
         const datamodel::t_iqscaler &scaler, const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution) const
 {
+    queue_name = common::sanitize_db_table_name(queue_name + "_" + bpt::to_simple_string(main_resolution));
     const oemd::oemd_coefficients_search oemd_search(levels, resolution, main_resolution / resolution);
     const auto full_len = input.distance() + tail.size();
     const auto coefs_key = std::pair{levels, queue_name};
     const auto it_coefs = oemd_coefs_cache.find(coefs_key);
     if (it_coefs != oemd_coefs_cache.end()) return it_coefs->second;
 
-    size_t fir_search_input_window_start;
-    if (full_len < oemd_search.fir_validation_window) {
-        LOG4_WARN("Input size " << input.distance() << " with tail " << tail.size() << " smaller " << oemd_search.fir_validation_window - full_len << " than recommended " <<
-                                oemd_search.fir_validation_window);
-        fir_search_input_window_start = 0;
-    } else
-        fir_search_input_window_start = full_len - oemd_search.fir_validation_window;
+    const auto fir_search_input_window_start = [&] {
+        if (full_len < oemd_search.fir_validation_window) {
+            LOG4_WARN("Input size " << input.distance() << " with tail " << tail.size() << " smaller " << oemd_search.fir_validation_window - full_len << " than recommended " <<
+                                    oemd_search.fir_validation_window);
+            return size_t(0);
+        } else
+            return full_len - oemd_search.fir_validation_window;
+    } ();
 
     auto coefs = oemd_coefficients::load(levels, queue_name);
     if (coefs && !coefs->siftings.empty()
@@ -166,10 +167,8 @@ t_oemd_coefficients_ptr online_emd::get_masks(
 
     const auto [it_loaded_coefs, rc] = oemd_coefs_cache.emplace(coefs_key, coefs);
     if (rc) return it_loaded_coefs->second;
-    else {
-        LOG4_ERROR("Error storing coefficients for " << levels << ", " << queue_name);
-        return coefs;
-    }
+    LOG4_ERROR("Error storing coefficients for " << levels << ", " << queue_name);
+    return coefs;
 }
 
 

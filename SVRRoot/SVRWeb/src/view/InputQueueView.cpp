@@ -85,8 +85,8 @@ bool InputQueueForm::validate_resolution()
     try {
         bpt::time_duration _resolution = bpt::duration_from_string(resolution.value());
 
-        if (_resolution < bpt::seconds(1) || _resolution > bpt::hours(4)) {
-            throw std::logic_error("* Resolution must be more than 1 second and less than or equal to 4 hours.");
+        if (_resolution < bpt::seconds(1) || _resolution > bpt::hours(24)) {
+            throw std::logic_error("* Resolution must be more than 1 second and less than or equal to 24 hours.");
         }
     } catch (const std::exception &e) {
         resolution.valid(false);
@@ -104,8 +104,8 @@ bool InputQueueForm::validate_legal_time_deviation()
     try {
         bpt::time_duration _legal_time_dev = bpt::duration_from_string(legal_time_deviation.value());
 
-        if (_legal_time_dev < bpt::seconds(0) || _legal_time_dev > bpt::hours(4)) {
-            throw std::logic_error("* Legal time deviation must be positive and less than or equal to 4 hours.");
+        if (_legal_time_dev < bpt::seconds(0) || _legal_time_dev > bpt::hours(24)) {
+            throw std::logic_error("* Legal time deviation must be positive and less than or equal to 24 hours.");
         }
     } catch (const std::exception &e) {
         legal_time_deviation.valid(false);

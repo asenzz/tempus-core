@@ -35,7 +35,7 @@ class online_emd final : public spectral_transform {
 public:
     explicit online_emd(const uint16_t levels, const double stretch_coef = oemd_coefficients::C_oemd_stretch_coef);
 
-    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_crange &input, const std::vector<double> &tail, const std::string &queue_name, const uint16_t in_colix_,
+    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_crange &input, const std::vector<double> &tail, std::string queue_name, const uint16_t in_colix_,
                                       const datamodel::t_iqscaler &scaler, const boost::posix_time::time_duration &resolution,
                                       const boost::posix_time::time_duration &main_resolution) const;
 

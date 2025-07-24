@@ -341,7 +341,7 @@ static inline bool ignore_case_equals(const std::string &lhs, const std::string 
     return tolower(lhs) == tolower(rhs);
 }
 
-std::string sanitize_db_table_name(std::string toBeIdentifier, char replaceChar = '_');
+std::string sanitize_db_table_name(std::string name, char replace_char = '_');
 
 std::string make_md5_hash(const std::string &in);
 

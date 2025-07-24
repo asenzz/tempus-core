@@ -300,11 +300,7 @@ oemd_coefficients_search::smoothen_mask(std::vector<double> &mask, common::t_dra
 
 
 void
-oemd_coefficients_search::save_mask(
-        const std::vector<double> &mask,
-        const std::string &queue_name,
-        const uint16_t level,
-        const uint16_t levels)
+oemd_coefficients_search::save_mask(const std::vector<double> &mask, const std::string &queue_name, const uint16_t level, const uint16_t levels)
 {
     uint16_t ctr = 0;
     LOG4_TRACE("Saving mask for level " << level << " of " << levels << ", queue " << queue_name << ", mask " <<

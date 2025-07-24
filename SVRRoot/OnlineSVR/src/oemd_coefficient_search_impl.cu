@@ -678,10 +678,8 @@ std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_
 
 double
 oemd_coefficients_search::evaluate_mask(
-    const double att, const double fp, const double fs, const std::span<double> &workspace,
-    const uint8_t siftings, const uint32_t prev_masks_len,
-    const double meanabs_input, const std::vector<uint32_t> &times,
-    const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const
+    const double att, const double fp, const double fs, const std::span<double> &workspace, const uint8_t siftings, const uint32_t prev_masks_len, const double meanabs_input,
+    const std::vector<uint32_t> &times, const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const
 {
     const auto mask = lbp_fir(att, fp, fs, sample_rate);
     if (mask.empty()) {
@@ -716,7 +714,6 @@ oemd_coefficients_search::evaluate_mask(
         return common::C_bad_validation;
     }
     const auto rel_pow = std::abs(meanabs_input / meanabs_imf - levels + 1.);
-
 #else
     constexpr double meanabs_imf = 1;
     constexpr double rel_pow = 1;
@@ -813,8 +810,7 @@ __skip_autocor:
 
 
 void oemd_coefficients_search::sift(
-    const uint16_t siftings, const uint32_t full_input_len, const uint32_t mask_len, const cudaStream_t custream, CPTRd d_mask, double *const d_rx,
-    double *const d_rx2) const noexcept
+    const uint16_t siftings, const uint32_t full_input_len, const uint32_t mask_len, const cudaStream_t custream, CPTRd d_mask, double *const d_rx, double *const d_rx2) const noexcept
 {
     UNROLL()
     for (DTYPE(siftings) s = 0; s < siftings; ++s) {
@@ -956,7 +952,7 @@ oemd_coefficients_search::run(
     const auto label_times = [&] {
         std::deque<bpt::ptime> r;
         UNROLL(64)
-        for (boost::posix_time::ptime it_time(times.front().date(), bpt::hours(times.front().time_of_day().hours()) + onehour);
+        for (boost::posix_time::ptime it_time(times.front().date(), label_duration * std::ceil(times.front().time_of_day() / label_duration));
              it_time < times.back(); it_time += label_duration)
             r.emplace_back(it_time);
         return r;

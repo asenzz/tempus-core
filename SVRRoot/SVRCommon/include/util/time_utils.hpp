@@ -7,8 +7,8 @@ namespace bpt = boost::posix_time;
 
 namespace svr {
 
-const auto onesec = bpt::seconds(1);
-const auto onehour = bpt::hours(1);
+const bpt::seconds onesec(1);
+const bpt::hours onehour(1);
 
 double operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs);
 //boost::posix_time::time_duration operator /(const boost::posix_time::time_duration &lhs, const boost::posix_time::time_duration &rhs);

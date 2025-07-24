@@ -684,8 +684,8 @@ ModelService::prepare_labels(
 #else
 #define coef_lag_ coef_lag
 #endif
-    // LOG4_TRACE("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data.front()->get_value_time() <<
-    //                              " until " << main_data.back()->get_value_time() << ", main to aux period ratio " << main_to_aux_period_ratio);
+    LOG4_TRACE("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data.front()->get_value_time() <<
+                                " until " << main_data.back()->get_value_time() << ", main resolution " << resolution_main << ", aux resolution " << resolution_aux);
     const auto &label_duration = resolution_main;
     const auto horizon_duration = resolution_main * PROPS.get_prediction_horizon();
     if (req_rows < 1 or main_data.get_container().empty())
@@ -732,11 +732,16 @@ ModelService::prepare_labels(
         }
         const uint32_t F_end_ix = F_end_it - aux_data.cbegin();
         t_label_ix this_label_ixs{.n_ixs = label_len};
-        if constexpr (C_label_bias == 0)
-            generate_twap_indexes(aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux, label_len, this_label_ixs.label_ixs);
-        else
-            this_label_ixs.special_x = generate_twap_bias(this_label_ixs.label_ixs, false /*askbid*/, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux,
-                                                          label_len, level);
+        try {
+            if constexpr (C_label_bias == 0)
+                generate_twap_indexes(aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux, label_len, this_label_ixs.label_ixs);
+            else
+                this_label_ixs.special_x = generate_twap_bias(this_label_ixs.label_ixs, false /*askbid*/, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux,
+                                                              label_len, level);
+        } catch (const std::runtime_error &e) {
+            LOG4_WARN("Failed to generate label indexes for time " << L_start_time << ", until " << L_end_time << ", aux start iterator time " << (**L_start_it).get_value_time());
+            continue;
+        }
         LOG4_TRACE("Adding row at " << L_start_time << " label at " << *this_label_ixs.label_ixs << " with " << F_end_ix << " index, of length " << label_len);
 #pragma omp ordered
         {

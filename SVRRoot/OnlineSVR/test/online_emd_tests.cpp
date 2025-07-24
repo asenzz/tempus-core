@@ -33,7 +33,7 @@ constexpr unsigned TEST_LEVELS = MIN_LEVEL_COUNT;
 const std::string TEST_QUEUE_NAME("test_queue");
 constexpr double TEST_STRETCH_COEF = 1;
 constexpr double TEST_ERROR_THRESHOLD = 1e-13;
-const auto TEST_RES = bpt::hours(1);
+const auto TEST_RES = bpt::hours(24);
 
 class onlineEmdTransformTest : public testing::Test
 {

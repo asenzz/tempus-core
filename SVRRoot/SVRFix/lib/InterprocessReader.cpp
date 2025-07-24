@@ -2,6 +2,8 @@
 
 #include <boost/interprocess/managed_shared_memory.hpp>
 
+#include "common/logging.hpp"
+
 namespace svr {
 namespace fix {
 
@@ -23,11 +25,12 @@ template<>
 class interprocess_serializer_reader<bid_ask_spread>
 {
 public:
-    static size_t const double_size = 8;
-    static size_t const size_t_size = 8;
+    static constexpr size_t double_size = 8;
+    static constexpr size_t size_t_size = 8;
 
-    static size_t const size = 2 * double_size + 3 * size_t_size;
-    inline void  read(char const * buffer, bid_ask_spread & value)
+    static constexpr size_t size = 2 * double_size + 3 * size_t_size;
+
+    static inline void read(char const * buffer, bid_ask_spread & value)
     {
         value.bid_px = *reinterpret_cast<double const *>(buffer) ;
         buffer += double_size;
@@ -41,9 +44,7 @@ public:
 
         static const bpt::ptime epoch = bpt::from_iso_string("20100101T000000");
 
-        size_t tm;
-        tm = *reinterpret_cast<size_t const *>(buffer);
-        value.time = epoch + bpt::microseconds(tm);
+        value.time = epoch + bpt::microseconds(*reinterpret_cast<size_t const *>(buffer));
     }
 
 private:
@@ -59,19 +60,19 @@ template<>
 class interprocess_serializer_reader<mm_file_reader::bid_ask_spread_container>
 {
 public:
-    static size_t const double_size = 8;
-    static size_t const size_t_size = 8;
+    static constexpr size_t double_size = 8;
+    static constexpr size_t size_t_size = 8;
 
-    static size_t const size = 2 * double_size + 3 * size_t_size;
+    static constexpr size_t size = 2 * double_size + 3 * size_t_size;
 
-    void read(char const * buffer, mm_file_reader::bid_ask_spread_container & value)
+    static void read(char const * buffer, mm_file_reader::bid_ask_spread_container & value)
     {
-        size_t sz = *reinterpret_cast<size_t const *>(buffer) ;
+        const size_t sz = *reinterpret_cast<size_t const *>(buffer) ;
         buffer += size_t_size;
 
         value.reserve(sz);
 
-        for(size_t i = 0; i < sz; ++i)
+        for(DTYPE(sz) i = 0; i < sz; ++i)
         {
             static bid_ask_spread_reader serializer;
             bid_ask_spread tmp;
@@ -124,19 +125,14 @@ struct mm_file_reader::Impl
     boost::interprocess::managed_shared_memory mm_file;
     char const * mm_file_buffer;
 
-    Impl(std::string const & mm_file_name)
-    : mm_file (boost::interprocess::managed_shared_memory(boost::interprocess::open_only, mm_file_name.c_str()))
+    explicit Impl(std::string const & mm_file_name) : mm_file (boost::interprocess::managed_shared_memory(boost::interprocess::open_only, mm_file_name.c_str()))
     {
-        std::pair<boost::interprocess::managed_shared_memory::handle_t*, boost::interprocess::managed_shared_memory::size_type> res;
-        res = mm_file.find<boost::interprocess::managed_shared_memory::handle_t>("mm_file_handle");
-
-        if(res.second != 1)
-            throw std::runtime_error("mm_file_reader error: cannot find mm file buffer handle");
-
-        mm_file_buffer = reinterpret_cast<char const *>(mm_file.get_address_from_handle(*res.first));
+        const auto [fst, snd] = mm_file.find<boost::interprocess::managed_shared_memory::handle_t>("mm_file_handle");
+        if (snd != 1) LOG4_THROW("mm_file_reader error: cannot find mm file buffer handle");
+        mm_file_buffer = static_cast<char const *>(mm_file.get_address_from_handle(*fst));
     }
 
-    mm_file_reader::bid_ask_spread_container read_all()
+    mm_file_reader::bid_ask_spread_container read_all() const
     {
         mm_file_reader::bid_ask_spread_container result;
         bid_ask_spread_file_reader reader;
@@ -144,7 +140,7 @@ struct mm_file_reader::Impl
         return result;
     }
 
-    mm_file_reader::bid_ask_spread_container read_new(bpt::ptime const & last_time)
+    mm_file_reader::bid_ask_spread_container read_new(bpt::ptime const & last_time) const
     {
         mm_file_reader::bid_ask_spread_container result;
         bid_ask_spread_file_reader reader;
@@ -155,8 +151,7 @@ struct mm_file_reader::Impl
 };
 
 
-mm_file_reader::mm_file_reader(std::string const & mm_file_name)
-: pImpl(* new Impl(mm_file_name))
+mm_file_reader::mm_file_reader(std::string const & mm_file_name) : pImpl(* new Impl(mm_file_name))
 {}
 
 
@@ -166,13 +161,13 @@ mm_file_reader::~mm_file_reader()
 }
 
 
-mm_file_reader::bid_ask_spread_container mm_file_reader::read_all()
+mm_file_reader::bid_ask_spread_container mm_file_reader::read_all() const
 {
     return pImpl.read_all();
 }
 
 
-mm_file_reader::bid_ask_spread_container mm_file_reader::read_new(bpt::ptime const & last_time)
+mm_file_reader::bid_ask_spread_container mm_file_reader::read_new(bpt::ptime const & last_time) const
 {
     return pImpl.read_new(last_time);
 }

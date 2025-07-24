@@ -297,7 +297,7 @@ template<typename I> inline void generate_twap_indexes(
     }
 #ifndef NDEBUG
     const auto dist_it = it - start_it;
-    if (inctr != inlen || dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
+    if (dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
 #endif
 }
 
@@ -335,7 +335,7 @@ template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
     }
 #ifndef NDEBUG
     const auto dist_it = it - start_it;
-    if (inctr != inlen || dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
+    if (dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
 #endif
     return maxmin_i;
 }

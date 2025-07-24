@@ -14,8 +14,8 @@ public:
 
     using bid_ask_spread_container = std::vector<bid_ask_spread>;
 
-    bid_ask_spread_container read_all();
-    bid_ask_spread_container read_new(bpt::ptime const & last_time);
+    bid_ask_spread_container read_all() const;
+    bid_ask_spread_container read_new(bpt::ptime const & last_time) const;
 
 private:
     struct Impl;

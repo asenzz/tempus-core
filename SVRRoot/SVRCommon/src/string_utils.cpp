@@ -180,14 +180,14 @@ std::string demangle(const char *mangled)
     return result.get() ? std::string(result.get()) : "::UNKNOWN::";
 }
 
-std::string sanitize_db_table_name(std::string where, char replace_char)
+std::string sanitize_db_table_name(std::string name, char replace_char)
 {
-    std::transform(C_default_exec_policy, where.begin(), where.end(), where.begin(), [replace_char](const char &c)
+    std::transform(C_default_exec_policy, name.begin(), name.end(), name.begin(), [replace_char](const char &c)
     {
         if (isalnum(c)) return c;
         return replace_char;
     });
-    return where;
+    return name;
 }
 
 std::string make_md5_hash(const std::string &in)

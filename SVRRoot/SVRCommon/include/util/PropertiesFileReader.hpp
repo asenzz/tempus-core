@@ -191,6 +191,7 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
     static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
+    static constexpr char OEMD_MASK_DIR[] = "OEMD_MASK_DIR"; // Directory for OEMD masks
 
     ConcreteDaoType dao_type;
     size_t feature_quantization_;
@@ -200,7 +201,7 @@ private: // TODO port properties below to use the CONFPROP macro
     double scaling_alpha_;
     bool recombine_parameters_, tune_parameters_;
     size_t slide_count_, slide_skip_, tune_run_limit_;
-    std::string db_connection_string_;
+    std::string db_connection_string_, oemd_masks_dir_;
     boost::log::trivial::severity_level log_level_;
     bool self_request_;
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
@@ -221,6 +222,8 @@ public:
     static int get_mpi_size();
 
     static int get_mpi_comm();
+
+    std::string get_oemd_masks_dir() const noexcept;
 
     ConcreteDaoType get_dao_type() const noexcept;
 

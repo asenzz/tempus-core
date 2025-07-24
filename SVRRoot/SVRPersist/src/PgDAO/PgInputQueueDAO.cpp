@@ -373,14 +373,14 @@ void mark_interval_reconciled_impl(InputQueueDAO &dao, DataSource &data_source, 
 OptionalTimeRange PgInputQueueDAO::get_missing_hours(datamodel::InputQueue_ptr const &queue, TimeRange const &from_range)
 {
     size_t const sec = queue->get_resolution().total_seconds();
-    bpt::time_duration one_month = bpt::hours(24 * 30);
+    static const bpt::hours one_month(24 * 30);
+    static const bpt::seconds sec10(10);
 
     OptionalTimeRange reconciled_interval = get_reconciled_interval_impl(*this, data_source, queue->get_table_name());
 
-    if (!reconciled_interval)
-        reconciled_interval.reset({from_range.second, from_range.second});
+    if (!reconciled_interval) reconciled_interval.reset({from_range.second, from_range.second});
 
-    if (from_range.second >= reconciled_interval->second + bpt::seconds(10 * sec)) {
+    if (from_range.second >= reconciled_interval->second + sec10) {
         OptionalTimeRange misses_in_front = get_missing_hours_impl(*this, data_source, queue->get_table_name(), from_range.second, reconciled_interval->second, sec);
 
         mark_interval_reconciled_impl(*this, data_source, queue->get_table_name(), reconciled_interval->second, from_range.second);

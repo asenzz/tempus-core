@@ -267,6 +267,12 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     oemd_tune_particles_ = get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles);
     oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);
     solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);
+    oemd_masks_dir_ = get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir);
+}
+
+std::string AppConfig::get_oemd_masks_dir() const noexcept
+{
+    return oemd_masks_dir_;
 }
 
 int AppConfig::get_mpi_rank()

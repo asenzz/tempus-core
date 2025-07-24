@@ -102,6 +102,7 @@ constexpr char C_default_oemd_tune_iterations[] = "24";
 constexpr char C_default_tune_particles[] = "16";
 constexpr char C_default_tune_iterations[] = "24";
 constexpr char C_defaut_solve_iterations_coefficient[] = ".1";
+constexpr char C_default_oemd_masks_dir[] = "../lib/oemd_masks/";
 
 constexpr uint16_t C_max_csv_token_size = 0xFF;
 
