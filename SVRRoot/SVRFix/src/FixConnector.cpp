@@ -1,19 +1,15 @@
-#include "FixConnector.hpp"
-
-#include <BidAskSpread.hpp>
-
 #include <quickfix/fix44/MarketDataRequest.h>
 #include <quickfix/fix44/MarketDataSnapshotFullRefresh.h>
-
-#include <common/logging.hpp>
-#include <common/ScopeExit.hpp>
 #include <thread>
-
-#include <appcontext.hpp>
+#include "FixConnector.hpp"
+#include "BidAskSpread.hpp"
+#include "InputQueueService.hpp"
+#include "common/logging.hpp"
+#include "common/ScopeExit.hpp"
+#include "appcontext.hpp"
 
 namespace svr {
 namespace fix {
-
 void FixConnector::run()
 {
     auto message_at_exit = at_scope_exit([]() { LOG4_INFO("The FixConnector main loop exited."); });
@@ -23,12 +19,12 @@ void FixConnector::run()
         if (done) return;
     }
 
-    subscriptions = std::shared_ptr<fix_subscription_container>(new fix_subscription_container(md_session_id.getSenderCompID(), md_session_id.getTargetCompID()));
+    subscriptions = std::make_shared<fix_subscription_container>(md_session_id.getSenderCompID(), md_session_id.getTargetCompID());
 
     while (!done) {
         const auto iqs = APP.input_queue_service.get_all_queues_with_sign(true);
         for (const auto &iq: iqs) subscriptions->create_unless_exists(iq);
-        for (auto i = 0U; i < 100; ++i) {
+        for (auto i = 0u; i < 100u; ++i) {
             if (done) return;
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -43,7 +39,7 @@ void FixConnector::stop()
 
 
 FixConnector::FixConnector(FIX::SessionSettings &settings)
-        : logged_in(false), done(false), settings(settings)
+    : logged_in(false), done(false), settings(settings)
 {
 }
 
@@ -80,8 +76,8 @@ void FixConnector::toApp(FIX::Message &message, const FIX::SessionID &sessionID)
         FIX::PossDupFlag possDupFlag;
         message.getHeader().getField(possDupFlag);
         if (possDupFlag) throw FIX::DoNotSend();
+    } catch (FIX::FieldNotFound &) {
     }
-    catch (FIX::FieldNotFound &) {}
 }
 
 
@@ -117,7 +113,7 @@ void read_bas(FIX44::MarketDataSnapshotFullRefresh::NoMDEntries const &mdEntries
             bas.ask_qty = DTYPE(bas.ask_qty)(mdEntrySize.getValue());
             break;
         default:
-            throw std::invalid_argument("FixConnector::read_bas: invalid MDEntryType value passed.");
+            THROW_EX_FS(std::invalid_argument, "FixConnector::read_bas: invalid MDEntryType value passed.");
     }
 }
 }
@@ -149,10 +145,6 @@ void FixConnector::onMessage(const FIX44::MarketDataSnapshotFullRefresh &message
 
 void FixConnector::onMessage(const FIX44::MarketDataIncrementalRefresh &, const FIX::SessionID &)
 {
-
-}
-
 }
 }
-
-
+}

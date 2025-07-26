@@ -1,19 +1,19 @@
 #include "appcontext.hpp"
 #include "include/DaoTestFixture.h"
-#include <DAO/ScopedTransaction.hpp>
-#include <model/User.hpp>
+#include "DAO/ScopedTransaction.hpp"
+#include "model/User.hpp"
+#include "EnsembleService.hpp"
 #include "include/InputQueueRowDataGenerator.hpp"
 #include "InputQueueService.hpp"
+#include "UserService.hpp"
 #include "common/constants.hpp"
+#include "model/Ensemble.hpp"
 
 using namespace svr;
-using svr::datamodel::Priority;
-using svr::datamodel::kernel_type;
-using svr::common::C_input_queue_table_name_prefix;
 
-class EnsembleIntegrationTests : public DaoTestFixture {
+class EnsembleIntegrationTests : public DaoTestFixture
+{
 protected:
-
     scoped_transaction_guard_ptr trx;
 
     User_ptr testUser;
@@ -21,7 +21,7 @@ protected:
     datamodel::Dataset_ptr testDataset;
     std::deque<datamodel::DeconQueue_ptr> deconQueues;
     std::deque<datamodel::Ensemble_ptr> ensembles;
-    std::map<std::pair<std::string, std::string>, std::vector<datamodel::SVRParameters_ptr>> ensembles_svr_parameters;
+    std::map<std::pair<std::string, std::string>, std::vector<datamodel::SVRParameters_ptr> > ensembles_svr_parameters;
 
     // test configuration
     long testDataNumberToGenerate = 1000;
@@ -39,12 +39,12 @@ protected:
     bpt::time_duration resolution = bpt::seconds(60);
     bpt::time_duration legalTimeDeviation = bpt::seconds(5);
     std::string timezone = "Europe/Zurich";
-    std::deque<std::string> valueColumns {"high", "low", "open", "close"};
+    std::deque<std::string> valueColumns{"high", "low", "open", "close"};
     std::string expectedTableName = business::InputQueueService::make_queue_table_name(user_name, queueName, resolution);
 
     // dataset details
     std::string datasetName = "test dataset";
-    Priority priority = Priority::Normal;
+    static constexpr auto priority = datamodel::Priority::Normal;
     size_t swtLevels = 1;
     std::string swtWaveletName = "db3";
     bpt::time_duration max_lookback_time_gap = bpt::hours(24);
@@ -52,43 +52,45 @@ protected:
 
     //vec_svr_parameters details
     svr::datamodel::SVRParameters svr_parameters;
-//            0, 0, expectedTableName, "", 0, 0, 0,
-//            2.05521, 0.16373, 1.4742, 1.40931, 1000, 0.357722, kernel_type::RBF, 10,
-//            DEFAULT_APP_HYPERPARAMS(PROPS)};
+    //            0, 0, expectedTableName, "", 0, 0, 0,
+    //            2.05521, 0.16373, 1.4742, 1.40931, 1000, 0.357722, kernel_type::RBF, 10,
+    //            DEFAULT_APP_HYPERPARAMS(PROPS)};
 
-    void InitSvrParameters() {
+    void InitSvrParameters()
+    {
         //init vec_svr_parameters
-         for (const std::string &column: valueColumns)
-         {
-             std::vector<svr::datamodel::SVRParameters_ptr> vec_svr_parameters;
-             svr_parameters.set_input_queue_column_name(column);
-             for (size_t swt_level = 0; swt_level <= swtLevels; swt_level++)
-             {
-                 svr_parameters.set_decon_level(swt_level);
-                 vec_svr_parameters.push_back(std::make_shared<svr::datamodel::SVRParameters>(svr_parameters));
-             }
-             auto key = std::make_pair(testQueue->get_table_name(), column);
-             ensembles_svr_parameters[key] = vec_svr_parameters;
-         }
+        for (const std::string &column: valueColumns) {
+            std::vector<svr::datamodel::SVRParameters_ptr> vec_svr_parameters;
+            svr_parameters.set_input_queue_column_name(column);
+            for (size_t swt_level = 0; swt_level <= swtLevels; swt_level++) {
+                svr_parameters.set_decon_level(swt_level);
+                vec_svr_parameters.push_back(std::make_shared<svr::datamodel::SVRParameters>(svr_parameters));
+            }
+            auto key = std::make_pair(testQueue->get_table_name(), column);
+            ensembles_svr_parameters[key] = vec_svr_parameters;
+        }
     }
 
-    void InitUser(){
+    void InitUser()
+    {
         // init user
         testUser = std::make_shared<svr::datamodel::User>(0, user_name, userEmail, userPassword, userRealName,
                                                           svr::datamodel::ROLE::USER);
     }
 
-    void InitDataset(){
+    void InitDataset()
+    {
         testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, user_name, testQueue, std::deque<datamodel::InputQueue_ptr>{},
                                                                 priority, "description", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), swtLevels, swtWaveletName,
                                                                 max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
     }
 
-    void InitInputQueueData(){
+    void InitInputQueueData()
+    {
         // initialize InputQueue object
-        testQueue = std::make_shared<svr::datamodel::InputQueue>("", queueName, user_name, "description", resolution,legalTimeDeviation,
-                timezone, valueColumns);
+        testQueue = std::make_shared<svr::datamodel::InputQueue>("", queueName, user_name, "description", resolution, legalTimeDeviation,
+                                                                 timezone, valueColumns);
 
         // init data generator
         InputQueueRowDataGenerator dataGenerator(aci.input_queue_service, testQueue,
@@ -102,7 +104,8 @@ protected:
         // should save all the data
     }
 
-    void InitDeconQueueData(){
+    void InitDeconQueueData() const
+    {
         bpt::ptime startTime = testQueue->front()->get_value_time();
         bpt::ptime endTime = testQueue->get_data().back()->get_value_time();
 
@@ -111,19 +114,20 @@ protected:
 
         LOG4_TRACE("Deconstructing test queue");
         //deconQueues = aci.decon_queue_service.deconstruct(testQueue, testDataset);
-        for (datamodel::DeconQueue_ptr p_decon : deconQueues) {
+        for (datamodel::DeconQueue_ptr p_decon: deconQueues) {
             LOG4_DEBUG("Deconstructed Data Queue: " << p_decon->metadata_to_string());
         }
     }
 
-    void InitEnsemble(){
+    void InitEnsemble() const
+    {
         //ensembles = aci.ensemble_service.init_ensembles_from_dataset(testDataset, deconQueues);
         testDataset->set_ensembles(ensembles, false);
 
         ASSERT_EQ(ensembles.size(), deconQueues.size());
     }
 
-    void saveDbData()
+    void saveDbData() const
     {
         LOG4_TRACE("Saving test user");
         ASSERT_TRUE(aci.user_service.save(testUser) == 1);
@@ -132,15 +136,14 @@ protected:
         ASSERT_TRUE(aci.input_queue_service.save(testQueue) > 0);
 
         LOG4_INFO(testQueue->get_table_name() << " is having data: "
-                 << bpt::to_simple_string(testQueue->front()->get_value_time()) << " - "
-                 << bpt::to_simple_string(testQueue->get_data().back()->get_value_time()));
+            << bpt::to_simple_string(testQueue->front()->get_value_time()) << " - "
+            << bpt::to_simple_string(testQueue->get_data().back()->get_value_time()));
 
         LOG4_TRACE("Saving test dataset");
         ASSERT_TRUE(aci.dataset_service.save(testDataset) == 1);
-
     }
 
-    void removeDbData()
+    void removeDbData() const
     {
         aci.dataset_service.remove(testDataset);
         aci.input_queue_service.remove(testQueue);
@@ -158,11 +161,11 @@ protected:
         saveDbData();
     }
 
-    virtual void TearDown() override {
+    virtual void TearDown() override
+    {
         removeDbData();
         trx = nullptr;
     }
-
 };
 
 TEST_F(EnsembleIntegrationTests, testEnsembleCRUD)
@@ -178,15 +181,14 @@ TEST_F(EnsembleIntegrationTests, testEnsembleCRUD)
                 "Retraining all models");
     }
 #endif
-    for (const datamodel::Ensemble_ptr &p_ensemble : ensembles) {
+    for (const datamodel::Ensemble_ptr &p_ensemble: ensembles) {
         // for each decon level should be there a model
         ASSERT_EQ(p_ensemble->get_models().size(), testDataset->get_spectral_levels() + 1);
     }
 
     PROFILE_INFO(aci.ensemble_service.save_ensembles(ensembles, true), "Persisting ensemble models");
 
-    for (const datamodel::Ensemble_ptr &p_ensemble : ensembles)
-    {
+    for (const datamodel::Ensemble_ptr &p_ensemble: ensembles) {
         ASSERT_NE(0UL, p_ensemble->get_id());
     }
 }

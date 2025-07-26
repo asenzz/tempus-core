@@ -6,6 +6,10 @@
 #include <model/Dataset.hpp>
 #include <model/IQScalingFactor.hpp>
 
+#include "DatasetService.hpp"
+#include "InputQueueService.hpp"
+#include "UserService.hpp"
+
 using namespace svr;
 
 
@@ -25,7 +29,7 @@ TEST_F(DaoTestFixture, IQScalingFactorWorkflow)
 
     aci.dataset_service.save(ds);
 
-    datamodel::IQScalingFactor_ptr iqsf = otr<datamodel::IQScalingFactor>(0, ds->get_id(), iq->get_table_name(), "column", 1.434);
+    auto iqsf = otr<datamodel::IQScalingFactor>(0, ds->get_id(), iq->get_table_name(), "column", 1.434);
 
     ASSERT_EQ(1, aci.iq_scaling_factor_service.save(iqsf));
 

@@ -172,7 +172,7 @@ mat_ptr calc_cache::get_features(
                 ModelService::tune_features(*p_features, labels, params, label_times, aux_decon_queues, aux_resolution, main_resolution),
                 "Tune features for " << params);
         } else PROFILE_INFO(
-            ModelService::prepare_features(*p_features, label_times, aux_decon_queues, params, max_lookback_time_gap, aux_resolution, main_resolution),
+            ModelService::prepare_features(*p_features, label_times, aux_decon_queues, params, aux_resolution, main_resolution),
             "Prepare features " << params);
         const auto p_feature_mechanics = ptr<datamodel::t_feature_mechanics>(params.get_feature_mechanics());
         return std::make_pair(p_features, p_feature_mechanics);

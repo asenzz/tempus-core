@@ -115,13 +115,13 @@ public:
         const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
 
     static void do_features(
-        arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels, const uint16_t n_queues,
+        arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_,
         const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period, const std::deque<uint32_t> &chunk_len_quantise,
-        const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<std::vector<t_feat_params> > &feat_params);
+        const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon, const std::deque<std::vector<t_feat_params> > &feat_params, const std::set<uint16_t> &adjacent_levels);
 
     static void prepare_features(
-        arma::mat &features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux, const datamodel::SVRParameters &params,
-        const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
+        arma::mat &features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &features_aux, const datamodel::SVRParameters &param,
+        const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
 
     static void prepare_weights(arma::mat &weights, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_decon_queues, const uint16_t steps,
                                 const bpt::time_duration &resolution_main);

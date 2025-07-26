@@ -1,5 +1,6 @@
 #include <iostream>
-#include "common/defines.h"
+#include "DatasetService.hpp"
+#include "UserService.hpp"
 #include "common/constants.hpp"
 #include "include/DaoTestFixture.h"
 #include "model/User.hpp"
@@ -14,9 +15,9 @@ using namespace svr;
 
 TEST_F(DaoTestFixture, DatasetTuningRecombination)
 {
-    const uint32_t colct = 31; // levct
-    const uint32_t rowct = 34144256;
-    double best_score = std::numeric_limits<double>::max();
+    constexpr uint32_t colct = 31; // levct
+    constexpr uint32_t rowct = 34144256;
+    const double best_score = std::numeric_limits<double>::max();
     std::vector<svr::t_param_preds_cu> params_preds(colct * svr::common::C_tune_keep_preds);
 #if 0
     std::vector<uint8_t> combos(rowct * colct, uint8_t(1));
@@ -37,16 +38,16 @@ TEST_F(DaoTestFixture, DatasetTuningRecombination)
 
 TEST_F(DaoTestFixture, DatasetWorkflow)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    auto user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High) ;
 
     aci.user_service.save(user1);
 
-    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+    auto iq = std::make_shared<svr::datamodel::InputQueue>(
             "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}
+    const auto ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}
             , svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
 

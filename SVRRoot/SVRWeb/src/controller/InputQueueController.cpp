@@ -1,21 +1,15 @@
-#include <controller/InputQueueController.hpp>
-#include <view/InputQueueView.hpp>
-#include "appcontext.hpp"
-#include "controller/MainController.hpp"
 #include "util/validation_utils.hpp"
+#include "util/math_utils.hpp"
+#include "controller/InputQueueController.hpp"
+#include "view/InputQueueView.hpp"
+#include "appcontext.hpp"
+#include "InputQueueService.hpp"
+#include "controller/MainController.hpp"
 
 // TODO Implement time zone conversion at time_from_string() calls
 
-using namespace svr::datamodel;
-using namespace svr::context;
-using namespace svr::common;
-using namespace bpt;
-using namespace std;
-
-
 namespace svr {
 namespace web {
-
 InputQueueController::InputQueueController(cppcms::service &svc) : application(svc)
 {
     dispatcher().assign("/", &InputQueueController::showAll, this);
@@ -35,8 +29,8 @@ void InputQueueController::show(std::string queue_name)
     session()["user"] = DEFAULT_WEB_USER;
     content::InputQueue model;
     model.pageTitle = "InputQueue Details";
-    const auto queue = AppContext::get().input_queue_service.get_queue_metadata(queue_name);
-    if (queue.get() != nullptr && queue->get_owner_user_name() == DEFAULT_WEB_USER /* session()["user"] */ )
+    const auto queue = APP.input_queue_service.get_queue_metadata(queue_name);
+    if (queue.get() != nullptr && queue->get_owner_user_name() == DEFAULT_WEB_USER /* session()["user"] */)
         model.object = queue;
     else
         model.pageError = "No queue named \"" + queue_name + "\" was found!";
@@ -61,7 +55,7 @@ void InputQueueView::getAllInputQueues()
 {
     session()["user"] = DEFAULT_WEB_USER;
     std::vector<datamodel::InputQueue_ptr> queue_vector;
-    const auto queues = APP.input_queue_service.get_all_user_queues(DEFAULT_WEB_USER /* session()["user"] */ );
+    const auto queues = APP.input_queue_service.get_all_user_queues(DEFAULT_WEB_USER /* session()["user"] */);
     std::copy(C_default_exec_policy, queues.cbegin(), queues.cend(), std::back_inserter(queue_vector));
     return_result(queue_vector);
 }
@@ -73,7 +67,6 @@ void InputQueueView::main(std::string string)
 
 void InputQueueController::handle_create_get()
 {
-
     LOG4_DEBUG("Handling Create Dataset GET request");
     content::InputQueue queue;
     queue.pageTitle = "Create InputQueue";
@@ -88,14 +81,14 @@ void InputQueueController::handle_create_post()
     session()["user"] = DEFAULT_WEB_USER;
     if (model.form.validate()) {
         model.load_form_data();
-        if (AppContext::get().input_queue_service.exists(DEFAULT_WEB_USER /* session()["user"] */, model.object->get_logical_name(), model.object->get_resolution())) {
+        if (APP.input_queue_service.exists(DEFAULT_WEB_USER /* session()["user"] */, model.object->get_logical_name(), model.object->get_resolution())) {
             model.form.logical_name.valid(false);
             model.form.resolution.valid(false);
             model.pageError = "Queue with name " + model.object->get_logical_name() + " and resolution " + bpt::to_simple_string(model.object->get_resolution())
                               + " is already created!";
         } else {
             model.object->set_owner_user_name(DEFAULT_WEB_USER /* session()["user"] */);
-            if (!AppContext::get().input_queue_service.save(model.object)) {
+            if (!APP.input_queue_service.save(model.object)) {
                 model.pageError = "Error while saving p_input_queue! Please try again later!";
             } else {
                 std::stringstream url;
@@ -120,14 +113,14 @@ InputQueueView::InputQueueView(cppcms::service &srv) : cppcms::rpc::json_rpc_ser
     bind("reconcileHistoricalData", cppcms::rpc::json_method(&InputQueueView::reconcileHistoricalData, this), method_role);
 }
 
-void InputQueueView::showInputQueue(std::string queueTableName)
+void InputQueueView::showInputQueue(std::string queue_table_name)
 {
-    return_result(AppContext::get().input_queue_service.load(queueTableName, bpt::min_date_time, bpt::max_date_time, 0));
+    return_result(APP.input_queue_service.load(queue_table_name, bpt::min_date_time, bpt::max_date_time, 0));
 }
 
 void InputQueueView::getValueColumnsModel(std::string queue_table_name)
 {
-    const auto p_queue = AppContext::get().input_queue_service.get_queue_metadata(queue_table_name);
+    const auto p_queue = APP.input_queue_service.get_queue_metadata(queue_table_name);
     if (!p_queue) {
         return_error("Queue was not found!");
         return;
@@ -145,30 +138,28 @@ void InputQueueView::getValueColumnsModel(std::string queue_table_name)
 
 
 namespace {
-
 svr::dao::OptionalTimeRange
-parse_time_range(session_interface &session, cppcms::json::object obj, string &logical_name, time_duration &resolution, datamodel::InputQueue_ptr &queue)
+parse_time_range(session_interface &session, cppcms::json::object obj, std::string &logical_name, bpt::time_duration &resolution, datamodel::InputQueue_ptr &queue)
 {
     LOG4_BEGIN();
 
-    const auto offered_time_from = time_from_string(obj["offeredTimeFrom"].str());
-    const auto offered_time_to = time_from_string(obj["offeredTimeTo"].str());
+    const auto offered_time_from = bpt::time_from_string(obj["offeredTimeFrom"].str());
+    const auto offered_time_to = bpt::time_from_string(obj["offeredTimeTo"].str());
 
     logical_name = obj["symbol"].str();
-    resolution = seconds(boost::lexical_cast<long>(obj["period"].str()));
+    resolution = bpt::seconds(boost::lexical_cast<long>(obj["period"].str()));
 
     session["user"] = DEFAULT_WEB_USER;
-    queue = AppContext::get().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
+    queue = APP.input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
     if (!queue) {
-        LOG4_ERROR("No Input Queue has been setup for symbol " << logical_name << " and resolution " << to_simple_string(resolution));
+        LOG4_ERROR("No Input Queue has been setup for symbol " << logical_name << " and resolution " << bpt::to_simple_string(resolution));
         return {};
     }
     LOG4_DEBUG("User " << session["user"] << ", symbol " << obj["symbol"].str() << ", period " << obj["period"].str() <<
-                       ", time from " << offered_time_from << ", time to " << offered_time_to);
+        ", time from " << offered_time_from << ", time to " << offered_time_to);
     LOG4_END();
     return {std::make_pair(offered_time_from, offered_time_to)};
 }
-
 }
 
 /* TODO Implement time zone conversion at time_from_string() calls, thorough range checking for missing values according to forex market hours and comparison with other queues
@@ -178,21 +169,21 @@ void InputQueueView::getNextTimeRangeToBeSent(cppcms::json::object obj)
 {
     LOG4_BEGIN();
 
-    string logical_name;
-    time_duration resolution;
+    std::string logical_name;
+    bpt::time_duration resolution;
     datamodel::InputQueue_ptr queue;
 
     session()["user"] = DEFAULT_WEB_USER;
     auto time_range = parse_time_range(session(), obj, logical_name, resolution, queue);
     if (!time_range) {
-        return_error("No Input Queue has been setup for symbol " + logical_name + " and resolution " + to_simple_string(resolution));
+        return_error("No Input Queue has been setup for symbol " + logical_name + " and resolution " + bpt::to_simple_string(resolution));
         return;
     }
     LOG4_TRACE("Offered time range from " << time_range->first << " to " << time_range->second);
-    const auto newest_row = AppContext::get().input_queue_service.find_newest_record(queue);
+    const auto newest_row = APP.input_queue_service.find_newest_record(queue);
     if (newest_row) time_range->first = newest_row->get_value_time();
     if (time_range->first >= time_range->second) {
-        const string msg = "No data needed for queue " + queue->get_table_name() + " already have up to " + to_simple_string(time_range->first);
+        const std::string msg = "No data needed for queue " + queue->get_table_name() + " already have up to " + to_simple_string(time_range->first);
         LOG4_DEBUG(msg);
         return_error(msg);
         return;
@@ -202,59 +193,58 @@ void InputQueueView::getNextTimeRangeToBeSent(cppcms::json::object obj)
     LOG4_DEBUG("Next time range from " << time_range->first << " to " << time_range->second);
 
     json::value response;
-    response["timeFrom"] = to_mql_date(time_range->first);
-    response["timeTo"] = to_mql_date(time_range->second);
+    response["timeFrom"] = common::to_mql_date(time_range->first);
+    response["timeTo"] = common::to_mql_date(time_range->second);
     LOG4_DEBUG("User " << DEFAULT_WEB_USER /* session()["user"] */ << ", symbol " << obj["symbol"].str() << ", period " << obj["period"].str());
     return_result(response);
 }
 
 void InputQueueView::reconcileHistoricalData(cppcms::json::object obj)
 {
-
-    string logical_name;
-    time_duration resolution;
+    std::string logical_name;
+    bpt::time_duration resolution;
     datamodel::InputQueue_ptr queue;
     session()["user"] = DEFAULT_WEB_USER;
     auto time_range = parse_time_range(session(), obj, logical_name, resolution, queue);
     if (!time_range) {
-        const string msg = "No Input Queue has been setup for symbol " + logical_name + " and resolution " + to_simple_string(resolution);
+        const std::string msg = "No Input Queue has been setup for symbol " + logical_name + " and resolution " + to_simple_string(resolution);
         LOG4_ERROR(msg);
         return_error(msg);
         return;
     }
 
-    time_range = AppContext::get().input_queue_service.get_missing_hours(queue, time_range.get());
+    time_range = APP.input_queue_service.get_missing_hours(queue, time_range.get());
 
     json::value response;
 
     if (time_range) {
-        response["timeFrom"] = to_mql_date(time_range->first);
-        response["timeTo"] = to_mql_date(time_range->second);
+        response["timeFrom"] = common::to_mql_date(time_range->first);
+        response["timeTo"] = common::to_mql_date(time_range->second);
         return_result(response);
         return;
     }
 
-    AppContext::get().input_queue_service.purge_missing_hours(queue);
+    APP.input_queue_service.purge_missing_hours(queue);
 
     response["message"] = "Reconciliation done";
     return_result(response);
 }
 
 namespace {
-
-using parsed_header_element = std::pair<string, string>;
+using parsed_header_element = std::pair<std::string, std::string>;
 using parsed_header = std::vector<parsed_header_element>;
 
-parsed_header parseMT4DataHeader(const std::string &raw_header, const std::string &delimiter)
+parsed_header parseMTDataHeader(const std::string &raw_header, const std::string &delimiter)
 {
     REJECT_EMPTY(raw_header, "Header must not be empty!");
     REJECT_EMPTY(delimiter, "Delimiter must not be empty!");
 
-    const auto headers = split(raw_header, delimiter);
+    const auto headers = common::split(raw_header, delimiter);
     parsed_header headers_with_type;
     for (const auto &header_item: headers) {
-        auto tok = split(header_item, ":");
-        if (tok.size() != 2) THROW_EX_FS(invalid_argument, "Cannot get parameter name and type from " + header_item);
+        auto tok = common::split(header_item, ":");
+        if (tok.size() != 2)
+            THROW_EX_FS(std::invalid_argument, "Cannot get parameter name and type from " + header_item);
         headers_with_type.emplace_back(tok[0], tok[1]);
     }
     return headers_with_type;
@@ -262,25 +252,30 @@ parsed_header parseMT4DataHeader(const std::string &raw_header, const std::strin
 
 using db_columns = std::deque<std::string>;
 
-struct header_to_column_mapper {
-    struct builder {
+struct header_to_column_mapper
+{
+    struct builder
+    {
         virtual double build(std::deque<std::string> const &) const = 0;
 
         virtual ~builder() = default;
     };
 
-    struct defaulter : builder {
-        double build(std::deque<std::string> const &) const
+    struct defaulter : builder
+    {
+        double build(std::deque<std::string> const &) const override
         {
             return std::numeric_limits<double>::quiet_NaN();
         }
     };
 
-    struct reader : builder {
+    struct reader : builder
+    {
         size_t header_idx;
 
         reader(size_t header_idx) : header_idx(header_idx)
-        {}
+        {
+        }
 
         double build(std::deque<std::string> const &string_values) const
         {
@@ -298,7 +293,7 @@ struct header_to_column_mapper {
         OMP_FOR_i(dbc.size()) {
             const auto &column = dbc[i];
             const auto it_header = std::find_if(ph.cbegin(), ph.cend(), [&column](const auto &v) {
-                return ignore_case_equals(v.first, column);
+                return common::ignore_case_equals(v.first, column);
             });
             builders[i] = it_header == ph.end() ? new defaulter() : (const header_to_column_mapper::builder *) new reader(it_header - ph.begin());
         }
@@ -310,14 +305,13 @@ struct header_to_column_mapper {
         for (const auto bldr: builders) delete bldr;
     }
 
-    std::vector<double> map_web_to_db(const std::deque<std::string> &string_values)
+    std::vector<double> map_web_to_db(const std::deque<std::string> &string_values) const
     {
         std::vector<double> result;
-        for (auto bldr: builders) result.emplace_back(bldr->build(string_values));
+        for (const auto bldr: builders) result.emplace_back(bldr->build(string_values));
         return result;
     }
 };
-
 }
 
 void InputQueueView::historyData(cppcms::json::object data)
@@ -325,9 +319,9 @@ void InputQueueView::historyData(cppcms::json::object data)
     json::value response;
     const auto symbol = data["symbol"].str();
     session()["user"] = DEFAULT_WEB_USER;
-    const auto resolution = seconds(boost::lexical_cast<uint32_t>(data["period"].str()));
-    LOG4_DEBUG("Resolution " << resolution);// << " data " << data);
-    auto p_queue = AppContext::get().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
+    const auto resolution = bpt::seconds(boost::lexical_cast<uint32_t>(data["period"].str()));
+    LOG4_DEBUG("Resolution " << resolution); // << " data " << data);
+    auto p_queue = APP.input_queue_service.get_queue_metadata(DEFAULT_WEB_USER /* session()["user"] */, symbol, resolution);
     if (!p_queue) {
         const std::string err_msg = "Queue for " + session()["user"] + " " + symbol + " " + bpt::to_simple_string(resolution) + " not found!";
         LOG4_ERROR(err_msg);
@@ -344,8 +338,8 @@ void InputQueueView::historyData(cppcms::json::object data)
         parsed_header headers_with_type;
 
         try {
-            headers_with_type = parseMT4DataHeader(header, delimiter);
-        } catch (const exception &ex) {
+            headers_with_type = parseMTDataHeader(header, delimiter);
+        } catch (const std::exception &ex) {
             const std::string msg = common::formatter() << "Error parsing headers " << header << ", " << ex.what();
             LOG4_ERROR(msg);
             return_error(msg);
@@ -353,7 +347,7 @@ void InputQueueView::historyData(cppcms::json::object data)
         }
 
         const uint32_t time_index = std::find_if(C_default_exec_policy, headers_with_type.cbegin(), headers_with_type.cend(),
-                                                 [](const auto &v) { return ignore_case_equals(v.first, "Time"); }) - headers_with_type.cbegin();
+                                                 [](const auto &v) { return common::ignore_case_equals(v.first, "Time"); }) - headers_with_type.cbegin();
         if (time_index >= headers_with_type.size()) {
             constexpr char err_msg[] = "Time column not found!";
             LOG4_ERROR(err_msg);
@@ -361,7 +355,7 @@ void InputQueueView::historyData(cppcms::json::object data)
             return;
         }
         const uint32_t volume_index = std::find_if(C_default_exec_policy, headers_with_type.cbegin(), headers_with_type.cend(),
-                                                   [](const auto &v) { return ignore_case_equals(v.first, "Volume"); }) - headers_with_type.cbegin();
+                                                   [](const auto &v) { return common::ignore_case_equals(v.first, "Volume"); }) - headers_with_type.cbegin();
         if (volume_index >= headers_with_type.size()) {
             constexpr char err_msg[] = "Volume column not found!";
             LOG4_ERROR(err_msg);
@@ -369,14 +363,14 @@ void InputQueueView::historyData(cppcms::json::object data)
             return;
         }
         header_to_column_mapper mapper(headers_with_type, APP.input_queue_service.get_db_table_column_names(p_queue));
-        const auto local_time = second_clock::local_time();
+        const auto local_time = bpt::second_clock::local_time();
         LOG4_DEBUG("Loaded history queue " << bar_from << " " << bar_to);
         bool break_loop = false;
         OMP_FOR_(bar_to - bar_from, ordered)
         for (uint32_t bar_ix = bar_from; bar_ix < bar_to; ++bar_ix) {
             if (break_loop) continue;
             const auto &row_str = data[std::to_string(bar_ix)].str();
-            const auto row_fields = split(row_str, delimiter);
+            const auto row_fields = common::split(row_str, delimiter);
             if (row_fields.size() != headers_with_type.size()) {
                 const std::string err_msg = "Invalid data, the row " + row_str + " doesn't match the supplied header: " + header;
                 LOG4_ERROR(err_msg);
@@ -384,17 +378,17 @@ void InputQueueView::historyData(cppcms::json::object data)
 #pragma omp atomic write
                 break_loop = true;
             }
-            const auto p_row = ptr<DataRow>( // TODO Implement time zone parsing
-                    bpt::time_from_string(row_fields[time_index]), local_time, boost::lexical_cast<double>(row_fields[volume_index]), mapper.map_web_to_db(row_fields)
+            const auto p_row = ptr<datamodel::DataRow>( // TODO Implement time zone parsing
+                bpt::time_from_string(row_fields[time_index]), local_time, boost::lexical_cast<double>(row_fields[volume_index]), mapper.map_web_to_db(row_fields)
             );
 #pragma omp ordered
             business::InputQueueService::add_row(*p_queue, p_row);
         }
         if (break_loop) return;
 
-        LOG4_DEBUG("Saving " << p_queue->size() << " rows");
+        LOG4_DEBUG("Saving " << p_queue->size() << " rows"); // TODO Inspect below
         size_t saved_rows;
-        if ((saved_rows = AppContext::get().input_queue_service.save(p_queue)) > 0) {
+        if ((saved_rows = APP.input_queue_service.save(p_queue)) > 0) {
             response["message"] = "OK";
             response["savedRows"] = saved_rows;
             LOG4_DEBUG("Saved " << saved_rows << " rows.");
@@ -417,12 +411,12 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     LOG4_BEGIN();
 
     const auto logical_name = obj["symbol"].str();
-    const auto resolution = seconds(boost::lexical_cast<uint32_t>(obj["period"].str()));
+    const auto resolution = bpt::seconds(boost::lexical_cast<uint32_t>(obj["period"].str()));
     // session()["user"] = DEFAULT_WEB_USER;
     // TODO Replace with specialized stored procedure
-    const auto p_queue = AppContext::get().input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
+    const auto p_queue = APP.input_queue_service.get_queue_metadata(DEFAULT_WEB_USER, logical_name, resolution);
     if (!p_queue) {
-        const std::string msg = "Queue for " DEFAULT_WEB_USER /* session()["user"] */ " " + logical_name + " " + to_simple_string(resolution) + " not found!";
+        const std::string msg = "Queue for " DEFAULT_WEB_USER /* session()["user"] */ " " + logical_name + " " + bpt::to_simple_string(resolution) + " not found!";
         LOG4_ERROR(msg);
         return_error(msg);
         return;
@@ -432,7 +426,8 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     std::deque<std::string> value_column_str(db_columns.size());
     LOG4_TRACE("Input queue has " << db_columns.size() << " columns");
     uint16_t i = 0;
-    for (const auto &column: db_columns) { // Ordered values
+    for (const auto &column: db_columns) {
+        // Ordered values
         const auto iter = obj.find(column);
         if (iter == obj.cend()) {
             const std::string msg = "Column " + column + " is missing in received data!";
@@ -446,7 +441,7 @@ void InputQueueView::sendTick(cppcms::json::object obj)
         LOG4_TRACE("Column " << i << ", " << column << ", value " << iter->second.str());
     }
     const auto value_time_str = "\"value_time\":\"" + obj["time"].str() + "\"";
-    const auto update_time_str = "\"update_time\":\"" + bpt::to_simple_string(second_clock::local_time()) + "\"";
+    const auto update_time_str = "\"update_time\":\"" + bpt::to_simple_string(bpt::second_clock::local_time()) + "\"";
     const auto volume_str = "\"tick_volume\":" + obj["Volume"].str();
     json::value response;
     try {
@@ -461,8 +456,5 @@ void InputQueueView::sendTick(cppcms::json::object obj)
     free(values);
     return_result(response);
 }
-
-
 }
 }
-

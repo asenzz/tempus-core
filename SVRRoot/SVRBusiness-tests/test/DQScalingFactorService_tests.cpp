@@ -1,9 +1,12 @@
 #include "include/DaoTestFixture.h"
 #include "common/constants.hpp"
-
-#include <model/User.hpp>
-#include <model/InputQueue.hpp>
-#include <model/Dataset.hpp>
+#include "model/User.hpp"
+#include "model/InputQueue.hpp"
+#include "model/Dataset.hpp"
+#include "DatasetService.hpp"
+#include "DQScalingFactorService.hpp"
+#include "InputQueueService.hpp"
+#include "UserService.hpp"
 
 using namespace svr;
 
@@ -14,7 +17,7 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
 
     aci.user_service.save(user1);
 
-    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+    auto iq = std::make_shared<svr::datamodel::InputQueue>(
             "CursedChildInputQueue", "CursedChildInputQueue_logicalName", user1->get_name(), "description"
             , bpt::seconds(60), bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"} );
 
@@ -27,7 +30,7 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
     aci.dataset_service.save(ds);
 
 
-    datamodel::DQScalingFactor_ptr dqsf = otr<datamodel::DQScalingFactor>(0, 0, 0, 0, 0, 1.434, 0, 0, 0);
+    auto dqsf = otr<datamodel::DQScalingFactor>(0, 0, 0, 0, 0, 1.434, 0, 0, 0);
 
     EXPECT_TRUE(1 == aci.dq_scaling_factor_service.save(dqsf));
 
@@ -74,7 +77,7 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
     datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("EmmaWatsonDeconQueue", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
     auto lt = bpt::second_clock::local_time();
 
-    const size_t dq_len = 1e+6;
+    constexpr size_t dq_len = 1e+6;
 
     for(size_t i = 0; i < dq_len; ++i)
     {

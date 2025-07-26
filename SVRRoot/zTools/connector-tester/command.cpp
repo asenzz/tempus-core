@@ -57,7 +57,7 @@ CommandRegistry& CommandRegistry::inst()
     return inst;
 }
 
-Command & CommandRegistry::getCommand(std::string const & commandName)
+Command & CommandRegistry::getCommand(std::string const & commandName) const
 {
     static Impl::my_cont_t::iterator iter;
     iter = pImpl.commands.find(commandName);

@@ -1,12 +1,15 @@
-#include "include/DaoTestFixture.h"
-#include "common/constants.hpp"
-
 #include <memory>
 
-#include <model/User.hpp>
-#include <model/Request.hpp>
-#include <model/Dataset.hpp>
-#include <model/InputQueue.hpp>
+#include "DatasetService.hpp"
+#include "InputQueueService.hpp"
+#include "RequestService.hpp"
+#include "UserService.hpp"
+#include "include/DaoTestFixture.h"
+#include "common/constants.hpp"
+#include "model/User.hpp"
+#include "model/Request.hpp"
+#include "model/Dataset.hpp"
+#include "model/InputQueue.hpp"
 
 using namespace svr;
 using datamodel::MultivalRequest;
@@ -46,16 +49,16 @@ TEST_F(DaoTestFixture, RequestWorkflow)
     ASSERT_EQ(*request, *rq);
 
 
-    datamodel::MultivalResponse_ptr rs0 = datamodel::MultivalResponse_ptr(new svr::datamodel::MultivalResponse(0, rq->get_id(), nw + iq->get_resolution(), "high", 1.1));
+    datamodel::MultivalResponse_ptr rs0 = std::make_shared<svr::datamodel::MultivalResponse>(0, rq->get_id(), nw + iq->get_resolution(), "high", 1.1);
     aci.request_service.save(rs0);
 
-    datamodel::MultivalResponse_ptr rs1 = datamodel::MultivalResponse_ptr(new svr::datamodel::MultivalResponse(0, rq->get_id(), nw + iq->get_resolution(), "close", 2.2));
+    datamodel::MultivalResponse_ptr rs1 = std::make_shared<svr::datamodel::MultivalResponse>(0, rq->get_id(), nw + iq->get_resolution(), "close", 2.2);
     aci.request_service.save(rs1);
 
-    datamodel::MultivalResponse_ptr rs2 = datamodel::MultivalResponse_ptr(new svr::datamodel::MultivalResponse(0, rq->get_id(), nw + iq->get_resolution(), "open", 3.3));
+    datamodel::MultivalResponse_ptr rs2 = std::make_shared<svr::datamodel::MultivalResponse>(0, rq->get_id(), nw + iq->get_resolution(), "open", 3.3);
     aci.request_service.save(rs2);
 
-    datamodel::MultivalResponse_ptr rs3 = datamodel::MultivalResponse_ptr(new svr::datamodel::MultivalResponse(0, rq->get_id(), nw + iq->get_resolution(), "low", 4.4));
+    datamodel::MultivalResponse_ptr rs3 = std::make_shared<svr::datamodel::MultivalResponse>(0, rq->get_id(), nw + iq->get_resolution(), "low", 4.4);
     aci.request_service.save(rs3);
 
     aci.request_service.force_finalize(request);
@@ -94,10 +97,10 @@ TEST_F(DaoTestFixture, CustomColumnsRequest)
 
     ASSERT_EQ(1, aci.request_service.save(request));
 
-    datamodel::MultivalResponse_ptr rs0 = datamodel::MultivalResponse_ptr(new svr::datamodel::MultivalResponse(0, request->get_id(), nw + iq->get_resolution(), "open", 1.1));
+    datamodel::MultivalResponse_ptr rs0 = std::make_shared<svr::datamodel::MultivalResponse>(0, request->get_id(), nw + iq->get_resolution(), "open", 1.1);
     aci.request_service.save(rs0);
 
-    datamodel::MultivalResponse_ptr rs1 = datamodel::MultivalResponse_ptr(new svr::datamodel::MultivalResponse(0, request->get_id(), nw + iq->get_resolution(), "some_custom_column", 2.2));
+    datamodel::MultivalResponse_ptr rs1 = std::make_shared<svr::datamodel::MultivalResponse>(0, request->get_id(), nw + iq->get_resolution(), "some_custom_column", 2.2);
     aci.request_service.save(rs1);
 
     aci.request_service.force_finalize(request);

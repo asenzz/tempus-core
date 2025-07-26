@@ -24,6 +24,11 @@ elif [[ $1 == "-v" ]]; then # Valgrind
   # Valgrind memcheck
   # $VGRIND --max-threads=100000 --track-origins=yes --error-limit=no --log-file=./${BIN}.valgrind.log --leak-check=full --tool=memcheck --expensive-definedness-checks=yes --show-leak-kinds=definite --max-stackframe=115062830400 ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}" # Enable to start GDB server on first error: --vgdb=full --vgdb-error=1
 
+  # Valgrind SG check
+  # /usr/bin/valgrind --tool=exp-sgcheck ./SVRDaemon --config daemon.config
+
+  # Dr. Memory
+  # /home/zarko/pub/DrMemory-Linux-2.3.0-1/bin/drmemory /home/zarko/pub/DrMemory-Linux-2.3.0-1/bin/drmemory -- ./SVRDaemon --config daemon.config
 
   # Valgrind stack audit
   # $VGRIND --max-threads=100000 --error-limit=no --log-file=${BIN}.valgrind.log --massif-out-file=${BIN}.massif.out --tool=massif --depth=10 --threshold=10.0 --peak-inaccuracy=10.0 --detailed-freq=100 --max-stackframe=115062830400 ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}" # Enable to start GDB server on first error: --vgdb=full --vgdb-error=1

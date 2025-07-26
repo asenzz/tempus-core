@@ -22,7 +22,6 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
 {
     LOG4_BEGIN();
 
-    const auto max_gap = dataset.get_max_lookback_time_gap();
     const auto main_res = dataset.get_input_queue()->get_resolution();
     const auto aux_res = dataset.get_aux_input_queues().empty() ? main_res : dataset.get_aux_input_queue()->get_resolution();
     const auto &aux_decons = ensemble.get_aux_decon_queues();
@@ -31,7 +30,7 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
-        ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params().first, max_gap, aux_res, main_res);
+        ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params().first, aux_res, main_res);
         const tbb::mutex::scoped_lock lk(res_l);
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
     }

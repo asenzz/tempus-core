@@ -1,34 +1,35 @@
-#include "../include/testutils.h"
-#include "../include/DaoTestFixture.h"
-#include <cstdlib>
 #include <cstdio>
-#include <memory>
-#include <stdexcept>
 #include <iostream>
+#include <memory>
 #include <regex>
+#include <stdexcept>
+#include "../include/DaoTestFixture.h"
+#include "../include/testutils.h"
+#include "common/logging.hpp"
 
 bool DaoTestFixture::DoPerformanceTests = false;
-DaoTestFixture::test_completeness  DaoTestFixture::DoTestPart = DaoTestFixture::test_completeness::full;
+DaoTestFixture::test_completeness DaoTestFixture::DoTestPart = DaoTestFixture::test_completeness::full;
 
-std::string exec(char const * cmd) {
+std::string exec(char const *cmd)
+{
     int pec;
     return exec(cmd, pec);
 }
 
-std::string exec(char const * cmd, int & procExitCode)
+std::string exec(char const *cmd, int &procExitCode)
 {
-    char buffer[128];
-    std::string result = "";
-    std::shared_ptr<FILE> pipe(popen(cmd, "r"), [&procExitCode](FILE* what){procExitCode = pclose(what);});
+    constexpr uint32_t buflen = 128;
+    char buffer[buflen];
+    std::string result;
+    std::shared_ptr<FILE> pipe(popen(cmd, "r"), [&procExitCode](FILE *what) { procExitCode = pclose(what); });
     if (!pipe) throw std::runtime_error("popen() failed!");
-    while (!feof(pipe.get())) {
-        if (fgets(buffer, 128, pipe.get()) != NULL)
-            result += buffer;
-    }
+    while (!feof(pipe.get()))
+        if (fgets(buffer, buflen, pipe.get()) != nullptr)
+            result.append(buffer);
     return result;
 }
 
-bool erase_after(std::string & where, char what)
+bool erase_after(std::string &where, char what)
 {
     std::string::size_type pos = where.find(what);
     if (pos == std::string::npos)
@@ -40,29 +41,28 @@ bool erase_after(std::string & where, char what)
 
 /******************************************************************************/
 
-TestEnv& TestEnv::global_test_env()
+TestEnv &TestEnv::global_test_env()
 {
     static TestEnv env;
     return env;
 }
 
-constexpr char const * TestEnv::ConfigFiles[];
+constexpr char const *TestEnv::ConfigFiles[];
 
 bool
 TestEnv::init_test_db(char const *db_name)
 {
     db_scripts_path.reset();
     char const *ctmp = std::getenv(EnvDbScriptsPathVar);
-    if (ctmp != NULL) db_scripts_path = boost::make_optional( ctmp ) ;
+    if (ctmp != NULL) db_scripts_path = boost::make_optional(ctmp);
 
     if (!db_scripts_path) {
         std::string tmp = exec("dirname `find ../../ -name 'init_db.sh'`");
         erase_after(tmp, '\n');
-        if(!tmp.empty()) db_scripts_path.reset(tmp);
+        if (!tmp.empty()) db_scripts_path.reset(tmp);
     }
 
-    if( !db_scripts_path )
-    {
+    if (!db_scripts_path) {
         std::cerr << "Cannot find the db scripts path." << std::endl;
         return false;
     }
@@ -71,20 +71,18 @@ TestEnv::init_test_db(char const *db_name)
 
     std::string expect = exec("find ~/ -maxdepth 1 -name runwithpass.sh");
     erase_after(expect, '\n');
-    if(!expect.empty()) cl = expect + " " + cl;
+    if (!expect.empty()) cl = expect + " " + cl;
 
     int pec;
     std::string out = exec(cl.c_str(), pec);
-    if(pec != 0)
-    {
+    if (pec != 0) {
         std::cerr << "init_db.sh exit code is not 0" << std::endl;
         return false;
     }
 
     std::regex regex("ERROR");
     std::smatch match;
-    if (std::regex_search(out, match, regex))
-    {
+    if (std::regex_search(out, match, regex)) {
         std::cerr << "Errors found in the init_db.sh output: " << out << std::endl;
         return false;
     }
@@ -98,16 +96,15 @@ TestEnv::init_test_db_98(char const *db_name)
 {
     db_scripts_path.reset();
     char const *ctmp = std::getenv(EnvDbScriptsPathVar);
-    if (ctmp != NULL) db_scripts_path = boost::make_optional( ctmp ) ;
+    if (ctmp != NULL) db_scripts_path = boost::make_optional(ctmp);
 
     if (!db_scripts_path) {
         std::string tmp = exec("dirname `find ../../ -name 'init_db.sh'`");
         erase_after(tmp, '\n');
-        if(!tmp.empty()) db_scripts_path.reset(tmp);
+        if (!tmp.empty()) db_scripts_path.reset(tmp);
     }
 
-    if( !db_scripts_path )
-    {
+    if (!db_scripts_path) {
         std::cerr << "Cannot find the db scripts path." << std::endl;
         return false;
     }
@@ -116,12 +113,11 @@ TestEnv::init_test_db_98(char const *db_name)
 
     std::string expect = exec("find ~/ -maxdepth 1 -name runwithpass.sh");
     erase_after(expect, '\n');
-    if(!expect.empty()) cl = expect + " " + cl;
+    if (!expect.empty()) cl = expect + " " + cl;
 
     int pec;
     std::string out = exec(cl.c_str(), pec);
-    if(pec != 0)
-    {
+    if (pec != 0) {
         std::cerr << "init_db.sh exit code is not 0" << std::endl;
         return false;
     }
@@ -129,8 +125,7 @@ TestEnv::init_test_db_98(char const *db_name)
     std::regex regex("error", std::regex::icase);
     std::smatch match;
 
-    if (std::regex_search(out, match, regex))
-    {
+    if (std::regex_search(out, match, regex)) {
         std::cerr << "Errors found in the init_db.sh output: " << out << std::endl;
         return false;
     }
@@ -139,20 +134,21 @@ TestEnv::init_test_db_98(char const *db_name)
 }
 
 
-bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & dao_type, int max_loop_count)
+bool TestEnv::prepareSvrConfig(char const *dbName, std::string const &dao_type, int max_loop_count)
 {
     /**************************************************************************/
     // Copying config files
     int pec;
-    std::stringstream str_cp; str_cp << "cp ";
+    std::stringstream str_cp;
+    str_cp << "cp ";
 
-    for (char const * cf : ConfigFiles)
+    for (char const *cf: ConfigFiles)
         str_cp << "../config/" << cf << " ";
 
     str_cp << " .";
 
     exec(str_cp.str().c_str(), pec);
-    if( pec )
+    if (pec)
         return false;
 
 
@@ -162,8 +158,7 @@ bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & dao_type
         std::stringstream str_sed;
         str_sed << "sed -ri 's/(dbname=|user=|password=)([a-zA-Z0-9_]+)/\\1" << dbName << "/g' ";
 
-        for (char const * cf : ConfigFiles)
-        {
+        for (char const *cf: ConfigFiles) {
             std::stringstream str1;
             str1 << str_sed.str() << cf;
             std::string out = exec(str1.str().c_str(), pec);
@@ -178,8 +173,7 @@ bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & dao_type
         std::stringstream str_sed;
         str_sed << "sed -ri 's/(DAO_TYPE[ \\t]*=[ \\t]*)([a-zA-Z0-9_]+)/\\1" << dao_type << "/g' ";
 
-        for (char const * cf : ConfigFiles)
-        {
+        for (char const *cf: ConfigFiles) {
             std::stringstream str1;
             str1 << str_sed.str() << cf;
             std::string out = exec(str1.str().c_str(), pec);
@@ -187,7 +181,7 @@ bool TestEnv::prepareSvrConfig(char const * dbName, std::string const & dao_type
         }
     }
 
-/**************************************************************************/
+    /**************************************************************************/
     // Setting up iteration number
 
     {
@@ -216,8 +210,7 @@ bool TestEnv::run_daemon()
 {
     auto cpid = fork();
 
-    if (cpid == 0)
-    {
+    if (cpid == 0) {
         // Child process;
         auto exit_code = execl("./SVRDaemon", "./SVRDaemon", "--config", "daemon.config", NULL);
         LOG4_DEBUG("exit code (child): " << exit_code);
@@ -227,8 +220,7 @@ bool TestEnv::run_daemon()
             exit_code = 1;
         exit(exit_code);
     }
-    else if (cpid > 0)
-    {
+    if (cpid > 0) {
         int status;
         auto w = waitpid(cpid, &status, WUNTRACED | WCONTINUED);
         if (w == -1)
@@ -237,19 +229,16 @@ bool TestEnv::run_daemon()
         LOG4_DEBUG("exit code received (parent): " << status);
         return status == 0;
     }
-    else
-        throw std::runtime_error("Cannot fork a child process");
+    LOG4_THROW("Cannot fork a child process");
+    return false; // Unreachable, but to avoid compiler warning
 }
 
-
-// /usr/bin/valgrind --track-origins=yes --error-limit=no --suppressions=minimal.supp --log-file=minimalraw.log --gen-suppressions=all --vgdb-error=1 --leak-check=full --tool=memcheck --show-leak-kinds=all --max-stackframe=115062830400 CMD: ", "./SVRDaemon", "--config", "daemon.config", NULL
 
 void TestEnv::run_daemon_nowait()
 {
     auto cpid = fork();
 
-    if (cpid == 0)
-    {
+    if (cpid == 0) {
         //Child process;
         //const auto exit_code = execl("/usr/bin/valgrind", "/usr/bin/valgrind", "--track-origins=yes", "--error-limit=no", "--suppressions=minimal.supp", "--log-file=minimalraw.log", "--gen-suppressions=all",
         //        /*"--vgdb-error=1",*/ "--leak-check=full", "--tool=memcheck", "--show-leak-kinds=all", "--max-stackframe=115062830400", "./SVRDaemon", "--config", "daemon.config", NULL);
@@ -263,64 +252,61 @@ void TestEnv::run_daemon_nowait()
 }
 
 
-
 /******************************************************************************/
 
 
 struct diagnostic_interface_alpha::diagnostic_interface_impl
 {
     static std::string const mine_pipe_name, their_pipe_name;
-    
+
     std::fstream mine_pipe;
     std::fstream their_pipe;
-    
+
     diagnostic_interface_impl()
     {
         std::remove(mine_pipe_name.c_str());
-        if(mkfifo(mine_pipe_name.c_str(), 0777) != 0)
+        if (mkfifo(mine_pipe_name.c_str(), 0777) != 0)
             throw std::runtime_error("Cannot create the FIFO: " + mine_pipe_name);
-        
+
         std::remove(their_pipe_name.c_str());
-        if(mkfifo(their_pipe_name.c_str(), 0777) != 0)
+        if (mkfifo(their_pipe_name.c_str(), 0777) != 0)
             throw std::runtime_error("Cannot create the FIFO: " + their_pipe_name);
 
         mine_pipe.open(mine_pipe_name.c_str());
-        
+
         mine_pipe << "M: start session" << std::endl;
     }
-    
+
     ~diagnostic_interface_impl()
     {
         mine_pipe << "M: close session" << std::endl;
         mine_pipe.close();
         std::remove(mine_pipe_name.c_str());
     }
-    
+
     void finish_construction()
     {
         do {
             their_pipe.clear();
             their_pipe.open(their_pipe_name.c_str());
-        }
-        while(their_pipe.bad());
+        } while (their_pipe.bad());
     }
-    
+
     void wait_iteration_finished()
     {
         std::string command;
-        while(command.empty())
-        {
-            if(their_pipe.eof())
+        while (command.empty()) {
+            if (their_pipe.eof())
                 their_pipe.clear();
-            
+
             std::getline(their_pipe, command);
-            if(command == "S: iteration finished")
+            if (command == "S: iteration finished")
                 return;
             command.clear();
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
     }
-    
+
     void trigger_next_iteration()
     {
         mine_pipe << "M: proceed to next iteration" << std::endl;
@@ -328,12 +314,12 @@ struct diagnostic_interface_alpha::diagnostic_interface_impl
     }
 };
 
-std::string const diagnostic_interface_alpha::diagnostic_interface_impl::mine_pipe_name =  "/tmp/SVRDaemon_di_alpha";
-std::string const diagnostic_interface_alpha::diagnostic_interface_impl::their_pipe_name = "/tmp/SVRDaemon_di_zwei";
+const std::string diagnostic_interface_alpha::diagnostic_interface_impl::mine_pipe_name = "/tmp/SVRDaemon_di_alpha";
+const std::string diagnostic_interface_alpha::diagnostic_interface_impl::their_pipe_name = "/tmp/SVRDaemon_di_zwei";
 
 
 diagnostic_interface_alpha::diagnostic_interface_alpha()
-: impl (*new diagnostic_interface_impl())
+    : impl(*new diagnostic_interface_impl())
 {
 }
 
@@ -343,18 +329,17 @@ diagnostic_interface_alpha::~diagnostic_interface_alpha()
 }
 
 
-void diagnostic_interface_alpha::finish_construction()
+void diagnostic_interface_alpha::finish_construction() const
 {
     impl.finish_construction();
 }
 
-void diagnostic_interface_alpha::wait_iteration_finished()
+void diagnostic_interface_alpha::wait_iteration_finished() const
 {
     impl.wait_iteration_finished();
 }
 
-void diagnostic_interface_alpha::trigger_next_iteration()
+void diagnostic_interface_alpha::trigger_next_iteration() const
 {
     impl.trigger_next_iteration();
 }
-

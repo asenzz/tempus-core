@@ -1,6 +1,6 @@
 #include "include/DaoTestFixture.h"
-
-#include <model/User.hpp>
+#include "UserService.hpp"
+#include "model/User.hpp"
 
 using svr::datamodel::User;
 

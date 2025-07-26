@@ -9,6 +9,8 @@
 #include "util/time_utils.hpp"
 #include "appcontext.hpp"
 #include "DaemonFacade.hpp"
+#include "InputQueueService.hpp"
+#include "RequestService.hpp"
 
 namespace svr::daemon {
 DaemonFacade::DaemonFacade() : loop_interval(PROPS.get_loop_interval()),
@@ -99,7 +101,7 @@ void DaemonFacade::save_queues_callback()
     }
 }
 
-void DaemonFacade::process_streams()
+void DaemonFacade::process_streams() // TODO Finish him!
 {
     const auto timenau = bpt::second_clock::local_time();
     const auto tables = streaming_messages_protocol::get().receive_queues_data(timenau);
@@ -175,9 +177,10 @@ void DaemonFacade::start_loop()
             try {
                 boost::unordered_flat_map<bigint, std::deque<datamodel::MultivalRequest_ptr> > user_requests;
                 for (const auto &p_user: dsu.users)
-                    user_requests[p_user->get_id()] = context::AppContext::get().request_service.get_active_multival_requests(*p_user, dataset);
+                    user_requests[p_user->get_id()] = APP.request_service.get_active_multival_requests(*p_user, dataset);
                 PROFILE_INFO(business::DatasetService::process(*dsu.p_dataset), "Process dataset");
-                for (const auto &p_user: dsu.users) PROFILE_INFO(business::DatasetService::process_requests(*p_user, *dsu.p_dataset, user_requests[p_user->get_id()], nullptr),
+                for (const auto &p_user: dsu.users)
+                    PROFILE_INFO(business::DatasetService::process_requests(*p_user, *dsu.p_dataset, user_requests[p_user->get_id()], nullptr),
                                                                  "Process multival requests " << p_user->get_user_name());
             } catch (const common::bad_model &ex) {
                 LOG4_ERROR("Bad model while processing dataset " << dsu.p_dataset->get_id() << " " << dsu.p_dataset->get_dataset_name()

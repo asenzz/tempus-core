@@ -1,14 +1,12 @@
-#include "FixSubscription.hpp"
-#include "model/InputQueue.hpp"
-#include "appcontext.hpp"
-
 #include <quickfix/fix44/MarketDataRequest.h>
 #include <quickfix/fix44/MarketDataSnapshotFullRefresh.h>
 #include <quickfix/Session.h>
 #include <ios>
-
-#include <common/logging.hpp>
-#include <model/InputQueue.hpp>
+#include "FixSubscription.hpp"
+#include "model/InputQueue.hpp"
+#include "appcontext.hpp"
+#include "common/logging.hpp"
+#include "InputQueueService.hpp"
 
 namespace svr {
 namespace fix {

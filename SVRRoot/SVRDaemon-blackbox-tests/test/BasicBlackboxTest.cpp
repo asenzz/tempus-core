@@ -1,13 +1,13 @@
-#include "include/DaoTestFixture.h"
 #include <memory>
 
-#include <model/User.hpp>
-#include <model/Request.hpp>
-#include <model/Dataset.hpp>
-#include <model/InputQueue.hpp>
+#include "RequestService.hpp"
+#include "include/DaoTestFixture.h"
+#include "model/User.hpp"
+#include "model/Request.hpp"
+#include "model/Dataset.hpp"
+#include "model/InputQueue.hpp"
 
 using namespace svr;
-using datamodel::MultivalRequest;
 
 TEST_F(DaoTestFixture, BasicWhiteboxTest)
 {
@@ -17,7 +17,7 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
     // 2017-05-05 06:20:00     2017-05-05 13:20:55     20       1.09573000000000        1.09574000000000        1.09564000000000        1.09571000000000
 
     std::string const default_user_name("svrwave");
-    bigint const default_dataset_id = 100;
+    constexpr bigint default_dataset_id = 100;
     bpt::ptime const nw = bpt::second_clock::local_time();
     bpt::ptime const default_request_time = bpt::from_iso_string("20170503T1808000");
     bpt::time_duration const default_resolution = bpt::seconds(60);
@@ -25,11 +25,9 @@ TEST_F(DaoTestFixture, BasicWhiteboxTest)
     if(DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::full || DaoTestFixture::DoTestPart == DaoTestFixture::test_completeness::first_half)
     {
 
-        datamodel::MultivalRequest_ptr request = datamodel::MultivalRequest_ptr( new
-            MultivalRequest(bigint(0), default_user_name, default_dataset_id, nw
-            , default_request_time, default_request_time + default_resolution * 15, default_resolution
-            , "{open,high,low,close}")
-        );
+        auto request = std::make_shared<datamodel::MultivalRequest>(bigint(0), default_user_name, default_dataset_id, nw
+                                                                                              , default_request_time, default_request_time + default_resolution * 15, default_resolution
+                                                                                              , "{open,high,low,close}");
 
         aci.request_service.save(request);
 

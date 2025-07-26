@@ -172,9 +172,9 @@ __global__ void G_quantise_features(
 }
 
 // TODO Align quantisation per column
-void quantise_features(CPTRd decon, CPTR(t_feat_params) feat_params,
-                       const uint32_t start_row, const uint32_t n_rows_chunk, const uint32_t n_rows, const uint32_t n_feat_rows,
-                       const uint16_t level, const uint32_t n_cols_coef_, const uint32_t n_cols_coef, const uint16_t quantise, RPTR(double) p_features)
+void quantise_features(
+    CPTRd decon, CPTR(t_feat_params) feat_params, const uint32_t start_row, const uint32_t n_rows_chunk, const uint32_t n_rows, const uint32_t n_feat_rows, const uint16_t level,
+    const uint32_t n_cols_coef_, const uint32_t n_cols_coef, const uint16_t quantise, RPTR(double) p_features)
 {
     CTX4_CUSTREAM;
     const auto end_row = start_row + n_rows_chunk - 1;

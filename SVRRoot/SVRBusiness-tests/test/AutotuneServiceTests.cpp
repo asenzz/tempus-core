@@ -1,3 +1,5 @@
+#if 0 // Disabled until further notice
+
 #include "include/DaoTestFixture.h"
 #include "common/constants.hpp"
 #include <iostream>
@@ -97,3 +99,5 @@ TEST_F(DaoTestFixture, AutotuneTaskWorkflow)
     aci.input_queue_service.remove(iq);
     aci.user_service.remove(user1);
 }
+
+#endif

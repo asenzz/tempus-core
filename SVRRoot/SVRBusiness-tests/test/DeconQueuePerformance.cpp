@@ -1,9 +1,13 @@
-#include "include/DaoTestFixture.h"
+#include "DatasetService.hpp"
+#include "DeconQueueService.hpp"
+#include "InputQueueService.hpp"
+#include "UserService.hpp"
+#include "model/Dataset.hpp"
+#include "model/DeconQueue.hpp"
+#include "model/InputQueue.hpp"
+#include "model/User.hpp"
 #include "common/constants.hpp"
-#include <model/User.hpp>
-#include <model/InputQueue.hpp>
-#include <model/DeconQueue.hpp>
-#include <model/Dataset.hpp>
+#include "include/DaoTestFixture.h"
 
 using namespace svr;
 
@@ -27,14 +31,14 @@ TEST_F(DaoTestFixture, DQSavePerfTests)
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    size_t const m = 200;
-    size_t const n = 5000;
+    size_t constexpr m = 200;
+    size_t constexpr n = 5000;
 
     duration<double> all_tests_time{0};
 
     for(size_t j = 0UL; j < m; ++j)
     {
-        datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
+        auto dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
         bpt::ptime nw = bpt::second_clock::local_time();
 

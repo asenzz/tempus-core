@@ -1,7 +1,6 @@
-#include "TestSuite.hpp"
 #include <gtest/gtest.h>
 #include <boost/program_options.hpp>
-
+#include "TestSuite.hpp"
 
 bool DoPerformanceTests = false;
 

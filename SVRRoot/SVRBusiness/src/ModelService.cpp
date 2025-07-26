@@ -818,15 +818,15 @@ void ModelService::tune_features(
 #ifdef EMO_DIFF
     const uint32_t coef_lag_ = coef_lag + 1;
 #endif
-    const uint16_t levels = adjacent_levels.size();
+    const uint16_t n_adj_levels = adjacent_levels.size();
     const uint16_t n_queues = feat_queues.size();
-    const uint16_t levels_queues = levels * n_queues;
-    arma::vec best_score(levels_queues, arma::fill::value(std::numeric_limits<double>::infinity()));
+    const uint16_t n_levels_queues = n_adj_levels * n_queues;
+    arma::vec best_score(n_levels_queues, arma::fill::value(std::numeric_limits<double>::infinity()));
     datamodel::t_feature_mechanics fm{
-        {levels_queues, ARMA_DEFAULT_FILL},
-        {levels_queues * lag, ARMA_DEFAULT_FILL},
-        std::deque<arma::uvec>(levels_queues),
-        {levels_queues * lag, ARMA_DEFAULT_FILL}
+        {n_levels_queues, ARMA_DEFAULT_FILL},
+        {n_levels_queues * lag, ARMA_DEFAULT_FILL},
+        std::deque<arma::uvec>(n_levels_queues),
+        {n_levels_queues * lag, ARMA_DEFAULT_FILL}
     };
 
     const auto horizon_duration = main_queue_resolution * PROPS.get_prediction_horizon();
@@ -844,7 +844,7 @@ void ModelService::tune_features(
     const auto latest_label_horizon = (**max_it).get_value_time() - horizon_duration;
     const auto coef_lag_max_q = coef_lag_ * get_max_quantisation();
     LOG4_TRACE("Preparing level " << params.get_decon_level() << ", " << n_rows << " rows, main range from " << earliest_label_horizon << " until " << latest_label_horizon <<
-        ", lag " << lag << ", " << n_queues << " queues, " << levels << " levels, stripe period " << stripe_period << ", max quant " <<
+        ", lag " << lag << ", " << n_queues << " queues, " << n_adj_levels << " levels, stripe period " << stripe_period << ", max quant " <<
         get_max_quantisation() << ", coef lag " << coef_lag_);
 
     std::deque<uint32_t> chunk_len_quantise(n_queues), in_rows(n_queues);
@@ -855,7 +855,7 @@ void ModelService::tune_features(
 #pragma omp parallel default(shared) ADJ_THREADS(gpu_handler_4.get_max_gpu_threads())
 #pragma omp single
     {
-        OMP_TASKLOOP_1(firstprivate(n_rows, levels))
+        OMP_TASKLOOP_1(firstprivate(n_rows, n_adj_levels))
 #else
 #undef OMP_TASKLOOP_1
 #undef OMP_TASKLOOP_
@@ -872,19 +872,20 @@ void ModelService::tune_features(
                 n_rows * coef_lag_ * sizeof(double) + in_rows[qix] * sizeof(double) + 2 * n_rows * sizeof(uint32_t) + in_rows[qix] * sizeof(uint32_t);
         const uint16_t n_chunks_quantise = cdiv(quantise_features_size, max_gpu_chunk_size);
         chunk_len_quantise[qix] = cdiv(n_rows, n_chunks_quantise);
-        decon[qix].set_size(in_rows[qix], levels);
+        decon[qix].set_size(in_rows[qix], n_adj_levels);
         feat_params[qix].resize(n_rows);
-        OMP_TASKLOOP_(in_rows[qix] * levels, SSIMD firstprivate(levels, start_offset, qix) collapse(2))
+        OMP_TASKLOOP_(in_rows[qix] * n_adj_levels, SSIMD firstprivate(start_offset, qix) collapse(2))
         for (uint32_t r = 0; r < in_rows[qix]; ++r)
-            for (uint16_t l = 0; l < levels; ++l)
+            for (uint16_t l = 0; l < n_adj_levels; ++l)
                 decon[qix](r, l) = p_queue->at(start_offset + r)->at(adjacent_levels ^ l);
         OMP_TASKLOOP_(n_rows, SSIMD firstprivate(n_rows))
         for (uint32_t r = 0; r < n_rows; ++r)
             feat_params[qix][r].ix_end = (lower_bound_before(*p_queue, label_times[r]->get_value_time() - horizon_duration) - p_queue->cbegin()) - start_offset;
-        OMP_TASKLOOP_1(firstprivate(levels, qix))
-        for (DTYPE(levels) adj_ix = 0; adj_ix < levels; ++adj_ix) {
+        OMP_TASKLOOP_1(firstprivate(n_adj_levels, qix))
+        for (DTYPE(n_adj_levels) adj_ix = 0; adj_ix < n_adj_levels; ++adj_ix) {
             tbb::mutex ins_l;
-            const auto adj_ix_q = adj_ix + qix * levels;
+            const auto adj_level = adjacent_levels ^ adj_ix;
+            const auto adj_ix_q = adj_ix + qix * n_adj_levels;
             const auto adj_ix_q_1 = adj_ix_q + 1;
             const std::deque<uint32_t> &quantisations = get_quantisations();
             OMP_TASKLOOP_(quantisations.size(), firstprivate(n_rows, lag, coef_lag, adj_ix_q, adj_ix_q_1, qix))
@@ -899,7 +900,7 @@ void ModelService::tune_features(
                 OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, quantise, coef_lag_, coef_lag))
                 for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix])
                     PROFILE_INFO(quantise_features(
-                                decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i, n_rows, in_rows[qix], adj_ix,
+                                decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i, n_rows, in_rows[qix], adj_level,
                                 coef_lag_, coef_lag, quantise, features.memptr()),
                             "Quantise features " << chunk_len_quantise[qix] << ", quantise " << quantise);
                 RELEASE_CONT(feat_params_qix_qt);
@@ -918,7 +919,7 @@ void ModelService::tune_features(
                 const tbb::mutex::scoped_lock lk(ins_l);
                 if (score < best_score[adj_ix_q]) {
                     LOG4_DEBUG("New best score " << score << ", previous best score " << best_score[adj_ix_q] << ", improvement " << common::imprv(score, best_score[adj_ix_q])
-                        << "pc, quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ", lag " << lag << ", coef lag "
+                        << "pc, quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ":" << adj_level << ", lag " << lag << ", coef lag "
                         << coef_lag);
                     best_score[adj_ix_q] = score;
                     fm.quantization[adj_ix_q] = quantise;
@@ -938,7 +939,7 @@ void ModelService::tune_features(
 #endif
     params.set_feature_mechanics(fm);
 
-    do_features(out_features, n_rows, lag, coef_lag, coef_lag_, levels, n_queues, fm, stripe_period, chunk_len_quantise, in_rows, decon, feat_params);
+    do_features(out_features, n_rows, lag, coef_lag, coef_lag_, fm, stripe_period, chunk_len_quantise, in_rows, decon, feat_params, adjacent_levels);
 
     LOG4_END();
 }
@@ -948,28 +949,31 @@ void ModelService::tune_features(
 #endif
 
 void ModelService::do_features(
-    arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels,
-    const uint16_t n_queues, const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period,
+    arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_,
+    const datamodel::t_feature_mechanics &fm, const boost::posix_time::time_duration &stripe_period,
     const std::deque<uint32_t> &chunk_len_quantise, const std::deque<uint32_t> &in_rows, const std::deque<arma::mat> &decon,
-    const std::deque<std::vector<t_feat_params> > &feat_params)
+    const std::deque<std::vector<t_feat_params> > &feat_params, const std::set<uint16_t> &adjacent_levels)
 {
-    const auto levels_lag = levels * lag;
+    const auto n_levels = adjacent_levels.size();
+    const auto n_queues = feat_params.size();
+    const auto levels_lag = n_levels * lag;
     const auto feature_cols = levels_lag * n_queues;
     const auto &feat_params_f = feat_params.front();
     if (out_features.n_rows != n_rows || out_features.n_cols != feature_cols) out_features.set_size(n_rows, feature_cols);
-    LOG4_TRACE("Preparing features " << n_rows << "x" << feature_cols << ", lag " << lag << ", coef lag " << coef_lag << ", levels " << levels << ", queues " << n_queues << ", decon queue "
+    LOG4_TRACE("Preparing features " << n_rows << "x" << feature_cols << ", lag " << lag << ", coef lag " << coef_lag << ", levels " << n_levels << ", queues " << n_queues << ", decon queue "
         << common::present(decon.front()) << ", feat params " << feat_params_f.size() << ", feat params ix_end " << feat_params_f.front().ix_end << ", stripe period " << stripe_period <<
         ", quantisation " << fm.quantization[0] << ", stretches " << common::present(fm.stretches) << ", shifts " << common::present(fm.shifts));
 #ifdef NDEBUG
-#pragma omp parallel num_threads(C_n_cpu)
+#pragma omp parallel ADJ_THREADS(n_levels * n_queues * n_rows)
 #pragma omp single
 #endif
     {
         OMP_TASKLOOP_1(firstprivate(levels_lag))
         for (DTYPE(n_queues) qix = 0; qix < n_queues; ++qix) {
-            OMP_TASKLOOP_1(firstprivate(lag, coef_lag, qix, levels))
-            for (DTYPE(levels) adj_ix = 0; adj_ix < levels; ++adj_ix) {
-                const auto adj_ix_q = adj_ix + qix * levels;
+            OMP_TASKLOOP_1(firstprivate(lag, coef_lag, qix, n_levels))
+            for (DTYPE(n_levels) adj_ix = 0; adj_ix < n_levels; ++adj_ix) {
+                const auto adj_level = adjacent_levels ^ adj_ix;
+                const auto adj_ix_q = adj_ix + qix * n_levels;
                 const auto adj_ix_q_lag = adj_ix_q * lag;
                 auto feat_params_qix_qt = feat_params[qix];
                 const auto quantise = fm.quantization[adj_ix_q];
@@ -978,9 +982,9 @@ void ModelService::do_features(
                 for (auto &f: feat_params_qix_qt) f.ix_start = f.ix_end - coef_lag_q + 1;
                 arma::mat level_features(n_rows, coef_lag, ARMA_DEFAULT_FILL);
                 OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, coef_lag_, coef_lag))
-                for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix]) PROFILE_INFO(
+                for (DTYPE(n_rows) i = 0; i < n_rows; i += chunk_len_quantise[qix]) PROFILE_INFO(
                     quantise_features(decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i,
-                                        n_rows, in_rows[qix], adj_ix, coef_lag_, coef_lag, quantise, level_features.memptr()),
+                                        n_rows, in_rows[qix], adj_level, coef_lag_, coef_lag, quantise, level_features.memptr()),
                                                                                            "Prepare quantised features " << chunk_len_quantise[qix]);
                 level_features.shed_cols(fm.trims[adj_ix_q]);
                 out_features.cols(adj_ix_q_lag, adj_ix_q_lag + lag - 1) = level_features;
@@ -995,8 +999,8 @@ void ModelService::do_features(
 
 void
 ModelService::prepare_features(
-    arma::mat &out_features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const datamodel::SVRParameters &params,
-    const bpt::time_duration &max_gap, const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
+    arma::mat &out_features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const datamodel::SVRParameters &param,
+    const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
 {
     LOG4_BEGIN();
 
@@ -1005,31 +1009,31 @@ ModelService::prepare_features(
     const auto latest_label_horizon = label_times.back()->get_value_time() - horizon_duration;
 
     const uint32_t n_rows = label_times.size();
-    const auto lag = params.get_lag_count();
-    const auto adjacent_levels = params.get_adjacent_levels();
+    const auto lag = param.get_lag_count();
+    const auto &adjacent_levels = param.get_adjacent_levels();
     const uint32_t coef_lag = PROPS.get_lag_multiplier() * lag;
 #ifdef EMO_DIFF
     const auto coef_lag_ = coef_lag + 1;
 #else
 #define coef_lag_ coef_lag
 #endif
-    const uint16_t levels = adjacent_levels.size();
+    const uint16_t n_levels = adjacent_levels.size();
     const uint16_t n_queues = feat_queues.size();
-    arma::vec best_score(levels, arma::fill::value(std::numeric_limits<double>::infinity()));
+    arma::vec best_score(n_levels, arma::fill::value(std::numeric_limits<double>::infinity()));
     const auto stripe_period = resolution_aux * coef_lag_;
     const auto coef_lag_max_q = coef_lag_ * get_max_quantisation();
-    LOG4_TRACE("Preparing level " << params.get_decon_level() << ", " << n_rows << " rows, main range from " << earliest_label_horizon << " until " << latest_label_horizon <<
-        ", lag " << lag << ", " << n_queues << " queues, " << levels << " levels, stripe period " << stripe_period);
+    LOG4_TRACE("Preparing level " << param.get_decon_level() << ", " << n_rows << " rows, main range from " << earliest_label_horizon << " until " << latest_label_horizon <<
+        ", lag " << lag << ", " << n_queues << " queues, " << n_levels << " levels, stripe period " << stripe_period);
 
     std::deque<uint32_t> chunk_len_quantise(n_queues), in_rows(n_queues);
     std::deque<arma::mat> decon(n_queues);
     std::deque<std::vector<t_feat_params> > feat_params(n_queues);
-    const auto &fm = params.get_feature_mechanics();
+    const auto &fm = param.get_feature_mechanics();
     const auto max_gpu_data_chunk_size = common::gpu_handler_4::get().get_max_gpu_data_chunk_size();
-#pragma omp parallel default(shared) num_threads(common::gpu_handler_4::get().get_max_gpu_threads())
+#pragma omp parallel default(shared) ADJ_THREADS(std::min<uint32_t>(common::gpu_handler_4::get().get_max_gpu_threads(), n_queues * n_levels * n_rows))
 #pragma omp single
     {
-        OMP_TASKLOOP_1(firstprivate(n_rows, levels))
+        OMP_TASKLOOP_1(firstprivate(n_rows, n_levels))
         for (DTYPE(n_queues) qix = 0; qix < n_queues; ++qix) {
             const auto &p_queue = feat_queues[qix]; // TODO Multiple queues have different amount of samples, fix assumption they are same!
             const auto start_iter = lower_bound_before(std::as_const(*p_queue), earliest_label_horizon) - coef_lag_max_q;
@@ -1040,29 +1044,25 @@ ModelService::prepare_features(
             const uint32_t start_offset = start_iter - p_queue->cbegin();
             in_rows[qix] = last_iter - start_iter;
             const size_t quantise_features_size = n_rows * coef_lag_ * sizeof(double) + in_rows[qix] * sizeof(double) + (2 * n_rows + in_rows[qix]) * sizeof(uint32_t);
-            const uint16_t n_chunks_quantise = cdiv(quantise_features_size, max_gpu_data_chunk_size);
-            chunk_len_quantise[qix] = cdiv(n_rows, n_chunks_quantise);
-            decon[qix].set_size(in_rows[qix], levels);
+            const uint16_t n_chunks_quantise = cdivi(quantise_features_size, max_gpu_data_chunk_size);
+            chunk_len_quantise[qix] = cdivi(n_rows, n_chunks_quantise);
+            decon[qix].set_size(in_rows[qix], n_levels);
             feat_params[qix].resize(n_rows);
             LOG4_TRACE("Queue " << qix << ", start offset " << start_offset << ", in rows " << in_rows[qix] << ", quantise features size " << quantise_features_size <<
                 ", chunks " << n_chunks_quantise << ", chunk rows " << chunk_len_quantise[qix]);
-
-            OMP_TASKLOOP_(levels * in_rows[qix], firstprivate(levels, start_offset) SSIMD untied collapse(2))
-            for (uint32_t r = 0; r < in_rows[qix]; ++r)
-                for (uint16_t l = 0; l < levels; ++l)
+            OMP_TASKLOOP_(n_levels * in_rows[qix], firstprivate(n_levels, start_offset) SSIMD untied collapse(2))
+            for (DTYPE(in_rows)::value_type r = 0; r < in_rows[qix]; ++r)
+                for (DTYPE(n_levels) l = 0; l < n_levels; ++l)
                     decon[qix](r, l) = p_queue->at(start_offset + r)->at(adjacent_levels ^ l);
 
             OMP_TASKLOOP_(n_rows, SSIMD firstprivate(n_rows) untied)
-            for (uint32_t r = 0; r < n_rows; ++r)
+            for (DTYPE(n_rows) r = 0; r < n_rows; ++r)
                 feat_params[qix][r].ix_end = (lower_bound_before(*p_queue, label_times[r]->get_value_time() - horizon_duration) - p_queue->cbegin()) - start_offset;
         }
     }
 
-    const auto levels_lag = levels * lag;
-    const auto feature_cols = levels_lag * n_queues;
-    if (out_features.n_rows != n_rows || out_features.n_cols != feature_cols) out_features.set_size(n_rows, feature_cols);
-
-    do_features(out_features, n_rows, lag, coef_lag, coef_lag_, levels, n_queues, fm, stripe_period, chunk_len_quantise, in_rows, decon, feat_params);
+    if (const auto feature_cols = n_levels * lag * n_queues; out_features.n_rows != n_rows || out_features.n_cols != feature_cols) out_features.set_size(n_rows, feature_cols);
+    do_features(out_features, n_rows, lag, coef_lag, coef_lag_, fm, stripe_period, chunk_len_quantise, in_rows, decon, feat_params, adjacent_levels);
 
     LOG4_END();
 }

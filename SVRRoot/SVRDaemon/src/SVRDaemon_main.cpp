@@ -8,14 +8,17 @@ using namespace svr;
 
 void signal_handler(const int signum)
 {
-    LOG4_DEBUG("Interrupt signal (" << signum << ") received.");
-
-    exit(signum);
+    LOG4_DEBUG("Interrupt signal " << signum << " received.");
+    if (signum == SIGINT || signum == SIGABRT || signum == SIGTERM) {
+        LOG4_INFO("Daemon process is shutting down gracefully.");
+        exit(signum);
+    }
+    LOG4_ERROR("Received unexpected signal: " << signum);
 }
 
 std::string parse(const int argc, const char **argv)
 {
-    boost::program_options::options_description gen_desc = boost::program_options::options_description("Daemon options");
+    auto gen_desc = boost::program_options::options_description("Daemon options");
     gen_desc.add_options()
             ("help", "produce help message")
             ("config,c", boost::program_options::value<std::string>()->default_value("daemon.config"), "Path to file with SQL configuration for daemon");
@@ -28,7 +31,7 @@ std::string parse(const int argc, const char **argv)
         exit(0);
     }
     if (vm["config"].as<std::string>().empty())
-        THROW_EX_F(std::invalid_argument, "Empty path to config file.");
+        THROW_EX_FS(std::invalid_argument, "Empty path to config file.");
 
     context::AppContext::init_instance(vm["config"].as<std::string>().c_str());
     return vm["config"].as<std::string>();
@@ -36,12 +39,16 @@ std::string parse(const int argc, const char **argv)
 
 int main(const int argc, const char **argv)
 {
+/*
+#ifndef NDEBUG
+    mtrace();
+#endif
+*/
+
 #ifdef INTEGRATION_TEST
     LOG4_FATAL("Integration test build cannot be run in production.");
     exit(0xfd);
-#endif
-
-//    mtrace();
+#else
     (void) signal(SIGINT, signal_handler);
     (void) signal(SIGABRT, signal_handler);
     (void) signal(SIGTERM, signal_handler);
@@ -68,4 +75,5 @@ int main(const int argc, const char **argv)
     LOG4_INFO("Daemon process finishing");
 
     return rc;
+#endif
 }

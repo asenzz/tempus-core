@@ -46,7 +46,7 @@ struct Bar : Command
 
         svr::datamodel::MultivalRequest_ptr request = aci.request_service.get_latest_multival_request(*user, *dataset);
         if(!request)
-            throw std::runtime_error("Bar: cannot find the user's request. Make sure MT4 is started and requests for values.");
+            throw std::runtime_error("Bar: cannot find the user's request. Make sure MT is started and requests for values.");
 
         boost::posix_time::time_duration const resolution {request->resolution};
 

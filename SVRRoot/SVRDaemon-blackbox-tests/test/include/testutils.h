@@ -3,18 +3,14 @@
 
 #include <string>
 #include <boost/optional.hpp>
-#include <memory>
-
-using opt_string = boost::optional<std::string>;
 
 std::string exec(char const * cmd);
 std::string exec(char const * cmd, int & exit_code);
-
 bool erase_after(std::string & where, char what);
 
 struct TestEnv
 {
-    opt_string db_scripts_path;
+    boost::optional<std::string> db_scripts_path;
     bool dbInitialized;
     std::string dao_type;
 
@@ -28,8 +24,9 @@ struct TestEnv
 
     bool prepareSvrConfig(char const * dbName, std::string const & dao_type, int max_loop_count);
 
-    bool run_daemon();
-    void run_daemon_nowait();
+    static bool run_daemon();
+
+    static void run_daemon_nowait();
 
     static TestEnv& global_test_env();
 };
@@ -40,9 +37,9 @@ class diagnostic_interface_alpha
 public:
     diagnostic_interface_alpha();
     ~diagnostic_interface_alpha();
-    void finish_construction();
-    void wait_iteration_finished();
-    void trigger_next_iteration();
+    void finish_construction() const;
+    void wait_iteration_finished() const;
+    void trigger_next_iteration() const;
 private:
     struct diagnostic_interface_impl;
     diagnostic_interface_impl & impl;

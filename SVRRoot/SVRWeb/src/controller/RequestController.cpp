@@ -12,21 +12,14 @@
 #include "controller/RequestController.hpp"
 #include "controller/MainController.hpp"
 #include "appcontext.hpp"
+#include "RequestService.hpp"
 #include "DAO/RequestDAO.hpp"
 #include "model/Request.hpp"
 #include "model/Dataset.hpp"
 #include "util/validation_utils.hpp"
 
-using namespace svr::datamodel;
-using namespace svr::context;
-using namespace svr::common;
-using namespace bpt;
-using namespace std;
-using namespace cppcms;
-
 namespace svr {
 namespace web {
-
 void RequestView::makeMultivalRequest(cppcms::json::object data)
 {
     constexpr char user[] = DEFAULT_WEB_USER;
@@ -58,8 +51,8 @@ void RequestView::makeMultivalRequest(cppcms::json::object data)
     const auto &resolution_str = data["resolution"].str();
     const auto request_id = APP.request_service.make_request(user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str, value_columns);
     if (request_id < 1) {
-        const string msg = common::formatter() << "Failed making forecast request " << user << ", " << dataset_id_str << ", " << value_time_start_str << ", " << value_time_end_str
-                                               << ", " << resolution_str << " " << value_columns;
+        const std::string msg = common::formatter() << "Failed making forecast request " << user << ", " << dataset_id_str << ", " << value_time_start_str << ", " << value_time_end_str
+                                << ", " << resolution_str << " " << value_columns;
         LOG4_ERROR(msg);
         return_error(msg);
         return;
@@ -118,12 +111,11 @@ void RequestView::getMultivalResults(json::object data)
     const auto &resolution_str = data["resolution"].str();
     const auto &value_time_start_str = data["value_time_start"].str();
     const auto &value_time_end_str = data["value_time_end"].str();
-    const auto responses = AppContext::get().request_service.get_multival_results(
-            user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str);
+    const auto responses = APP.request_service.get_multival_results(user, dataset_id_str, value_time_start_str, value_time_end_str, resolution_str);
     if (responses.empty()) {
         const std::string error =
                 common::formatter() << "Couldn't find any responses for user " << user << ", dataset " << dataset_id_str << ", starting " << value_time_start_str <<
-                                    ", until " << value_time_end_str << ", resolution " << resolution_str;
+                ", until " << value_time_end_str << ", resolution " << resolution_str;
         LOG4_WARN(error);
         return_error(error);
         return;
@@ -138,7 +130,7 @@ void RequestView::getMultivalResults(json::object data)
         });
         if (it_jsonarray == json_array.cend()) {
             json::value new_row;
-            new_row.set("tm", to_mql_date(aresponse->value_time));
+            new_row.set("tm", common::to_mql_date(aresponse->value_time));
             LOG4_TRACE("New row at time " << aresponse->value_time);
             it_jsonarray = json_array.insert(json_array.cend(), new_row);
         }
@@ -188,7 +180,5 @@ void RequestView::main(std::string string)
 {
     json_rpc_server::main(string);
 }
-
 }
 }
-

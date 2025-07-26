@@ -15,7 +15,8 @@ namespace web{
 class ConnectorLoginController : public cppcms::application{
 
     void handle_login_post();
-    void handle_login_get();
+
+    static void handle_login_get();
 
 
 public:

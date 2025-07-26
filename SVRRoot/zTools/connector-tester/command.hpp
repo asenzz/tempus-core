@@ -19,7 +19,7 @@ class CommandRegistry
 public:
     static CommandRegistry& inst();
 
-    Command & getCommand(std::string const & commandName);
+    Command & getCommand(std::string const & commandName) const;
 private:
     CommandRegistry();
     ~CommandRegistry();
