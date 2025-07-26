@@ -677,19 +677,21 @@ ModelService::prepare_labels(
     const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag)
 {
     LOG4_BEGIN();
+    assert(aux_data.distance() > 1);
     const auto req_rows = main_data.distance();
+    assert(req_rows > 0);
     const uint32_t coef_lag = PROPS.get_lag_multiplier() * lag;
 #ifdef EMO_DIFF
     const auto coef_lag_ = coef_lag + 1;
 #else
 #define coef_lag_ coef_lag
 #endif
-    LOG4_TRACE("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data.front()->get_value_time() <<
-                                " until " << main_data.back()->get_value_time() << ", main resolution " << resolution_main << ", aux resolution " << resolution_aux);
+    LOG4_TRACE("Preparing level " << level << ", training " << req_rows << " rows, main range from " << main_data.front()->get_value_time() << " until " << main_data.back()->get_value_time()
+        << ", main resolution " << resolution_main << ", aux resolution " << resolution_aux);
     const auto &label_duration = resolution_main;
     const auto horizon_duration = resolution_main * PROPS.get_prediction_horizon();
-    if (req_rows < 1 or main_data.get_container().empty())
-        LOG4_THROW("Main data level " << level << " is empty!");
+    const auto valid_start_drift = std::min(label_duration * PROPS.get_label_drift(), max_gap);
+    assert(main_data.get_container().size());
     const uint32_t label_len = resolution_main / resolution_aux;
 
     std::vector<t_label_ix> label_ixs;
@@ -714,7 +716,7 @@ ModelService::prepare_labels(
             continue;
         }
         const auto L_start_it = lower_bound_or_before(aux_data.cbegin(), aux_data.cend(), L_start_time);
-        if (L_start_it == aux_data.cend() || (**L_start_it).get_value_time() > L_start_time) {
+        if (L_start_it == aux_data.cend() || (**L_start_it).get_value_time() > L_start_time + valid_start_drift) {
             LOG4_TRACE("No aux data for time " << L_start_time);
             continue;
         }
@@ -725,7 +727,13 @@ ModelService::prepare_labels(
             LOG4_TRACE("No aux data for time " << L_start_time << " label ending at " << L_end_time);
             continue;
         }
-        auto F_end_it = lower_bound_before(L_start_it - aux_data.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : aux_data.cbegin(), L_start_it, L_start_time - horizon_duration);
+        const auto L_end_it_time = L_end_it == aux_data.cend() ? (**std::prev(L_end_it)).get_value_time() : (**L_end_it).get_value_time();
+        bpt::time_duration label_gap;
+        if ((label_gap = L_end_it_time - L_start_time) > max_gap) {
+            LOG4_TRACE("Label gap " << label_gap << " is larger than max gap " << max_gap << " for time " << L_start_time);
+            continue;
+        }
+        const auto F_end_it = lower_bound_before(L_start_it - aux_data.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : aux_data.cbegin(), L_start_it, L_start_time - horizon_duration);
         if (F_end_it == aux_data.cend() || F_end_it == aux_data.cbegin()) {
             LOG4_TRACE("No feature data for label at " << L_start_time);
             continue;
@@ -799,7 +807,7 @@ ModelService::prepare_labels(
 
 void ModelService::tune_features(
     arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
-    const bpt::time_duration &max_gap, const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
+    const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
 {
     LOG4_BEGIN();
     assert(labels.n_rows == label_times.size());

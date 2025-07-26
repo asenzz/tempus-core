@@ -704,6 +704,8 @@ oemd_coefficients_search::evaluate_mask(
     const uint32_t mask_offset = siftings * mask_len + prev_masks_len;
     const auto d_imf_len = workspace.size() - mask_offset;
     const auto d_imf = d_workspace + mask_offset;
+    double stub_sf, stub_dc;
+    // business::ScalingFactorService::cu_scale_calc_I(d_imf, d_imf_len, stub_sf, stub_dc, custream);
 #if 1 // Component power
     const auto meanabs_imf = std::abs(rel_pow_w) > std::numeric_limits<DTYPE(rel_pow_w) >::epsilon() ? solvers::meanabs(d_imf, d_imf_len, custream) : 1;
     if (!std::isnormal(meanabs_imf)) {
@@ -741,7 +743,6 @@ oemd_coefficients_search::evaluate_mask(
         RELEASE_CONT(ix_end_F);
         G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
             d_imf, d_labels, validate_rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
-        double stub_sf, stub_dc;
         business::ScalingFactorService::cu_scale_calc_I(d_labels, validate_rows, stub_sf, stub_dc, custream);
         cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
         cu_errchk(cudaFreeAsync(d_ix_end_F, custream));

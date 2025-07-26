@@ -1,10 +1,10 @@
 #include <armadillo>
+#include "common/parallelism.hpp"
 #include "common/constants.hpp"
 #include "util/time_utils.hpp"
 #include "util/math_utils.hpp"
 #include "model/DataRow.hpp"
-#include "appcontext.hpp"
-#include "common/parallelism.hpp"
+#include "model/SVRParameters.hpp"
 
 namespace svr {
 namespace datamodel {

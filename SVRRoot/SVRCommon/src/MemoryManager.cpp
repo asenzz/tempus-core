@@ -1,16 +1,17 @@
-#include <util/MemoryManager.hpp>
-#include "common/gpu_handler.hpp"
-#include <common/logging.hpp>
 #include <chrono>
 #include <thread>
 #include <cstdio>
-#include <unistd.h>
-#include <ftw.h>
 #include <ios>
 #include <string>
 #include <memory>
 #include <stdexcept>
 #include <array>
+#include <unistd.h>
+#include <ftw.h>
+#include "common/parallelism.hpp"
+#include "common/gpu_handler.hpp"
+#include "common/logging.hpp"
+#include "util/MemoryManager.hpp"
 
 namespace svr {
 namespace common {
@@ -22,7 +23,7 @@ struct pclose_wrapper {
     }
 };
 
-std::string exec(const char *cmd)
+std::string exec(CRPTR(char) cmd)
 {
     std::array<char, BUFSIZ> buffer;
     std::string result;

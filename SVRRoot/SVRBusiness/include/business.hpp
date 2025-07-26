@@ -15,3 +15,4 @@
 #include "IQScalingFactorService.hpp"
 #include "DQScalingFactorService.hpp"
 #include "SVRParametersService.hpp"
+#include "WScalingFactorService.hpp"

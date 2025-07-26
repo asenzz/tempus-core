@@ -1,12 +1,12 @@
 #pragma once
 
 #include <set>
-#include "model/Entity.hpp"
 #include "common/constants.hpp"
 #include "relations/ensemble_relation.hpp"
 #include "SVRParametersService.hpp"
 #include "SVRParameters.hpp"
 #include "DataRow.hpp"
+#include "Entity.hpp"
 
 namespace svr {
 namespace datamodel {

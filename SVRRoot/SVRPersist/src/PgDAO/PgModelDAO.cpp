@@ -2,6 +2,7 @@
 #include "PgDQScalingFactorDAO.hpp"
 #include "DAO/ModelRowMapper.hpp"
 #include "DAO/DataSource.hpp"
+#include "DQScalingFactorService.hpp"
 #include "appcontext.hpp"
 
 namespace svr {

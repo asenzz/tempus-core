@@ -18,6 +18,7 @@
 #include <hdbscan/logger.h>
 #include "pprune.hpp"
 #include "DQScalingFactorService.hpp"
+#include "SVRParametersService.hpp"
 #include "onlinesvr.hpp"
 #include "appcontext.hpp"
 #include "recombine_parameters.cuh"

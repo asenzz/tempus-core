@@ -40,6 +40,9 @@ View definition:
  */
 
 #include "common/defines.h"
+#include "InputQueueService.hpp"
+#include "DeconQueueService.hpp"
+#include "RequestService.hpp"
 
 #ifdef INTEGRATION_TEST
 
@@ -89,7 +92,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const std::string C_test_input_name = "q_svrwave_test_xauusd_avg_";
     const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
     const std::string C_test_aux_input_table_name(C_test_input_name + "1");
-    constexpr uint16_t C_test_levels = 4; // 4 spectral levels
+    constexpr uint16_t C_test_levels = 1; // Spectral levels
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
     const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);

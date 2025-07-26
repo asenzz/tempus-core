@@ -1004,91 +1004,23 @@ template<const uint32_t block_size, typename T> __device__ __forceinline__ void 
 template<const uint32_t block_size> __global__ void
 G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sumabs, RPTR(double) d_result_minabs, const uint32_t n)
 {
-    __shared__ double sumabs[block_size];
-    __shared__ double minabs[block_size];
-    auto i = blockIdx.x * block_size + tid_;
-    if (i < n) {
+    CU_STRIDED_FOR_i(n) {
         d_input[i] = fabs(d_input[i]);
-        sumabs[tid_] = d_input[i];
-        minabs[tid_] = d_input[i];
-        const auto stride1 = blockDim.x * gridDim.x;
-        UNROLL()
-        for (i += stride1; i < n; i += stride1) {
-            d_input[i] = fabs(d_input[i]);
-            sumabs[tid_] += d_input[i];
-            MINAS(minabs[tid_], d_input[i]);
-        }
-    } else {
-        sumabs[tid_] = 0;
-        minabs[tid_] = common::C_bad_validation;
+        atomicAdd(d_result_sumabs, d_input[i]);
+        atomicMin(d_result_minabs, d_input[i]);
     }
-
-    __syncthreads();
-    const auto sh_limit = _MIN(n, block_size);
-#define stride_reduce_minsum(block_low_)                        \
-        if (block_size >= block_low_) {                      \
-            constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid_ + stride2;          \
-            if (tid_ < stride2 && tid_stride2 < sh_limit) {   \
-                sumabs[tid_] += sumabs[tid_stride2];          \
-                MINAS(minabs[tid_], minabs[tid_stride2]);     \
-            }                                                \
-            __syncthreads();                                 \
-        }
-
-    stride_reduce_minsum(1024);
-    stride_reduce_minsum(512);
-    stride_reduce_minsum(256);
-    stride_reduce_minsum(128);
-    if (tid_ >= 32) return;
-    warp_reduce_minsum<block_size>(sumabs, minabs, tid_, sh_limit);
-    if (tid_) return;
-    atomicAdd(d_result_sumabs, *sumabs);
-    atomicMin(d_result_minabs, *minabs);
 }
 
 template<const uint32_t block_size> __global__ void
 G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sum, const uint32_t n)
 {
-    //    constexpr double C_error_threshold = 1e-8;
-    __shared__ double sumdata[block_size];
-    auto i = blockIdx.x * block_size + tid_;
-    if (i < n) {
+    CU_STRIDED_FOR_i(n) {
         d_input[i] = fabs(d_input[i]);
-        sumdata[tid_] = d_input[i];
-        // d_input[i] = 1. / _MAX(d_input[i], C_error_threshold);
-        const auto stride1 = blockDim.x * gridDim.x;
-        UNROLL()
-        for (i += stride1; i < n; i += stride1) {
-            d_input[i] = fabs(d_input[i]);
-            sumdata[tid_] += d_input[i];
-            // d_input[i] = 1. / _MAX(d_input[i], C_error_threshold);
-        }
-    } else
-        sumdata[tid_] = 0;
-
-    __syncthreads();
-    const auto sh_limit = _MIN(n, block_size);
-#define stride_reduce_sum(block_low_)                        \
-        if (block_size >= block_low_) {                      \
-            constexpr uint32_t stride2 = block_low_ / 2;     \
-            const auto tid_stride2 = tid_ + stride2;          \
-            if (tid_ < stride2 && tid_stride2 < sh_limit)     \
-                sumdata[tid_] += sumdata[tid_stride2];        \
-            __syncthreads();                                 \
-        }
-
-    stride_reduce_sum(1024);
-    stride_reduce_sum(512);
-    stride_reduce_sum(256);
-    stride_reduce_sum(128);
-    if (tid_ >= 32) return;
-    warp_reduce_sum<block_size>(sumdata, tid_, sh_limit);
-    if (tid_) return;
-    atomicAdd(d_result_sum, *sumdata);
+        atomicAdd(d_result_sum, d_input[i]);
+    }
 }
 
-// Inplace meanabs, and returns meanabs and minabs
+// Inplace abs, and returns minabs, meanabs
 std::pair<double, double> irwls_op1w(double *d_in, const uint32_t n, const cudaStream_t stm)
 {
     double sumabs, *d_sumabs = cucalloc<double>(stm), minabs = common::C_bad_validation, *d_minabs;
@@ -1098,18 +1030,18 @@ std::pair<double, double> irwls_op1w(double *d_in, const uint32_t n, const cudaS
     cufreecopy(&sumabs, d_sumabs, stm);
     cufreecopy(&minabs, d_minabs, stm);
     cu_errchk(cudaStreamSynchronize(stm));
-    return {sumabs / n, minabs}; // Return mean
+    return {sumabs / n, minabs};
 }
 
 
-// Inplace meanabs, and returns meanabs
+// Inplace abs, and returns sumabs
 double irwls_op1(double *const d_in, const uint32_t n, const cudaStream_t stm)
 {
     double sumabs, *d_sumabs = cucalloc<double>(stm);
     G_irwls_op1<common::C_cu_block_size><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_sumabs, n);
     cufreecopy(&sumabs, d_sumabs, stm);
     cu_errchk(cudaStreamSynchronize(stm));
-    return sumabs / n; // Return mean
+    return sumabs;
 }
 
 #else

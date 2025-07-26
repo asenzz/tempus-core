@@ -112,7 +112,7 @@ public:
 
     static void tune_features(
         arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
-        const bpt::time_duration &max_gap, const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
+        const bpt::time_duration &aux_queue_res, const bpt::time_duration &main_queue_resolution);
 
     static void do_features(
         arma::mat &out_features, const uint32_t n_rows, const uint32_t lag, const uint32_t coef_lag, const uint32_t coef_lag_, const uint16_t levels, const uint16_t n_queues,

@@ -11,6 +11,11 @@
 #endif
 #include "appcontext.hpp"
 #include "matrix_solver.hpp"
+#include "common/logging.hpp"
+#include "cuqrsolve.cuh"
+#include "util/math_utils.hpp"
+#include "onlinesvr.hpp"
+
 
 namespace svr {
 namespace solvers {

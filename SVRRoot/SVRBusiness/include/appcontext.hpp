@@ -1,9 +1,6 @@
 #pragma once
 
 #include <string>
-#include "common.hpp"
-#include "business.hpp"
-#include "WScalingFactorService.hpp"
 
 #define APP svr::context::AppContext::get()
 #define PROPS APP.app_properties
@@ -14,6 +11,24 @@
 namespace svr {
 namespace dao { class scoped_transaction_guard; }
 namespace common { class AppConfig; }
+namespace business {
+class UserService;
+class InputQueueService;
+class SVRParametersService;
+class ModelService;
+class DeconQueueService;
+class EnsembleService;
+class DatasetService;
+class RequestService;
+class AuthenticationProvider;
+class PredictionTaskService;
+class ScalingFactorsTaskService;
+class AutotuneTaskService;
+class DecrementTaskService;
+class IQScalingFactorService;
+class WScalingFactorService;
+class DQScalingFactorService;
+}
 
 namespace context {
 
@@ -36,8 +51,7 @@ class AppContext {
     AppContextImpl &p_impl;
 
 public:
-    static inline AppContext &get()
-    { return *p_instance; }
+    static AppContext &get();
 
     static void init_instance(const std::string &config_path, const bool use_threadsafe_dao = true);
 

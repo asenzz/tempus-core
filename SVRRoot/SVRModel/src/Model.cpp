@@ -1,6 +1,7 @@
 #include <utility>
 #include <atomic>
 #include "appcontext.hpp"
+#include "util/math_utils.hpp"
 #include "model/Model.hpp"
 #include "model/Ensemble.hpp"
 #include "onlinesvr.hpp"

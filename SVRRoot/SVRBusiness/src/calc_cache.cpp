@@ -4,11 +4,12 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <highwayhash/highwayhash.h>
 #include "common/types.hpp"
+#include "WScalingFactorService.hpp"
 #include "model/Dataset.hpp"
 #include "model/SVRParameters.hpp"
 #include "onlinesvr.hpp"
 #include "appcontext.hpp"
-#include "WScalingFactorService.hpp"
+#include "ModelService.hpp"
 #include "kernel_path.hpp"
 #include "kernel_factory.hpp"
 #include "common/compatibility.hpp"
@@ -138,9 +139,9 @@ std::tuple<mat_ptr, data_row_container_ptr, data_row_container_ptr> calc_cache::
 }
 
 std::tuple<mat_ptr, vec_ptr, data_row_container_ptr> calc_cache::get_labels(
-    const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
-    const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res,
-    const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution, const uint16_t lag)
+    const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
+    const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution,
+    const uint16_t lag)
 {
     LOG4_TRACE("Getting labels for " << column_name << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " << level << ", step " << step <<
         ", aux last values " << labels_aux.back()->to_string());
@@ -168,7 +169,7 @@ mat_ptr calc_cache::get_features(
         auto p_features = ptr<arma::mat>();
         if (needs_tuning) {
             PROFILE_INFO(
-                ModelService::tune_features(*p_features, labels, params, label_times, aux_decon_queues, max_lookback_time_gap, aux_resolution, main_resolution),
+                ModelService::tune_features(*p_features, labels, params, label_times, aux_decon_queues, aux_resolution, main_resolution),
                 "Tune features for " << params);
         } else PROFILE_INFO(
             ModelService::prepare_features(*p_features, label_times, aux_decon_queues, params, max_lookback_time_gap, aux_resolution, main_resolution),

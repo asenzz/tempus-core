@@ -268,6 +268,7 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
     oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);
     solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);
     oemd_masks_dir_ = get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir);
+    if (oemd_masks_dir_[oemd_masks_dir_.size() - 1] != '/') oemd_masks_dir_.append("/");
 }
 
 std::string AppConfig::get_oemd_masks_dir() const noexcept
@@ -277,17 +278,23 @@ std::string AppConfig::get_oemd_masks_dir() const noexcept
 
 int AppConfig::get_mpi_rank()
 {
-    int rank;
-    mpi_errchk(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
-    LOG4_DEBUG("Running on MPI rank " << rank);
+    static const auto rank = [] {
+        int r;
+        mpi_errchk(MPI_Comm_rank(MPI_COMM_WORLD, &r));
+        LOG4_DEBUG("Running on MPI rank " << r);
+        return r;
+    } ();
     return rank;
 }
 
 int AppConfig::get_mpi_size()
 {
-    int size;
-    mpi_errchk(MPI_Comm_size(MPI_COMM_WORLD, &size));
-    LOG4_DEBUG("Running with " << size << " MPI processes.");
+    static const auto size = [] {
+        int s;
+        mpi_errchk(MPI_Comm_size(MPI_COMM_WORLD, &s));
+        LOG4_DEBUG("Running with " << s << " MPI processes.");
+        return s;
+    } ();
     return size;
 }
 

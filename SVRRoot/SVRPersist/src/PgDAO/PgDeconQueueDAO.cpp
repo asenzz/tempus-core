@@ -2,7 +2,7 @@
 #include "PgDeconQueueDAO.hpp"
 #include "common/constants.hpp"
 #include "util/validation_utils.hpp"
-#include "util/string_utils.hpp"
+#include "DatasetService.hpp"
 #include "DAO/DataRowRowMapper.hpp"
 #include "DAO/DeconQueueRowMapper.hpp"
 #include "DAO/DataSource.hpp"

@@ -17,8 +17,7 @@ namespace svr {
 oemd_coefficients::oemd_coefficients() : siftings({}), masks({})
 {};
 
-oemd_coefficients::oemd_coefficients(
-        const std::deque<uint16_t> &siftings_, const std::deque <std::vector<double>> &mask_) : siftings(siftings_), masks(mask_)
+oemd_coefficients::oemd_coefficients(const std::deque<uint16_t> &siftings_, const std::deque <std::vector<double>> &mask_) : siftings(siftings_), masks(mask_)
 {}
 
 std::string oemd_coefficients::get_mask_file_name(const uint16_t ctr, const uint16_t level, const uint16_t level_count, const std::string &queue_name)

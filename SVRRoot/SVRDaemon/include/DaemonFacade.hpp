@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model/User.hpp"
+#include <unordered_set>
 #include "model/InputQueue.hpp"
 #include "model/Dataset.hpp"
 #include "streaming_messages_protocol.hpp"

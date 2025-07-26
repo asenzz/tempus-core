@@ -2,13 +2,13 @@
 // Created by zarko on 11/11/21.
 //
 
-//#define BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS 1 // Otherwise Valgrind crashes on init
 #include <armadillo>
 #include <boost/math/distributions/students_t.hpp>
 #include <execution>
 #include <mutex>
 #include <cmath>
 #include <vector>
+#include <mpi.h>
 #include <oneapi/tbb/blocked_range2d.h>
 #include <oneapi/tbb/spin_mutex.h>
 #include "model/SVRParameters.hpp"
@@ -69,12 +69,14 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
     t_omp_lock l2;
     const auto l_cols = p_labels->n_cols;
     const auto active_chunks = get_predict_chunks();
+    const auto n_chunks = active_chunks.size();
     const auto chunk_divisor = 1. / active_chunks.size();
-// #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers())
+    // #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers())
 // #pragma omp single
     {
+        const auto [start_chunk, end_chunk] = get_mpi_bounds(n_chunks);
         // OMP_TASKLOOP_1()
-        for (uint32_t ch = 0; ch < active_chunks.size(); ++ch) {
+        for (auto ch = start_chunk; ch < end_chunk; ++ch) {
             const auto chunk_ix = active_chunks[ch];
             const auto p_params = get_params_ptr(chunk_ix);
             assert(p_params);
@@ -112,6 +114,18 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
             l2.unset();
         }
     }
+
+    if (const auto world_size = PROPS.get_mpi_size(); world_size > 1) {
+        if (PROPS.get_mpi_rank()) {
+            mpi_errchk(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, nullptr, 0, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
+        } else {
+            std::vector<double> mpi_all_predictions(prediction.n_elem * world_size);
+            mpi_errchk(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, mpi_all_predictions.data(), prediction.n_elem, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
+            for (DTYPE(world_size) i = 0; i < world_size; ++i)
+                prediction += arma::mat(mpi_all_predictions.data() + i * prediction.n_elem, prediction.n_rows, prediction.n_cols, false, true);
+        }
+    }
+
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }

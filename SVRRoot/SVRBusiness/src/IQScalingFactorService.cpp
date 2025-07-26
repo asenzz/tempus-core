@@ -7,6 +7,7 @@
 #include "model/InputQueue.hpp"
 #include "model/DataRow.hpp"
 #include "IQScalingFactorService.hpp"
+#include "ModelService.hpp"
 #include "appcontext.hpp"
 
 

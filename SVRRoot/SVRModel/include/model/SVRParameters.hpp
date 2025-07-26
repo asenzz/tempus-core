@@ -9,6 +9,7 @@
 #include "common/logging.hpp"
 #include "common/serialization.hpp"
 #include "model/Entity.hpp"
+#include "model/SVRParameters.hpp"
 
 //#define SMO_EPSILON 1e-3
 

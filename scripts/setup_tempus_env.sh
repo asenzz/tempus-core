@@ -70,9 +70,6 @@ then
 	#exit 1
 fi
 
-if [ ! -d "../lib/oemd_fir_masks_xauusd_1s_backtest/" ]; then mkdir "../lib/oemd_fir_masks_xauusd_1s_backtest/"; fi
-if [ ! -d "../lib/oemd_fir_masks_xauusd_1s/" ]; then mkdir "../lib/oemd_fir_masks_xauusd_1s/"; fi
-
 NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Default thread pool size is ${NUM_THREADS} threads.${NC}\n\n"
 

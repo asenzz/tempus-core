@@ -15,6 +15,7 @@
 #include "common/gpu_handler.hpp"
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
+#include "DQScalingFactorService.hpp"
 #include "onlinesvr.hpp"
 #include "mat_solve_gpu.hpp"
 #include "cuqrsolve.cuh"

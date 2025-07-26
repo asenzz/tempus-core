@@ -1,6 +1,7 @@
 #pragma once
 
 #include <thread>
+#include <omp.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #include <oneapi/tbb/parallel_for.h>
@@ -194,5 +195,7 @@ public:
     void unset();
     ~t_omp_lock();
 };
+
+std::pair<uint32_t, uint32_t> get_mpi_bounds(uint32_t n_threads);
 
 }

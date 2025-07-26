@@ -8,7 +8,6 @@
 #include "model/Priority.hpp"
 #include "model/InputQueue.hpp"
 #include "model/IQScalingFactor.hpp"
-#include "model/DQScalingFactor.hpp"
 #include "relations/iq_relation.hpp"
 #include "spectral_transform.hpp"
 #include "calc_cache.hpp"

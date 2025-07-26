@@ -8,7 +8,8 @@
 #include "util/string_utils.hpp"
 #include "util/math_utils.hpp"
 #include "oemd_coefficient_search.hpp"
-
+#include "SVRParametersService.hpp"
+#include "DeconQueueService.hpp"
 
 namespace svr {
 namespace oemd {

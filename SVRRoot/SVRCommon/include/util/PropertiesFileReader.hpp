@@ -166,6 +166,8 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(float, oemd_freq_ceil, .25) // OEMD tuning frequency ceiling, [0..0.5]
 
+    CONFPROP(float, label_drift, .5)
+
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";
     static constexpr char STREAM_LOOP_INTERVAL[] = "STREAM_LOOP_INTERVAL_MS";
@@ -206,8 +208,7 @@ private: // TODO port properties below to use the CONFPROP macro
     bool self_request_;
     std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     bool daemonize_;
-    uint16_t num_quantisations_, quantisation_divisor_;
-    uint16_t oemd_tune_particles_, oemd_tune_iterations_;
+    uint16_t num_quantisations_, quantisation_divisor_, oemd_tune_particles_, oemd_tune_iterations_;
     float solve_iterations_coefficient_;
 
 public:

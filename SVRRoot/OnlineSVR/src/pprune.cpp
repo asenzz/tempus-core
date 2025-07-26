@@ -376,40 +376,37 @@ struct t_biteopt_prune
 
 void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
-    const auto rank = PROPS.get_mpi_rank();
-    const auto world_size = PROPS.get_mpi_size();
-    const auto start_particle = rank * n_particles / world_size;
-    const auto end_particle = rank == world_size - 1 ? n_particles : (rank + 1) * n_particles / world_size;
-    LOG4_DEBUG("PPrune BiteOpt, particles " << n_particles << ", start " << start_particle << ", end " << end_particle << ", rank " << rank << ", world size " << world_size);
+    LOG4_BEGIN();
 
+    const auto [start_particle, end_particle] = get_mpi_bounds(n_particles);
     auto p_particles = ptr<std::deque<t_calfun_data_ptr> >(n_particles);
     std::deque<std::deque<t_biteopt_prune> > biteopt_particle(n_particles, std::deque<t_biteopt_prune>(depth));
     tbb::task_arena tta(adj_threads(n_particles));
     tta.execute([&] {
         tbb_pfor_i__(start_particle, end_particle,
-            for (DTYPE(depth) d = 0; d < depth; ++d) {
-                auto &rnd = biteopt_particle[i][d].rnd;
-                auto &biteopt = biteopt_particle[i][d].biteopt;
-                auto &calfun_data = biteopt_particle[i][d].calfun_data;
-                const auto particle_index = i * depth + d;
-                calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, particle_index, this};
-                rnd = ptr<CBiteRnd>(std::pow(C_rand_disperse * particle_index, C_rand_disperse));
-                biteopt = otr<t_biteopt_cost>(calfun_data, bounds, max_population);
-                biteopt->init(*rnd, x0.colptr(i));
-            }
+                     for (DTYPE(depth) d = 0; d < depth; ++d) {
+                         auto &rnd = biteopt_particle[i][d].rnd;
+                         auto &biteopt = biteopt_particle[i][d].biteopt;
+                         auto &calfun_data = biteopt_particle[i][d].calfun_data;
+                         const auto particle_index = i * depth + d;
+                         calfun_data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, particle_index, this};
+                         rnd = ptr<CBiteRnd>(std::pow(C_rand_disperse * particle_index, C_rand_disperse));
+                         biteopt = otr<t_biteopt_cost>(calfun_data, bounds, max_population);
+                         biteopt->init(*rnd, x0.colptr(i));
+                     }
         )
     });
     for (DTYPE(iter) j = 0; j < iter; ++j) {
         PROFILE_TRACE(tta.execute([&] {
-            tbb_pfor_i__(start_particle, end_particle,
-                for (DTYPE(depth) d = 0; d < depth; ++d) {
-                    if (biteopt_particle[i][d].calfun_data->zombie) continue;
-                    const auto &biteopt = biteopt_particle[i][d].biteopt;
-                    auto &rnd = biteopt_particle[i][d].rnd;
-                    biteopt->optimize(*rnd, d + 1 >= depth ? nullptr : biteopt_particle[i][d + 1].biteopt.get());
-                }
-            )
-        }), "Cycle " << j << " of " << iter << ", particles " << n_particles << ", depth " << depth);
+                          tbb_pfor_i__(start_particle, end_particle,
+                              for (DTYPE(depth) d = 0; d < depth; ++d) {
+                              if (biteopt_particle[i][d].calfun_data->zombie) continue;
+                              const auto &biteopt = biteopt_particle[i][d].biteopt;
+                              auto &rnd = biteopt_particle[i][d].rnd;
+                              biteopt->optimize(*rnd, d + 1 >= depth ? nullptr : biteopt_particle[i][d + 1].biteopt.get());
+                              }
+                          )
+                          }), "Cycle " << j << " of " << iter << ", particles " << n_particles << ", depth " << depth);
     }
     const auto D_size = D * sizeof(double);
     for (auto i = start_particle; i < end_particle; ++i) {
@@ -428,9 +425,9 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
         }
     }
 
-    if (world_size > 1) {
-        const auto result_len = result.best_parameters.size() + 2;
-        std::vector<DTYPE(result.best_score)> mpi_best_result(result_len);
+    if (const auto world_size = PROPS.get_mpi_size(); world_size > 1) {
+        const auto result_len = result.best_parameters.n_elem + 2;
+        std::vector<DTYPE(result.best_score) > mpi_best_result(result_len);
         mpi_best_result[0] = result.best_score;
         mpi_best_result[1] = result.total_iterations;
         memcpy(mpi_best_result.data() + 2, result.best_parameters.mem, D_size);
@@ -571,7 +568,8 @@ void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &c
 
 pprune::operator t_pprune_res() const noexcept
 {
-    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !common::isnormalz(result.total_iterations)) LOG4_THROW("No valid solution found.");
+    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !common::isnormalz(result.total_iterations))
+        LOG4_THROW("No valid solution found.");
     return result;
 }
 }

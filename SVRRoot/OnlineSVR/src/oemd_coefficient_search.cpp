@@ -10,6 +10,9 @@
 #include "appcontext.hpp"
 #include "util/math_utils.hpp"
 #include "oemd_coefficient_search.hpp"
+
+#include <filesystem>
+
 #include "common/gpu_handler.hpp"
 #include "oemd_coefficients.hpp"
 #include "ModelService.hpp"
@@ -303,6 +306,21 @@ void
 oemd_coefficients_search::save_mask(const std::vector<double> &mask, const std::string &queue_name, const uint16_t level, const uint16_t levels)
 {
     uint16_t ctr = 0;
+
+    const std::filesystem::path dir_path(PROPS.get_oemd_masks_dir());
+
+    // Attempt to create the directories
+    try {
+        if (std::filesystem::create_directories(dir_path)) {
+            std::cout << "Directory '" << dir_path << "' created successfully." << std::endl;
+        } else {
+            std::cout << "Directory '" << dir_path << "' already exists or could not be created." << std::endl;
+        }
+    } catch (const std::filesystem::filesystem_error& ex) {
+        std::cerr << "Error creating directory: " << ex.what() << std::endl;
+    }
+
+
     LOG4_TRACE("Saving mask for level " << level << " of " << levels << ", queue " << queue_name << ", mask " <<
                                         common::present(arma::vec((double *) mask.data(), mask.size(), false, true)));
     while (common::file_exists(oemd_coefficients::get_mask_file_name(ctr, level, levels, queue_name))) { ++ctr; }
