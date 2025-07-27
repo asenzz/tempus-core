@@ -1,24 +1,31 @@
 #pragma once
 
 #include "common/types.hpp"
-#include "model/Dataset.hpp"
-#include "model/SVRParameters.hpp"
-#include "model/Ensemble.hpp"
-#include "model/Model.hpp"
-#include "model/User.hpp"
-#include "EnsembleService.hpp"
-#include <oneapi/tbb/concurrent_unordered_map.h>
-#include <boost/date_time/posix_time/time_period.hpp>
 
 // #define TRIM_DATA
 
 namespace svr {
 namespace datamodel {
 class Dataset;
-
 using Dataset_ptr = std::shared_ptr<Dataset>;
+class Ensemble;
+using Ensemble_ptr = std::shared_ptr<Ensemble>;
+class Model;
+using Model_ptr = std::shared_ptr<Model>;
+class SVRParameters;
+using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
+class User;
+using User_ptr = std::shared_ptr<User>;
+class MultivalRequest;
+using MultivalRequest_ptr = std::shared_ptr<MultivalRequest>;
+class DataRow;
+using DataRow_ptr = std::shared_ptr<DataRow>;
 }
-namespace dao { class DatasetDAO; }
+
+namespace dao {
+class DatasetDAO;
+}
+
 namespace business {
 class EnsembleService;
 
@@ -28,8 +35,7 @@ class SVRParametersService;
 
 namespace svr {
 namespace business {
-
-typedef boost::unordered_flat_map<std::string /* column */, std::deque<datamodel::DataRow_ptr>> t_stream_results, *t_stream_results_ptr;
+typedef boost::unordered_flat_map<std::string /* column */, std::deque<datamodel::DataRow_ptr> > t_stream_results, *t_stream_results_ptr;
 
 class DatasetService
 {
@@ -41,9 +47,9 @@ public:
     struct DatasetUsers
     {
         datamodel::Dataset_ptr p_dataset;
-        std::deque<User_ptr> users;
+        std::deque<datamodel::User_ptr> users;
 
-        DatasetUsers(datamodel::Dataset_ptr const &dataset, std::deque<User_ptr> &&users);
+        DatasetUsers(datamodel::Dataset_ptr const &dataset, std::deque<datamodel::User_ptr> &&users);
     };
 
     typedef std::deque<DatasetUsers> UserDatasetPairs;
@@ -72,17 +78,15 @@ public:
 
     size_t get_level_count(const bigint dataset_id);
 
-    bool link_user_to_dataset(User_ptr const &user, const datamodel::Dataset_ptr &dataset);
+    bool link_user_to_dataset(datamodel::User_ptr const &user, const datamodel::Dataset_ptr &dataset);
 
-    bool unlink_user_from_dataset(User_ptr const &user, const datamodel::Dataset_ptr &dataset);
+    bool unlink_user_from_dataset(datamodel::User_ptr const &user, const datamodel::Dataset_ptr &dataset);
 
     void update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs);
 
     static void process(datamodel::Dataset &dataset);
 
-    static void process_requests(
-            const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests, t_stream_results_ptr p_stream_results);
+    static void process_requests(const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests, t_stream_results_ptr p_stream_results);
 };
-
 } /* namespace business */
 } /* namespace svr */

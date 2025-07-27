@@ -1,16 +1,13 @@
 #pragma once
 
-#include <set>
 #include "common/constants.hpp"
 #include "relations/ensemble_relation.hpp"
-#include "SVRParametersService.hpp"
-#include "SVRParameters.hpp"
-#include "DataRow.hpp"
 #include "Entity.hpp"
+#include "model/DataRow.hpp"
+#include "model/SVRParameters.hpp"
 
 namespace svr {
 namespace datamodel {
-
 class Model : public Entity
 {
     ensemble_relation ensemble;
@@ -28,15 +25,15 @@ class Model : public Entity
     PROPERTY(arma::vec, last_knowns)
     PROPERTY(data_row_container, times)
 
-    virtual void init_id() override;
+    void init_id() override;
 
 public:
     Model() = default;
 
-    Model(const bigint id, const bigint ensemble_id, const uint16_t decon_level, const uint16_t step, const uint16_t multiout_, const uint16_t gradient_ct, const uint32_t chunk_size,
+    Model(bigint id, bigint ensemble_id, uint16_t decon_level, uint16_t step, uint16_t multiout_, uint16_t gradient_ct, uint32_t chunk_size,
           std::deque<OnlineSVR_ptr> svr_models = {}, const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time);
 
-    OnlineSVR_ptr get_gradient(const uint16_t i = 0) const;
+    OnlineSVR_ptr get_gradient(uint16_t i = 0) const;
 
     std::deque<OnlineSVR_ptr> &get_gradients();
 
@@ -50,7 +47,7 @@ public:
 
     uint32_t get_max_chunk_size() const;
 
-    void set_max_chunk_size(const uint32_t chunk_size);
+    void set_max_chunk_size(uint32_t chunk_size);
 
     uint16_t get_multiout() const;
 
@@ -60,7 +57,7 @@ public:
 
     void set_head_params(const std::pair<SVRParameters_ptr, SVRParameters_ptr> &params);
 
-    void adjust_gradient_decrement(const uint32_t distance);
+    void adjust_gradient_decrement(uint32_t distance) const;
 
     bool operator==(const Model &o) const;
 
@@ -68,15 +65,15 @@ public:
 
     bigint get_ensemble_id() const;
 
-    void set_ensemble_id(const bigint ensemble_id);
+    void set_ensemble_id(bigint ensemble_id);
 
     uint16_t get_decon_level() const;
 
-    void set_decon_level(const uint16_t _decon_level);
+    void set_decon_level(uint16_t _decon_level);
 
     uint16_t get_step() const;
 
-    void set_step(const uint16_t step);
+    void set_step(uint16_t step);
 
     bpt::ptime const &get_last_modified() const;
 
@@ -94,13 +91,12 @@ public:
 
 using Model_ptr = std::shared_ptr<Model>;
 
-datamodel::Model_ptr
-find_model(const std::deque<datamodel::Model_ptr> &models, const uint16_t levix);
+datamodel::Model_ptr find_model(const std::deque<datamodel::Model_ptr> &models, uint16_t levix);
 
-template<typename T> std::basic_ostream<T> &
-operator<<(std::basic_ostream<T> &s, const datamodel::Model &m)
+template<typename T> std::basic_ostream<T> &operator<<(std::basic_ostream<T> &s, const datamodel::Model &m)
 {
     return s << m.to_string();
 }
+
 }
 }

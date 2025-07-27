@@ -1,35 +1,37 @@
-#include "include/DaoTestFixture.h"
-#include "model/User.hpp"
+#include "DataRowService.hpp"
 #include "DatasetService.hpp"
 #include "DeconQueueService.hpp"
+#include "EnsembleService.hpp"
 #include "UserService.hpp"
-#include "include/InputQueueRowDataGenerator.hpp"
 #include "../../OnlineSVR/test/test_harness.hpp"
-#include "common/constants.hpp"
+#include "include/DaoTestFixture.h"
+#include "include/InputQueueRowDataGenerator.hpp"
+#include "model/Ensemble.hpp"
+#include "model/User.hpp"
 
 using namespace svr;
 
 TEST_F(DaoTestFixture, DeconQueueWorkflow)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>
+    const auto user1 = std::make_shared<datamodel::User>
     (bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser",
-     svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
+     datamodel::ROLE::ADMIN, datamodel::Priority::High);
 
     aci.user_service.save(user1);
 
-    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+    datamodel::InputQueue_ptr iq = std::make_shared<datamodel::InputQueue>(
         "tableName", "logicalName", user1->get_name(), "description", bpt::seconds(60), bpt::seconds(5),
         "UTC",
         std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>
-    (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1,
+    datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>
+    (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, datamodel::Priority::Normal, "", 1,
      common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
+    datamodel::DeconQueue_ptr dq = std::make_shared<datamodel::DeconQueue>("DeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     // The decon queue is saved with saving the dataset
     //aci.decon_queue_service.save(dq);
@@ -73,10 +75,10 @@ load_input_queue(const datamodel::Dataset_ptr &p_dataset, const std::string &fil
         std::getline(ifstream, line);
         std::vector<std::string> fields;
         if (line.empty()) continue;
-        svr::common::split(line, '\t', fields);
+        common::split(line, '\t', fields);
         if (fields.size() != 4) continue;
         const auto row_time = bpt::time_from_string(fields[0]);
-        const auto p_row = std::make_shared<svr::datamodel::DataRow>(
+        const auto p_row = std::make_shared<datamodel::DataRow>(
             row_time,
             boost::posix_time::second_clock::local_time(),
             std::atof(fields[2].c_str()),
@@ -93,20 +95,20 @@ load_input_queue(const datamodel::Dataset_ptr &p_dataset, const std::string &fil
 
 TEST_F(DaoTestFixture, testDeconRecon)
 {
-    User_ptr p_user = std::make_shared<svr::datamodel::User>(
-        bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
+    datamodel::User_ptr p_user = std::make_shared<datamodel::User>(
+        bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser", datamodel::ROLE::ADMIN, datamodel::Priority::High);
     // Test of Save and Load to database is disabled for now, TODO enable in future
     aci.user_service.save(p_user);
 
-    datamodel::InputQueue_ptr p_all_data_inputqueue = std::make_shared<svr::datamodel::InputQueue>(
+    datamodel::InputQueue_ptr p_all_data_inputqueue = std::make_shared<datamodel::InputQueue>(
         "EURUSD1S", "EURUSD1S", p_user->get_name(), "EURUSD1S", bpt::seconds(1), bpt::seconds(0), "Europe/Zurich", std::deque<std::string>{"eurusd_avg_bid"});
-    datamodel::InputQueue_ptr p_all_data_inputqueue_1h = std::make_shared<svr::datamodel::InputQueue>(
+    datamodel::InputQueue_ptr p_all_data_inputqueue_1h = std::make_shared<datamodel::InputQueue>(
         "EURUSD1H", "EURUSD1H", p_user->get_name(), "EURUSD1H", bpt::seconds(3600), bpt::seconds(5), "Europe/Zurich", std::deque<std::string>{"eurusd_avg_bid"});
     aci.input_queue_service.save(p_all_data_inputqueue);
     aci.input_queue_service.save(p_all_data_inputqueue_1h);
     auto p_inputq = p_all_data_inputqueue->clone_empty();
-    datamodel::Dataset_ptr p_dataset = std::make_shared<svr::datamodel::Dataset>(
-        bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, svr::datamodel::Priority::Normal,
+    datamodel::Dataset_ptr p_dataset = std::make_shared<datamodel::Dataset>(
+        bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, datamodel::Priority::Normal,
         "dsDescription", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
     APP.ensemble_service.init_ensembles(p_dataset);
     p_dataset->set_is_active(true);
@@ -115,7 +117,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     load_input_queue(p_dataset, "../SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_1_test_data.sql", p_all_data_inputqueue);
     load_input_queue(p_dataset, "../SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_3600_test_data.sql", p_all_data_inputqueue_1h);
 #ifdef TEST_DECON_SAVE
-    svr::datamodel::DeconQueue_ptr p_1h_decon_queue;
+    datamodel::DeconQueue_ptr p_1h_decon_queue;
     PROFILE_INFO(p_1h_decon_queue = aci.decon_queue_service.deconstruct(p_all_data_inputqueue_1h, p_dataset, false).at(0),
                       "Deconstruction of 1H single column containing " << p_all_data_inputqueue_1h->size() << " rows.");
     APP.decon_queue_service.save(p_1h_decon_queue);
@@ -125,13 +127,13 @@ TEST_F(DaoTestFixture, testDeconRecon)
     double total_input_diff = 0;
     size_t compared_ct = 0;
     for (const auto &row_1h: p_all_data_inputqueue_1h->get_data()) {
-        const auto it_row_1s = svr::lower_bound_or_before(p_all_data_inputqueue->get_data(), row_1h->get_value_time());
+        const auto it_row_1s = business::lower_bound_or_before(p_all_data_inputqueue->get_data(), row_1h->get_value_time());
         // const auto it_row_1s = p_all_data_inputqueue->get_data().find(row_1h->get_value_time());
         if (it_row_1s == p_all_data_inputqueue->end()) {
             LOG4_DEBUG("Row not found in hires data for " << row_1h->get_value_time());
             continue;
         }
-        const auto twap_1h = 0.; /* TODO Port svr::generate_twap(
+        const auto twap_1h = 0.; /* TODO Port generate_twap(
                 it_row_1s, p_all_data_inputqueue->end(),
                 row_1h->get_value_time(), row_1h->get_value_time() + p_all_data_inputqueue_1h->get_resolution(),
                 p_all_data_inputqueue->get_resolution(), 0); */
@@ -141,12 +143,12 @@ TEST_F(DaoTestFixture, testDeconRecon)
         ++compared_ct;
         if (diff_twap > std::numeric_limits<double>::epsilon())
             LOG4_WARN(
-            "Input data inconsistent at " << row_1h->get_value_time() << " difference " << diff_twap << " 1h price " << row_1h.get()->get_value(0) << " mean 1s " << twap_1h <<
-            " last 1s iter time " << it_row_1s->get()->get_value_time() << " 1s prices");
+            "Input data inconsistent at " << row_1h->get_value_time() << " difference " << diff_twap << " 1h price " << **row_1h << " mean 1s " << twap_1h <<
+            " last 1s iter time " << (*it_row_1s)->get_value_time() << " 1s prices");
         else
             LOG4_TRACE("Data is OK at " << row_1h->get_value_time() << " difference " << diff_twap);
     }
-    LOG4_DEBUG("Average input diff " << (total_input_diff/double(compared_ct)) << " out of " << compared_ct << " comparisons.");
+    LOG4_DEBUG("Average input diff " << total_input_diff/double(compared_ct) << " out of " << compared_ct << " comparisons.");
 #ifdef TEST_INPUT_ONLY
     return;
 #endif
@@ -174,7 +176,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
         ASSERT_EQ(it.get()->get_values().size(), (size_t) TEST_DECON_LEVELS) << "Decon queue data at " << it->get_value_time() << " have wrong deconstructed levels";
     }
 
-    svr::business::EnsembleService::update_ensemble_decon_queues(p_dataset->get_ensembles(), {p_online_decon_queue});
+    business::EnsembleService::update_ensemble_decon_queues(p_dataset->get_ensembles(), {p_online_decon_queue});
     size_t ctr = 0;
     for (auto row_iter = std::next(p_all_data_inputqueue->begin(), TEST_FIRST_BATCH_SIZE(p_dataset));
          row_iter != p_all_data_inputqueue->end(); ++row_iter) {
@@ -182,7 +184,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
         if (++ctr < ONLINE_BATCH_LEN) continue;
         PROFILE_INFO(p_online_decon_queue = aci.decon_queue_service.deconstruct(*p_dataset, *p_inputq, "EURUSD1S"),
                      "Deconstruction of single column containing " << (ctr == ONLINE_BATCH_LEN ? ONLINE_BATCH_LEN : 1) << " rows.");
-        svr::business::EnsembleService::update_ensemble_decon_queues(p_dataset->get_ensembles(), {p_online_decon_queue});
+        business::EnsembleService::update_ensemble_decon_queues(p_dataset->get_ensembles(), {p_online_decon_queue});
     }
     p_online_decon_queue = p_dataset->get_ensemble(0)->get_decon_queue()->clone();
     p_dataset->get_ensemble(0)->get_decon_queue()->get_data().clear();
@@ -201,7 +203,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     for (auto batch_row_iter = std::next(batch_decon_data.begin(), TEST_RESIDUALS_COUNT(p_dataset));
          batch_row_iter != batch_decon_data.end();
          ++batch_row_iter) {
-        const auto online_row_iter = svr::find(p_online_decon_queue->get_data(), batch_row_iter->get()->get_value_time());
+        const auto online_row_iter = business::find(p_online_decon_queue->get_data(), batch_row_iter->get()->get_value_time());
         if (online_row_iter == p_online_decon_queue->end()) {
             LOG4_WARN("Batch time " << batch_row_iter->get()->get_value_time() << " row " << row_ix << " not found in online decon queue.");
             continue;
@@ -226,7 +228,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     datamodel::InputQueue_ptr recon_queue = p_inputq->clone_empty();
     PROFILE_INFO(APP.decon_queue_service.reconstruct(
                      *p_online_decon_queue,
-                     svr::business::recon_type_e::ADDITIVE,
+                     business::recon_type_e::ADDITIVE,
                      recon_queue->get_data(),
                      business::IQScalingFactorService::C_default_scaler),
                  "Reconstruction of " << TEST_DECON_LEVELS << " levels containing " << p_inputq->size() << " rows.");
@@ -234,7 +236,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     double total_diff = 0;
     size_t diff_ct = 0;
     for (const auto &p_iq_row: p_inputq->get_data()) {
-        const auto i_rq_row = svr::find(recon_queue->get_data(), p_iq_row->get_value_time());
+        const auto i_rq_row = business::find(recon_queue->get_data(), p_iq_row->get_value_time());
         if (i_rq_row == recon_queue->end()) {
             LOG4_WARN("Row with time " << p_iq_row->get_value_time() << " not found in recon queue!");
             continue;
@@ -264,7 +266,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
 
     aci.dataset_service.remove(p_dataset);
 
-    aci.decon_queue_service.remove(p_online_decon_queue);
+    (void) aci.decon_queue_service.remove(p_online_decon_queue);
 
     aci.input_queue_service.remove(p_inputq);
     aci.user_service.remove(p_user);
@@ -273,24 +275,24 @@ TEST_F(DaoTestFixture, testDeconRecon)
 
 TEST_F(DaoTestFixture, TestSaveDQIntegrity)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
-        bigint(), "JamesBond", "JamesBond@email", "JamesBond", "JamesBond", svr::datamodel::ROLE::ADMIN,
-        svr::datamodel::Priority::High);
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
+        bigint(), "JamesBond", "JamesBond@email", "JamesBond", "JamesBond", datamodel::ROLE::ADMIN,
+        datamodel::Priority::High);
 
     aci.user_service.save(user1);
 
-    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+    datamodel::InputQueue_ptr iq = std::make_shared<datamodel::InputQueue>(
         "SomeInputQueue", "SomeInputQueue", user1->get_name(), "SomeInputQueue", bpt::seconds(60), bpt::seconds(5),
         "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-                                                                          svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 2,
+    datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
+                                                                          datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 2,
                                                                           "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
+    datamodel::DeconQueue_ptr dq = std::make_shared<datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     bpt::ptime nw = bpt::second_clock::local_time();
 
@@ -305,7 +307,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
     row1->set_values({0, 1, 2});
     dq->get_data().push_back(row1);
 
-    datamodel::DeconQueue_ptr dq1 = std::make_shared<svr::datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
+    datamodel::DeconQueue_ptr dq1 = std::make_shared<datamodel::DeconQueue>("SomeDeconQueuetableName", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     aci.decon_queue_service.load(*dq1, nw - bpt::hours(1), nw + bpt::hours(1), 1000);
 
@@ -313,7 +315,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
 
     aci.dataset_service.remove(ds);
 
-    aci.decon_queue_service.remove(dq);
+    (void) aci.decon_queue_service.remove(dq);
 
     aci.input_queue_service.remove(iq);
     aci.user_service.remove(user1);
@@ -321,28 +323,28 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
 
 TEST_F(DaoTestFixture, TestDQUpdates)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "WarrenBuffett", "WarrenBuffett@email", "WarrenBuffett", "WarrenBuffett",
-        svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
+        datamodel::ROLE::ADMIN, datamodel::Priority::High);
 
     aci.user_service.save(user1);
 
-    datamodel::InputQueue_ptr iq = std::make_shared<svr::datamodel::InputQueue>(
+    datamodel::InputQueue_ptr iq = std::make_shared<datamodel::InputQueue>(
         "GatesFoundationIQ", "GatesFoundationIQ", user1->get_name(), "GatesFoundationIQ", bpt::seconds(60),
         bpt::seconds(5), "UTC", std::deque<std::string>{"up", "down", "left", "right"});
     aci.input_queue_service.save(iq);
 
-    datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-                                                                          svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 2,
+    datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
+                                                                          datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 2,
                                                                           "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
-    datamodel::DeconQueue_ptr dq = std::make_shared<svr::datamodel::DeconQueue>("GatesFoundationDQ", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
+    auto dq = std::make_shared<datamodel::DeconQueue>("GatesFoundationDQ", iq->get_table_name(), "up", ds->get_id(), ds->get_spectral_levels());
 
     bpt::ptime nw = bpt::second_clock::local_time();
 
-    datamodel::DataRow_ptr row = std::make_shared<svr::datamodel::DataRow>(nw, bpt::second_clock::local_time(), 1, 1);
+    datamodel::DataRow_ptr row = std::make_shared<datamodel::DataRow>(nw, bpt::second_clock::local_time(), 1, 1);
     row->set_values({0, 1, 2});
     dq->get_data().push_back(row);
 
@@ -380,7 +382,7 @@ TEST_F(DaoTestFixture, TestDQUpdates)
 
     aci.dataset_service.remove(ds);
 
-    aci.decon_queue_service.remove(dq);
+    (void) aci.decon_queue_service.remove(dq);
 
     aci.input_queue_service.remove(iq);
     aci.user_service.remove(user1);

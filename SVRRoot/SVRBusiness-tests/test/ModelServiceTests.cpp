@@ -1,5 +1,6 @@
 #include "DatasetService.hpp"
 #include "DeconQueueService.hpp"
+#include "EnsembleService.hpp"
 #include "InputQueueService.hpp"
 #include "ModelService.hpp"
 #include "UserService.hpp"
@@ -19,7 +20,7 @@ TEST_F(DaoTestFixture, ModelWorkflow)
     bpt::ptime last_modified = bpt::time_from_string("2015-05-20 10:45:00");
     bpt::ptime last_modeled_value_time = bpt::time_from_string("2015-05-20 10:47:00");
 
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser",
         datamodel::ROLE::ADMIN, datamodel::Priority::High);
 

@@ -21,7 +21,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
 
     bigint dataset_id = 0; {
         constexpr size_t decon_levels = 4;
-        User_ptr user1 = std::make_shared<svr::datamodel::User>(
+        datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), user_name, "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser",
             svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
         aci.user_service.save(user1);
@@ -103,7 +103,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
 
     datamodel::Dataset_ptr ds = aci.dataset_service.load(dataset_id);
     datamodel::InputQueue_ptr iq = aci.input_queue_service.get_queue_metadata(iq_table_name);
-    User_ptr user1 = aci.user_service.get_user_by_user_name(user_name);
+    datamodel::User_ptr user1 = aci.user_service.get_user_by_user_name(user_name);
 
     aci.dataset_service.remove(ds);
     aci.input_queue_service.remove(iq);

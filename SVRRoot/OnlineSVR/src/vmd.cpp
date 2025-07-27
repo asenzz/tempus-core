@@ -41,7 +41,7 @@ void printMatrix(const MatrixXd &u)
 
 
 void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega,
-         svr::data_row_container::const_iterator iterin, const size_t saveT, const unsigned input_column_index, const double alpha, const double tau,
+         datamodel::data_row_container::const_iterator iterin, const size_t saveT, const unsigned input_column_index, const double alpha, const double tau,
          const int K, const int DC, const int init, const double tol, const double eps, const svr::datamodel::t_iqscaler &scaler)
 {
     /* ---------------------
@@ -323,7 +323,7 @@ vectorcd ExtractRowFromMatrixXd(MatrixXd &Input, const int RowIdx, const int Col
 
 // Function declaration
 std::tuple<std::vector<std::vector<double>>, std::vector<std::vector<std::complex<double>>>, std::vector<std::vector<double>>>
-VMD(const svr::data_row_container::const_iterator iterin, const size_t save_T,
+VMD(const datamodel::data_row_container::const_iterator iterin, const size_t save_T,
     const unsigned input_column_index, double alpha, double tau, int K, bool DC, int init, double tol, const svr::datamodel::t_iqscaler &scaler)
 {
     if (save_T % 2) LOG4_THROW("Signal length must be even.");

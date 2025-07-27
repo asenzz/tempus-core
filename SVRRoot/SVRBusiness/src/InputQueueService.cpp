@@ -3,10 +3,13 @@
 #include "DeconQueueService.hpp"
 #include "model/InputQueue.hpp"
 #include "appcontext.hpp"
+#include "DataRowService.hpp"
 #include "DAO/InputQueueDAO.hpp"
 #include "DAO/ScopedTransaction.hpp"
 #include "InterprocessReader.hpp"
 #include "model/Ensemble.hpp"
+#include "model/DataRow.hpp"
+#include "model/Dataset.hpp"
 
 
 std::string svr::business::InputQueueService::make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)
@@ -83,7 +86,7 @@ InputQueueService::load(datamodel::InputQueue &input_queue)
                                       data.back()->get_value_time() + input_queue.get_resolution(),
                                       bpt::max_date_time, 0);
         if (!new_data.empty() && new_data.front()->get_value_time() <= data.back()->get_value_time())
-            data.erase(lower_bound(data, new_data.front()->get_value_time()), data.end());
+            data.erase(business::lower_bound(data, new_data.front()->get_value_time()), data.end());
         data.insert(data.end(), new_data.begin(), new_data.end());
     }
 }
@@ -98,7 +101,7 @@ InputQueueService::load(
     // Because of that, callers that want to exclude this last time must make sure to subtract a small amount of time from that parameter.
     LOG4_DEBUG("Getting up to " << limit << " rows during " << range << " from " << input_queue.get_table_name());
 
-    data_row_container &data = input_queue.get_data();
+    datamodel::data_row_container &data = input_queue.get_data();
     if (data.empty()) {
         if (input_queue.get_uses_fix_connection())
             input_queue.set_data(load_latest_from_mmf(input_queue, range.begin()));
@@ -116,12 +119,12 @@ InputQueueService::load(
 }
 
 
-data_row_container
+datamodel::data_row_container
 InputQueueService::load_latest_from_mmf(
         const datamodel::InputQueue &input_queue,
         const bpt::ptime &last_time)
 {
-    data_row_container result;
+    datamodel::data_row_container result;
 #ifndef BUILD_WITHOUT_SVR_FIX
     if (not input_queue.get_uses_fix_connection()) return result;
 
@@ -175,7 +178,7 @@ InputQueueService::load_latest(
 
 
 datamodel::DataRow_ptr
-InputQueueService::load_nth_last_row(const datamodel::InputQueue_ptr &input_queue, const size_t position, const bpt::ptime target_time)
+InputQueueService::load_nth_last_row(const datamodel::InputQueue_ptr &input_queue, const size_t position, const bpt::ptime &target_time)
 {
     LOG4_DEBUG("Getting " << position << "th row before " << target_time << " from " << input_queue->get_table_name());
     return input_queue_dao.get_nth_last_row(input_queue->get_table_name(), position, target_time);
@@ -243,7 +246,7 @@ InputQueueService::clone_with_data(
 }
 
 
-data_row_container
+datamodel::data_row_container
 InputQueueService::get_column_data(
         const datamodel::InputQueue &input_queue,
         const std::string &column_name)
@@ -252,7 +255,7 @@ InputQueueService::get_column_data(
 }
 
 
-data_row_container
+datamodel::data_row_container
 InputQueueService::get_column_data(const datamodel::InputQueue &input_queue, const size_t column_index)
 {
     LOG4_BEGIN();
@@ -278,13 +281,11 @@ InputQueueService::get_column_data(const datamodel::InputQueue &input_queue, con
 }
 
 
-std::deque<std::string>
-InputQueueService::get_db_table_column_names(const datamodel::InputQueue_ptr &queue)
+std::deque<std::string> InputQueueService::get_db_table_column_names(const datamodel::InputQueue_ptr &queue) const
 {
     const auto db_all_columns = input_queue_dao.get_db_table_column_names(queue);
     std::deque<std::string> result;
-    auto iut = std::find_if(
-            C_default_exec_policy, db_all_columns.cbegin(), db_all_columns.cend(), [](std::shared_ptr<std::string> const &col) { return *col == "tick_volume"; });
+    auto iut = std::find_if(C_default_exec_policy, db_all_columns.cbegin(), db_all_columns.cend(), [](std::shared_ptr<std::string> const &col) { return *col == "tick_volume"; });
     if (iut == db_all_columns.cend()) return result;
     ++iut;
     for (; iut != db_all_columns.cend(); ++iut) result.emplace_back(**iut);
@@ -292,10 +293,7 @@ InputQueueService::get_db_table_column_names(const datamodel::InputQueue_ptr &qu
 }
 
 
-size_t
-InputQueueService::get_value_column_index(
-        const datamodel::InputQueue &input_queue,
-        const std::string &column_name)
+size_t InputQueueService::get_value_column_index(const datamodel::InputQueue &input_queue, const std::string &column_name)
 {
     const auto &cols = input_queue.get_value_columns();
     const auto pos = std::find(C_default_exec_policy, cols.cbegin(), cols.cend(), column_name);
@@ -304,16 +302,14 @@ InputQueueService::get_value_column_index(
 }
 
 
-datamodel::DataRow_ptr
-InputQueueService::find_oldest_record(const datamodel::InputQueue_ptr &queue)
+datamodel::DataRow_ptr InputQueueService::find_oldest_record(const datamodel::InputQueue_ptr &queue) const
 {
     REJECT_NULLPTR(queue);
 
     return input_queue_dao.find_oldest_record(queue);
 }
 
-datamodel::DataRow_ptr
-InputQueueService::find_newest_record(const datamodel::InputQueue_ptr &queue)
+datamodel::DataRow_ptr InputQueueService::find_newest_record(const datamodel::InputQueue_ptr &queue) const
 {
     LOG4_BEGIN();
     REJECT_NULLPTR(queue);
@@ -322,34 +318,31 @@ InputQueueService::find_newest_record(const datamodel::InputQueue_ptr &queue)
 }
 
 
-std::deque<datamodel::InputQueue_ptr>
-InputQueueService::get_all_user_queues(const std::string &user_name)
+std::deque<datamodel::InputQueue_ptr> InputQueueService::get_all_user_queues(const std::string &user_name) const
 {
     return input_queue_dao.get_all_user_queues(user_name);
 }
 
 
-std::deque<datamodel::InputQueue_ptr> InputQueueService::get_all_queues_with_sign(const bool uses_fix_connector)
+std::deque<datamodel::InputQueue_ptr> InputQueueService::get_all_queues_with_sign(const bool uses_fix_connector) const
 {
     return input_queue_dao.get_all_queues_with_sign(uses_fix_connector);
 }
 
 
-svr::dao::OptionalTimeRange
-InputQueueService::get_missing_hours(const datamodel::InputQueue_ptr &queue, svr::dao::TimeRange const &from_range) const
+svr::dao::OptionalTimeRange InputQueueService::get_missing_hours(const datamodel::InputQueue_ptr &queue, svr::dao::TimeRange const &from_range) const
 {
     return input_queue_dao.get_missing_hours(queue, from_range);
 }
 
 
-void InputQueueService::purge_missing_hours(datamodel::InputQueue_ptr const &queue)
+void InputQueueService::purge_missing_hours(datamodel::InputQueue_ptr const &queue) const
 {
     input_queue_dao.purge_missing_hours(queue);
 }
 
 
-boost::posix_time::ptime
-InputQueueService::validate_decon_data(const datamodel::InputQueue &input_queue, const datamodel::DeconQueue &decon_queue)
+boost::posix_time::ptime InputQueueService::validate_decon_data(const datamodel::InputQueue &input_queue, const datamodel::DeconQueue &decon_queue)
 {
     // max_date_time means don't decompose anything, min_date_time means decompose all data from the input queue
     LOG4_BEGIN();
@@ -469,7 +462,7 @@ void InputQueueService::prepare_input_data(datamodel::Dataset &dataset)
 }
 
 #if 0
-data_row_container
+datamodel::data_row_container
 InputQueueService::shift_times_forward(const data_row_container &data, const bpt::time_duration &resolution)
 {
     data_row_container new_data_cont;

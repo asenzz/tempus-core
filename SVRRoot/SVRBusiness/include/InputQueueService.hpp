@@ -5,11 +5,9 @@
 #include <memory>
 #include <boost/date_time.hpp>
 #include <boost/optional.hpp>
+#include "common/compatibility.hpp"
+#include "util/time_utils.hpp"
 #include "model/DataRow.hpp"
-#include "model/InputQueue.hpp"
-#include "model/DeconQueue.hpp"
-#include "model/Dataset.hpp"
-
 
 namespace svr {
 namespace dao {
@@ -20,6 +18,12 @@ using OptionalTimeRange = boost::optional<TimeRange>;
 namespace datamodel {
 class Dataset;
 using Dataset_ptr = std::shared_ptr<Dataset>;
+class DataRow;
+using DataRow_ptr = std::shared_ptr<DataRow>;
+class InputQueue;
+using InputQueue_ptr = std::shared_ptr<InputQueue>;
+class DeconQueue;
+using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
 }
 }
 
@@ -27,11 +31,11 @@ using Dataset_ptr = std::shared_ptr<Dataset>;
 namespace svr {
 namespace business {
 
-class InputQueueService
+class InputQueueService final
 {
     svr::dao::InputQueueDAO &input_queue_dao;
 
-    data_row_container load_latest_from_mmf(const datamodel::InputQueue &input_queue, const bpt::ptime &last_time);
+    datamodel::data_row_container load_latest_from_mmf(const datamodel::InputQueue &input_queue, const bpt::ptime &last_time);
 
     static void prepare_input_data(datamodel::Dataset &dataset);
 
@@ -51,26 +55,24 @@ public:
 
     virtual ~InputQueueService();
 
-    std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name);
+    std::deque<datamodel::InputQueue_ptr> get_all_user_queues(const std::string &user_name) const;
 
-    std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(const bool uses_fix_connector);
+    std::deque<datamodel::InputQueue_ptr> get_all_queues_with_sign(bool uses_fix_connector) const;
 
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
 
     datamodel::InputQueue_ptr get_queue_metadata(const std::string &input_queue_table_name);
 
-    data_row_container
+    datamodel::data_row_container
     load(const std::string &table_name, const bpt::ptime &time_from = bpt::min_date_time, const bpt::ptime &time_to = bpt::max_date_time, size_t limit = 0);
 
     void load(datamodel::InputQueue &input_queue);
 
-    void load(datamodel::InputQueue &p_input_queue, const bpt::time_period &range, const size_t limit = 0);
+    void load(datamodel::InputQueue &p_input_queue, const bpt::time_period &range, size_t limit = 0);
 
-    void
-    load_latest(datamodel::InputQueue_ptr p_input_queue, const size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
+    void load_latest(datamodel::InputQueue_ptr p_input_queue, size_t limit = 0, const bpt::ptime &last_time = bpt::max_date_time);
 
-    datamodel::DataRow_ptr
-    load_nth_last_row(const datamodel::InputQueue_ptr &input_queue, const size_t position, const bpt::ptime target_time = bpt::max_date_time);
+    datamodel::DataRow_ptr load_nth_last_row(const datamodel::InputQueue_ptr &input_queue, size_t position, const bpt::ptime &target_time = bpt::max_date_time);
 
     size_t save(const datamodel::InputQueue_ptr &p_input_queue);
 
@@ -82,26 +84,24 @@ public:
 
     int clear(const datamodel::InputQueue_ptr &p_input_queue);
 
-    datamodel::DataRow_ptr find_oldest_record(const datamodel::InputQueue_ptr &queue);
+    datamodel::DataRow_ptr find_oldest_record(const datamodel::InputQueue_ptr &queue) const;
 
-    datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr &queue);
+    datamodel::DataRow_ptr find_newest_record(const datamodel::InputQueue_ptr &queue) const;
 
     static size_t get_value_column_index(const datamodel::InputQueue &input_queue, const std::string &column_name);
 
-    datamodel::InputQueue_ptr clone_with_data(const datamodel::InputQueue_ptr &p_input_queue, const bpt::time_period &time_range,
-                                   const size_t minimum_rows_count = std::numeric_limits<size_t>::min());
+    datamodel::InputQueue_ptr clone_with_data(
+        const datamodel::InputQueue_ptr &p_input_queue, const bpt::time_period &time_range, size_t minimum_rows_count = std::numeric_limits<size_t>::min());
 
-    static svr::datamodel::DataRow::container
-    get_column_data(const datamodel::InputQueue &input_queue, const std::string &column_name);
+    static datamodel::data_row_container get_column_data(const datamodel::InputQueue &input_queue, const std::string &column_name);
 
-    static data_row_container
-    get_column_data(const datamodel::InputQueue &input_queue, const size_t column_index);
+    static datamodel::data_row_container get_column_data(const datamodel::InputQueue &input_queue, size_t column_index);
 
-    std::deque<std::string> get_db_table_column_names(const datamodel::InputQueue_ptr &queue);
+    std::deque<std::string> get_db_table_column_names(const datamodel::InputQueue_ptr &queue) const;
 
-    svr::dao::OptionalTimeRange get_missing_hours(datamodel::InputQueue_ptr const &, svr::dao::TimeRange const &) const;
+    dao::OptionalTimeRange get_missing_hours(datamodel::InputQueue_ptr const &, svr::dao::TimeRange const &) const;
 
-    void purge_missing_hours(datamodel::InputQueue_ptr const &);
+    void purge_missing_hours(datamodel::InputQueue_ptr const &) const;
 
     static void prepare_queues(datamodel::Dataset &dataset);
 
@@ -109,7 +109,7 @@ public:
 
     size_t get_count_from_start(const datamodel::InputQueue_ptr &p_input_queue, const boost::posix_time::ptime &time);
 
-    //data_row_container shift_times_forward(const data_row_container &data, const bpt::time_duration &resolution);
+    // datamodel::data_row_container shift_times_forward(const datamodel::data_row_container &data, const bpt::time_duration &resolution);
 
     static std::string make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution);
 
@@ -117,12 +117,12 @@ public:
 
     static bool add_row(datamodel::InputQueue &queue, const datamodel::DataRow_ptr &p_row);
 
-    static void add_row(data_row_container &data, const datamodel::DataRow_ptr &p_row);
+    static void add_row(datamodel::data_row_container &data, const datamodel::DataRow_ptr &p_row);
 
-    void upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, const uint16_t n_values);
+    void upsert_row_str(CRPTR(char) table_name, CRPTR(char) value_time, CRPTR(char) update_time, CRPTR(char) volume, CRPTR(char *) values, uint16_t n_values);
 };
+
+using InputQueueService_ptr = std::shared_ptr<svr::business::InputQueueService>;
 
 } /* namespace business */
 } /* namespace svr */
-
-using InputQueueService_ptr = std::shared_ptr<svr::business::InputQueueService>;

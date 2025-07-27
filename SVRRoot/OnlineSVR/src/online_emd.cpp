@@ -5,6 +5,8 @@
 #include <appcontext.hpp>
 
 #include "online_emd.hpp"
+
+#include "DataRowService.hpp"
 #include "util/string_utils.hpp"
 #include "util/math_utils.hpp"
 #include "oemd_coefficient_search.hpp"
@@ -71,9 +73,9 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
         ", test offset " << test_offset << ", custom residuals " << custom_residuals_ct << ", stretch " << stretch_coef << ", main resolution " << main_resolution);
 
     const uint32_t residuals_ct = custom_residuals_ct == std::numeric_limits<uint32_t>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
-    data_row_container::const_iterator start_input_iter;
+    datamodel::data_row_container::const_iterator start_input_iter;
     if (decon_queue.empty()) start_input_iter = input_queue.cbegin();
-    else start_input_iter = upper_bound(input_queue.get_data(), decon_queue.back()->get_value_time());
+    else start_input_iter = business::upper_bound(input_queue.get_data(), decon_queue.back()->get_value_time());
     uint32_t tail_len;
     const uint32_t start_offset = start_input_iter - input_queue.cbegin();
     if (start_offset < residuals_ct) {
@@ -85,7 +87,7 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
     }
 
     std::vector<double> tail;
-    datamodel::datarow_crange in_range(start_input_iter, input_queue.cend(), input_queue.get_data());
+    const datamodel::datarow_crange in_range(start_input_iter, input_queue.cend(), input_queue.get_data());
     if (tail_len) business::DeconQueueService::mirror_tail(in_range, in_range.distance() + tail_len, tail, in_colix);
     LOG4_DEBUG("Mirror for " << decon_queue.get_table_name() << ", range len " << in_range.distance() << " values, requested tail " << tail_len);
 

@@ -195,9 +195,9 @@ datamodel::DeconQueue_ptr Ensemble::get_aux_decon_queue(const std::string &colum
     return *res;
 }
 
-std::deque<data_row_container_ptr> Ensemble::get_aux_decon_datas()
+std::deque<datamodel::data_row_container_ptr> Ensemble::get_aux_decon_datas()
 {
-    std::deque<data_row_container_ptr> result;
+    std::deque<datamodel::data_row_container_ptr> result;
     for (const auto &aux_decon_queue: aux_decon_queues)
         if (aux_decon_queue)
             result.emplace_back(shared_observer_ptr<data_row_container>(aux_decon_queue->get_data()));

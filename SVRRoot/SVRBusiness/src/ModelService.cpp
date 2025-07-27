@@ -1,48 +1,47 @@
-#include "DeconQueueService.hpp"
-
-#include <execution>
-#include <model/Ensemble.hpp>
-#include <tuple>
-#include <string>
-#include <deque>
-#include <complex>
-#include <cmath>
 #include <algorithm>
-#include <utility>
-#include <memory>
+#include <armadillo>
+#include <cmath>
+#include <complex>
+#include <cstdlib>
+#include <deque>
+#include <execution>
+#include <iostream>
 #include <iterator>
 #include <limits>
-#include <cstdlib>
-#include <armadillo>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <utility>
 #include <boost/date_time/posix_time/ptime.hpp>
-#include <iostream>
+#include <model/Ensemble.hpp>
+#include "DeconQueueService.hpp"
 #ifdef INTEGRATION_TEST
 #include <LightGBM/c_api.h>
 #include "kernel_gbm.hpp"
 #endif
-#include "model/DataRow.hpp"
-#include "util/string_utils.hpp"
-#include "cuqrsolve.cuh"
+#include "ModelService.hpp"
+#include "align_features.cuh"
+#include "appcontext.hpp"
+#include "DataRowService.hpp"
+#include "DQScalingFactorService.hpp"
 #include "firefly.hpp"
-#include "common/constants.hpp"
-#include "model/SVRParameters.hpp"
+#include "onlinesvr.hpp"
 #include "SVRParametersService.hpp"
+#include "common/compatibility.hpp"
+#include "common/constants.hpp"
+#include "common/defines.h"
+#include "common/logging.hpp"
+#include "common/parallelism.hpp"
 #include "common/rtp_thread_pool.hpp"
+#include "DAO/DatasetDAO.hpp"
 #include "DAO/ModelDAO.hpp"
+#include "model/DataRow.hpp"
 #include "model/Model.hpp"
+#include "model/SVRParameters.hpp"
+#include "util/math_utils.hpp"
+#include "util/string_utils.hpp"
 #include "util/time_utils.hpp"
 #include "util/validation_utils.hpp"
-#include "util/math_utils.hpp"
-#include "DAO/DatasetDAO.hpp"
-#include "common/defines.h"
-#include "common/compatibility.hpp"
-#include "common/parallelism.hpp"
-#include "common/logging.hpp"
-#include "onlinesvr.hpp"
-#include "DQScalingFactorService.hpp"
-#include "ModelService.hpp"
-#include "appcontext.hpp"
-#include "align_features.cuh"
 
 
 namespace svr {
@@ -95,6 +94,7 @@ uint32_t ModelService::get_max_row_len()
 {
     return get_max_quantisation() * (1 + PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count);
 }
+
 
 ModelService::ModelService(dao::ModelDAO &model_dao) : model_dao(model_dao)
 {
@@ -177,7 +177,8 @@ arma::mat aux_train_predict(const datamodel::SVRParameters &param, const arma::m
 
     BoosterHandle booster;
     const std::string lgbm_core_parameters = common::formatter() << "objective=regression tree_learner=data seed=123 learning_rate=" << PROPS.get_k_learn_rate() << " num_iterations=" <<
-        PROPS.get_k_epochs() << " early_stopping_round=200 metric=l2 force_col_wise=true num_threads=" << C_n_cpu << " device_type=gpu " << lgbm_dataset_parameters;
+                                             PROPS.get_k_epochs() << " early_stopping_round=200 metric=l2 force_col_wise=true num_threads=" << C_n_cpu << " device_type=gpu " <<
+                                             lgbm_dataset_parameters;
     lg_errchk(LGBM_BoosterCreate(train_dataset, lgbm_core_parameters.c_str(), &booster));
     int train_complete = 0;
     auto iter = PROPS.get_k_epochs() + 1;
@@ -185,20 +186,24 @@ arma::mat aux_train_predict(const datamodel::SVRParameters &param, const arma::m
     while (train_complete != 1 && --iter) lg_errchk(LGBM_BoosterUpdateOneIter(booster, &train_complete));
     arma::vec res(predict_features_t.n_cols, ARMA_DEFAULT_FILL);
     int64_t out_len;
-    lg_errchk(LGBM_BoosterPredictForMat(booster, predict_features_t.mem, C_API_DTYPE_FLOAT32, predict_features_t.n_cols, predict_features_t.n_rows, 1, C_API_PREDICT_NORMAL, 0, 0, lgbm_core_parameters.c_str(), &out_len, res.memptr()));
+    lg_errchk(
+        LGBM_BoosterPredictForMat(booster, predict_features_t.mem, C_API_DTYPE_FLOAT32, predict_features_t.n_cols, predict_features_t.n_rows, 1, C_API_PREDICT_NORMAL, 0, 0,
+            lgbm_core_parameters.c_str(), &out_len, res.memptr()));
     lg_errchk(LGBM_BoosterFree(booster));
     lg_errchk(LGBM_DatasetFree(train_dataset));
 #ifdef SCALE_REF
     business::DQScalingFactorService::unscale_labels_I(*p_labels_sf, res);
 #endif
-    LOG4_DEBUG("Predicted " << common::present(res) << ", difference " << common::present<double>(arma::vectorise(predict_labels) - res) << ", reference " << common::present<float>(predict_labels));
+    LOG4_DEBUG(
+        "Predicted " << common::present(res) << ", difference " << common::present<double>(arma::vectorise(predict_labels) - res) << ", reference " << common::present<float>(predict_labels))
+    ;
     return res;
 }
 
 // Utility function used in tests, does predict, unscale and then validate
 std::tuple<double, double, arma::vec, arma::vec, double, arma::vec>
 ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
-                       const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const data_row_container &times, const bool online, const bool verbose)
+                       const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const datamodel::data_row_container &times, const bool online, const bool verbose)
 {
     LOG4_BEGIN();
     if (labels.n_rows <= start_ix)
@@ -211,10 +216,10 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
 
     datamodel::t_level_predict_features predict_features({times.cbegin() + start_ix, times.cend()}, otr<arma::mat>(features.rows(start_ix, ix_fini)));
     LOG4_TRACE("Predicting features " << common::present<double>(*predict_features.p));
-    data_row_container batch_predicted, cont_predicted_online;
+    datamodel::data_row_container batch_predicted, cont_predicted_online;
     tbb::mutex mx;
     PROFILE_INFO(ModelService::predict(ensemble, model, predict_features, dataset.get_input_queue()->get_resolution(), mx, labels.rows(start_ix, ix_fini), batch_predicted),
-                "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
+                 "Batch predict of " << num_preds << " rows, level " << level << ", step " << model.get_step());
     arma::mat predict_lgbm;
     PROFIL3(predict_lgbm = aux_train_predict(*param_pair.first, features, labels, start_ix));
     if (batch_predicted.size() != num_preds || predict_lgbm.n_rows != num_preds || predict_lgbm.n_cols != 1)
@@ -228,7 +233,8 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     OMP_FOR_i(actual.n_cols) actual.col(i) += lastknown; // common::sexp<double>(actual.col(i)) + lastknown;
 #endif
     double sum_absdiff_batch = 0, sum_absdiff_lk = 0, sum_abs_labels = 0, sum_absdiff_online = 0, sum_absdiff_lgbm = 0;
-    double batch_correct_directions = 0, lgbm_correct_directions = 0, lgbm_correct_predictions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions = 0;
+    double batch_correct_directions = 0, lgbm_correct_directions = 0, lgbm_correct_predictions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions =
+            0;
     for (uint32_t ix_future = start_ix; ix_future <= ix_fini; ++ix_future) {
         const auto ix = ix_future - start_ix;
         predicted_batch[ix] = stepping * batch_predicted[ix]->at(level);
@@ -251,16 +257,16 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
         std::stringstream row_report;
         if (print_line)
             row_report << "Position " << ix << ", level " << level << ", step " << model.get_step() <<
-                ", actual " << actual[ix] << ", batch predicted " << predicted_batch[ix] << ", LGBM predicted " << predict_lgbm[ix] << ", last known " << lastknown[ix] << \
-                " batch MAE " << sum_absdiff_batch / ix_div << ", MAE last-known " << sum_absdiff_lk / ix_div << " LGBM MAE " << sum_absdiff_lgbm / ix_div << \
-                ", LGBM MAPE " << common::mape(sum_absdiff_lgbm, sum_abs_labels) << \
-                "pc, batch MAPE " << common::mape(sum_absdiff_batch, sum_abs_labels) << \
-                "pc, MAPE last-known " << common::mape(sum_absdiff_lk, sum_abs_labels) << \
-                "pc, batch alpha " << common::alpha(sum_absdiff_lk, sum_absdiff_batch) << \
-                "pc, LGBM alpha " << common::alpha(sum_absdiff_lk, sum_absdiff_lgbm) << \
-                "pc, current batch alpha " << cur_alpha_pct_batch <<  "pc, current LGBM alpha " << cur_alpha_pct_lgbm << \
-                "pc, batch correct predictions " << 100. * batch_correct_predictions / ix_div << "pc, batch correct directions " << 100. * batch_correct_directions / ix_div << "pc" << \
-                "pc, LGBM correct predictions " << 100. * lgbm_correct_predictions / ix_div << "pc, LGBM correct directions " << 100. * lgbm_correct_directions / ix_div << "pc";
+                    ", actual " << actual[ix] << ", batch predicted " << predicted_batch[ix] << ", LGBM predicted " << predict_lgbm[ix] << ", last known " << lastknown[ix] <<
+                    " batch MAE " << sum_absdiff_batch / ix_div << ", MAE last-known " << sum_absdiff_lk / ix_div << " LGBM MAE " << sum_absdiff_lgbm / ix_div <<
+                    ", LGBM MAPE " << common::mape(sum_absdiff_lgbm, sum_abs_labels) <<
+                    "pc, batch MAPE " << common::mape(sum_absdiff_batch, sum_abs_labels) <<
+                    "pc, MAPE last-known " << common::mape(sum_absdiff_lk, sum_abs_labels) <<
+                    "pc, batch alpha " << common::alpha(sum_absdiff_lk, sum_absdiff_batch) <<
+                    "pc, LGBM alpha " << common::alpha(sum_absdiff_lk, sum_absdiff_lgbm) <<
+                    "pc, current batch alpha " << cur_alpha_pct_batch << "pc, current LGBM alpha " << cur_alpha_pct_lgbm <<
+                    "pc, batch correct predictions " << 100. * batch_correct_predictions / ix_div << "pc, batch correct directions " << 100. * batch_correct_directions / ix_div << "pc" <<
+                    "pc, LGBM correct predictions " << 100. * lgbm_correct_predictions / ix_div << "pc, LGBM correct directions " << 100. * lgbm_correct_directions / ix_div << "pc";
         if (online) {
             PROFILE_INFO(
                 ModelService::predict(
@@ -291,7 +297,8 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
                         << "pc, current online alpha " << cur_alpha_pct_online << "pc, online correct predictions " << 100. * online_correct_predictions / ix_div
                         << "pc, online correct directions " << 100. * online_correct_directions / ix_div << "pc";
         }
-        if (row_report.str().size()) LOG4_DEBUG(row_report.str());
+        if (row_report.str().size())
+            LOG4_DEBUG(row_report.str());
     }
     const auto mape_lk = 100. * sum_absdiff_lk / sum_abs_labels;
     const auto &sum_absdiff = online ? sum_absdiff_online : sum_absdiff_batch;
@@ -333,7 +340,7 @@ ModelService::get_start(const datamodel::DataRow::container &cont, const uint32_
     return get_start(cont.cbegin(), cont.cend(), decremental_offset, model_last_time, resolution);
 }
 
-datamodel::Model_ptr ModelService::get_model_by_id(const bigint model_id)
+datamodel::Model_ptr ModelService::get_model_by_id(const bigint model_id) const
 {
     return model_dao.get_by_id(model_id);
 }
@@ -360,7 +367,7 @@ datamodel::SVRParameters_ptr ModelService::produce_parameters(
                                                ensemble.get_column_name(), dataset.get_spectral_levels(), model.get_decon_level(), model.get_step(), chunk_ix, grad_ix);
 }
 
-void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model)
+void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model) const
 {
     if (!check(model.get_gradients(), model.get_gradient_count()) && model.get_id())
         model.set_gradients(model_dao.get_svr_by_model_id(model.get_id()), false);
@@ -379,7 +386,7 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
             paramset.empty() || std::none_of(C_default_exec_policy, paramset.cbegin(), paramset.cend(), [](const auto p) { return p->is_manifold(); })
                 ? 1
                 : datamodel::OnlineSVR::get_num_chunks(paramset.empty() ? datamodel::C_default_svrparam_decrement_distance : (**paramset.cbegin()).get_svr_decremental_distance(),
-                                                           model.get_max_chunk_size());
+                                                       model.get_max_chunk_size());
 
     const uint16_t default_adjacent_ct = paramset.empty()
                                              ? datamodel::C_default_svrparam_adjacent_levels_ratio * p_dataset->get_spectral_levels()
@@ -456,35 +463,35 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
 }
 
 
-int ModelService::save(const datamodel::Model_ptr &p_model)
+int ModelService::save(const datamodel::Model_ptr &p_model) const
 {
     REJECT_NULLPTR(p_model);
     if (!p_model->get_id()) p_model->set_id(model_dao.get_next_id());
     return model_dao.save(p_model);
 }
 
-bool ModelService::exists(const datamodel::Model &model)
+bool ModelService::exists(const datamodel::Model &model) const
 {
     return model_dao.exists(model.get_id());
 }
 
-int ModelService::remove(const datamodel::Model_ptr &model)
+int ModelService::remove(const datamodel::Model_ptr &model) const
 {
     REJECT_NULLPTR(model);
     return model_dao.remove(model);
 }
 
-int ModelService::remove_by_ensemble_id(const bigint ensemble_id)
+int ModelService::remove_by_ensemble_id(const bigint ensemble_id) const
 {
     return model_dao.remove_by_ensemble_id(ensemble_id);
 }
 
-std::deque<datamodel::Model_ptr> ModelService::get_all_models_by_ensemble_id(const bigint ensemble_id)
+std::deque<datamodel::Model_ptr> ModelService::get_all_models_by_ensemble_id(const bigint ensemble_id) const
 {
     return model_dao.get_all_ensemble_models(ensemble_id);
 }
 
-datamodel::Model_ptr ModelService::get_model(const bigint ensemble_id, const uint16_t decon_level)
+datamodel::Model_ptr ModelService::get_model(const bigint ensemble_id, const uint16_t decon_level) const
 {
     return model_dao.get_by_ensemble_id_and_decon_level(ensemble_id, decon_level);
 }
@@ -502,7 +509,7 @@ bool ModelService::check(const std::deque<datamodel::OnlineSVR_ptr> &models, con
                          [grad_ct](const auto p_model) { return p_model->get_gradient_level() < grad_ct; });
 }
 
-arma::rowvec ModelService::prepare_special_features(const data_row_container::const_iterator &last_known_it, const bpt::time_duration &resolution, const uint32_t len)
+arma::rowvec ModelService::prepare_special_features(const datamodel::data_row_container::const_iterator &last_known_it, const bpt::time_duration &resolution, const uint32_t len)
 {
     const bpt::ptime value_time = (**last_known_it).get_value_time();
     LOG4_TRACE("Processing row with value time " << value_time);
@@ -521,7 +528,7 @@ arma::rowvec ModelService::prepare_special_features(const data_row_container::co
 }
 
 void ModelService::prepare_weights(
-    arma::mat &weights, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t steps,
+    arma::mat &weights, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t steps,
     const bpt::time_duration &resolution_main)
 {
     LOG4_BEGIN();
@@ -551,7 +558,7 @@ void ModelService::prepare_weights(
     LOG4_END();
 }
 
-std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, data_row_container_ptr>
+std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, datamodel::data_row_container_ptr>
 ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, uint32_t dataset_rows)
 {
     LOG4_BEGIN();
@@ -565,7 +572,8 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     const auto aux_resolution = dataset.get_aux_input_queues().empty() ? main_resolution : dataset.get_aux_input_queue()->get_resolution();
     const datamodel::datarow_crange labels_range{
         ModelService::get_start(label_decon.get_data().cbegin(), label_decon.get_data().cend(), dataset_rows, model.get_last_modeled_value_time(), main_resolution),
-        label_decon.get_data().cend(), label_decon};
+        label_decon.get_data().cend(), label_decon
+    };
 
     const auto [p_labels, p_last_knowns, p_label_times] = dataset.get_calc_cache().get_labels(
         p_params->get_input_queue_column_name(), model.get_step(), labels_range, labels_aux, dataset.get_max_lookback_time_gap(), level, dataset.get_multistep(),
@@ -606,7 +614,8 @@ ModelService::get_manifold_training_data(datamodel::Dataset &dataset, const data
     const auto main_cend = label_decon.get_data().cend();
 #endif
     const datamodel::datarow_crange labels_range{
-        ModelService::get_start(label_decon.get_data().cbegin(), main_cend, dataset_rows, model.get_last_modeled_value_time(), main_resolution), main_cend, label_decon};
+        ModelService::get_start(label_decon.get_data().cbegin(), main_cend, dataset_rows, model.get_last_modeled_value_time(), main_resolution), main_cend, label_decon
+    };
     LOG4_TRACE("Preparing manifold dataset " << labels_range.front()->get_value_time() << " to " << labels_range.back()->get_value_time() <<
         ", main resolution " << main_resolution << ", aux resolution " << aux_resolution << ", dataset rows " << dataset_rows << ", range " << labels_range.distance());
     const auto [p_labels, p_label_times_l, p_label_times_r] = dataset.get_calc_cache().get_manifold_labels(
@@ -630,13 +639,13 @@ ModelService::get_manifold_training_data(datamodel::Dataset &dataset, const data
             ptr<arma::mat>();
 #endif
 
-    return {p_features, p_labels, p_weights, (**std::prev(main_cend)).  get_value_time()}; // The last time is the last modeled value time, which is used to prepare manifold labels
+    return {p_features, p_labels, p_weights, (**std::prev(main_cend)).get_value_time()}; // The last time is the last modeled value time, which is used to prepare manifold labels
 }
 
 
 void
 ModelService::prepare_manifold_labels(
-    datamodel::Model &model, arma::mat &manifold_labels, data_row_container &manifold_times_left, data_row_container &manifold_times_right,
+    datamodel::Model &model, arma::mat &manifold_labels, datamodel::data_row_container &manifold_times_left, datamodel::data_row_container &manifold_times_right,
     const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, const uint16_t level, const bpt::time_duration &resolution_aux,
     const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag)
 {
@@ -672,7 +681,7 @@ ModelService::prepare_manifold_labels(
 
 void
 ModelService::prepare_labels(
-    arma::mat &all_labels, arma::vec &all_last_knowns, data_row_container &all_times, const datamodel::datarow_crange &main_data,
+    arma::mat &all_labels, arma::vec &all_last_knowns, datamodel::data_row_container &all_times, const datamodel::datarow_crange &main_data,
     const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, const uint16_t level, const bpt::time_duration &resolution_aux, const bpt::ptime &last_modeled_value_time,
     const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag)
 {
@@ -733,7 +742,8 @@ ModelService::prepare_labels(
             LOG4_TRACE("Label gap " << label_gap << " is larger than max gap " << max_gap << " for time " << L_start_time);
             continue;
         }
-        const auto F_end_it = lower_bound_before(L_start_it - aux_data.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : aux_data.cbegin(), L_start_it, L_start_time - horizon_duration);
+        const auto F_end_it = lower_bound_before(L_start_it - aux_data.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : aux_data.cbegin(), L_start_it,
+                                                 L_start_time - horizon_duration);
         if (F_end_it == aux_data.cend() || F_end_it == aux_data.cbegin()) {
             LOG4_TRACE("No feature data for label at " << L_start_time);
             continue;
@@ -806,7 +816,8 @@ ModelService::prepare_labels(
 }
 
 void ModelService::tune_features(
-    arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
+    arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const datamodel::data_row_container &label_times,
+    const std::deque<datamodel::DeconQueue_ptr> &feat_queues,
     const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
 {
     LOG4_BEGIN();
@@ -862,78 +873,78 @@ void ModelService::tune_features(
 #define OMP_TASKLOOP_1(STUB)
 #define OMP_TASKLOOP_(STUB1, STUB2)
 #endif
-    for (DTYPE(n_queues) qix = 0; qix < n_queues; ++qix) {
-        const auto &p_queue = feat_queues[qix]; // TODO Multiple queues may have different amount of samples, fix the assumption here that they are the same!
-        const auto last_iter = lower_bound(std::as_const(*p_queue), latest_label_horizon);
-        const auto start_iter = lower_bound_before(std::as_const(*p_queue), earliest_label_horizon) - coef_lag_max_q;
-        const uint32_t start_offset = start_iter - p_queue->cbegin();
-        in_rows[qix] = last_iter - start_iter;
-        const size_t quantise_features_size =
-                n_rows * coef_lag_ * sizeof(double) + in_rows[qix] * sizeof(double) + 2 * n_rows * sizeof(uint32_t) + in_rows[qix] * sizeof(uint32_t);
-        const uint16_t n_chunks_quantise = cdiv(quantise_features_size, max_gpu_chunk_size);
-        chunk_len_quantise[qix] = cdiv(n_rows, n_chunks_quantise);
-        decon[qix].set_size(in_rows[qix], n_adj_levels);
-        feat_params[qix].resize(n_rows);
-        OMP_TASKLOOP_(in_rows[qix] * n_adj_levels, SSIMD firstprivate(start_offset, qix) collapse(2))
-        for (uint32_t r = 0; r < in_rows[qix]; ++r)
-            for (uint16_t l = 0; l < n_adj_levels; ++l)
-                decon[qix](r, l) = p_queue->at(start_offset + r)->at(adjacent_levels ^ l);
-        OMP_TASKLOOP_(n_rows, SSIMD firstprivate(n_rows))
-        for (uint32_t r = 0; r < n_rows; ++r)
-            feat_params[qix][r].ix_end = (lower_bound_before(*p_queue, label_times[r]->get_value_time() - horizon_duration) - p_queue->cbegin()) - start_offset;
-        OMP_TASKLOOP_1(firstprivate(n_adj_levels, qix))
-        for (DTYPE(n_adj_levels) adj_ix = 0; adj_ix < n_adj_levels; ++adj_ix) {
-            tbb::mutex ins_l;
-            const auto adj_level = adjacent_levels ^ adj_ix;
-            const auto adj_ix_q = adj_ix + qix * n_adj_levels;
-            const auto adj_ix_q_1 = adj_ix_q + 1;
-            const std::deque<uint32_t> &quantisations = get_quantisations();
-            OMP_TASKLOOP_(quantisations.size(), firstprivate(n_rows, lag, coef_lag, adj_ix_q, adj_ix_q_1, qix))
-            for (uint32_t qq = 0; qq < quantisations.size(); ++qq) {
-                const auto quantise = quantisations[qq];
-                auto feat_params_qix_qt = feat_params[qix];
-                const auto coef_lag_q = coef_lag_ * quantise;
-                OMP_TASKLOOP_(n_rows, SSIMD firstprivate(quantise))
-                for (auto &f: feat_params_qix_qt) f.ix_start = f.ix_end - coef_lag_q + 1;
+        for (DTYPE(n_queues) qix = 0; qix < n_queues; ++qix) {
+            const auto &p_queue = feat_queues[qix]; // TODO Multiple queues may have different amount of samples, fix the assumption here that they are the same!
+            const auto last_iter = lower_bound(std::as_const(*p_queue), latest_label_horizon);
+            const auto start_iter = lower_bound_before(std::as_const(*p_queue), earliest_label_horizon) - coef_lag_max_q;
+            const uint32_t start_offset = start_iter - p_queue->cbegin();
+            in_rows[qix] = last_iter - start_iter;
+            const size_t quantise_features_size =
+                    n_rows * coef_lag_ * sizeof(double) + in_rows[qix] * sizeof(double) + 2 * n_rows * sizeof(uint32_t) + in_rows[qix] * sizeof(uint32_t);
+            const uint16_t n_chunks_quantise = cdiv(quantise_features_size, max_gpu_chunk_size);
+            chunk_len_quantise[qix] = cdiv(n_rows, n_chunks_quantise);
+            decon[qix].set_size(in_rows[qix], n_adj_levels);
+            feat_params[qix].resize(n_rows);
+            OMP_TASKLOOP_(in_rows[qix] * n_adj_levels, SSIMD firstprivate(start_offset, qix) collapse(2))
+            for (uint32_t r = 0; r < in_rows[qix]; ++r)
+                for (uint16_t l = 0; l < n_adj_levels; ++l)
+                    decon[qix](r, l) = p_queue->at(start_offset + r)->at(adjacent_levels ^ l);
+            OMP_TASKLOOP_(n_rows, SSIMD firstprivate(n_rows))
+            for (uint32_t r = 0; r < n_rows; ++r)
+                feat_params[qix][r].ix_end = (lower_bound_before(*p_queue, label_times[r]->get_value_time() - horizon_duration) - p_queue->cbegin()) - start_offset;
+            OMP_TASKLOOP_1(firstprivate(n_adj_levels, qix))
+            for (DTYPE(n_adj_levels) adj_ix = 0; adj_ix < n_adj_levels; ++adj_ix) {
+                tbb::mutex ins_l;
+                const auto adj_level = adjacent_levels ^ adj_ix;
+                const auto adj_ix_q = adj_ix + qix * n_adj_levels;
+                const auto adj_ix_q_1 = adj_ix_q + 1;
+                const std::deque<uint32_t> &quantisations = get_quantisations();
+                OMP_TASKLOOP_(quantisations.size(), firstprivate(n_rows, lag, coef_lag, adj_ix_q, adj_ix_q_1, qix))
+                for (uint32_t qq = 0; qq < quantisations.size(); ++qq) {
+                    const auto quantise = quantisations[qq];
+                    auto feat_params_qix_qt = feat_params[qix];
+                    const auto coef_lag_q = coef_lag_ * quantise;
+                    OMP_TASKLOOP_(n_rows, SSIMD firstprivate(quantise))
+                    for (auto &f: feat_params_qix_qt) f.ix_start = f.ix_end - coef_lag_q + 1;
 
-                arma::mat features(n_rows, coef_lag, ARMA_DEFAULT_FILL);
-                OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, quantise, coef_lag_, coef_lag))
-                for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix])
-                    PROFILE_INFO(quantise_features(
-                                decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i, n_rows, in_rows[qix], adj_level,
-                                coef_lag_, coef_lag, quantise, features.memptr()),
-                            "Quantise features " << chunk_len_quantise[qix] << ", quantise " << quantise);
-                RELEASE_CONT(feat_params_qix_qt);
-                arma::vec scores(coef_lag, ARMA_DEFAULT_FILL);
-                arma::fvec stretches(coef_lag, ARMA_DEFAULT_FILL);
-                arma::u32_vec shifts(coef_lag, ARMA_DEFAULT_FILL);
-                OMP_TASKLOOP_1(firstprivate(coef_lag, chunk_len_align, n_rows, quantise))
-                for (DTYPE(coef_lag) i = 0; i < coef_lag; i += chunk_len_align)
-                    PROFILE_INFO(align_features(
-                                    features.colptr(i), mean_L.mem, scores.memptr() + i, stretches.memptr() + i, shifts.memptr() + i, n_rows,
-                                    std::min<uint32_t>(i + chunk_len_align, coef_lag) - i), "Align features " << n_rows << "x" << chunk_len_align << ", quantize " << quantise);
+                    arma::mat features(n_rows, coef_lag, ARMA_DEFAULT_FILL);
+                    OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, quantise, coef_lag_, coef_lag))
+                    for (uint32_t i = 0; i < n_rows; i += chunk_len_quantise[qix])
+                        PROFILE_INFO(quantise_features(
+                                     decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i, n_rows, in_rows[qix], adj_level,
+                                     coef_lag_, coef_lag, quantise, features.memptr()),
+                                 "Quantise features " << chunk_len_quantise[qix] << ", quantise " << quantise);
+                    RELEASE_CONT(feat_params_qix_qt);
+                    arma::vec scores(coef_lag, ARMA_DEFAULT_FILL);
+                    arma::fvec stretches(coef_lag, ARMA_DEFAULT_FILL);
+                    arma::u32_vec shifts(coef_lag, ARMA_DEFAULT_FILL);
+                    OMP_TASKLOOP_1(firstprivate(coef_lag, chunk_len_align, n_rows, quantise))
+                    for (DTYPE(coef_lag) i = 0; i < coef_lag; i += chunk_len_align)
+                        PROFILE_INFO(align_features(
+                                     features.colptr(i), mean_L.mem, scores.memptr() + i, stretches.memptr() + i, shifts.memptr() + i, n_rows,
+                                     std::min<uint32_t>(i + chunk_len_align, coef_lag) - i), "Align features " << n_rows << "x" << chunk_len_align << ", quantize " << quantise);
 
-                const arma::uvec trims = arma::uvec(arma::stable_sort_index(scores)).tail(coef_lag - lag);
-                scores.shed_rows(trims);
-                const double score = arma::accu(scores);
-                const tbb::mutex::scoped_lock lk(ins_l);
-                if (score < best_score[adj_ix_q]) {
-                    LOG4_DEBUG("New best score " << score << ", previous best score " << best_score[adj_ix_q] << ", improvement " << common::imprv(score, best_score[adj_ix_q])
-                        << "pc, quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ":" << adj_level << ", lag " << lag << ", coef lag "
-                        << coef_lag);
-                    best_score[adj_ix_q] = score;
-                    fm.quantization[adj_ix_q] = quantise;
-                    stretches.shed_rows(trims);
-                    shifts.shed_rows(trims);
-                    const auto adj_ix_q_lag = adj_ix_q * lag;
-                    const auto adj_ix_q_1_lag = adj_ix_q_1 * lag - 1;
-                    fm.stretches.rows(adj_ix_q_lag, adj_ix_q_1_lag) = stretches;
-                    fm.shifts.rows(adj_ix_q_lag, adj_ix_q_1_lag) = shifts;
-                    fm.trims[adj_ix_q] = trims;
+                    const arma::uvec trims = arma::uvec(arma::stable_sort_index(scores)).tail(coef_lag - lag);
+                    scores.shed_rows(trims);
+                    const double score = arma::accu(scores);
+                    const tbb::mutex::scoped_lock lk(ins_l);
+                    if (score < best_score[adj_ix_q]) {
+                        LOG4_DEBUG("New best score " << score << ", previous best score " << best_score[adj_ix_q] << ", improvement " << common::imprv(score, best_score[adj_ix_q])
+                            << "pc, quantise " << quantise << ", aux queue " << qix << ", level " << adj_ix << ":" << adj_level << ", lag " << lag << ", coef lag "
+                            << coef_lag);
+                        best_score[adj_ix_q] = score;
+                        fm.quantization[adj_ix_q] = quantise;
+                        stretches.shed_rows(trims);
+                        shifts.shed_rows(trims);
+                        const auto adj_ix_q_lag = adj_ix_q * lag;
+                        const auto adj_ix_q_1_lag = adj_ix_q_1 * lag - 1;
+                        fm.stretches.rows(adj_ix_q_lag, adj_ix_q_1_lag) = stretches;
+                        fm.shifts.rows(adj_ix_q_lag, adj_ix_q_1_lag) = shifts;
+                        fm.trims[adj_ix_q] = trims;
+                    }
                 }
             }
         }
-    }
 #ifdef NDEBUG
     }
 #endif
@@ -960,7 +971,8 @@ void ModelService::do_features(
     const auto feature_cols = levels_lag * n_queues;
     const auto &feat_params_f = feat_params.front();
     if (out_features.n_rows != n_rows || out_features.n_cols != feature_cols) out_features.set_size(n_rows, feature_cols);
-    LOG4_TRACE("Preparing features " << n_rows << "x" << feature_cols << ", lag " << lag << ", coef lag " << coef_lag << ", levels " << n_levels << ", queues " << n_queues << ", decon queue "
+    LOG4_TRACE(
+        "Preparing features " << n_rows << "x" << feature_cols << ", lag " << lag << ", coef lag " << coef_lag << ", levels " << n_levels << ", queues " << n_queues << ", decon queue "
         << common::present(decon.front()) << ", feat params " << feat_params_f.size() << ", feat params ix_end " << feat_params_f.front().ix_end << ", stripe period " << stripe_period <<
         ", quantisation " << fm.quantization[0] << ", stretches " << common::present(fm.stretches) << ", shifts " << common::present(fm.shifts));
 #ifdef NDEBUG
@@ -984,8 +996,8 @@ void ModelService::do_features(
                 OMP_TASKLOOP_1(firstprivate(n_rows, adj_ix, coef_lag_, coef_lag))
                 for (DTYPE(n_rows) i = 0; i < n_rows; i += chunk_len_quantise[qix]) PROFILE_INFO(
                     quantise_features(decon[qix].mem, feat_params_qix_qt.data(), i, std::min<uint32_t>(i + chunk_len_quantise[qix], n_rows) - i,
-                                        n_rows, in_rows[qix], adj_level, coef_lag_, coef_lag, quantise, level_features.memptr()),
-                                                                                           "Prepare quantised features " << chunk_len_quantise[qix]);
+                        n_rows, in_rows[qix], adj_level, coef_lag_, coef_lag, quantise, level_features.memptr()),
+                    "Prepare quantised features " << chunk_len_quantise[qix]);
                 level_features.shed_cols(fm.trims[adj_ix_q]);
                 out_features.cols(adj_ix_q_lag, adj_ix_q_lag + lag - 1) = level_features;
                 LOG4_TRACE("Level " << adj_ix << ", queue " << qix << ", features " << common::present(level_features) << ", quantise period " << stripe_period * quantise);
@@ -999,7 +1011,7 @@ void ModelService::do_features(
 
 void
 ModelService::prepare_features(
-    arma::mat &out_features, const data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const datamodel::SVRParameters &param,
+    arma::mat &out_features, const datamodel::data_row_container &label_times, const std::deque<datamodel::DeconQueue_ptr> &feat_queues, const datamodel::SVRParameters &param,
     const bpt::time_duration &resolution_aux, const bpt::time_duration &main_queue_resolution)
 {
     LOG4_BEGIN();
@@ -1137,8 +1149,9 @@ ModelService::train_batch(
         if (!p_gradient)
             LOG4_THROW("SVR model for gradient " << gix << " not initialized " << model);
         PROFILE_INFO(p_gradient->batch_train(gradient_data.p_features, gradient_data.p_labels, p_weights, last_value_time),
-                    "Train batch, gradient " << gix << ", labels " << arma::size(*gradient_data.p_labels) << ", features " << arma::size(*gradient_data.p_features) << ", last value time " <<
-                    last_value_time);
+                     "Train batch, gradient " << gix << ", labels " << arma::size(*gradient_data.p_labels) << ", features " << arma::size(*gradient_data.p_features) << ", last value time "
+                     <<
+                     last_value_time);
 
         if (model.get_gradient_count() < 2 || gix == model.get_gradient_count() - 1) continue;
         gradient_data = model.get_gradient(gix)->produce_residuals();
@@ -1150,7 +1163,7 @@ ModelService::train_batch(
 }
 
 arma::vec
-ModelService::get_last_knowns(const datamodel::Ensemble &ensemble, const uint16_t level, const data_row_container &times, const bpt::time_duration &resolution)
+ModelService::get_last_knowns(const datamodel::Ensemble &ensemble, const uint16_t level, const datamodel::data_row_container &times, const bpt::time_duration &resolution)
 {
     arma::vec res(times.size(), arma::fill::zeros);
     const auto p_aux_decon = ensemble.get_label_aux_decon();
@@ -1158,7 +1171,7 @@ ModelService::get_last_knowns(const datamodel::Ensemble &ensemble, const uint16_
         LOG4_THROW("No label auxiliary data for ensemble " << ensemble);
     const auto horizon_duration = resolution * PROPS.get_prediction_horizon();
     OMP_FOR_i_(res.size(), firstprivate(level)) {
-        const auto &row = (**lower_bound_before(*p_aux_decon, times[i]->get_value_time() - horizon_duration));
+        const auto &row = (**business::lower_bound_before(*p_aux_decon, times[i]->get_value_time() - horizon_duration));
         res[i] = row[level];
         LOG4_TRACE("For time " << times[i]->get_value_time() << " found last known " << row.get_value_time() << " " << row.to_string());
     }
@@ -1166,14 +1179,13 @@ ModelService::get_last_knowns(const datamodel::Ensemble &ensemble, const uint16_
 }
 
 
-void
-ModelService::predict(
+void ModelService::predict(
     const datamodel::Ensemble &ensemble,
     datamodel::Model &model,
     const datamodel::t_level_predict_features &predict_features,
     const bpt::time_duration &resolution,
     tbb::mutex &insemx,
-    data_row_container &out)
+    datamodel::data_row_container &out)
 {
     arma::mat prediction(predict_features.p->n_rows, model.get_multiout());
     tbb::mutex predict_lock;
@@ -1204,7 +1216,7 @@ void ModelService::predict(
     const bpt::time_duration &resolution,
     tbb::mutex &insemx,
     const arma::mat &labels,
-    data_row_container &out)
+    datamodel::data_row_container &out)
 {
     arma::mat prediction(predict_features.p->n_rows, model.get_multiout());
     tbb::mutex predict_lock;
@@ -1247,10 +1259,7 @@ ModelService::check_feature_data(
 
 void
 ModelService::check_feature_data(
-    const datamodel::DataRow::container &data,
-    const datamodel::DataRow::container::const_iterator &iter,
-    const bpt::time_duration &max_gap,
-    const bpt::ptime &feat_time)
+    const datamodel::DataRow::container &data, const datamodel::DataRow::container::const_iterator &iter, const bpt::time_duration &max_gap, const bpt::ptime &feat_time)
 {
     if (iter == data.end() || iter->get()->get_value_time() - feat_time > max_gap)
         THROW_EX_FS(common::insufficient_data,

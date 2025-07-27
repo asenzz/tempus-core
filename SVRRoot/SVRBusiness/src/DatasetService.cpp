@@ -161,19 +161,19 @@ size_t DatasetService::get_level_count(const bigint dataset_id)
     return dataset_dao.get_level_count(dataset_id);
 }
 
-bool DatasetService::link_user_to_dataset(User_ptr const &user, datamodel::Dataset_ptr const &dataset)
+bool DatasetService::link_user_to_dataset(datamodel::User_ptr const &user, datamodel::Dataset_ptr const &dataset)
 {
     return dataset_dao.link_user_to_dataset(user->get_user_name(), dataset);
 }
 
 
-bool DatasetService::unlink_user_from_dataset(User_ptr const &user, datamodel::Dataset_ptr const &dataset)
+bool DatasetService::unlink_user_from_dataset(datamodel::User_ptr const &user, datamodel::Dataset_ptr const &dataset)
 {
     return dataset_dao.unlink_user_from_dataset(user->get_user_name(), dataset);
 }
 
-DatasetService::DatasetUsers::DatasetUsers(datamodel::Dataset_ptr const &dataset, std::deque<User_ptr> &&users)
-        : p_dataset(dataset), users(std::forward<std::deque<User_ptr>>(users))
+DatasetService::DatasetUsers::DatasetUsers(datamodel::Dataset_ptr const &dataset, std::deque<datamodel::User_ptr> &&users)
+        : p_dataset(dataset), users(std::forward<std::deque<datamodel::User_ptr>>(users))
 {}
 
 namespace {
@@ -280,7 +280,7 @@ void DatasetService::process_requests(
             REQCHK(!p_request->sanity_check(), "Request " << *p_request << " incorrect!")
 
             LOG4_DEBUG("Processing request " << *p_request);
-            data_row_container predict_times;
+            datamodel::data_row_container predict_times;
             if (p_request->value_time_start == p_request->value_time_end)
                 predict_times.emplace_back(otr<datamodel::DataRow>(p_request->value_time_start, timenow, 0, 0));
             else

@@ -1,19 +1,16 @@
 #pragma once
 
-#include "common/types.hpp"
 #include "DBTable.hpp"
-#include "DataRow.hpp"
+#include "common/types.hpp"
 #include "StoreBufferPushMerge.hpp"
-#include "DeconQueue.hpp"
 
 namespace svr {
-
-namespace business { class DeconQueueService; }
+namespace business {
+class DeconQueueService;
+}
 
 namespace datamodel {
-
-
-class DeconQueue: public Queue
+class DeconQueue final : public Queue
 {
     friend svr::business::DeconQueueService;
 
@@ -26,19 +23,15 @@ class DeconQueue: public Queue
 
 public:
     DeconQueue();
-    DeconQueue(
-            std::string const &table_name,
-            std::string const &input_queue_table_name_,
-            std::string const &input_queue_column_name_,
-            const bigint dataset_id_ = 0,
-            const size_t decon_level_number_ = 1,
-            const data_row_container &data = data_row_container());
+
+    DeconQueue(std::string const &table_name, std::string const &input_queue_table_name_, std::string const &input_queue_column_name_, bigint dataset_id_ = 0,
+               size_t decon_level_number_ = 1, const data_row_container &data = data_row_container());
 
     std::shared_ptr<DeconQueue> clone_empty() const;
 
-    std::shared_ptr<DeconQueue> clone(const size_t start_ix = std::numeric_limits<size_t>::min(), const size_t end_ix = std::numeric_limits<size_t>::max()) const;
+    std::shared_ptr<DeconQueue> clone(size_t start_ix = std::numeric_limits<size_t>::min(), size_t end_ix = std::numeric_limits<size_t>::max()) const;
 
-    virtual void update_data(const DataRow::container &new_data, const bool overwrite = true) override;
+    void update_data(const data_row_container &new_data, bool overwrite = true) override;
 
     const std::string &get_input_queue_table_name() const;
 
@@ -50,17 +43,17 @@ public:
 
     bigint get_dataset_id() const;
 
-    void set_dataset_id(const bigint dataset_id_);
+    void set_dataset_id(bigint dataset_id_);
 
     size_t get_decon_level_number() const;
 
-    virtual std::string metadata_to_string() const override;
+    std::string metadata_to_string() const override;
 
     bool operator==(const DeconQueue &other) const;
 
-    virtual std::string data_to_string() const override;
+    std::string data_to_string() const override;
 
-    std::string data_to_string(const size_t data_size = DISPLAY_ROWS_LIMIT) const;
+    std::string data_to_string(size_t data_size = DISPLAY_ROWS_LIMIT) const;
 
     size_t get_column_count() const;
 
@@ -81,17 +74,15 @@ operator<<(std::basic_ostream<T> &os, const DeconQueue &e)
 }
 
 using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
-
 }
 
 template<>
 inline void store_buffer_push_merge<svr::datamodel::DeconQueue_ptr>(svr::datamodel::DeconQueue_ptr &dest, const svr::datamodel::DeconQueue_ptr &src)
 {
-    for(auto const &row: src->get_data()) dest->get_data().emplace_back(row);
+    for (auto const &row: src->get_data()) dest->get_data().emplace_back(row);
     dest->set_table_name(src->get_table_name());
     dest->set_input_queue_table_name(src->get_input_queue_table_name());
     dest->set_input_queue_column_name(src->get_input_queue_column_name());
     dest->set_dataset_id(src->get_dataset_id());
 }
-
 }

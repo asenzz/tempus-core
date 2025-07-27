@@ -18,7 +18,7 @@ TEST_F(DaoTestFixture, DQSavePerfTests)
     if(!DaoTestFixture::DoPerformanceTests)
         return;
 
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "JamesBond", "JamesBond@email", "JamesBond", "JamesBond", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High) ;
 
     aci.user_service.save(user1);

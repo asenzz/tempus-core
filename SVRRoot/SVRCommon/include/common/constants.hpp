@@ -3,11 +3,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp> // TODO Port all boost::date_time code to std::chrono
 #include <cstdlib>
 #include <string>
-#include <array>
-#include <algorithm>
 #include <execution>
 #include <cmath>
-#include <deque>
 #include "defines.h"
 
 namespace svr {

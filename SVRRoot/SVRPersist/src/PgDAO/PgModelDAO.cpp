@@ -4,6 +4,7 @@
 #include "DAO/DataSource.hpp"
 #include "DQScalingFactorService.hpp"
 #include "appcontext.hpp"
+#include "SVRParametersService.hpp"
 
 namespace svr {
 namespace dao {

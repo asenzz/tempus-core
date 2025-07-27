@@ -18,7 +18,7 @@ namespace svr {
 namespace business {
 
 datamodel::t_predict_features
-EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times)
+EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::data_row_container &times)
 {
     LOG4_BEGIN();
 
@@ -83,7 +83,7 @@ void EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &en
     for (auto p_model: ensemble.get_models()) ModelService::train(dataset, ensemble, *p_model);
 }
 
-datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times) noexcept
+datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::data_row_container &times) noexcept
 {
     try {
         return predict(dataset, ensemble, EnsembleService::prepare_prediction_data(dataset, ensemble, times));

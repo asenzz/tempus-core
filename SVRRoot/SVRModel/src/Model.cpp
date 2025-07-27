@@ -5,6 +5,7 @@
 #include "model/Model.hpp"
 #include "model/Ensemble.hpp"
 #include "onlinesvr.hpp"
+#include "SVRParametersService.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -135,7 +136,7 @@ void Model::set_head_params(const std::pair<SVRParameters_ptr, SVRParameters_ptr
     }
 }
 
-void Model::adjust_gradient_decrement(const uint32_t distance)
+void Model::adjust_gradient_decrement(const uint32_t distance) const
 {
     for (auto &m: svr_models)
         for (auto p_params : m->get_param_set())

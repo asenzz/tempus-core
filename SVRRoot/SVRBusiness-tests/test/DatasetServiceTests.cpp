@@ -73,7 +73,7 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
 
 TEST_F(DaoTestFixture, SelectingActiveDatasets)
 {
-    User_ptr user1Low = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1Low = std::make_shared<svr::datamodel::User>(
             bigint(), "User2016-07-20-Low", "User2016-07-20-Low@dkdk.dld", "User2016-07-20-Low", "User2016-07-20-Low", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::Low) ;
 
     aci.user_service.save(user1Low);
@@ -101,7 +101,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     ////////////////////////////////////////////////////////////////////////////
 
-    User_ptr user2Normal = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user2Normal = std::make_shared<svr::datamodel::User>(
             bigint(), "User2016-07-20-Normal", "User2016-07-20-Normal@dkdk.dld", "User2016-07-20-Normal", "User2016-07-20-Normal"
             , svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::Normal) ;
 
@@ -194,8 +194,8 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     ////////////////////////////////////////////////////////////////////////////
 
-    User_ptr user3High = std::make_shared<svr::datamodel::User>(
-        bigint(), "User2016-07-20-High-3", "User2016-07-20-High-3@dkdk.dld", "User2016-07-20-High-3", "User2016-07-20-High-3", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
+    auto user3High = std::make_shared<datamodel::User>(
+        bigint(), "User2016-07-20-High-3", "User2016-07-20-High-3@dkdk.dld", "User2016-07-20-High-3", "User2016-07-20-High-3", datamodel::ROLE::ADMIN, datamodel::Priority::High);
 
     aci.user_service.save(user3High);
 

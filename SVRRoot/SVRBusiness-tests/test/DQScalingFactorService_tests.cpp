@@ -12,7 +12,7 @@ using namespace svr;
 
 TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "EmmaWatson", "EmmaWatson@somedorf", "EmmaWatson", "EmmaWatson", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);
@@ -57,7 +57,7 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
 
 TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "EmmaWatson", "EmmaWatson@somedorf", "EmmaWatson", "EmmaWatson", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);

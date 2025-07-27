@@ -1,5 +1,7 @@
 #include "view/InputQueueView.hpp"
 
+#include "common/logging.hpp"
+
 
 namespace content
 {

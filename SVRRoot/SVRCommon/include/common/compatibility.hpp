@@ -1,30 +1,26 @@
 #pragma once
 
-#include <memory>
-#include <sstream>
-#include <type_traits>
-#include <tuple>
-#include <vector>
-#include <map>
-#include <set>
+#include <armadillo>
 #include <execution>
 #include <functional>
-#include <armadillo>
+#include <map>
+#include <memory>
+#include <set>
+#include <tuple>
+#include <type_traits>
+#include <vector>
 #include <oneapi/tbb/mutex.h>
 #ifdef ENABLE_OPENCL
 #include <viennacl/matrix.hpp>
 #endif
+#include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/math/special_functions.hpp>
 #include <oneapi/tbb/concurrent_map.h>
 #include <oneapi/tbb/concurrent_set.h>
 #include <oneapi/tbb/concurrent_unordered_set.h>
-#include <oneapi/tbb/concurrent_unordered_map.h>
-#include <boost/functional/hash.hpp>
-#include <boost/math/special_functions.hpp>
-#include <boost/date_time/posix_time/ptime.hpp>
-#include "types.hpp"
-#include "defines.h"
 #include "constants.hpp"
-#include "util/string_utils.hpp"
+#include "defines.h"
+#include "types.hpp"
 
 namespace bpt = boost::posix_time;
 

@@ -38,7 +38,7 @@ struct Bar : Command
 
         svr::context::AppContext & aci = APP;
 
-        User_ptr user = aci.user_service.get_user_by_user_name(user_name);
+        auto user = aci.user_service.get_user_by_user_name(user_name);
 
         svr::datamodel::Dataset_ptr dataset = aci.dataset_service.get_user_dataset(user_name, dataset_name);
         if(!dataset)

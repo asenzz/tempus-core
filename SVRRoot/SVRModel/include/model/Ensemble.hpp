@@ -8,12 +8,12 @@
 
 namespace svr {
 namespace datamodel {
-
 struct t_level_predict_features
 {
     data_row_container times;
     mat_ptr p;
 };
+
 using t_predict_features = boost::unordered_flat_map<std::tuple<size_t /* level */, size_t /* step */>, t_level_predict_features, common::hash_tuple>;
 
 struct t_training_data
@@ -24,7 +24,7 @@ struct t_training_data
     bpt::ptime last_row_time = bpt::not_a_date_time;
 };
 
-class Ensemble : public Entity
+class Ensemble final : public Entity
 {
     bigint dataset_id = 0; /* TODO Replace with pointer to a dataset */
     std::deque<datamodel::Model_ptr> models;
@@ -34,23 +34,24 @@ class Ensemble : public Entity
 public:
     bool operator==(Ensemble const &o) const;
 
-    Ensemble() : Entity() {}
+    Ensemble() : Entity()
+    {
+    }
 
-    Ensemble(const bigint id, const bigint dataset_id, const std::string &decon_queue_table_name,
-             const std::deque<std::string> &aux_decon_queue_table_names, const bool load_decon_data = false);
+    Ensemble(bigint id, bigint dataset_id, const std::string &decon_queue_table_name, const std::deque<std::string> &aux_decon_queue_table_names, bool load_decon_data = false);
 
-    Ensemble(const bigint id, const bigint dataset_id, const std::deque<datamodel::Model_ptr> &models,
-             const datamodel::DeconQueue_ptr &p_decon_queue, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues = {});
+    Ensemble(bigint id, bigint dataset_id, const std::deque<datamodel::Model_ptr> &models, const datamodel::DeconQueue_ptr &p_decon_queue,
+             const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues = {});
 
-    virtual void init_id() override;
+    void init_id() override;
 
-    void set_dataset_id(const bigint dataset_id_);
+    void set_dataset_id(bigint dataset_id_);
 
     bigint get_dataset_id() const;
 
     std::string get_column_name() const;
 
-    datamodel::Model_ptr get_model(const size_t levix, const size_t stepix) const;
+    datamodel::Model_ptr get_model(size_t levix, size_t stepix) const;
 
     std::deque<datamodel::Model_ptr> &get_models();
 
@@ -58,7 +59,7 @@ public:
 
     std::deque<bigint> get_models_ids();
 
-    void set_models(const std::deque<datamodel::Model_ptr> &p_new_model, const bool overwrite);
+    void set_models(const std::deque<datamodel::Model_ptr> &p_new_model, bool overwrite);
 
     // Each ensemble is associated with one column of the main input queue of the dataset, this is it's decon queue
     datamodel::DeconQueue_ptr get_decon_queue() const;
@@ -73,11 +74,11 @@ public:
 
     std::deque<datamodel::DeconQueue_ptr> &get_aux_decon_queues();
 
-    datamodel::DeconQueue_ptr get_aux_decon_queue(const size_t i = 0) const;
+    datamodel::DeconQueue_ptr get_aux_decon_queue(size_t i = 0) const;
 
     datamodel::DeconQueue_ptr get_aux_decon_queue(const std::string &column_name) const;
 
-    std::deque<data_row_container_ptr> get_aux_decon_datas();
+    std::deque<datamodel::data_row_container_ptr> get_aux_decon_datas();
 
     const std::deque<datamodel::DeconQueue_ptr> &get_aux_decon_queues() const;
 
@@ -93,7 +94,5 @@ public:
 };
 
 using Ensemble_ptr = std::shared_ptr<Ensemble>;
-
 }
-
 }

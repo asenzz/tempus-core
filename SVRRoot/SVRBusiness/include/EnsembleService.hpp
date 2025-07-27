@@ -77,13 +77,13 @@ public:
 
     static datamodel::DeconQueue_ptr predict(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::t_predict_features &features);
 
-    static datamodel::DeconQueue_ptr predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times) noexcept;
+    static datamodel::DeconQueue_ptr predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::data_row_container &times) noexcept;
 
     static bool is_ensemble_input_queue(const datamodel::Ensemble &ensemble, const datamodel::InputQueue &input_queue);
 
     static void update_ensemble_decon_queues(const std::deque<datamodel::Ensemble_ptr> &ensembles, const std::deque<datamodel::DeconQueue_ptr> &new_decon_queues);
 
-    static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const data_row_container &times);
+    static datamodel::t_predict_features prepare_prediction_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::data_row_container &times);
 };
 } /* namespace business */
 } /* namespace svr */

@@ -2,11 +2,10 @@
 #include "common/parallelism.hpp"
 #include "model/DBTable.hpp"
 #include "util/math_utils.hpp"
-
+#include "DataRowService.hpp"
 
 namespace svr {
 namespace datamodel {
-
 
 Queue::Queue(const Queue &rhs) : Entity(rhs), table_name_(rhs.table_name_), data_(rhs.data_)
 {
@@ -165,7 +164,7 @@ DataRow::container Queue::get_data(const size_t row_count, const bpt::ptime &tim
 {
     LOG4_BEGIN();
     DataRow::container new_data;
-    auto end_iter = lower_bound(this->data_, time_to);
+    auto end_iter = business::lower_bound(this->data_, time_to);
     auto start_iter = end_iter;
     const auto distance_lag = std::distance(data_.begin(), start_iter);
     if (distance_lag < (DTYPE(distance_lag)) row_count)
@@ -180,8 +179,8 @@ DataRow::container Queue::get_data(const size_t tail_length, const bpt::time_per
 {
     LOG4_BEGIN();
     DataRow::container new_data;
-    auto end_iter = upper_bound(data_, range.end());
-    auto start_iter = lower_bound(data_, range.begin());
+    auto end_iter = business::upper_bound(data_, range.end());
+    auto start_iter = business::lower_bound(data_, range.begin());
     const auto distance_lag = std::distance(data_.begin(), start_iter);
     if (distance_lag < (DTYPE(distance_lag)) tail_length)
         THROW_EX_FS(std::runtime_error, "Missing data, distance from begin is " << distance_lag);
@@ -199,11 +198,11 @@ DataRow::container Queue::get_data(const bpt::time_period &range) const
     }
     LOG4_DEBUG("Looking for range " << range << " in data from " << data_.front()->get_value_time() << " until " << data_.back()->get_value_time());
     DataRow::container new_data;
-    auto iter = lower_bound(data_, range.begin());
+    auto iter = business::lower_bound(data_, range.begin());
     if (iter == data_.cend())
         THROW_EX_F(std::runtime_error,
                    "Could not find " << range.begin() << " in data from " << data_.front()->get_value_time() << " until " << data_.back()->get_value_time());
-    const auto end_iter = upper_bound(data_, range.end());
+    const auto end_iter = business::upper_bound(data_, range.end());
 UNROLL()
     for (; iter != end_iter; ++iter) new_data.emplace_back(*iter);
     LOG4_DEBUG("For range " << range << " found data from " << new_data.front()->get_value_time() << " until " << new_data.back()->get_value_time());
@@ -220,9 +219,9 @@ Queue::get_column_values(
     if (data_.empty() or data_.front()->get_values().size() <= column_index)
         THROW_EX_FS(std::invalid_argument, "No data for column index " << column_index);
 
-    auto iter = lower_bound(data_, start_time);
+    auto iter = business::lower_bound(data_, start_time);
     if (iter == data_.cend()) THROW_EX_F(std::runtime_error, "Row for time " << start_time << " not found.");
-    const auto end_row_iter = upper_bound(data_, end_time);
+    const auto end_row_iter = business::upper_bound(data_, end_time);
 UNROLL()
     for (; iter != end_row_iter; ++iter) output_values.emplace_back((**iter).get_value(column_index));
     return output_values;
@@ -255,14 +254,14 @@ bool Queue::get_column_values(
         return false;
     }
 
-    const auto iter_start = lower_bound(data_, range.begin());
+    const auto iter_start = business::lower_bound(data_, range.begin());
     if (iter_start == data_.cend()) {
         LOG4_DEBUG("Couldn't find range " << range);
         return false;
     }
-    auto row_iter = lower_bound(data_, range.begin());
+    auto row_iter = business::lower_bound(data_, range.begin());
     if (row_iter == data_.cend()) THROW_EX_F(std::runtime_error, "Row for time " << range.begin() << " not found.");
-    const auto end_row_iter = upper_bound(data_, range.end());
+    const auto end_row_iter = business::upper_bound(data_, range.end());
 UNROLL()
     for (; row_iter != end_row_iter; ++row_iter) output_values.emplace_back((**row_iter).get_value(column_index));
     return true;
@@ -270,21 +269,21 @@ UNROLL()
 
 void Queue::trim(const bpt::ptime &start_time, const bpt::ptime &end_time)
 {
-    const auto from_iter = lower_bound(data_, start_time);
+    const auto from_iter = business::lower_bound(data_, start_time);
     data_.erase(data_.cbegin(), from_iter);
-    data_.erase(upper_bound(data_, end_time), data_.cend());
+    data_.erase(business::upper_bound(data_, end_time), data_.cend());
 }
 
 void Queue::trim(const ssize_t lag, const bpt::ptime &start_time, const bpt::ptime &end_time)
 {
-    auto from_iter = lower_bound(data_, start_time);
+    auto from_iter = business::lower_bound(data_, start_time);
     std::advance(from_iter, -lag);
 #ifdef ALL_VALUES_DELTA
     while (from_iter->second->is_anchor()) ++from_iter;
         --from_iter;
 #endif
     data_.erase(data_.begin(), from_iter);
-    data_.erase(upper_bound(data_, end_time), data_.end());
+    data_.erase(business::upper_bound(data_, end_time), data_.end());
 }
 
 void Queue::trim(const bpt::time_period &time_range)
@@ -307,7 +306,7 @@ void Queue::update_data(const DataRow::container &new_data, const bool overwrite
     if (!data_.empty()
         && !new_data.empty()
         && new_data.front()->get_value_time() < data_.back()->get_value_time())
-        data_.erase(lower_bound(data_, new_data.front()->get_value_time()), data_.cend());
+        data_.erase(business::lower_bound(data_, new_data.front()->get_value_time()), data_.cend());
 
     data_.insert(data_.cend(), new_data.cbegin(), new_data.cend());
 

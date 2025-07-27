@@ -10,6 +10,7 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 #include "model/DataRow.hpp"
 #include "DatasetService.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 namespace daemon {
@@ -32,29 +33,18 @@ class stream_message_queue : public std::basic_fstream<char> {
 public:
     using std::basic_fstream<char>::write, std::basic_fstream<char>::read;
 
-    stream_message_queue(const char file_path[]);
+    explicit stream_message_queue(const char file_path[]);
 
-    template<queue_binary_type T> inline void write(const T value)
-    {
-        (void) write(reinterpret_cast<const char *>(&value), sizeof(value));
-    }
+    template<queue_binary_type T> inline void write(const T value);
 
-    template<queue_binary_type T> inline T read()
-    {
-        T value;
-        (void) read(reinterpret_cast<char *>(&value), sizeof(value));
-        return value;
-    }
+    template<queue_binary_type T> inline T read();
 
     // Writes Pascal-type string to the stream
     void write(const std::string &value);
 
     void write(const bpt::ptime &value);
 
-    template<typename T> T read()
-    {
-        THROW_EX_FS(std::invalid_argument, "Unsupported type " << typeid(T).name());
-    }
+    template<typename T> T read();
 
     void reset();
 };
@@ -93,7 +83,6 @@ public:
 };
 
 }
-}
 
 /* Description of input data stream message queue */
 struct data_msg_queue {
@@ -118,7 +107,8 @@ struct data_msg_queue {
     double row_volume;
     double value_bid; // column values
     double value_ask;
-    /* ... */
+
+    char trailing_data[1]; /* ... */
 };
 
 /* Description of prediction response message queue */
@@ -135,8 +125,11 @@ struct response_msg_queue {
         double row_value_ask;
     } *response_rows;
 
-    /* ... */
+    char trailing_data[1]; /* ... */
 };
 
+}
+
+#include "streaming_messages_protocol.tpp"
 
 #endif //SVR_STREAMING_MESSAGES_PROTOCOL_HPP

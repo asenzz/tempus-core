@@ -15,6 +15,8 @@
 #include <vector>
 #include "common/defines.h"
 #include "fast_cvmd.hpp"
+
+#include "DataRowService.hpp"
 #include "util/math_utils.hpp"
 #include "common/compatibility.hpp"
 #include "common/logging.hpp"
@@ -43,7 +45,7 @@ fcvmd_frequency_outputs fast_cvmd::compute_cos_sin(const arma::vec &omega, const
     const arma::vec phase_cos = arma::cos(step_omega);
     const arma::vec phase_sin = arma::sin(step_omega);
     LOG4_DEBUG("Omega " << omega << ", phase cos " << phase_cos << ", phase sin " << phase_sin << ", step " << step << ", alpha bins " << C_default_alpha_bins
-                        << ", tau fidelity " << TAU_FIDELITY << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL);
+                        << ", tau fidelity " << C_tau_fidelity << ", max VMD iterations " << MAX_VMD_ITERATIONS << ", tolerance " << CVMD_TOL);
     return {phase_cos, phase_sin};
 }
 
@@ -185,7 +187,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const unsigned inp
             calc_omega(omega, k, freqs, u_hat_plus, T);
         }
         // Dual ascent
-        lambda_hat += TAU_FIDELITY * (arma::accu(u_hat_plus.row(0)) - f_hat_plus);
+        lambda_hat += C_tau_fidelity * (arma::accu(u_hat_plus.row(0)) - f_hat_plus);
 
         ++n_iter;
 
@@ -236,7 +238,7 @@ fast_cvmd::initialize(const datamodel::datarow_crange &input, const unsigned inp
 
 void
 fast_cvmd::transform(
-        const data_row_container &input,
+        const datamodel::data_row_container &input,
         datamodel::DeconQueue &decon,
         const unsigned in_colix,
         const unsigned test_offset,
@@ -244,7 +246,7 @@ fast_cvmd::transform(
 {
 #ifdef ORIG_VMD
 
-    data_row_container::const_iterator iterin;
+    datamodel::data_row_container::const_iterator iterin;
     if (decon.empty()) {
         iterin = input.cbegin();
     } else {
@@ -312,12 +314,12 @@ fast_cvmd::transform(
         LOG4_THROW("Invalid phase cos size " << phase_cos.size() << " or phase sin size " << phase_sin.size() << ", should be " << K);
 
     const auto levels_size = levels * sizeof(double);
-    data_row_container::const_iterator iterin;
+    datamodel::data_row_container::const_iterator iterin;
     if (decon.empty()) {
         iterin = input.cbegin();
         soln[0] = scaler((**iterin)[in_colix]);
     } else {
-        iterin = lower_bound(input, decon.back()->get_value_time());
+        iterin = business::lower_bound(input, decon.back()->get_value_time());
         while ((**iterin).get_value_time() <= decon.back()->get_value_time() && iterin != input.cend()) ++iterin;
         if (iterin == input.cend()) {
             LOG4_WARN("No input data newer than " << decon.back()->get_value_time() << " to deconstruct.");

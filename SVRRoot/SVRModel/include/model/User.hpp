@@ -71,7 +71,7 @@ public:
     virtual std::string to_json_string() const;
 };
 
-}
-}
+using User_ptr = std::shared_ptr<User>;
 
-using User_ptr = std::shared_ptr<svr::datamodel::User>;
+}
+}

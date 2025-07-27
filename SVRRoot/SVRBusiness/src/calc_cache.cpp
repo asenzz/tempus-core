@@ -118,7 +118,7 @@ template<typename kT, typename fT> cached<kT, fT>::~cached()
 }
 
 // calc_cache
-std::tuple<mat_ptr, data_row_container_ptr, data_row_container_ptr> calc_cache::get_manifold_labels(
+std::tuple<mat_ptr, datamodel::data_row_container_ptr, datamodel::data_row_container_ptr> calc_cache::get_manifold_labels(
     datamodel::Model &model, const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
     const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
     const bpt::time_duration &main_resolution, const uint16_t lag)
@@ -127,8 +127,8 @@ std::tuple<mat_ptr, data_row_container_ptr, data_row_container_ptr> calc_cache::
         ", aux last values " << labels_aux.back()->to_string());
     const auto prepare_f = [&] {
         auto p_labels = ptr<arma::mat>();
-        auto p_label_times_left = ptr<data_row_container>();
-        auto p_label_times_right = ptr<data_row_container>();
+        auto p_label_times_left = ptr<datamodel::data_row_container>();
+        auto p_label_times_right = ptr<datamodel::data_row_container>();
         ModelService::prepare_manifold_labels(model, *p_labels, *p_label_times_left, *p_label_times_right, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
             main_resolution, multistep, lag);
         return std::make_tuple(p_labels, p_label_times_left, p_label_times_right);
@@ -138,7 +138,7 @@ std::tuple<mat_ptr, data_row_container_ptr, data_row_container_ptr> calc_cache::
     return {ptr<arma::mat>(p_labels->col(step)), p_label_times_left, p_label_times_right};
 }
 
-std::tuple<mat_ptr, vec_ptr, data_row_container_ptr> calc_cache::get_labels(
+std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> calc_cache::get_labels(
     const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
     const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution,
     const uint16_t lag)
@@ -148,7 +148,7 @@ std::tuple<mat_ptr, vec_ptr, data_row_container_ptr> calc_cache::get_labels(
     const auto prepare_f = [&] {
         auto p_labels = ptr<arma::mat>();
         auto p_last_knowns = ptr<arma::vec>();
-        auto p_label_times = ptr<data_row_container>();
+        auto p_label_times = ptr<datamodel::data_row_container>();
         ModelService::prepare_labels(*p_labels, *p_last_knowns, *p_label_times, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
                                      main_resolution, multistep, lag);
         return std::make_tuple(p_labels, p_last_knowns, p_label_times);
@@ -161,7 +161,7 @@ std::tuple<mat_ptr, vec_ptr, data_row_container_ptr> calc_cache::get_labels(
 
 mat_ptr calc_cache::get_features(
     const arma::mat &labels, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &params, const bpt::time_duration &aux_resolution,
-    const bpt::time_duration &main_resolution, const bpt::time_duration &max_lookback_time_gap, const data_row_container &label_times)
+    const bpt::time_duration &main_resolution, const bpt::time_duration &max_lookback_time_gap, const datamodel::data_row_container &label_times)
 {
     LOG4_TRACE("Getting features for with " << label_times.size() << " rows, parameters " << params << ", queues " << aux_decon_queues.size());
     const auto needs_tuning = params.get_feature_mechanics().needs_tuning();
@@ -188,7 +188,7 @@ mat_ptr calc_cache::get_features(
 
 // Input weights
 mat_ptr calc_cache::get_weights(
-    const bigint dataset_id, const data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
+    const bigint dataset_id, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
     const bpt::time_duration &resolution_main)
 {
     LOG4_BEGIN();

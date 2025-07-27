@@ -7,7 +7,6 @@
 namespace svr {
 namespace datamodel {
 
-
 std::shared_ptr<InputQueue> iq_storage_adapter::load(std::string const & table_name)
 {
     return APP.input_queue_service.get_queue_metadata(table_name);

@@ -16,7 +16,7 @@
 #include "IQScalingFactorService.hpp"
 
 constexpr unsigned CVMD_INIT_LEN = 100'000; // Last N samples of the input queue used for calculating frequencies
-constexpr auto TAU_FIDELITY = 1e3; // 1000 seems to yield best results
+constexpr auto C_tau_fidelity = 1e3; // 1000 seems to yield best results
 constexpr auto HAS_DC = false; // Has DC component is always false, it's removed during scaling
 constexpr double C_default_alpha_bins = .016 * CVMD_INIT_LEN; // 2000 for EURUSD, 1600 for XAUUSD, Matlab examples use 50 on input length 1200 (CVMD_INIT_LEN * 50 / 1200 = 4166)
 constexpr unsigned MAX_VMD_ITERATIONS = 1500;
@@ -68,20 +68,17 @@ public:
 
     void
     transform(
-            const data_row_container &input,
+            const datamodel::data_row_container &input,
             datamodel::DeconQueue &decon,
             const unsigned in_colix = 0,
             const unsigned test_offset = 0,
             const datamodel::t_iqscaler &scaler = std::identity());
 
-    void inverse_transform(
-            const std::vector<double> &decon,
-            std::vector<double> &recon,
-            const size_t padding /* = 0 */) const override;
+    void inverse_transform(const std::vector<double> &decon, std::vector<double> &recon, size_t padding /* = 0 */) const override;
 
     size_t get_residuals_length(const std::string &decon_queue_table_name);
 
-    static size_t get_residuals_length(const unsigned levels) noexcept;
+    static size_t get_residuals_length(uint32_t levels) noexcept;
 
     bool initialized(const std::string &decon_queue_table_name);
 

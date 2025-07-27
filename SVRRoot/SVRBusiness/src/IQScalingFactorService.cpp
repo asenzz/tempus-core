@@ -9,6 +9,7 @@
 #include "IQScalingFactorService.hpp"
 #include "ModelService.hpp"
 #include "appcontext.hpp"
+#include "DataRowService.hpp"
 
 
 namespace svr {
@@ -103,7 +104,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     const uint32_t calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::get_max_quantisation() * PROPS.get_lag_multiplier() + dataset.get_max_decrement() * resolution_ratio;
 #ifdef INTEGRATION_TEST
     const auto last_label_time = (**(p_main_input_queue->get_data().rbegin() + common::C_integration_test_validation_window)).get_value_time() + p_main_input_queue->get_resolution();
-    const uint32_t test_offset = resolution_ratio > 1 ? lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
+    const uint32_t test_offset = resolution_ratio > 1 ? business::lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
             input_queue.size() - common::C_integration_test_validation_window;
     auto p_test_input_queue = input_queue.clone(0, test_offset);
     PROFILE_INFO(dataset.set_iq_scaling_factors(calculate(*p_test_input_queue, dataset.get_id(), calc_len), true),

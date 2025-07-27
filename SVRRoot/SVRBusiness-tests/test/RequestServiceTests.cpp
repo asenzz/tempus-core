@@ -16,7 +16,7 @@ using datamodel::MultivalRequest;
 
 TEST_F(DaoTestFixture, RequestWorkflow)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High) ;
 
     aci.user_service.save(user1);
@@ -73,7 +73,7 @@ TEST_F(DaoTestFixture, RequestWorkflow)
 
 TEST_F(DaoTestFixture, CustomColumnsRequest)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "DeconQueueTestUser", "DeconQueueTestUser@email", "DeconQueueTestUser", "DeconQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High) ;
 
     aci.user_service.save(user1);
@@ -124,7 +124,7 @@ TEST_F(DaoTestFixture, CustomColumnsRequest)
 
 TEST_F(DaoTestFixture, GettingActiveRequests)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "FridayTestUser", "Friday@email", "FridayTestUser", "FridayTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High) ;
 
     aci.user_service.save(user1);

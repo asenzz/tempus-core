@@ -1,16 +1,17 @@
 #include <iostream>
-#include "include/DaoTestFixture.h"
-#include <model/User.hpp>
-#include <model/InputQueue.hpp>
 #include "UserService.hpp"
+#include "common/logging.hpp"
+#include "include/DaoTestFixture.h"
 #include "include/InputQueueRowDataGenerator.hpp"
+#include "model/InputQueue.hpp"
+#include "model/User.hpp"
 #include "view/UserView.hpp"
 
 using namespace svr;
 
 TEST_F(DaoTestFixture, InputQueueWorkflow)
 {
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "InputQueueTestUser", "InputQueueTestUser@email", "InputQueueTestUser", "InputQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);
@@ -49,7 +50,7 @@ long constexpr testDataNumberToGenerate = 5000;
 
 TEST_F(DaoTestFixture, InputQueueSaveQueueTest)
 {
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "InputQueueTestUser", "InputQueueTestUser@email", "InputQueueTestUser", "InputQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);
@@ -90,7 +91,7 @@ TEST_F(DaoTestFixture, InputQueueSaveQueueTest)
 
 TEST_F(DaoTestFixture, GetColumnInFramesTest)
 {
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "InputQueueTestUser", "InputQueueTestUser@email", "InputQueueTestUser", "InputQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);
@@ -133,7 +134,7 @@ TEST_F(DaoTestFixture, GetColumnInFramesTest)
 
 TEST_F(DaoTestFixture, GetDBColumnsTests)
 {
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "InputQueueTestUser", "InputQueueTestUser@email", "InputQueueTestUser", "InputQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);
@@ -164,7 +165,7 @@ TEST_F(DaoTestFixture, GetDBColumnsTests)
 
 TEST_F(DaoTestFixture, TestFixInputQueueSelection)
 {
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "InputQueueTestUser", "InputQueueTestUser@email", "InputQueueTestUser", "InputQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);
@@ -210,7 +211,7 @@ bpt::ptime operator ""_pt(const char *s, size_t)
 
 TEST_F(DaoTestFixture, InputQueueReconciliationWorkflow)
 {
-    User_ptr user1 = std::make_shared<datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<datamodel::User>(
         bigint(), "InputQueueTestUser", "InputQueueTestUser@email", "InputQueueTestUser", "InputQueueTestUser", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     bpt::time_duration resolution = bpt::seconds(60);

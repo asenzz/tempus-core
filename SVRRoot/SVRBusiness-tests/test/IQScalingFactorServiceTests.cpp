@@ -15,7 +15,7 @@ using namespace svr;
 
 TEST_F(DaoTestFixture, IQScalingFactorWorkflow)
 {
-    User_ptr user1 = std::make_shared<svr::datamodel::User>(
+    datamodel::User_ptr user1 = std::make_shared<svr::datamodel::User>(
             bigint(), "JamesMay", "JamesMay@snailmail", "JamesMay", "JamesMay", svr::datamodel::ROLE::ADMIN, svr::datamodel::Priority::High);
 
     aci.user_service.save(user1);

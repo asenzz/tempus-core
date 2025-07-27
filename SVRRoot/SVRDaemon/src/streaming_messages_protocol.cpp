@@ -5,6 +5,7 @@
 #include <filesystem>
 #include "streaming_messages_protocol.hpp"
 #include "appcontext.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 namespace daemon {

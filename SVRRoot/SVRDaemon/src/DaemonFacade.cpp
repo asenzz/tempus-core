@@ -9,8 +9,12 @@
 #include "util/time_utils.hpp"
 #include "appcontext.hpp"
 #include "DaemonFacade.hpp"
+
+#include "DataRowService.hpp"
 #include "InputQueueService.hpp"
 #include "RequestService.hpp"
+#include "common/exceptions.hpp"
+#include "model/User.hpp"
 
 namespace svr::daemon {
 DaemonFacade::DaemonFacade() : loop_interval(PROPS.get_loop_interval()),
@@ -117,7 +121,7 @@ void DaemonFacade::process_streams() // TODO Finish him!
                 {
                     const tbb::mutex::scoped_lock l2(p_queue->get_update_mutex());
                     if (p_queue->back()->get_value_time() >= t.second.rows.front()->get_value_time())
-                        p_queue->get_data().erase(lower_bound(p_queue->get_data(), t.second.rows.front()->get_value_time()), p_queue->end());
+                        p_queue->get_data().erase(business::lower_bound(p_queue->get_data(), t.second.rows.front()->get_value_time()), p_queue->end());
                     p_queue->get_data().insert(p_queue->end(), std::make_move_iterator(t.second.rows.begin()), std::make_move_iterator(t.second.rows.end()));
                 } {
                     const tbb::mutex::scoped_lock l2(save_queues_mx);

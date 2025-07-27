@@ -1,9 +1,11 @@
+#include "DataRowService.hpp"
 #include "DatasetService.hpp"
 #include "DeconQueueService.hpp"
 #include "InputQueueService.hpp"
 #include "RequestService.hpp"
 #include "DAO/RequestDAO.hpp"
 #include "include/DaoTestFixture.h"
+#include "model/DataRow.hpp"
 #include "model/InputQueue.hpp"
 #include "model/Request.hpp"
 
@@ -22,7 +24,7 @@ constexpr char C_test_primary_column[] = "xauusd_avg_bid"; // Ignore tuning or v
 constexpr bigint default_dataset_id = 100;
 
 void
-update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter);
+update_with_new_data(const datamodel::InputQueue_ptr &iq, const datamodel::data_row_container::iterator &new_iq_iter);
 
 void
 prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &start_predict_time);
@@ -110,7 +112,7 @@ TEST_F(DaoTestFixture, backtest_xauusd)
 
 
 void
-update_with_new_data(const datamodel::InputQueue_ptr &iq, const data_row_container::iterator &new_iq_iter)
+update_with_new_data(const datamodel::InputQueue_ptr &iq, const datamodel::data_row_container::iterator &new_iq_iter)
 {
     LOG4_DEBUG("Adding new datarow for time " << new_iq_iter->get()->get_value_time());
     const auto prev_last_time = iq->get_data().back()->get_value_time() + iq->get_resolution() - bpt::seconds(1);
@@ -124,7 +126,7 @@ void
 prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &start_predict_time)
 {
     datamodel::MultivalRequest_ptr p_request = ptr<datamodel::MultivalRequest>(
-        bigint(0),
+        0,
         iq->get_owner_user_name(),
         default_dataset_id,
         bpt::second_clock::local_time(),
@@ -138,7 +140,7 @@ prepare_forecast_request(const datamodel::InputQueue_ptr &iq, const bpt::ptime &
 }
 
 
-data_row_container
+datamodel::data_row_container
 get_results(const bpt::ptime &request_time, const datamodel::InputQueue_ptr &iq, const std::string &column_name)
 {
     const auto results = APP.request_service.get_multival_results(
@@ -154,8 +156,8 @@ get_results(const bpt::ptime &request_time, const datamodel::InputQueue_ptr &iq,
 
 std::pair<double, double>
 compare_by_value_mean_error(
-    const data_row_container &forecasts,
-    const data_row_container &etalon,
+    const datamodel::data_row_container &forecasts,
+    const datamodel::data_row_container &etalon,
     const size_t etalon_col = 0)
 {
     double res = 0.;
@@ -165,7 +167,7 @@ compare_by_value_mean_error(
             LOG4_ERROR("Forecasts row for time " << forecast_row->get()->get_value_time() << " is empty, skipping.");
             continue;
         }
-        const auto etalon_row = find(etalon, forecast_row->get()->get_value_time());
+        const auto etalon_row = business::find(etalon, forecast_row->get()->get_value_time());
         if (etalon_row == etalon.end()) {
             LOG4_ERROR("Not found etalon row for time " << forecast_row->get()->get_value_time());
             continue;
@@ -194,8 +196,8 @@ compare_by_value_mean_error(
 
 std::pair<double, double>
 compare_by_value_mean_erroraux(
-    const data_row_container &forecasts,
-    const data_row_container &etalon,
+    const datamodel::data_row_container &forecasts,
+    const datamodel::data_row_container &etalon,
     const bpt::time_duration &forecast_resolution)
 {
     double mae = 0, last_known_mae = 0;
@@ -207,8 +209,8 @@ compare_by_value_mean_erroraux(
             continue;
         }
 
-        const auto it_label_start = lower_bound(etalon, forecast_time);
-        const auto last_known_iter = lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * PROPS.get_prediction_horizon());
+        const auto it_label_start = business::lower_bound(etalon, forecast_time);
+        const auto last_known_iter = business::lower_bound_back(etalon, it_label_start, forecast_time - forecast_resolution * PROPS.get_prediction_horizon());
         const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : std::prev(last_known_iter)->get()->get_value(0);
         const auto last_known_time = std::prev(last_known_iter)->get()->get_value_time();
         const auto etalon_val = 0; // TODO Port generate_twap(std::prev(it_label_start), etalon.end(), forecast_time, forecast_time + forecast_resolution, onesec, 0);
@@ -240,8 +242,8 @@ compare_by_value_mean_erroraux(
 
 std::pair<double, double>
 compare_by_value_error_ohlc(
-    const data_row_container &forecasts,
-    const data_row_container &etalon)
+    const datamodel::data_row_container &forecasts,
+    const datamodel::data_row_container &etalon)
 {
     double mae = 0.;
     int n_items = 0;
@@ -250,7 +252,7 @@ compare_by_value_error_ohlc(
             LOG4_ERROR("Forecasts row for time " << forecast_row->get()->get_value_time() << " is empty, skipping.");
             continue;
         }
-        const auto etalon_row = find(etalon, forecast_row->get()->get_value_time());
+        const auto etalon_row = business::find(etalon, forecast_row->get()->get_value_time());
         if (etalon_row == etalon.end()) {
             LOG4_ERROR("Not found etalon row for time " << forecast_row->get()->get_value_time());
             continue;
@@ -276,11 +278,7 @@ compare_by_value_error_ohlc(
 }
 
 
-std::pair<double, double>
-compare_by_value_error_ohlcaux(
-    const data_row_container &forecasts,
-    const data_row_container &etalon,
-    const bpt::time_duration &forecast_resolution)
+std::pair<double, double> compare_by_value_error_ohlcaux(const datamodel::data_row_container &forecasts, const datamodel::data_row_container &etalon, const bpt::time_duration &forecast_resolution)
 {
     double mae = 0, last_known_mae = 0;
     int n_items = 0;
@@ -290,7 +288,7 @@ compare_by_value_error_ohlcaux(
             continue;
         }
         std::vector<double> etalon_aux_vals;
-        auto etalon_iter = lower_bound(etalon, forecast_row->get()->get_value_time());
+        auto etalon_iter = business::lower_bound(etalon, forecast_row->get()->get_value_time());
         if (etalon_iter == etalon.end()) {
             LOG4_ERROR("Not found etalon row for time " << forecast_row->get()->get_value_time());
             continue;
@@ -305,7 +303,7 @@ compare_by_value_error_ohlcaux(
         const auto etalon_min = *std::ranges::min_element(etalon_aux_vals);
 
         const auto last_known_time = forecast_row->get()->get_value_time() - forecast_resolution * PROPS.get_prediction_horizon();
-        const auto last_known_iter = lower_bound_back_before(etalon, etalon_iter, last_known_time);
+        const auto last_known_iter = business::lower_bound_back_before(etalon, etalon_iter, last_known_time);
         const double last_known = last_known_iter == etalon.end() ? common::C_bad_validation : last_known_iter->get()->get_value(0);
 
         const auto forecast_val = forecast_row->get()->get_value(0);

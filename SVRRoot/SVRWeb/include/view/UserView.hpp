@@ -92,7 +92,7 @@ struct UserForm : cppcms::form
 
 struct UserWithForm : public Main
 {
-    User_ptr object;
+    svr::datamodel::User_ptr object;
     UserForm form;
 
     void load_form_data()
@@ -108,7 +108,7 @@ struct UserWithForm : public Main
 
 struct User : public Main
 {
-    User_ptr object;
+    svr::datamodel::User_ptr object;
 };
 
 }
@@ -121,9 +121,9 @@ namespace json {
 // objects to and from json values
 
 template<>
-struct traits<User_ptr>
+struct traits<svr::datamodel::User_ptr>
 {
-    static void set(value &v, User_ptr const &in)
+    static void set(value &v, svr::datamodel::User_ptr const &in)
     {
         v.set("id", in->get_id());
         v.set("user_name", in->get_user_name());

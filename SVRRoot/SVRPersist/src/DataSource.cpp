@@ -3,6 +3,8 @@
 
 #include "DAO/DataSource.hpp"
 
+#include "DataRowService.hpp"
+
 #define CLEANUP_BATCH_SIZE 10000
 
 namespace svr {
@@ -106,11 +108,9 @@ void DataSource::upsert_row(CRPTR(char) table_name, CRPTR(char *) row_fields, co
 void DataSource::cleanup_queue_table(const std::string &table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)
 {
     if (data.empty()) return;
-    LOG4_DEBUG(
-            "Cleaning queue of size " << data.size() << " rows, starting " << std::max(start_time, data.front()->get_value_time()) << " until " << data.back()->get_value_time());
-    scoped_transaction_guard_ptr trx = open_transaction();
-    const auto start_iter = lower_bound_back(data, start_time);
-    auto start_ix = start_iter - data.cbegin();
+    LOG4_DEBUG("Cleaning queue of size " << data.size() << " rows, starting " << std::max(start_time, data.front()->get_value_time()) << " until " << data.back()->get_value_time());
+    const auto trx = open_transaction();
+    auto start_ix = business::lower_bound(data, start_time) - data.cbegin();
     if (start_ix < 0 or start_ix >= CAST2(start_ix) data.size()) start_ix = 0;
     for (DTYPE(data.size()) i = start_ix; i < data.size(); i += CLEANUP_BATCH_SIZE) {
         std::ostringstream ostr;
@@ -118,9 +118,7 @@ void DataSource::cleanup_queue_table(const std::string &table_name, const datamo
         auto ivt = data.cbegin() + i;
         ostr << (**ivt).get_value_time();
         ++ivt;
-        uint32_t j = 0;
-        for (; ivt != data.cend() && j < CLEANUP_BATCH_SIZE; ++ivt, ++j)
-            ostr << ',' << (**ivt).get_value_time();
+        for (uint32_t j = 0; ivt != data.cend() && j < CLEANUP_BATCH_SIZE; ++ivt, ++j) ostr << ',' << (**ivt).get_value_time();
         ostr << "}'::timestamp[])";
         try {
             trx->exec(ostr.str());

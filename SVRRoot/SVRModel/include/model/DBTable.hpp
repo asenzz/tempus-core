@@ -7,7 +7,6 @@
 
 #define DISPLAY_ROWS_LIMIT (5)
 
-
 namespace svr {
 namespace datamodel {
 

@@ -2,6 +2,8 @@
 #include "appcontext.hpp"
 #include "model/Dataset.hpp"
 #include "model/Ensemble.hpp"
+#include "model/IQScalingFactor.hpp"
+#include "model/InputQueue.hpp"
 #include "SVRParametersService.hpp"
 #include "ModelService.hpp"
 #include "online_emd.hpp"
@@ -18,12 +20,12 @@ void Dataset::init_transform()
 {
     if (spectrum_levels_ >= MIN_LEVEL_COUNT) {
 #ifdef VMD_ONLY
-        p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(spectrum_levels_);
+        p_cvmd_transformer = std::make_unique<vmd::fast_cvmd>(spectrum_levels_);
 #elif defined(EMD_ONLY)
-        p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(spectrum_levels_);
+        p_oemd_transformer_fat = std::make_unique<oemd::online_emd>(spectrum_levels_);
 #else
-        p_oemd_transformer_fat = std::make_unique<svr::oemd::online_emd>(spectrum_levels_ / 4);
-        p_cvmd_transformer = std::make_unique<svr::vmd::fast_cvmd>(spectrum_levels_ / 2);
+        p_oemd_transformer_fat = std::make_unique<oemd::online_emd>(spectrum_levels_ / 4);
+        p_cvmd_transformer = std::make_unique<vmd::fast_cvmd>(spectrum_levels_ / 2);
 #endif
     }
 }
@@ -44,10 +46,10 @@ Dataset::Dataset() :
 }
 
 Dataset::Dataset(
-        bigint id,
+        const bigint id,
         const std::string &dataset_name,
         const std::string &user_name,
-        datamodel::InputQueue_ptr p_input_queue,
+        const datamodel::InputQueue_ptr &p_input_queue,
         const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
         const Priority &priority,
         const std::string &description,
@@ -58,8 +60,8 @@ Dataset::Dataset(
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
-        bool is_active,
-        const std::deque<datamodel::IQScalingFactor_ptr> iq_scaling_factors
+        const bool is_active,
+        const std::deque<datamodel::IQScalingFactor_ptr> &iq_scaling_factors
 )
         : Entity(id),
           ccache(),
@@ -73,9 +75,9 @@ Dataset::Dataset(
           spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
-          ensembles_(svr::common::clone_shared_ptr_elements(ensembles)),
+          ensembles_(common::clone_shared_ptr_elements(ensembles)),
           is_active_(is_active),
-          iq_scaling_factors_(svr::common::clone_shared_ptr_elements(iq_scaling_factors))
+          iq_scaling_factors_(common::clone_shared_ptr_elements(iq_scaling_factors))
 {
     if (!p_input_queue) THROW_EX_FS(std::logic_error, "Input queue cannot be null.");
 
@@ -92,11 +94,11 @@ Dataset::Dataset(
 }
 
 Dataset::Dataset(
-        bigint id,
+        const bigint id,
         const std::string &dataset_name,
         const std::string &user_name,
         const std::string &input_queue_table_name,
-        const std::deque<std::string> &aux_input_queue_table_names,
+        const std::deque<std::string> &aux_input_queues_table_names,
         const Priority &priority,
         const std::string &description,
         const uint16_t gradients,
@@ -106,8 +108,8 @@ Dataset::Dataset(
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles,
-        bool is_active,
-        const std::deque<datamodel::IQScalingFactor_ptr> iq_scaling_factors)
+        const bool is_active,
+        const std::deque<datamodel::IQScalingFactor_ptr> &iq_scaling_factors)
         : Entity(id),
           ccache(),
           dataset_name_(dataset_name),
@@ -128,7 +130,7 @@ Dataset::Dataset(
 
     input_queue_.set_id(input_queue_table_name);
 
-    for (const auto &aux_input_queue_table_name: aux_input_queue_table_names)
+    for (const auto &aux_input_queue_table_name: aux_input_queues_table_names)
         aux_input_queues_.emplace_back(aux_input_queue_table_name);
 
     init_transform();
@@ -218,13 +220,13 @@ business::calc_cache &Dataset::get_calc_cache()
     return ccache;
 }
 
-vmd::fast_cvmd &Dataset::get_cvmd_transformer()
+vmd::fast_cvmd &Dataset::get_cvmd_transformer() const
 { return *p_cvmd_transformer; }
 
-oemd::online_emd &Dataset::get_oemd_transformer()
+oemd::online_emd &Dataset::get_oemd_transformer() const
 { return *p_oemd_transformer_fat; }
 
-bool Dataset::get_initialized()
+bool Dataset::get_initialized() const
 { return initialized; }
 
 uint16_t Dataset::get_gradient_count() const
@@ -294,8 +296,8 @@ datamodel::InputQueue_ptr Dataset::get_aux_input_queue(const std::string &table_
 std::deque<std::string> Dataset::get_aux_input_table_names() const
 {
     std::deque<std::string> res;
-    std::transform(aux_input_queues_.begin(), aux_input_queues_.end(), std::back_inserter(res),
-                   [](const iq_relation &inque_rel) { return inque_rel.get_obj()->get_table_name(); });
+    std::ranges::transform(aux_input_queues_, std::back_inserter(res),
+                           [](const iq_relation &inque_rel) { return inque_rel.get_obj()->get_table_name(); });
     return res;
 }
 
@@ -543,11 +545,11 @@ datamodel::IQScalingFactor_ptr Dataset::get_iq_scaling_factor(const std::string 
 void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor_ptr> &new_iq_scaling_factors, const bool overwrite)
 {
     const auto prev_size = iq_scaling_factors_.size();
-    tbb::mutex iq_scaling_factors_l;
 #pragma omp parallel ADJ_THREADS(new_iq_scaling_factors.size() * prev_size)
 #pragma omp single
     {
-    	OMP_TASKLOOP_(new_iq_scaling_factors.size(),)
+        tbb::mutex iq_scaling_factors_l;
+        OMP_TASKLOOP_(new_iq_scaling_factors.size(),)
         for (const auto &new_iqsf: new_iq_scaling_factors) {
             std::atomic<bool> found = false;
             for (DTYPE(prev_size) i = 0; i < prev_size; ++i) {
@@ -621,10 +623,10 @@ uint32_t Dataset::get_max_residuals_length() const
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
     uint32_t result = 0;
-    tbb::mutex max_residuals_l;
 #pragma omp parallel ADJ_THREADS(2 * ensembles_.size())
 #pragma omp single
     {
+        tbb::mutex max_residuals_l;
         OMP_TASKLOOP_(ensembles_.size(), untied)
         for (const auto &p_ensemble: ensembles_) {
             const auto res_count = get_residuals_length(p_ensemble->get_decon_queue()->get_table_name());

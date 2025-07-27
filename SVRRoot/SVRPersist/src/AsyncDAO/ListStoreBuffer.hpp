@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <mutex>
 
-#include <model/StoreBufferPushMerge.hpp>
+#include "model/StoreBufferPushMerge.hpp"
 
 class ListStoreBufferTests_BasicTests_Test;
 

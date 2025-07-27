@@ -2,6 +2,7 @@
 // Created by zarko on 7/22/24.
 //
 #include "model/Request.hpp"
+#include "util/string_utils.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -70,18 +71,12 @@ const std::deque<std::string> &MultivalRequest::get_value_columns()
 std::string MultivalRequest::to_string() const
 {
     std::stringstream s;
-    s << "Request ID " << id
-      << ", user " << user_name
-      << ", dataset id " << dataset_id
-      << ", request time " << request_time
-      << ", value time start " << value_time_start
-      << ", value time end " << value_time_end
-      << ", resolution " << resolution
-      << ", value columns " << value_columns;
+    s << "Request ID " << id << ", user " << user_name << ", dataset id " << dataset_id << ", request time " << request_time << ", value time start " << value_time_start
+      << ", value time end " << value_time_end << ", resolution " << resolution << ", value columns " << value_columns;
     return s.str();
 }
 
-bool MultivalRequest::sanity_check()
+bool MultivalRequest::sanity_check() const
 {
     if (dataset_id == 0) return false;
     if (resolution.is_special()) return false;
@@ -148,10 +143,7 @@ bool ValueRequest::operator==(const ValueRequest &o) const
 std::string ValueRequest::to_string() const
 {
     std::stringstream ss;
-    ss << "Response ID " << id
-       << ", request time " << request_time
-       << ", value time " << value_time
-       << ", value column " << value_column;
+    ss << "Response ID " << id << ", request time " << request_time << ", value time " << value_time << ", value column " << value_column;
     return ss.str();
 }
 

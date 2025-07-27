@@ -16,7 +16,7 @@ bigint PgUserDAO::get_next_id()
     return bigint(data_source.query_for_type<long>(AbstractDAO::get_sql("get_next_id")));
 }
 
-int PgUserDAO::save(const User_ptr &user)
+int PgUserDAO::save(const datamodel::User_ptr &user)
 {
 
     if (exists(user->get_user_name())) return update(user);
@@ -31,7 +31,7 @@ int PgUserDAO::save(const User_ptr &user)
                               user->get_priority());
 }
 
-int PgUserDAO::update(const User_ptr &user)
+int PgUserDAO::update(const datamodel::User_ptr &user)
 {
     LOG4_DEBUG("Updating user: " << user->to_string());
     return data_source.update(AbstractDAO::get_sql("update"),
@@ -43,7 +43,7 @@ int PgUserDAO::update(const User_ptr &user)
                               user->get_user_name());
 }
 
-int PgUserDAO::remove(const User_ptr &user)
+int PgUserDAO::remove(const datamodel::User_ptr &user)
 {
     LOG4_DEBUG("Removing user: " << user->to_string());
     return data_source.update(AbstractDAO::get_sql("remove"), user->get_user_name());
@@ -54,13 +54,13 @@ bool PgUserDAO::exists(std::string const &user_name)
     return 1 == data_source.query_for_type<long>(AbstractDAO::get_sql("existsByUsername"), user_name);
 }
 
-User_ptr PgUserDAO::get_by_user_name(const std::string &user_name)
+datamodel::User_ptr PgUserDAO::get_by_user_name(const std::string &user_name)
 {
     UserRowMapper row_mapper;
     return data_source.query_for_object(&row_mapper, AbstractDAO::get_sql("get_by_user_name"), user_name);
 }
 
-std::vector<User_ptr> PgUserDAO::get_all_users()
+std::vector<datamodel::User_ptr> PgUserDAO::get_all_users()
 {
     UserRowMapper row_mapper;
     return data_source.query_for_array(row_mapper, AbstractDAO::get_sql("get_all_users"));
@@ -72,7 +72,7 @@ bool PgUserDAO::login(const std::string &user_name, const std::string &enc_passw
     return data_source.query_for_type<bool>(get_sql("login"), user_name, enc_password);
 }
 
-std::vector<User_ptr> PgUserDAO::get_all_users_by_priority()
+std::vector<datamodel::User_ptr> PgUserDAO::get_all_users_by_priority()
 {
     UserRowMapper row_mapper;
     return data_source.query_for_array(row_mapper, get_sql("get_all_users_by_priority"));

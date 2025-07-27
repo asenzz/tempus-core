@@ -6,21 +6,21 @@ namespace dao {
 DEFINE_THREADSAFE_DAO_CONSTRUCTOR (TsUserDAO, UserDAO)
 {}
 
-User_ptr TsUserDAO::get_by_user_name(const std::string& user_name)
+datamodel::User_ptr TsUserDAO::get_by_user_name(const std::string& user_name)
 {
-    return ts_call<User_ptr>(&UserDAO::get_by_user_name, user_name);
+    return ts_call<datamodel::User_ptr>(&UserDAO::get_by_user_name, user_name);
 }
 
 
-std::vector<User_ptr> TsUserDAO::get_all_users()
+std::vector<datamodel::User_ptr> TsUserDAO::get_all_users()
 {
-    return ts_call<std::vector<User_ptr>>(&UserDAO::get_all_users);
+    return ts_call<std::vector<datamodel::User_ptr>>(&UserDAO::get_all_users);
 }
 
 
-std::vector<User_ptr> TsUserDAO::get_all_users_by_priority()
+std::vector<datamodel::User_ptr> TsUserDAO::get_all_users_by_priority()
 {
-    return ts_call<std::vector<User_ptr>>(&UserDAO::get_all_users_by_priority);
+    return ts_call<std::vector<datamodel::User_ptr>>(&UserDAO::get_all_users_by_priority);
 }
 
 
@@ -36,19 +36,19 @@ bool TsUserDAO::exists(std::string const & user_name)
 }
 
 
-int TsUserDAO::save(const User_ptr& user)
+int TsUserDAO::save(const datamodel::User_ptr& user)
 {
     return ts_call<int>(&UserDAO::save, user);
 }
 
 
-int TsUserDAO::update(const User_ptr& user)
+int TsUserDAO::update(const datamodel::User_ptr& user)
 {
     return ts_call<int>(&UserDAO::update, user);
 }
 
 
-int TsUserDAO::remove(const User_ptr& user)
+int TsUserDAO::remove(const datamodel::User_ptr& user)
 {
     return ts_call<int>(&UserDAO::remove, user);
 }

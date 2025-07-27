@@ -27,7 +27,10 @@
 #include "align_features.cuh"
 #include "ModelService.hpp"
 #include "appcontext.hpp"
+#include "DataRowService.hpp"
+#include "ScalingFactorService.hpp"
 #include "common/cuda_util.cuh"
+#include "model/SVRParameters.hpp"
 
 // #define USE_FIREFLY // else use BITEOPT
 
@@ -650,6 +653,10 @@ std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_
             OMP_FOR_i(N) w[i] = 0.42 - 0.5 * std::cos(C_pi_2 * i / (N - 1)) + 0.08 * std::cos(4 * M_PI * i / (N - 1)); // Blackman window
         }
     }
+    if (N < 1) {
+        LOG4_WARN("FIR mask too short " << N);
+        return {};
+    }
     if (N > oemd_coefficients_search::C_fir_max_len) {
         LOG4_WARN("FIR mask too long " << N);
         return {};
@@ -991,7 +998,7 @@ oemd_coefficients_search::run(
             L_ins = &label_ixs.emplace_back(t_label_ix{.n_ixs = label_len});
             (void) feat_params.emplace_back(t_feat_params{.ix_end = F_end_ix});
         }
-        generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution, label_len, L_ins->label_ixs);
+        business::generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution, label_len, L_ins->label_ixs);
     }
     assert(label_ixs.size() == feat_params.size());
     RELEASE_CONT(times);

@@ -134,7 +134,7 @@ TEST_F(cvmd_transform_test, test_transform_correctness)
         LOG4_DEBUG("Level " << i << ", power " << mean_abs_level);
     }
 
-    data_row_container recon(decon.size());
+    datamodel::data_row_container recon(decon.size());
     double min_v = 0;
 #if 0
     OMP_FOR_i_(decon.size(), simd reduction(min:min_v)) {

@@ -10,7 +10,7 @@ using namespace svr::common;
 namespace svr {
 namespace business {
 
-int UserService::save(const User_ptr &user)
+int UserService::save(const datamodel::User_ptr &user)
 {
     REJECT_NULLPTR(user);
 
@@ -22,7 +22,7 @@ int UserService::save(const User_ptr &user)
     return user_dao.save(user);
 }
 
-int UserService::remove(const User_ptr &user)
+int UserService::remove(const datamodel::User_ptr &user)
 {
     REJECT_NULLPTR(user);
     if (!exists(user->get_user_name())) {
@@ -32,12 +32,12 @@ int UserService::remove(const User_ptr &user)
     return user_dao.remove(user);
 }
 
-User_ptr UserService::get_user_by_user_name(const std::string &user_name)
+datamodel::User_ptr UserService::get_user_by_user_name(const std::string &user_name)
 {
     return user_dao.get_by_user_name(user_name);
 }
 
-std::vector<User_ptr> UserService::get_all_users()
+std::vector<datamodel::User_ptr> UserService::get_all_users()
 {
     return user_dao.get_all_users();
 }
@@ -52,7 +52,7 @@ bool UserService::login(const std::string &user_name, const std::string &passwor
     return user_dao.login(user_name, password);
 }
 
-std::vector<User_ptr> UserService::get_all_users_by_priority()
+std::vector<datamodel::User_ptr> UserService::get_all_users_by_priority()
 {
     return user_dao.get_all_users_by_priority();
 }

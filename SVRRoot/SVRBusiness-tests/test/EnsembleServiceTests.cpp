@@ -16,7 +16,7 @@ class EnsembleIntegrationTests : public DaoTestFixture
 protected:
     scoped_transaction_guard_ptr trx;
 
-    User_ptr testUser;
+    datamodel::User_ptr testUser;
     datamodel::InputQueue_ptr testQueue;
     datamodel::Dataset_ptr testDataset;
     std::deque<datamodel::DeconQueue_ptr> deconQueues;

@@ -19,7 +19,7 @@
 namespace svr {
 
 constexpr uint64_t C_sign_mask_dbl = 0x7FFFFFFF;
-constexpr unsigned C_cufft_input_limit = 64e5;
+constexpr uint32_t C_cufft_input_limit = 64e5;
 // #define HETEROGENOUS_GPU_HW
 
 #define tid_ threadIdx.x

@@ -37,7 +37,7 @@ typedef std::vector<double> vectord;
 typedef std::vector<std::complex<double> > vectorcd;
 typedef std::vector<MatrixXcd> Matrix3DXd;
 
-void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega, svr::data_row_container::const_iterator iterin, const size_t in_ct, const unsigned input_column_index,
+void VMD(MatrixXd &u, MatrixXcd &u_hat, MatrixXd &omega, datamodel::data_row_container::const_iterator iterin, const size_t in_ct, const unsigned input_column_index,
          const double alpha, const double tau, const int K, const int DC, const int init, const double tol, const double eps, const svr::datamodel::t_iqscaler &scaler);
 
 vectorcd circshift(vectorcd &data, int offset);
@@ -53,7 +53,7 @@ void printMatrix(const MatrixXd &u);
 #else
 
 std::tuple<std::vector<std::vector<double>>, std::vector<std::vector<std::complex<double>>>, std::vector<std::vector<double>>>
-VMD(const svr::data_row_container::const_iterator iterin, const size_t in_ct, const unsigned input_column_index, double alpha, double tau, int K, bool DC, int init, double tol,
+VMD(const datamodel::data_row_container::const_iterator iterin, const size_t in_ct, const unsigned input_column_index, double alpha, double tau, int K, bool DC, int init, double tol,
     const svr::datamodel::t_iqscaler &scaler);
 
 #endif

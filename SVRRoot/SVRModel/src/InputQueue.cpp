@@ -1,41 +1,39 @@
-#include <model/InputQueue.hpp>
+#include "model/InputQueue.hpp"
+
+#include "DataRowService.hpp"
 #include "InputQueueService.hpp"
+#include "common/logging.hpp"
 #include "util/time_utils.hpp"
 
 namespace svr {
 namespace datamodel {
-
-
 InputQueue::InputQueue(
-        const std::string &table_name,
-        const std::string &logical_name,
-        const std::string &owner_user_name,
-        const std::string &description,
-        const bpt::time_duration &resolution,
-        const bpt::time_duration &legal_time_deviation,
-        const std::string &time_zone,
-        const std::deque<std::string> &value_columns,
-        const bool uses_fix_connection,
-        const data_row_container &rows)
-        :
-        Queue(business::InputQueueService::make_queue_table_name(owner_user_name, logical_name, resolution), rows),
-        logical_name_(logical_name),
-        owner_user_name_(owner_user_name),
-        description_(description),
-        resolution_(resolution),
-        legal_time_deviation_(legal_time_deviation),
-        time_zone_(time_zone),
-        value_columns_(value_columns),
-        uses_fix_connection(uses_fix_connection)
+    const std::string &table_name,
+    const std::string &logical_name,
+    const std::string &owner_user_name,
+    const std::string &description,
+    const bpt::time_duration &resolution,
+    const bpt::time_duration &legal_time_deviation,
+    const std::string &time_zone,
+    const std::deque<std::string> &value_columns,
+    const bool uses_fix_connection,
+    const data_row_container &rows)
+    : Queue(table_name.empty() ? business::InputQueueService::make_queue_table_name(owner_user_name, logical_name, resolution) : table_name, rows),
+      logical_name_(logical_name),
+      owner_user_name_(owner_user_name),
+      description_(description),
+      resolution_(resolution),
+      legal_time_deviation_(legal_time_deviation),
+      time_zone_(time_zone),
+      value_columns_(value_columns),
+      uses_fix_connection(uses_fix_connection)
 {
 }
 
 
 InputQueue InputQueue::get_copy_metadata() const
 {
-    return InputQueue(
-            get_table_name(), logical_name_, owner_user_name_, description_, resolution_,
-            legal_time_deviation_, time_zone_, value_columns_, uses_fix_connection);
+    return InputQueue(get_table_name(), logical_name_, owner_user_name_, description_, resolution_, legal_time_deviation_, time_zone_, value_columns_, uses_fix_connection);
 }
 
 
@@ -49,44 +47,66 @@ datamodel::InputQueue_ptr InputQueue::clone(const size_t start_ix, const size_t 
     auto p_new_queue = clone_empty();
     if (data_.empty()) return p_new_queue;
     else if (data_.size() > start_ix)
-        p_new_queue->data_ = clone_datarows(data_.cbegin() + std::min(start_ix, data_.size() - 1), data_.cbegin() + std::min(end_ix, data_.size()));
+        p_new_queue->data_ = business::clone_datarows(data_.cbegin() + std::min(start_ix, data_.size() - 1), data_.cbegin() + std::min(end_ix, data_.size()));
     else
         LOG4_ERROR("Start index " << start_ix << " exceeds data size " << data_.size());
     return p_new_queue;
 }
 
 const std::string &InputQueue::get_description() const
-{ return description_; }
+{
+    return description_;
+}
 
 void InputQueue::set_description(const std::string &description)
-{ this->description_ = description; }
+{
+    this->description_ = description;
+}
 
 const bpt::time_duration &InputQueue::get_legal_time_deviation() const
-{ return legal_time_deviation_; }
+{
+    return legal_time_deviation_;
+}
 
 void InputQueue::set_legal_time_deviation(const bpt::time_duration &legalTimeDeviation)
-{ legal_time_deviation_ = legalTimeDeviation; }
+{
+    legal_time_deviation_ = legalTimeDeviation;
+}
 
 const std::string &InputQueue::get_logical_name() const
-{ return logical_name_; }
+{
+    return logical_name_;
+}
 
 const std::string &InputQueue::get_owner_user_name() const
-{ return owner_user_name_; }
+{
+    return owner_user_name_;
+}
 
 const bpt::time_duration &InputQueue::get_resolution() const
-{ return resolution_; }
+{
+    return resolution_;
+}
 
 const std::string &InputQueue::get_time_zone() const
-{ return time_zone_; }
+{
+    return time_zone_;
+}
 
 void InputQueue::set_time_zone(const std::string &time_zone)
-{ time_zone_ = time_zone; }
+{
+    time_zone_ = time_zone;
+}
 
 const std::string &InputQueue::get_value_column(const size_t i) const
-{ return value_columns_[i]; }
+{
+    return value_columns_[i];
+}
 
 const std::deque<std::string> &InputQueue::get_value_columns() const
-{ return value_columns_; }
+{
+    return value_columns_;
+}
 
 void InputQueue::set_value_columns(const std::deque<std::string> &value_columns)
 {
@@ -105,7 +125,9 @@ const std::string &InputQueue::get_value_column_str()
 }
 
 bool InputQueue::is_tick_queue() const
-{ return resolution_ < onesec; }
+{
+    return resolution_ < onesec;
+}
 
 bpt::time_duration const &InputQueue::get_missing_hours_retention() const
 {
@@ -142,7 +164,7 @@ void InputQueue::set_owner_user_name(const std::string &owner_user_name)
 
 void InputQueue::set_resolution(const bpt::time_duration &resolution)
 {
-    this->resolution_ = resolution;
+    resolution_ = resolution;
     reinit_table_name();
 }
 
@@ -157,13 +179,13 @@ std::string InputQueue::metadata_to_string() const
 {
     std::stringstream ss;
     ss << "Table name " << table_name_
-       << ", logical name " << logical_name_
-       << ", owner user name " << owner_user_name_
-       << ", description " << description_
-       << ", resolution " << resolution_
-       << ", legal time deviation " << legal_time_deviation_
-       << ", time zone " << time_zone_
-       << ", columns " << common::to_string(value_columns_);
+            << ", logical name " << logical_name_
+            << ", owner user name " << owner_user_name_
+            << ", description " << description_
+            << ", resolution " << resolution_
+            << ", legal time deviation " << legal_time_deviation_
+            << ", time zone " << time_zone_
+            << ", columns " << common::to_string(value_columns_);
 
     return ss.str();
 }
@@ -177,7 +199,18 @@ void InputQueue::set_uses_fix_connection(const bool value)
 {
     uses_fix_connection = value;
 }
+} // namespace datamodel
 
-
+template<> void store_buffer_push_merge<svr::datamodel::InputQueue_ptr>(svr::datamodel::InputQueue_ptr &dest, svr::datamodel::InputQueue_ptr const &src)
+{
+    dest->get_data().insert(dest->end(), src->cbegin(), src->cend());
+    dest->set_value_columns(src->get_value_columns());
+    dest->set_description(src->get_description());
+    dest->set_legal_time_deviation(src->get_legal_time_deviation());
+    dest->set_logical_name(src->get_logical_name());
+    dest->set_owner_user_name(src->get_owner_user_name());
+    dest->set_resolution(src->get_resolution());
+    dest->set_table_name(src->get_table_name());
+    dest->set_time_zone(src->get_time_zone());
+}
 } // namespace svr
-} //namespace datamodel

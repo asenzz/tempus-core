@@ -54,6 +54,7 @@ View definition:
 #include "IQScalingFactorService.hpp"
 #include "ModelService.hpp"
 #include "appcontext.hpp"
+#include "DataRowService.hpp"
 #include "DQScalingFactorService.hpp"
 #include "model/Priority.hpp"
 #include "common/compatibility.hpp"
@@ -141,7 +142,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
-            data_row_container times;
+            datamodel::data_row_container times;
             arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros),
                     recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros);
             arma::vec recon_last_knowns(common::C_integration_test_validation_window, arma::fill::zeros);
@@ -210,8 +211,8 @@ TEST(manifold_tune_train_predict, basic_integration)
             for (uint16_t i = 0; i < validated_ct; ++i) {
                 const auto i_div = i + 1.;
                 const auto cur_time = times[validate_start + i]->get_value_time();
-                const auto actual = (**lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
-                const auto last_known_iter = lower_bound_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
+                const auto actual = (**business::lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
+                const auto last_known_iter = business::lower_bound_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
                 const auto last_known = (**last_known_iter)[column_ix];
                 const auto actual_move = actual - last_known;
                 const auto recon_actual_move = recon_actual[i] - recon_last_knowns[i];
@@ -234,9 +235,9 @@ TEST(manifold_tune_train_predict, basic_integration)
                     ++positive_mae_ct;
                 }
                 const auto sign_predicted_move = std::signbit(predicted_move);
-                const auto start_aux_it = lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time);
-                const auto last_aux_it = lower_bound(start_aux_it, p_dataset->get_aux_input_queue()->cend(), cur_time + resolution);
-                const auto placement_it = lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time - horizon_duration + C_placement_delay);
+                const auto start_aux_it = business::lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time);
+                const auto last_aux_it = business::lower_bound(start_aux_it, p_dataset->get_aux_input_queue()->cend(), cur_time + resolution);
+                const auto placement_it = business::lower_bound(last_known_iter, p_dataset->get_aux_input_queue()->cend(), cur_time - horizon_duration + C_placement_delay);
                 const auto placement_price = ***placement_it;
                 const auto last_aux_price = ***std::prev(last_aux_it);
                 constexpr auto time_comp = [](const auto &lhs, const auto &rhs) { return lhs->get_value_time() < rhs->get_value_time(); };
