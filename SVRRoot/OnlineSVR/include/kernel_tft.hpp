@@ -14,7 +14,7 @@ namespace kernel {
 template<typename T> class kernel_tft final : public kernel_base<T>
 {
 public:
-    void init(const arma::Mat<T> &X, const arma::Mat<T> &Y);
+    void init(datamodel::OnlineSVR &model, const uint32_t chunk_ix) override;
 
     explicit kernel_tft(datamodel::SVRParameters &p);
 

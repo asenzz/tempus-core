@@ -24,7 +24,8 @@ class SVRParametersService {
 
 public:
     explicit SVRParametersService(dao::SVRParametersDAO &svr_parameters_dao);
-    bool exists(const datamodel::SVRParameters_ptr &svr_parameters);
+    bool exists(const datamodel::SVRParameters_ptr &p_svr_parameters);
+    bool exists(const datamodel::SVRParameters &svr_parameters);
     bool exists(const bigint svr_parameters_id);
     int save(datamodel::SVRParameters &svr_parameters);
     int save(const datamodel::SVRParameters_ptr &p_svr_parameters);

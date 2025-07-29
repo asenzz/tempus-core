@@ -67,21 +67,16 @@ public:
     template<typename T> arma::Mat<T> get_Ky(
         const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &time_X, const bpt::ptime &time_Xy);
 
-    std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> get_labels(
+    static std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> get_labels(
         const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
         const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
-        const bpt::time_duration &main_queue_resolution, const uint16_t lag);
+        const bpt::time_duration &main_resolution, const uint16_t lag);
 
-    std::tuple<mat_ptr, datamodel::data_row_container_ptr, datamodel::data_row_container_ptr> get_manifold_labels(
-        datamodel::Model &model, const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
-        const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
-        const bpt::time_duration &main_queue_resolution, const uint16_t lag);
-
-    mat_ptr get_features(
+    static mat_ptr get_features(
         const arma::mat &labels, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &params, const bpt::time_duration &aux_resolution,
         const bpt::time_duration &main_resolution, const bpt::time_duration &max_lookback_time_gap, const datamodel::data_row_container &label_times);
 
-    mat_ptr get_weights(
+    static mat_ptr get_weights(
         const bigint dataset_id, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
         const bpt::time_duration &resolution_main);
 

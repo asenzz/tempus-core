@@ -74,7 +74,7 @@ int PgModelDAO::save(const datamodel::Model_ptr &model)
                       });
         std::for_each(C_default_exec_policy, p_svr->get_param_set().cbegin(), p_svr->get_param_set().cend(),
                       [&](const auto &s) {
-                          if (APP.svr_parameters_service.exists(s)) APP.svr_parameters_service.remove(s);
+                          if (APP.svr_parameters_service.exists(*s)) APP.svr_parameters_service.remove(s);
                           APP.svr_parameters_service.save(s);
                       });
     }

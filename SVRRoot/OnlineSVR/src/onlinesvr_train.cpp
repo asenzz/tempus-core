@@ -471,9 +471,15 @@ void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, c
         OMP_FOR_i(n_rows) augment_K.row(i) = p_kernel_matrices->at(chunk_ix).row(i) + L_t;
     }
     const arma::mat L = train_label_chunks[chunk_ix] * n_rows;
+
     PROFILE_INFO(chunks_score[chunk_ix] = calc_weights(augment_K, L, ixs[chunk_ix], weight_chunks[chunk_ix], iter_opt, iter_irwls, PROPS.get_limes()),
                 "Calculate weights for " << params << ", chunk score " << chunks_score[chunk_ix] << ", chunk " << chunk_ix << ", iter_opt " << iter_opt <<
                 ", iter_irwls " << iter_irwls);
+
+    /*
+     * TODO Test if this scoring method is better
+    if (!std::isnormal(chunks_score[chunk_ix])) chunks_score[chunk_ix] = common::meanabs<double>(kernel::get_reference_Z(train_label_chunks[chunk_ix]) - p_kernel_matrices->at(chunk_ix));
+    */
 }
 
 

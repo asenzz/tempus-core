@@ -13,6 +13,7 @@
 #include <common/thread_pool.hpp>
 #include "onlinesvr.hpp"
 #include "DaemonFacade.hpp"
+#include "DataRowService.hpp"
 
 namespace svr {
 namespace business {

@@ -45,7 +45,6 @@ datamodel::DeconQueue_ptr DeconQueue::clone(const size_t start_ix, const size_t 
 
 void DeconQueue::erase_until(const data_row_container::iterator &target_iter)
 {
-    //    reset_anchor(target_iter);
     data_.erase(data_.begin(), target_iter);
 }
 
@@ -75,16 +74,15 @@ void DeconQueue::update_data(const DataRow::container &new_data, const bool over
 
     LOG4_DEBUG(
         "Updating " << input_queue_table_name_ << " " << input_queue_column_name_ << " new data from " << new_data.front()->get_value_time() << " until " << new_data.back()->get_value_time()
-        <<
-        " existing data from " << data_.front()->get_value_time() << " until " << data_.back()->get_value_time());
+        << " existing data from " << data_.front()->get_value_time() << " until " << data_.back()->get_value_time());
 
     // Sanity checks against existing decon data
+#if 0
     if (!new_data.empty() && data_.size() > 1)
+        // TODO Max gap time
         if (new_data.front()->get_value_time() - data_.back()->get_value_time() > std::next(new_data.begin())->get()->get_value_time() - new_data.front()->get_value_time())
-            // TODO Max gap time
-            THROW_EX_FS(std::runtime_error,
-                    "Adding new data will introduce a gap in decon queue " << input_queue_column_name_ << " time series!");
-
+            LOG4_THROW("Adding new data will introduce a gap in decon queue " << input_queue_column_name_ << " time series!");
+#endif
     if (new_data.front()->get_value_time() <= data_.front()->get_value_time() && new_data.back()->get_value_time() >= data_.back()->get_value_time()) {
         data_ = new_data;
     } else if (new_data.front()->get_value_time() < data_.front()->get_value_time()) {
@@ -187,7 +185,7 @@ std::string DeconQueue::data_to_string(const size_t data_size) const
     std::stringstream ss;
     for (const auto &row: get_data()) {
         if (row_id++ > data_size) {
-            ss << ". . . " << (size() - data_size) << " more" << std::endl;
+            ss << ". . . " << size() - data_size << " more" << '\n';
             break;
         }
         ss << row->to_string() << '\n';
@@ -203,7 +201,6 @@ DeconQueue DeconQueue::load(const std::string &file_path)
     fin.open(file_path, std::ios::in);
     std::vector<std::string> row;
     std::string line, word, temp;
-
     while (fin >> temp) {
         row.clear();
 
@@ -225,13 +222,12 @@ DeconQueue DeconQueue::load(const std::string &file_path)
             row.emplace_back(word);
         }
         std::vector<double> values;
-        for (size_t i = 3; i < row.size() - (row.size() - 3) / 5; ++i) {
+        for (size_t i = 3; i < row.size() - (row.size() - 3) / 5; ++i)
             values.emplace_back(std::atof(row[i].c_str()));
-        }
         const auto data_row_ptr = ptr<datamodel::DataRow>(
             boost::posix_time::time_from_string(row[0]),
             boost::posix_time::time_from_string(row[1]),
-            std::atoll(row[2].c_str()),
+            std::stoll(row[2].c_str()),
             values);
         data.emplace_back(data_row_ptr);
     }

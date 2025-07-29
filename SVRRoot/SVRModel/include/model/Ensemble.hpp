@@ -30,6 +30,7 @@ class Ensemble final : public Entity
     std::deque<datamodel::Model_ptr> models;
     datamodel::DeconQueue_ptr p_decon_queue;
     std::deque<datamodel::DeconQueue_ptr> aux_decon_queues;
+    PROPERTY(bpt::ptime, last_modeled_time)
 
 public:
     bool operator==(Ensemble const &o) const;

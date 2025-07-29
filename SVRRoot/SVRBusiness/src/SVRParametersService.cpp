@@ -32,13 +32,22 @@ datamodel::SVRParameters_ptr SVRParametersService::is_tft(const datamodel::t_par
     return res == param_set.end() ? nullptr : *res;
 }
 
-bool SVRParametersService::exists(const datamodel::SVRParameters_ptr &svr_parameters)
+bool SVRParametersService::exists(const datamodel::SVRParameters_ptr &p_svr_parameters)
 {
-    if (!svr_parameters || !svr_parameters->get_id()) {
+    if (!p_svr_parameters) {
+        LOG4_ERROR("Parameters not initialized");
+        return false;
+    }
+    return exists(*p_svr_parameters);
+}
+
+bool SVRParametersService::exists(const datamodel::SVRParameters &svr_parameters)
+{
+    if (!svr_parameters.get_id()) {
         LOG4_ERROR("Parameters not initialized or id is zero!");
         return false;
     }
-    return exists(svr_parameters->get_id());
+    return exists(svr_parameters.get_id());
 }
 
 

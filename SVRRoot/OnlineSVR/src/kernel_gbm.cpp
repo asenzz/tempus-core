@@ -88,9 +88,11 @@ void lgbm_log(const char *const lgbm_message)
     LOG4_DEBUG(lgbm_message);
 }
 
-template<> void kernel_gbm<T>::init(const arma::Mat<T> &X_t, const arma::Mat<T> &Y)
+template<> void kernel_gbm<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t chunk_ix)
 {
     LOG4_BEGIN();
+    const auto &X_t = svrmod.get_X(chunk_ix);
+    const auto &Y = svrmod.get_Y(chunk_ix);
     assert(Y.n_cols == 1);
     const uint32_t n_samples = X_t.n_cols;
     const uint32_t n_samples_2 = n_samples * n_samples;
@@ -147,13 +149,15 @@ template<> void kernel_gbm<T>::init(const arma::Mat<T> &X_t, const arma::Mat<T> 
     boost::iostreams::close(out);
     compressed_stream.flush();
     parameters.set_tft_model(compressed_stream.str());
+    parameters.set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
     LOG4_DEBUG("Saved LighGBM model with size " << model_size << " bytes to parameters " << parameters);
+    kernel_base::wrapup(svrmod, chunk_ix);
     LOG4_END();
 }
 
 template<> arma::Mat<T> kernel_gbm<T>::distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const
 {
-    LOG4_THROW("Not implemeneted.");
+    LOG4_THROW("Not implemented.");
     return {};
 }
 

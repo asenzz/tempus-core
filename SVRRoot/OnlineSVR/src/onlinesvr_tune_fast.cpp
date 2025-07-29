@@ -87,39 +87,8 @@ void OnlineSVR::score_indexes(const arma::mat &features_t, const arma::mat &labe
     ixs = ixs.rows(arma::sort(arma::stable_sort_index(score).eval().head_rows(n_rows - PROPS.get_outlier_slack())));
 }
 
-void save_chunk_params(const SVRParameters_ptr &p_params)
-{
-    if (APP.svr_parameters_service.exists(p_params)) APP.svr_parameters_service.remove(p_params);
-    APP.svr_parameters_service.save(p_params);
-}
-
 void OnlineSVR::tune()
 {
-    if (const auto p_params = is_manifold()) {
-        assert(ixs.size() == 1);
-        assert(train_feature_chunks_t.size() == 1);
-        assert(train_label_chunks.size() == 1);
-        PROFIL3(kernel::IKernel<double>::get<kernel::kernel_deep_path<double>>(*p_params)->init(
-            projection, p_dataset, train_feature_chunks_t.front(), train_label_chunks.front(), last_trained_time));
-        p_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
-        return;
-    }
-
-    constexpr uint8_t D = 1;
-    // static const auto equiexp = std::log(std::sqrt(PROPS.get_tune_max_lambda())) / M_LN2;
-    static const auto bounds1 = [] {
-        arma::mat r(4, 2, ARMA_DEFAULT_FILL);
-        r.col(0).zeros();
-        r.col(1).fill(PROPS.get_tune_max_fback());
-        r(0, 1) = PROPS.get_tune_max_tau();
-        return r;
-    }();
-    static const auto bounds2 = [] {
-        arma::mat r(D, 2, ARMA_DEFAULT_FILL);
-        r(0, 0) = 0;
-        r(0, 1) = PROPS.get_tune_max_lambda();
-        return r;
-    }();
     const auto num_chunks = ixs.size();
     LOG4_TRACE("Systuning level " << level << ", step " << step << ", num chunks " << num_chunks << ", first chunk " << common::present_chunk(ixs.front(), .1) <<
         ", last chunk " << common::present_chunk(ixs.back(), .1) << " labels " << common::present(*p_labels) << ", features " << common::present(*p_features) <<
@@ -138,67 +107,7 @@ void OnlineSVR::tune()
             prepare_chunk(chunk_ix);
             LOG4_TRACE("Trimmed chunk " << chunk_ix << " ixs " << common::present(ixs[chunk_ix]) << ", labels rows " << p_labels->n_rows);
         }
-        if (p_chunk_params->get_kernel_type() == kernel_type::TFT) {
-            PROFIL3(kernel::IKernel<double>::get<kernel::kernel_tft<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
-            p_chunk_params->set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
-            if (model_id) save_chunk_params(p_chunk_params);
-            continue; // No tuning for TFT
-        } else if (p_chunk_params->get_kernel_type() == kernel_type::GBM) {
-            PROFIL3(kernel::IKernel<double>::get<kernel::kernel_gbm<double>>(*p_chunk_params)->init(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix]));
-            p_chunk_params->set_svr_kernel_param(1);
-            if (model_id) save_chunk_params(p_chunk_params);
-            continue; // No tuning for GBM
-        }
-        tbb::mutex chunk_preds_l;
-        auto best_score = std::numeric_limits<double>::max();
-        arma::mat W_tune, W_train;
-#ifdef INSTANCE_WEIGHTS
-        if (p_input_weights && p_input_weights->n_elem) {
-            W_tune = weight_matrix(chunk_ixs_tune, *p_input_weights);
-            W_train = instance_weight_matrix(ixs[chunk_ix], *p_input_weights);
-        }
-#endif
-        cutuner cv(train_feature_chunks_t[chunk_ix], train_label_chunks[chunk_ix], W_train, *p_chunk_params);
-        auto costF = [&](const double x[], double *const f) {
-            const auto [score, gamma, min] = cv.phase1(x[0], x[1], x[2], x[3]);
-            *f = score;
-            const tbb::mutex::scoped_lock lk(chunk_preds_l);
-            if (score < best_score) {
-                p_chunk_params->set_svr_kernel_param(gamma);
-                p_chunk_params->set_kernel_param3(*x);
-                p_chunk_params->set_H_feedback(x[1]);
-                p_chunk_params->set_D_feedback(x[2]);
-                p_chunk_params->set_V_feedback(x[3]);
-                p_chunk_params->set_min_Z(min);
-                LOG4_TRACE("New best score distances " << score << ", previous best " << best_score << ", improvement " << common::imprv(score, best_score) << "pc, parameters " <<
-                    *p_chunk_params << ", opt arg " << common::to_string(x, 4));
-                best_score = score;
-            }
-        };
-        (void) optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_tune_particles1(), bounds1, costF, PROPS.get_tune_iteration1(), 0, 0, {}, {}, std::min<uint32_t>(PROPS.get_tune_iteration1(), PROPS.get_opt_depth()));
-        cv.prepare_second_phase(*p_chunk_params);
-        auto costF2 = [&](const double x[], double *const f) {
-            const auto [score, gamma, min] = cv.phase2(*x);
-            *f = score;
-            const tbb::mutex::scoped_lock lk(chunk_preds_l);
-            if (score < best_score) {
-                p_chunk_params->set_svr_kernel_param(gamma);
-                p_chunk_params->set_svr_kernel_param2(*x);
-                p_chunk_params->set_min_Z(min);
-                LOG4_TRACE("New best score kernel " << score << ", previous best " << best_score << ", improvement " << common::imprv(score, best_score) << "pc, parameters " <<
-                    *p_chunk_params << ", opt arg " << *x);
-                best_score = score;
-            }
-        };
-        chunks_score[chunk_ix] = best_score;
-        (void) optimizer::pprune(optimizer::pprune::C_default_algo, PROPS.get_tune_particles2(), bounds2, costF2, PROPS.get_tune_iteration2(), 0, 0, {}, {}, std::min<uint32_t>(PROPS.get_tune_iteration2(), PROPS.get_opt_depth()));
-
-        assert(p_chunk_params->get_svr_kernel_param() != 0);
-
-        set_params(p_chunk_params, chunk_ix);
-        LOG4_INFO("Tuned best score " << chunks_score[chunk_ix] << ", final parameters " << *p_chunk_params);
-
-        if (model_id) save_chunk_params(p_chunk_params);
+        kernel::IKernel<double>::get(*p_chunk_params)->init(*this, chunk_ix);
     }
     clean_chunks();
 }

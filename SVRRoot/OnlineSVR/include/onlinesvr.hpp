@@ -68,7 +68,11 @@ class OnlineSVR final : public Entity
     uint16_t gradient = C_default_svrparam_grad_level;
     uint16_t level = C_default_svrparam_decon_level;
     uint16_t step = C_default_svrparam_step;
-    PROPERTY(uint16_t, projection, 0);
+    PROPERTY(uint16_t, projection, 0)
+
+    bpt::ptime get_last_trained_time() const;
+
+    void set_score(uint32_t chunk_ix, double score);
 
     virtual void init_id() override;
 
@@ -234,51 +238,16 @@ public:
 
     void prepare_chunk(const SVRParameters_ptr &p);
 
-    static SVRParameters make_tuning_template(const SVRParameters &example);
+    arma::mat &get_X(uint32_t chunk_ix);
+
+    arma::mat get_X(uint32_t chunk_ix) const;
+
+    arma::mat &get_Y(uint32_t chunk_ix);
+
+    arma::mat get_Y(uint32_t chunk_ix) const;
 };
 
 using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
-
-class cutuner
-{
-    static constexpr uint16_t streams_per_gpu = 1;
-    const uint16_t n_gpus;
-    SVRParameters template_parameters;
-    const bool weighted;
-    const uint32_t n, train_len, calc_start, calc_len, train_F_rows; // calc len of 3000 seems to work best
-    const uint64_t K_train_len, K_train_size, K_calc_len, K_off, train_len_n, train_n_size;
-    const arma::mat ref_K, train_F;
-    const double ref_K_mean, ref_K_meanabs;
-
-public:
-    struct dev_ctx
-    {
-        struct stream_ctx
-        {
-            cudaStream_t custream;
-            cublasHandle_t cublas_H;
-            magma_queue_t ma_queue;
-            double *d_K_train, *K_train_off;
-        };
-
-        double *d_train_F, *d_train_W, *d_ref_K, *d_D_paths;
-        std::deque<stream_ctx> sx;
-    };
-
-    std::deque<dev_ctx> dx;
-
-    cutuner(const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters);
-
-    ~cutuner();
-
-    std::tuple<double, double, double> normalize_result(const dev_ctx &dx_, const dev_ctx::stream_ctx &dxsx, const SVRParameters &parameters) const;
-
-    void prepare_second_phase(const SVRParameters &first_phase_parameters);
-
-    std::tuple<double, double, double> phase1(const double tau, const double H, const double D, const double V) const;
-
-    std::tuple<double, double, double> phase2(const double lambda) const;
-};
 
 } // datamodel
 } // svr

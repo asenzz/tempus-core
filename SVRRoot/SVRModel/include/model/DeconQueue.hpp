@@ -35,15 +35,15 @@ public:
 
     const std::string &get_input_queue_table_name() const;
 
-    void set_input_queue_table_name(const std::string &input_queue_table_name_);
+    void set_input_queue_table_name(const std::string &input_queue_table_name);
 
     const std::string &get_input_queue_column_name() const;
 
-    void set_input_queue_column_name(const std::string &input_queue_column_name_);
+    void set_input_queue_column_name(const std::string &input_queue_column_name);
 
     bigint get_dataset_id() const;
 
-    void set_dataset_id(bigint dataset_id_);
+    void set_dataset_id(bigint dataset_id);
 
     size_t get_decon_level_number() const;
 

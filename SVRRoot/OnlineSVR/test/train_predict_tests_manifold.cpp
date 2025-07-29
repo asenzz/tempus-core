@@ -130,15 +130,15 @@ TEST(manifold_tune_train_predict, basic_integration)
             C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
-// #pragma omp parallel ADJ_THREADS(std::min<uint16_t>(PROPS.get_parallel_models(), p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
-// #pragma omp single
+#pragma omp parallel ADJ_THREADS(std::min<uint16_t>(PROPS.get_parallel_models(), p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
+#pragma omp single
     {
-        // OMP_TASKLOOP_1()
+        // OMP_TASKLOOP_1() // To preserve order of processing, do not parallelize
         for (const auto &p_ensemble: p_dataset->get_ensembles()) {
             const auto &column = p_ensemble->get_column_name();
 //            const bool is_ask = column.find("_ask") != std::string::npos;
             prepare_test_queue(*p_dataset, *p_dataset->get_input_queue(), *p_ensemble->get_decon_queue());
-//            OMP_TASKLOOP_1()
+            OMP_TASKLOOP_1()
             for (auto &p_aux_decon_queue: p_ensemble->get_aux_decon_queues())
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
@@ -147,9 +147,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros);
             arma::vec recon_last_knowns(common::C_integration_test_validation_window, arma::fill::zeros);
             tbb::mutex recon_l;
-            const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
-            LOG4_TRACE("Got scaling factor " << *p_iqsf);
-//            OMP_TASKLOOP_1(collapse(2))
+//            OMP_TASKLOOP_1(collapse(2)) // To preserve order of processing, do not parallelize
             for (uint16_t l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
                 for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
@@ -194,6 +192,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             recon_predicted = arma::mean(recon_predicted, 1);
             recon_actual = arma::mean(recon_actual, 1);
 
+            const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
             LOG4_TRACE("Got scaling factor " << *p_iqsf);
             business::IQScalingFactorService::unscale_I(*p_iqsf, recon_predicted);
             business::IQScalingFactorService::unscale_I(*p_iqsf, recon_last_knowns);

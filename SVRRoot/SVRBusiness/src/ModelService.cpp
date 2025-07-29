@@ -59,7 +59,6 @@ std::deque<uint32_t> calc_quantisations()
     return r;
 }
 
-std::deque<uint32_t> G_quantisations;
 }
 
 const std::deque<uint32_t> &ModelService::get_quantisations()
@@ -101,23 +100,12 @@ ModelService::ModelService(dao::ModelDAO &model_dao) : model_dao(model_dao)
 }
 
 
-uint16_t ModelService::to_level_ix(const uint16_t model_ix, const uint16_t level_ct) noexcept
-{
-#ifdef VMD_ONLY
-    return model_ix >= MIN_LEVEL_COUNT ? model_ix / 2 : model_ix;
-#elif defined(EMD_ONLY)
-    return model_ix;
-#else
-    return model_ix >= MIN_LEVEL_COUNT ? ((model_ix >= (level_ct / 4)) ? (model_ix + 1) : model_ix) * 2 : 0;
-#endif
-}
-
 uint16_t ModelService::to_level_ct(const uint16_t model_ct) noexcept
 {
 #ifdef VMD_ONLY
-    return model_ct * 2;
+     model_ct * 2 / PROPS.get_multistep_len();
 #elif defined(EMD_ONLY)
-    return model_ct;
+    return model_ct / PROPS.get_multistep_len();
 #else
     return model_ct >= MIN_LEVEL_COUNT / 2 - 1 ? model_ct * 2 + 2 : 1;
 #endif
@@ -125,22 +113,15 @@ uint16_t ModelService::to_level_ct(const uint16_t model_ct) noexcept
 
 uint16_t ModelService::to_model_ct(const uint16_t level_ct) noexcept
 {
+    return
 #ifdef VMD_ONLY
-    return level_ct >= MIN_LEVEL_COUNT ? level_ct / 2 : 1;
+    level_ct >= MIN_LEVEL_COUNT ? level_ct / 2 : 1
 #elif defined(EMD_ONLY)
-    return level_ct;
+    level_ct
 #else
-    return level_ct >= MIN_LEVEL_COUNT ? level_ct / 2 - 1 : 1;
+    level_ct >= MIN_LEVEL_COUNT ? level_ct / 2 - 1 : 1
 #endif
-}
-
-uint16_t ModelService::to_model_ix(const uint16_t level_ix, const uint16_t level_ct)
-{
-    if (level_ct < MIN_LEVEL_COUNT) return 0;
-    const auto trans_levix = SVRParametersService::get_trans_levix(level_ct);
-    if (level_ix == trans_levix)
-        LOG4_THROW("Illegal level index " << level_ix << ", of count " << level_ct);
-    return level_ix / 2 - (level_ix > trans_levix ? 1 : 0);
+    * PROPS.get_multistep_len();
 }
 
 #ifdef INTEGRATION_TEST
@@ -309,37 +290,6 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
 
 #endif
 
-datamodel::DataRow::container::const_iterator
-ModelService::get_start(
-    const datamodel::DataRow::container::const_iterator &cbegin,
-    const datamodel::DataRow::container::const_iterator &cend,
-    const uint32_t count,
-    const boost::posix_time::ptime &model_last_time,
-    const boost::posix_time::time_duration &resolution)
-{
-    if (count < 1) {
-        LOG4_ERROR("Decremental offset " << count << " returning end.");
-        return cend;
-    }
-    const auto len = std::distance(cbegin, cend);
-    // Returns an iterator with the earliest value time needed to train a model with the most current data.
-    LOG4_DEBUG("Size is " << len << " decrement " << count);
-    if (len <= count) {
-        LOG4_WARN("Container size " << len << " is less or equal to needed size " << count);
-        return cbegin;
-    } else if (model_last_time == boost::posix_time::min_date_time)
-        return std::next(cbegin, len - count);
-    else
-        return find_nearest(cbegin, cend, model_last_time + resolution);
-}
-
-datamodel::DataRow::container::const_iterator
-ModelService::get_start(const datamodel::DataRow::container &cont, const uint32_t decremental_offset, const boost::posix_time::ptime &model_last_time,
-                        const boost::posix_time::time_duration &resolution)
-{
-    return get_start(cont.cbegin(), cont.cend(), decremental_offset, model_last_time, resolution);
-}
-
 datamodel::Model_ptr ModelService::get_model_by_id(const bigint model_id) const
 {
     return model_dao.get_by_id(model_id);
@@ -374,26 +324,19 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
 
     model.set_max_chunk_size(p_dataset->get_max_chunk_size());
     std::deque<datamodel::SVRParameters_ptr> paramset;
-    if (p_dataset->get_id())
-        paramset = APP.svr_parameters_service.get_by_dataset_column_level(p_dataset->get_id(), ensemble.get_column_name(), model.get_decon_level(), model.get_step());
+    if (p_dataset->get_id()) paramset = APP.svr_parameters_service.get_by_dataset_column_level(p_dataset->get_id(), ensemble.get_column_name(), model.get_decon_level(), model.get_step());
 
     model.set_head_params({
         produce_parameters(*p_dataset, ensemble, model, paramset, datamodel::Model::C_paramid_left, datamodel::Model::C_paramid_left),
         produce_parameters(*p_dataset, ensemble, model, paramset, datamodel::Model::C_paramid_right, datamodel::Model::C_paramid_right)
     });
 
-    const uint16_t default_model_num_chunks =
-            paramset.empty() || std::none_of(C_default_exec_policy, paramset.cbegin(), paramset.cend(), [](const auto p) { return p->is_manifold(); })
-                ? 1
-                : datamodel::OnlineSVR::get_num_chunks(paramset.empty() ? datamodel::C_default_svrparam_decrement_distance : (**paramset.cbegin()).get_svr_decremental_distance(),
-                                                       model.get_max_chunk_size());
+    const uint16_t default_model_num_chunks = datamodel::OnlineSVR::get_num_chunks(
+        paramset.empty() ? datamodel::C_default_svrparam_decrement_distance : (**paramset.cbegin()).get_svr_decremental_distance(), model.get_max_chunk_size());
 
-    const uint16_t default_adjacent_ct = paramset.empty()
-                                             ? datamodel::C_default_svrparam_adjacent_levels_ratio * p_dataset->get_spectral_levels()
-                                             : paramset.front()->get_adjacent_levels().size();
     datamodel::dq_scaling_factor_container_t all_model_scaling_factors;
     if (model.get_id()) all_model_scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model.get_id());
-#pragma omp parallel ADJ_THREADS(p_dataset->get_gradient_count() * default_model_num_chunks * p_dataset->get_spectral_levels() * default_adjacent_ct)
+#pragma omp parallel ADJ_THREADS(p_dataset->get_gradient_count() * default_model_num_chunks * p_dataset->get_spectral_levels())
 #pragma omp single
     {
         tbb::mutex gradients_l;
@@ -439,8 +382,7 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
                 for (DTYPE(grad_num_chunks) chix = 0; chix < grad_num_chunks; ++chix) {
                     datamodel::DQScalingFactor_ptr p_sf;
                     if (!DQScalingFactorService::find(p_svr_model->get_scaling_factors(), model.get_id(), chix, p_svr_model->get_gradient_level(), model.get_step(),
-                                                      model.get_decon_level(), false, true)
-                        &&
+                                                      model.get_decon_level(), false, true) &&
                         (p_sf = DQScalingFactorService::find(all_model_scaling_factors, model.get_id(), chix, p_svr_model->get_gradient_level(), p_svr_model->get_step(),
                                                              model.get_decon_level(), false, true))) {
                         const tbb::mutex::scoped_lock l2(gradients_l);
@@ -571,7 +513,7 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     const auto main_resolution = dataset.get_input_queue()->get_resolution();
     const auto aux_resolution = dataset.get_aux_input_queues().empty() ? main_resolution : dataset.get_aux_input_queue()->get_resolution();
     const datamodel::datarow_crange labels_range{
-        ModelService::get_start(label_decon.get_data().cbegin(), label_decon.get_data().cend(), dataset_rows, model.get_last_modeled_value_time(), main_resolution),
+        DataRowService::get_start(label_decon.get_data().cbegin(), label_decon.get_data().cend(), dataset_rows, model.get_last_modeled_value_time(), main_resolution),
         label_decon.get_data().cend(), label_decon
     };
 
@@ -595,89 +537,6 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     return {p_features, p_labels, p_last_knowns, p_weights, p_label_times};
 }
 
-
-std::tuple<mat_ptr, mat_ptr, mat_ptr, bpt::ptime>
-ModelService::get_manifold_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, uint32_t dataset_rows)
-{
-    LOG4_BEGIN();
-
-    const auto level = model.get_decon_level();
-    const auto &label_decon = *ensemble.get_decon_queue();
-    const auto &labels_aux = *ensemble.get_label_aux_decon();
-    auto [p_params_l, p_params_r] = model.get_head_params();
-    if (!dataset_rows) dataset_rows = p_params_l->get_svr_decremental_distance();
-    const auto main_resolution = dataset.get_input_queue()->get_resolution();
-    const auto aux_resolution = dataset.get_aux_input_queue()->get_resolution();
-#ifdef INTEGRATION_TEST
-    const auto main_cend = label_decon.get_data().cend() - common::C_integration_test_validation_window;
-#else
-    const auto main_cend = label_decon.get_data().cend();
-#endif
-    const datamodel::datarow_crange labels_range{
-        ModelService::get_start(label_decon.get_data().cbegin(), main_cend, dataset_rows, model.get_last_modeled_value_time(), main_resolution), main_cend, label_decon
-    };
-    LOG4_TRACE("Preparing manifold dataset " << labels_range.front()->get_value_time() << " to " << labels_range.back()->get_value_time() <<
-        ", main resolution " << main_resolution << ", aux resolution " << aux_resolution << ", dataset rows " << dataset_rows << ", range " << labels_range.distance());
-    const auto [p_labels, p_label_times_l, p_label_times_r] = dataset.get_calc_cache().get_manifold_labels(
-        model, p_params_l->get_input_queue_column_name(), model.get_step(), labels_range, labels_aux, dataset.get_max_lookback_time_gap(), level, dataset.get_multistep(),
-        aux_resolution, model.get_last_modeled_value_time(), main_resolution, p_params_l->get_lag_count());
-
-    const auto p_features_l = dataset.get_calc_cache().get_features(
-        *p_labels, ensemble.get_aux_decon_queues(), *p_params_l, aux_resolution, main_resolution, dataset.get_max_lookback_time_gap(), *p_label_times_l);
-    const auto p_features_r = dataset.get_calc_cache().get_features(
-        *p_labels, ensemble.get_aux_decon_queues(), *p_params_r, aux_resolution, main_resolution, dataset.get_max_lookback_time_gap(), *p_label_times_r);
-    model.set_features(*dataset.get_calc_cache().get_features(
-        *p_labels, ensemble.get_aux_decon_queues(), *p_params_r, aux_resolution, main_resolution, dataset.get_max_lookback_time_gap(), model.get_times()));
-    const auto p_features = ptr<arma::mat>(arma::join_rows(*p_features_l, *p_features_r));
-    assert(p_labels->n_rows == p_features->n_rows);
-    const auto p_weights =
-#ifdef INSTANCE_WEIGHTS
-            dataset.get_calc_cache().get_weights(
-                    dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
-            assert(p_labels->n_rows == p_weights->n_rows);
-#else
-            ptr<arma::mat>();
-#endif
-
-    return {p_features, p_labels, p_weights, (**std::prev(main_cend)).get_value_time()}; // The last time is the last modeled value time, which is used to prepare manifold labels
-}
-
-
-void
-ModelService::prepare_manifold_labels(
-    datamodel::Model &model, arma::mat &manifold_labels, datamodel::data_row_container &manifold_times_left, datamodel::data_row_container &manifold_times_right,
-    const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, const uint16_t level, const bpt::time_duration &resolution_aux,
-    const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag)
-{
-    auto &times = model.get_times();
-    auto &labels = model.get_labels();
-    if (auto &last_knowns = model.get_last_knowns(); labels.empty() || last_knowns.empty() || times.empty()) {
-        prepare_labels(labels, last_knowns, times, main_data, aux_data, max_gap, level, resolution_aux, last_modeled_value_time, resolution_main, multistep, lag);
-        model.set_labels(labels);
-        model.set_last_knowns(last_knowns);
-        model.set_times(times);
-    }
-
-    const uint32_t rows = times.size();
-    const auto interleave = PROPS.get_interleave();
-    const uint32_t manifold_rows = CDIVI(rows * rows, interleave);
-    manifold_labels.set_size(manifold_rows, labels.n_cols);
-    manifold_times_left.resize(manifold_rows);
-    manifold_times_right.resize(manifold_rows);
-    OMP_FOR_(rows * rows, SSIMD collapse(2))
-    for (DTYPE(rows) i = 0; i < rows; ++i) {
-        for (DTYPE(rows) j = 0; j < rows; ++j) {
-            const auto row = i * rows + j;
-            if (row % interleave) continue;
-            const auto i_row = row / interleave;
-            manifold_labels.row(i_row) = labels.row(i) - labels.row(j);
-            manifold_times_left[i_row] = times[i];
-            manifold_times_right[i_row] = times[j];
-        }
-    }
-    LOG4_TRACE("Prepared manifold labels " << common::present(manifold_labels) << ", interleave " << interleave << ", from vanilla labels " << common::present(labels) <<
-        ", main data range " << main_data.distance());
-}
 
 void
 ModelService::prepare_labels(
@@ -756,7 +615,7 @@ ModelService::prepare_labels(
             else
                 this_label_ixs.special_x = generate_twap_bias(this_label_ixs.label_ixs, false /*askbid*/, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux,
                                                               label_len, level);
-        } catch (const std::runtime_error &e) {
+        } catch (...) {
             LOG4_WARN("Failed to generate label indexes for time " << L_start_time << ", until " << L_end_time << ", aux start iterator time " << (**L_start_it).get_value_time());
             continue;
         }
@@ -1257,8 +1116,7 @@ ModelService::check_feature_data(
                 bpt::to_simple_string(data.back()->get_value_time()));
 }
 
-void
-ModelService::check_feature_data(
+void ModelService::check_feature_data(
     const datamodel::DataRow::container &data, const datamodel::DataRow::container::const_iterator &iter, const bpt::time_duration &max_gap, const bpt::ptime &feat_time)
 {
     if (iter == data.end() || iter->get()->get_value_time() - feat_time > max_gap)
@@ -1269,8 +1127,7 @@ ModelService::check_feature_data(
 }
 
 
-void
-ModelService::init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble)
+void ModelService::init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble) const
 {
     if (!check(ensemble.get_models(), p_dataset->get_model_count()) && ensemble.get_id())
         ensemble.set_models(model_dao.get_all_ensemble_models(ensemble.get_id()), false);

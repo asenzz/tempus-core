@@ -480,5 +480,39 @@ arma::mat to_arma_mat(const datamodel::data_row_container &c)
             v(i, j) = c[i]->at(j);
     return v;
 }
+
+datamodel::DataRow::container::const_iterator DataRowService::get_start(
+    const datamodel::DataRow::container &cont,
+    const uint32_t decremental_offset,
+    const boost::posix_time::ptime &model_last_time,
+    const boost::posix_time::time_duration &resolution)
+{
+    return get_start(cont.cbegin(), cont.cend(), decremental_offset, model_last_time, resolution);
+}
+
+datamodel::DataRow::container::const_iterator DataRowService::get_start(
+    const datamodel::DataRow::container::const_iterator &cbegin,
+    const datamodel::DataRow::container::const_iterator &cend,
+    const uint32_t count,
+    const boost::posix_time::ptime &last_time,
+    const boost::posix_time::time_duration &resolution)
+{
+    if (count < 1) {
+        LOG4_ERROR("Decremental offset " << count << " returning end.");
+        return cend;
+    }
+    const auto len = std::distance(cbegin, cend);
+    // Returns an iterator with the earliest value time needed to train a model with the most current data.
+    LOG4_DEBUG("Size is " << len << " decrement " << count);
+    if (len <= count) {
+        LOG4_WARN("Container size " << len << " is less or equal to needed size " << count);
+        return cbegin;
+    }
+
+    if (last_time == boost::posix_time::min_date_time) return std::next(cbegin, len - count);
+
+    return find_nearest(cbegin, cend, last_time + resolution);
+}
+
 }
 }

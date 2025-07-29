@@ -25,14 +25,14 @@
 #include "common/cuda_util.cuh"
 
 namespace svr {
-namespace datamodel {
+namespace kernel {
 constexpr double C_min_gamma = 1e-12;
 constexpr double C_max_gamma = 1e12;
 
-SVRParameters OnlineSVR::make_tuning_template(const SVRParameters &example)
+datamodel::SVRParameters make_tuning_template(const datamodel::SVRParameters &example)
 {
 #if 0
-    SVRParameters template_p;
+    datamodel::SVRParameters template_p;
     template_p.set_kernel_type(example.get_kernel_type());
     template_p.set_svr_kernel_param2(example.get_svr_kernel_param2());
     template_p.set_kernel_param3(example.get_kernel_param3());
@@ -49,8 +49,8 @@ SVRParameters OnlineSVR::make_tuning_template(const SVRParameters &example)
 }
 
 cutuner::cutuner(
-    const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const SVRParameters &parameters)
-    : n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count()), template_parameters(OnlineSVR::make_tuning_template(parameters)),
+    const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const datamodel::SVRParameters &parameters)
+    : n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count()), template_parameters(make_tuning_template(parameters)),
       weighted(train_W.n_elem), n(train_label_chunk.n_cols), train_len(train_F.n_cols),
       calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), train_F_rows(train_F.n_rows), K_train_len(train_len * train_len),
       K_train_size(K_train_len * sizeof(double)), K_calc_len(calc_len * calc_len), K_off(calc_start * train_len + calc_start),
@@ -98,7 +98,7 @@ cutuner::~cutuner()
             cu_errchk(cudaFreeAsync(dx[i].d_train_F, custream));
             cu_errchk(cudaFreeAsync(dx[i].d_ref_K, custream));
             if (weighted) cu_errchk(cudaFreeAsync(dx[i].d_train_W, custream));
-            if (template_parameters.get_kernel_type() == e_kernel_type::PATH) cu_errchk(cudaFreeAsync(dx[i].d_D_paths, custream));
+            if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH) cu_errchk(cudaFreeAsync(dx[i].d_D_paths, custream));
             cusyndestroy(custream);
         }
         cu_errchk(cudaSetDevice((i)));
@@ -111,7 +111,7 @@ cutuner::~cutuner()
     }
 }
 
-std::tuple<double, double, double> cutuner::normalize_result(const dev_ctx &dx_, const dev_ctx::stream_ctx &dxsx, const SVRParameters &parameters) const
+std::tuple<double, double, double> cutuner::normalize_result(const dev_ctx &dx_, const dev_ctx::stream_ctx &dxsx, const datamodel::SVRParameters &parameters) const
 {
     const auto mean = solvers::mean(dxsx.K_train_off, K_train_len, dxsx.custream) - ref_K_mean;
     if (mean != 0)
@@ -153,17 +153,17 @@ std::tuple<double, double, double> cutuner::phase1(const double tau, const doubl
     return normalize_result(dx_, dxsx, svr_parameters_);
 }
 
-void cutuner::prepare_second_phase(const SVRParameters &first_phase_parameters)
+void cutuner::prepare_second_phase(const datamodel::SVRParameters &first_phase_parameters)
 {
     template_parameters = first_phase_parameters;
 
     arma::mat Z;
-    if (template_parameters.get_kernel_type() == e_kernel_type::PATH)
+    if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH)
         Z = kernel::IKernel<double>::get<kernel::kernel_path<double> >(template_parameters)->kernel_base::distances(train_F);
     OMP_FOR_i(n_gpus) {
         // Read-only buffers per device
         DEV_CUSTREAM(i);
-        if (template_parameters.get_kernel_type() == e_kernel_type::PATH) dx[i].d_D_paths = cumallocopy(Z, custream);
+        if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH) dx[i].d_D_paths = cumallocopy(Z, custream);
         cusyndestroy(custream);
     }
 }

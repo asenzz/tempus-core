@@ -53,13 +53,6 @@ class ModelService
 
     static arma::vec get_last_knowns(const datamodel::Ensemble &ensemble, uint16_t level, const datamodel::data_row_container &times, const bpt::time_duration &resolution);
 
-    static datamodel::DataRow::container::const_iterator
-    get_start(const datamodel::DataRow::container &cont, uint32_t decremental_offset, const boost::posix_time::ptime &model_last_time,
-              const boost::posix_time::time_duration &resolution);
-
-    static datamodel::DataRow::container::const_iterator get_start(const datamodel::DataRow::container::const_iterator &cbegin, const datamodel::DataRow::container::const_iterator &cend,
-                                                                   uint32_t count, const boost::posix_time::ptime &model_last_time, const boost::posix_time::time_duration &resolution);
-
 public:
     static uint32_t get_max_quantisation();
 
@@ -88,12 +81,6 @@ public:
     static void prepare_labels(arma::mat &all_labels, arma::vec &all_last_knowns, datamodel::data_row_container &all_times, const datamodel::datarow_crange &main_data,
                                const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, uint16_t level, const bpt::time_duration &resolution_aux,
                                const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, uint16_t multistep, uint32_t lag);
-
-    static void prepare_manifold_labels(
-        datamodel::Model &model, arma::mat &all_labels, datamodel::data_row_container &all_times_left, datamodel::data_row_container &all_times_right,
-        const datamodel::datarow_crange &main_data,
-        const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, uint16_t level, const bpt::time_duration &resolution_aux,
-        const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, uint16_t multistep, uint32_t lag);
 
     static void tune_features(
         arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const datamodel::data_row_container &label_times,
@@ -128,9 +115,6 @@ public:
         const arma::vec &last_knowns, const arma::mat &weights, const datamodel::data_row_container &times, bool online, bool verbose);
 #endif
 
-    static std::tuple<mat_ptr, mat_ptr, mat_ptr, bpt::ptime> get_manifold_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model,
-                                                                                        uint32_t dataset_rows = 0);
-
     // A bit more expensive but checks for lag count values before found time
     static void check_feature_data(
         const datamodel::DataRow::container &data,
@@ -156,15 +140,11 @@ public:
     static datamodel::SVRParameters_ptr produce_parameters(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model,
                                                            const std::deque<datamodel::SVRParameters_ptr> &paramset, uint16_t chunk_ix, uint16_t grad_ix);
 
-    void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble);
+    void init_models(const datamodel::Dataset_ptr &p_dataset, datamodel::Ensemble &ensemble) const;
 
     static bool check(const std::deque<datamodel::Model_ptr> &models, uint16_t model_ct);
 
     static bool check(const std::deque<datamodel::OnlineSVR_ptr> &models, uint16_t grad_ct);
-
-    static uint16_t to_level_ix(uint16_t model_ix, uint16_t level_ct) noexcept;
-
-    static uint16_t to_model_ix(uint16_t level_ix, uint16_t level_ct);
 
     static uint16_t to_level_ct(uint16_t model_ct) noexcept;
 

@@ -81,9 +81,11 @@ template<> arma::Mat<T> kernel_tft<T>::kernel(const arma::Mat<T> &X, const arma:
     return res;
 }
 
-template<> void kernel_tft<T>::init(const arma::Mat<T> &X, const arma::Mat<T> &Y)
+template<> void kernel_tft<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t chunk_ix)
 {
     LOG4_BEGIN();
+    const auto &X = svrmod.get_X(chunk_ix);
+    const auto &Y = svrmod.get_Y(chunk_ix);
     assert(Y.n_cols == 1);
     const int64_t n_samples = X.n_cols;
     const int64_t n_samples_2 = n_samples * n_samples;
@@ -104,27 +106,27 @@ template<> void kernel_tft<T>::init(const arma::Mat<T> &X, const arma::Mat<T> &Y
         }
 
     const auto device = get_cuda_device();
-    TemporalFusionTransformer model(n_manifold_features, PROPS.get_nn_hide_coef() * n_manifold_features, PROPS.get_multiout(), PROPS.get_nn_head_coef() * n_manifold_features, device);
+    TemporalFusionTransformer tftmod(n_manifold_features, PROPS.get_nn_hide_coef() * n_manifold_features, PROPS.get_multiout(), PROPS.get_nn_head_coef() * n_manifold_features, device);
     if (!device.is_cpu()) {
-        model->to(device);
+        tftmod->to(device);
         manifold_features = manifold_features.to(device);
         manifold_labels = manifold_labels.to(device);
     }
-    model->train();
-    auto optimizer = torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(PROPS.get_k_learn_rate()));
+    tftmod->train();
+    auto optimizer = torch::optim::Adam(tftmod->parameters(), torch::optim::AdamOptions(PROPS.get_k_learn_rate()));
     // torch::nn::BCEWithLogitsLoss criterion;
     for (uint16_t epoch = 0; epoch < PROPS.get_k_epochs(); ++epoch) {
         optimizer.zero_grad();
-        const auto output = model->forward(manifold_features);
+        const auto output = tftmod->forward(manifold_features);
         // auto loss = torch::nn::functional::cross_entropy(output, labels);
         const auto loss = torch::mse_loss(output, manifold_labels);
         loss.backward();
         optimizer.step();
         if (epoch % 10 == 0) LOG4_TRACE("Epoch " << epoch << ", loss " << loss.item<float>());
     }
-    if (!device.is_cpu()) model->to(torch::kCPU);
+    if (!device.is_cpu()) tftmod->to(torch::kCPU);
     std::ostringstream raw_model_stream;
-    torch::save(model, raw_model_stream);
+    torch::save(tftmod, raw_model_stream);
 #ifdef COMPRESS_MODEL
     std::ostringstream compressed_stream;
     boost::iostreams::filtering_ostream out;
@@ -136,6 +138,7 @@ template<> void kernel_tft<T>::init(const arma::Mat<T> &X, const arma::Mat<T> &Y
 #else
     parameters.set_tft_model(raw_model_stream.str());
 #endif
+    kernel_base::wrapup(svrmod, chunk_ix);
     LOG4_END();
 }
 

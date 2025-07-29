@@ -237,6 +237,7 @@ std::string Ensemble::to_string() const
 
 uint16_t Ensemble::get_level_ct() const
 {
+    assert(model.size());
     return business::ModelService::to_level_ct(models.size());
 }
 

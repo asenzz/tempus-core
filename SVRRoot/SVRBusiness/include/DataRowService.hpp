@@ -10,6 +10,17 @@
 namespace svr {
 namespace business {
 
+class DataRowService
+{
+public:
+    static datamodel::DataRow::container::const_iterator get_start(
+        const datamodel::DataRow::container &cont, uint32_t decremental_offset, const boost::posix_time::ptime &model_last_time, const boost::posix_time::time_duration &resolution);
+
+    static datamodel::DataRow::container::const_iterator get_start(
+        const datamodel::DataRow::container::const_iterator &cbegin, const datamodel::DataRow::container::const_iterator &cend,
+        uint32_t count, const boost::posix_time::ptime &last_time, const boost::posix_time::time_duration &resolution);
+};
+
 datamodel::DataRow::container clone_datarows(datamodel::DataRow::container::const_iterator it, const datamodel::DataRow::container::const_iterator &end);
 
 datamodel::DataRow::container::iterator lower_bound(const datamodel::DataRow::container::iterator &begin, const datamodel::DataRow::container::iterator &end, const bpt::ptime &t);

@@ -33,8 +33,14 @@ template<> kernel_deep_path<T>::kernel_deep_path(kernel_base<T> &k) : kernel_bas
  * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
  */
 
-template<> void kernel_deep_path<T>::init(const uint32_t parent_projection, datamodel::Dataset_ptr &p_dataset, const arma::mat &features_t, const arma::mat &labels, const bpt::ptime &last_time)
+template<> void kernel_deep_path<T>::init(datamodel::OnlineSVR &model, const uint32_t chunk_ix)
 {
+    const auto parent_projection = model.get_projection();
+    const auto &p_dataset = model.get_dataset();
+    const auto &features_t = model.get_X(chunk_ix);
+    const auto &labels = model.get_Y(chunk_ix);
+    const auto last_time = model.get_last_trained_time();
+
     if (parameters.get_manifold()) LOG4_WARN("Manifold already initialized!");
 
     const auto n_samples = features_t.n_cols;
@@ -76,7 +82,12 @@ template<> void kernel_deep_path<T>::init(const uint32_t parent_projection, data
     p_manifold->batch_train(p_manifold_features, p_manifold_labels, p_manifold_weights, last_time);
     assert(p_manifold_features->has_nonfinite() == false && p_manifold_labels->has_nonfinite() == false);
     assert(p_manifold_lastknowns->has_nonfinite() == false && p_manifold_weights->has_nonfinite() == false);
+
     parameters.set_manifold(p_manifold);
+    parameters.set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
+
+    kernel_base::wrapup(model, chunk_ix);
+
     LOG4_END();
 }
 

@@ -117,27 +117,6 @@ template<typename kT, typename fT> cached<kT, fT>::~cached()
     cached_register::cr.unsafe_erase(this);
 }
 
-// calc_cache
-std::tuple<mat_ptr, datamodel::data_row_container_ptr, datamodel::data_row_container_ptr> calc_cache::get_manifold_labels(
-    datamodel::Model &model, const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
-    const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
-    const bpt::time_duration &main_resolution, const uint16_t lag)
-{
-    LOG4_TRACE("Getting labels for " << column_name << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " << level << ", step " << step <<
-        ", aux last values " << labels_aux.back()->to_string());
-    const auto prepare_f = [&] {
-        auto p_labels = ptr<arma::mat>();
-        auto p_label_times_left = ptr<datamodel::data_row_container>();
-        auto p_label_times_right = ptr<datamodel::data_row_container>();
-        ModelService::prepare_manifold_labels(model, *p_labels, *p_label_times_left, *p_label_times_right, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
-            main_resolution, multistep, lag);
-        return std::make_tuple(p_labels, p_label_times_left, p_label_times_right);
-    };
-    const auto k = std::make_tuple(column_name, (*main_data.cbegin())->get_value_time(), main_data.distance(), level, main_resolution, aux_queue_res);
-    const auto [p_labels, p_label_times_left, p_label_times_right] = cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
-    return {ptr<arma::mat>(p_labels->col(step)), p_label_times_left, p_label_times_right};
-}
-
 std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> calc_cache::get_labels(
     const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
     const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution,

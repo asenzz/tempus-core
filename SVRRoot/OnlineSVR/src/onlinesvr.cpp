@@ -207,6 +207,16 @@ const dq_scaling_factor_container_t &OnlineSVR::get_scaling_factors() const
     return scaling_factors;
 }
 
+bpt::ptime OnlineSVR::get_last_trained_time() const
+{
+    return last_trained_time;
+}
+
+void OnlineSVR::set_score(const uint32_t chunk_ix, const double score)
+{
+    chunks_score[chunk_ix] = score;
+}
+
 void OnlineSVR::set_scaling_factor(const DQScalingFactor_ptr &p_sf)
 {
     business::DQScalingFactorService::add(scaling_factors, p_sf);
@@ -375,7 +385,7 @@ uint32_t OnlineSVR::get_num_chunks(const uint32_t n_rows, const uint32_t chunk_s
 
 uint32_t OnlineSVR::get_num_chunks() const
 {
-    return projection ? get_num_chunks(get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance()), max_chunk_size) : 1;
+    return is_manifold() ? 1 : get_num_chunks(get_full_train_len(p_labels ? p_labels->n_rows : 0, (**param_set.cbegin()).get_svr_decremental_distance()), max_chunk_size);
 }
 
 std::deque<arma::uvec> OnlineSVR::generate_indexes() const
@@ -540,6 +550,26 @@ datamodel::SVRParameters_ptr OnlineSVR::is_manifold() const
 datamodel::SVRParameters_ptr OnlineSVR::is_tft() const
 {
     return business::SVRParametersService::is_tft(param_set);
+}
+
+arma::mat &OnlineSVR::get_X(const uint32_t chunk_ix)
+{
+    return train_feature_chunks_t[chunk_ix];
+}
+
+arma::mat OnlineSVR::get_X(const uint32_t chunk_ix) const
+{
+    return train_feature_chunks_t[chunk_ix];
+}
+
+arma::mat &OnlineSVR::get_Y(const uint32_t chunk_ix)
+{
+    return train_label_chunks[chunk_ix];
+}
+
+arma::mat OnlineSVR::get_Y(const uint32_t chunk_ix) const
+{
+    return train_label_chunks[chunk_ix];
 }
 
 } // datamodel

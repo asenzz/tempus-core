@@ -18,16 +18,18 @@ template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y);
 
 template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y1, const arma::Mat<T> &y2);
 
-template<typename T> void kernel_from_distances(RPTR(T) Kz, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree);
+template<typename T> void kernel_from_distances(RPTR(T) Kz, uint32_t m, uint32_t n, T gamma, T mean, T degree);
 
-template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree);
+template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, uint32_t m, uint32_t n, T gamma, T mean, T degree);
 
-template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree, const cudaStream_t custream);
+template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, uint32_t m, uint32_t n, T gamma, T mean, T degree, cudaStream_t custream);
 
 template<typename T>
 class kernel_base {
 protected:
     datamodel::SVRParameters &parameters;
+
+    void wrapup(datamodel::OnlineSVR &model, uint32_t chunk_ix) const;
 
 public:
     datamodel::SVRParameters &get_parameters();
@@ -40,9 +42,11 @@ public:
 
     virtual ~kernel_base();
 
-    void d_distances(CRPTR(T) d_X, const uint32_t m, const uint32_t n, RPTR(T) d_Z, const cudaStream_t custream) const;
+    virtual void init(datamodel::OnlineSVR &model, uint32_t chunk_ix);
 
-    void d_kernel_from_distances(CRPTR(T) d_X, const uint32_t m, const uint32_t n, RPTR(T) d_Z, const cudaStream_t custream) const;
+    void d_distances(CRPTR(T) d_X, uint32_t m, uint32_t n, RPTR(T) d_Z, cudaStream_t custream) const;
+
+    void d_kernel_from_distances(CRPTR(T) d_X, uint32_t m, uint32_t n, RPTR(T) d_Z, cudaStream_t custream) const;
 
     arma::Mat<T> kernel(const arma::Mat<T> &X) const;
 
@@ -64,10 +68,10 @@ public:
 
     virtual arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const = 0; // Z is a distance matrix
 
-    virtual void d_kernel(CRPTR(T) d_X, const uint32_t m, RPTR(T) d_K, const cudaStream_t custream) const = 0;
+    virtual void d_kernel(CRPTR(T) d_X, uint32_t m, RPTR(T) d_K, cudaStream_t custream) const = 0;
 
     // m is common rows count (features length), n is the number of columns or samples
-    virtual void d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR(T) d_Z, const cudaStream_t custream) const = 0;
+    virtual void d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, uint32_t m, uint32_t n_X, uint32_t n_Xy, RPTR(T) d_Z, cudaStream_t custream) const = 0;
 };
 
 }

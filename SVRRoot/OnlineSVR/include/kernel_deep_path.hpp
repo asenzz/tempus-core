@@ -26,7 +26,7 @@ public:
 
     explicit kernel_deep_path(kernel_base<T> &k);
 
-    void init(const uint32_t parent_projection, datamodel::Dataset_ptr &p_dataset, const arma::mat &features_t, const arma::mat &labels, const bpt::ptime &last_time);
+    void init(datamodel::OnlineSVR &model, uint32_t chunk_ix) override;
 
     arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const override;
 
