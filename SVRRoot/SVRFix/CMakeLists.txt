@@ -1,27 +1,25 @@
 PROJECT(SVRFix)
 
-#Define project dependencies
+# Define project dependencies
 SET(DEPENDENCIES SVRCommon SVRBusiness)
 IF(EXPERIMENTAL_FEATURES)
     LINK_DIRECTORIES(${MATLAB_LINK_DIR})
 ENDIF(EXPERIMENTAL_FEATURES)
 
 INCLUDE(../../cmake/IncludeDependencies.cmake)
-INCLUDE("../../cmake/SourceList.cmake")
+INCLUDE(../../cmake/SourceList.cmake)
 
 FILE(GLOB SHARED_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.cpp")
+
 # if($ENV{HOSTNAME} MATCHES "sl[0-9]+$")
 #     find_package(OpenCV EXACT REQUIRED PATHS /opt/soft/opencv3.2/)
 # else()
 #     find_package(OpenCV 3.1 EXACT REQUIRED PATHS /usr/local/opencv3.1)
 # endif()
 FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED CONFIG)
-INCLUDE_DIRECTORIES(include)
-
 FIND_PACKAGE(QUICKFIX REQUIRED)
-INCLUDE_DIRECTORIES(include ${QUICKFIX_INCLUDE_DIR})
 
-INCLUDE_DIRECTORIES(include)
+INCLUDE_DIRECTORIES(include ${QUICKFIX_INCLUDE_DIR})
 
 IF (BUILD_SHARED_LIBS)
     ADD_LIBRARY(${PROJECT_NAME}-shared SHARED ${SHARED_SOURCE_FILES})
@@ -42,5 +40,5 @@ FOREACH (TMP_PATH ${ADDITIONAL_TEST_SOURCE_FILES})
 ENDFOREACH(TMP_PATH)
 
 SET(TEST_DEPENDENCIES ${QUICKFIX_LIBRARIES} ${PROJECT_NAME}-shared gtest gtest_main atomic rt)
-include ("../../cmake/UnitTester.cmake")
+INCLUDE ("../../cmake/UnitTester.cmake")
 

@@ -1,7 +1,8 @@
+
+cmake_minimum_required(VERSION 3.15)
 set(PROJECT_NAME wavelib)
 project(${PROJECT_NAME} C)
-
-
+set(CMAKE_CXX_LINK_EXECUTABLE g++)
 # src root path
 set(WAVELIB_SRC_ROOT ${PROJECT_SOURCE_DIR} CACHE PATH "Wavelib source root")
 # binary output by default

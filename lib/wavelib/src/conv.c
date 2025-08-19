@@ -5,6 +5,7 @@
  *      Author: Rafat Hussain
  */
 
+#include <stdlib.h>
 #include "conv.h"
 
 int factorf(int M) {
@@ -140,12 +141,12 @@ void conv_fft(const conv_object obj,fft_type *inp1,fft_type *inp2,fft_type *oup)
 	L2 = obj->ilen2;
 	ls = L1 + L2 - 1;
 	
-	a = (fft_type*) memalign (sizeof(fft_type), sizeof(fft_data) * N);
-	b = (fft_type*) memalign (sizeof(fft_type), sizeof(fft_data) * N);
-	c = (fft_data*) memalign (sizeof(fft_type), sizeof(fft_data) * N);
-	ao = (fft_data*) memalign (sizeof(fft_type), sizeof(fft_data) * N);
-	bo = (fft_data*) memalign (sizeof(fft_type), sizeof(fft_data) * N);
-	co = (fft_type*) memalign (sizeof(fft_type), sizeof(fft_data) * N);
+	a = (fft_type*) aligned_alloc (sizeof(fft_type), sizeof(fft_data) * N);
+	b = (fft_type*) aligned_alloc (sizeof(fft_type), sizeof(fft_data) * N);
+	c = (fft_data*) aligned_alloc (sizeof(fft_type), sizeof(fft_data) * N);
+	ao = (fft_data*) aligned_alloc (sizeof(fft_type), sizeof(fft_data) * N);
+	bo = (fft_data*) aligned_alloc (sizeof(fft_type), sizeof(fft_data) * N);
+	co = (fft_type*) aligned_alloc (sizeof(fft_type), sizeof(fft_data) * N);
 	
 	for (i = 0; i < N;i++) {
 		if (i < L1) {

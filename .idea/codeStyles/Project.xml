@@ -1,5 +1,6 @@
 <component name="ProjectCodeStyleConfiguration">
   <code_scheme name="Project" version="173">
+    <option name="RIGHT_MARGIN" value="180" />
     <DBN-PSQL>
       <case-options enabled="true">
         <option name="KEYWORD_CASE" value="lower" />
@@ -40,9 +41,5 @@
         <pair source="cu" header="cuh" fileNamingConvention="SNAKE_CASE" />
       </extensions>
     </files>
-    <codeStyleSettings language="ObjectiveC">
-      <option name="RIGHT_MARGIN" value="170" />
-      <option name="CLASS_BRACE_STYLE" value="2" />
-    </codeStyleSettings>
   </code_scheme>
 </component>

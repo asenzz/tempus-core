@@ -11,7 +11,7 @@
 #include <cuda_runtime_api.h>
 #include <cooperative_groups.h>
 #include <tuple>
-#include <thrust/async/reduce.h>
+#include <thrust/reduce.h>
 #include "common/compatibility.hpp"
 #include "common/logging.hpp"
 #include "common/gpu_handler.hpp"

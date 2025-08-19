@@ -1,8 +1,5 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include "util/PropertiesFileReader.hpp"
-
-#include <mpi.h>
-
 #include "common/logging.hpp"
 #include "common/constants.hpp"
 #include "util/string_utils.hpp"
@@ -276,6 +273,8 @@ std::string AppConfig::get_oemd_masks_dir() const noexcept
     return oemd_masks_dir_;
 }
 
+#ifdef USE_MPI
+
 int AppConfig::get_mpi_rank()
 {
     static const auto rank = [] {
@@ -298,10 +297,12 @@ int AppConfig::get_mpi_size()
     return size;
 }
 
-int AppConfig::get_mpi_comm()
+DTYPE(MPI_COMM_WORLD) AppConfig::get_mpi_comm()
 {
     return MPI_COMM_WORLD;
 }
+
+#endif
 
 ConcreteDaoType AppConfig::get_dao_type() const noexcept
 {

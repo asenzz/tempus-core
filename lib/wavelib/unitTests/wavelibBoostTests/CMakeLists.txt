@@ -9,7 +9,7 @@ set(SOURCE_FILES
 
 
 add_executable(wavelibLibTests ${SOURCE_FILES} )
-
+set_target_properties(wavelibLibTests PROPERTIES LINKER_LANGUAGE CXX)
 add_test(NAME wavelibLibTests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test  COMMAND wavelibLibTests)
 
 add_dependencies(wavelibLibTests wavelib)

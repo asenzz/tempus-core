@@ -309,7 +309,7 @@ double cu_calc_gamma(CPTRd Z, CPTRd L, const uint32_t m, const uint32_t n, const
 
 double cu_calc_gamma(CPTRd Z, const double L_mean, const double train_len, const uint32_t n_elem, const cudaStream_t stm)
 {
-    const auto Z_mm = solvers::mean(Z, n_elem, stm);
+    const auto Z_mm = mean(Z, n_elem, stm);
     const auto g = 0; //kernel::path::calc_g(train_len, Z_mm, L_mean);
     LOG4_TRACE("Mean Z " << Z_mm << ", mean L " << L_mean << ", n " << train_len << ", gamma " << g);
     return g;

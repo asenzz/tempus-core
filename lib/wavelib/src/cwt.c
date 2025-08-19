@@ -163,10 +163,10 @@ void cwavelet(double *y, int N, double dt, int mother, double param, double s0, 
 	obj = fft_init(npad, 1);
 	iobj = fft_init(npad, -1);
 
-	ypad = (fft_data*)memalign(sizeof(fft_type), sizeof(fft_data)* npad);
-	yfft = (fft_data*)memalign(sizeof(fft_type), sizeof(fft_data)* npad);
-	daughter = (fft_data*)memalign(sizeof(fft_type), sizeof(fft_data)* npad);
-	kwave = (double*)memalign(sizeof(fft_type), sizeof(double)* npad);
+	ypad = (fft_data*)aligned_alloc(sizeof(fft_type), sizeof(fft_data)* npad);
+	yfft = (fft_data*)aligned_alloc(sizeof(fft_type), sizeof(fft_data)* npad);
+	daughter = (fft_data*)aligned_alloc(sizeof(fft_type), sizeof(fft_data)* npad);
+	kwave = (double*)aligned_alloc(sizeof(fft_type), sizeof(double)* npad);
 
 	ymean = 0.0;
 

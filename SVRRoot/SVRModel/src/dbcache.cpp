@@ -4,7 +4,7 @@
 
 #include "model/Entity.hpp"
 #include "model/dbcache.tpp"
-#include "common/Logging.hpp"
+#include "common/logging.hpp"
 
 namespace svr {
 namespace datamodel {

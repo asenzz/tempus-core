@@ -3,6 +3,7 @@
 //
 
 #include "common/cuda_util.cuh"
+#include "common/compatibility.hpp"
 
 namespace svr {
 

@@ -104,15 +104,15 @@ datamodel::data_row_container::const_iterator find_nearest(
 datamodel::data_row_container::const_iterator find_nearest_after(
     const datamodel::data_row_container &data, const boost::posix_time::ptime &time, const boost::posix_time::time_duration &max_gap, size_t lag_count);
 
-inline std::vector<uint32_t> generate_twap_indexes(
-    const std::deque<bpt::ptime>::const_iterator &cbegin, // Begin of container
-    const std::deque<bpt::ptime>::const_iterator &start_it, // At start time or before
-    const std::deque<bpt::ptime>::const_iterator &it_end, // At end time or after
+template<typename I> inline void generate_twap_indexes(
+    const I &cbegin, // Begin of container
+    const I &start_it, // At start time or before
+    const I &it_end, // At end time or after
     const bpt::ptime &start_time, // Exact start time
-    const boost::posix_time::ptime &end_time, // Exact end time
-    const bpt::time_duration &resolution, // Aux input queue resolution
-    uint32_t n_out); // Input column index
-
+    const bpt::time_duration &duration, // Exact end time
+    const uint32_t n_out, // Count of positions to output
+    uint32_t *const out);
+    
 template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
     uint32_t *out, // Output array
     bool maxmin, // Min or max

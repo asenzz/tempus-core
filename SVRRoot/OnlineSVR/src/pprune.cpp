@@ -24,6 +24,7 @@
 
 namespace svr {
 namespace optimizer {
+    
 constexpr std::array<double, 1> C_maxfun_drop_coefs{}; // .5};
 constexpr double C_default_rhoend = 5e-10;
 constexpr double C_default_rhobeg = .25;
@@ -424,7 +425,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
             delete biteopt_particle[i][d].calfun_data;
         }
     }
-
+#ifdef USE_MPI
     if (const auto world_size = PROPS.get_mpi_size(); world_size > 1) {
         const auto result_len = result.best_parameters.n_elem + 2;
         std::vector<DTYPE(result.best_score) > mpi_best_result(result_len);
@@ -441,7 +442,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
             memcpy(result.best_parameters.memptr(), mpi_all_results.data() + i * result_len + 2, D_size);
         }
     }
-
+#endif
     result.total_iterations = maxfun;
     if (result.best_parameters.has_nonfinite())
         LOG4_THROW("Best parameters contain non-finite values " << common::present(result.best_parameters));
@@ -510,7 +511,8 @@ void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &c
 
 void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
-#if 0
+#ifdef USE_PETSC_SOLVER
+#if 0 // TODO Rewrite using TAO
     auto p_particles = ptr<std::deque<t_calfun_data_ptr>>(n_particles);
 
     tbb::mutex res_l;
@@ -562,6 +564,7 @@ void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &c
             "PPrune PETSC, score " << result.best_score << ", total iterations " << result.total_iterations << ", particles " << n << ", parameters " << D <<
                                      ", max iterations per particle " << maxfun << ", var start " << rhobeg << ", var end " << rhoend << ", best parameters "
                                      << common::present(result.best_parameters));
+#endif
 #endif
 }
 

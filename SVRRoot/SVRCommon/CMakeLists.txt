@@ -4,6 +4,8 @@ PROJECT(SVRCommon)
 
 INCLUDE("../../cmake/SourceList.cmake")
 
+INCLUDE_DIRECTORIES("${ONEAPI_ROOT}/mpi/latest/include")
+
 GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/include/util")
 GLOB_SOURCES("${CMAKE_CURRENT_SOURCE_DIR}/include/common")
 

@@ -14,8 +14,10 @@
 #include <tuple>
 #include <mkl_vsl.h>
 #include <magma_auxiliary.h>
+#ifdef USE_HDBSCAN
 #include <hdbscan/hdbscan.h>
 #include <hdbscan/logger.h>
+#endif
 #include "pprune.hpp"
 #include "DQScalingFactorService.hpp"
 #include "SVRParametersService.hpp"
@@ -28,7 +30,7 @@
 
 namespace svr {
 namespace datamodel {
-
+#ifdef USE_HDBSCAN
 // Returns indexes of outliers
 arma::uvec outlier_hdbscan(const arma::mat &features_t)
 {
@@ -45,7 +47,7 @@ arma::uvec outlier_hdbscan(const arma::mat &features_t)
     LOG4_TRACE("Returning " << common::present(ures));
     return ures.tail_rows(PROPS.get_outlier_slack());
 }
-
+#endif
 arma::uvec outlier_bacon(const arma::mat &features_t)
 {
     VSLSSTaskPtr task;

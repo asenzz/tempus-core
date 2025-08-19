@@ -225,13 +225,25 @@ struct AveragePrice {
     ~AveragePrice();
 };
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-aprice calc_msec_twap(const MqlTick &ticks[], int &tick_ix, const int ticks_len, const datetime time_iter, aprice &twap_price, uint &volume, const aprice &cur_price_)
+//+-------------------------------------------------------------------+
+//| Calculate msec price precision for a one second time frame bar.   |
+//| twap_price is set to last known price, or open price for the bar. |
+//+-------------------------------------------------------------------+
+aprice calc_msec_twap(const MqlTick &ticks[], int &tick_ix, const int ticks_len, const datetime time_iter, aprice &twap_price, uint &volume)
 {
-    aprice cur_price = cur_price_;
-    if (ticks[tick_ix].time != time_iter) LOG_ERROR("Starting tick does not equal time iter!");
+    if (tick_ix > ticks_len) {
+        LOG_ERROR("Tick index " + string(tick_ix) + " is past end " + string(ticks_len));
+        return twap_price;
+    }
+    if (ticks[tick_ix].time < time_iter) {
+        LOG_INFO("Starting tick before time iterator, fast forwarding.");
+        while (ticks[tick_ix].time < time_iter && tick_ix < ticks_len) ++tick_ix;
+    }
+    if (ticks[tick_ix].time != time_iter) {
+        LOG_ERROR("Starting tick does not equal iterator, returning start price!");
+        return twap_price;
+    }
+    aprice cur_price = twap_price;
     int last_ms = 0;
     const int start_tick_ix = tick_ix;
     for (; tick_ix < ticks_len && ticks[tick_ix].time == time_iter; ++tick_ix) {
@@ -304,15 +316,12 @@ aprice persec_prices( // returns last processed tick price
     }
 
     for (int tick_ix = 0, price_ix = start_out; price_ix < end_out; ++price_ix, ++time_iter) {
-        times[price_ix] = time_iter;
-        
         for (; tick_ix < ticks_len && ticks[tick_ix].time < time_iter; ++tick_ix) last_tick_price.set(ticks[tick_ix]);
-        
-        if (tick_ix >= ticks_len || ticks[tick_ix].time > time_iter) {
-            volumes[price_ix] = 0;
-            prices[price_ix] = last_tick_price;
-        } else if (ticks[tick_ix].time == time_iter)
-            last_tick_price = calc_msec_twap(ticks, tick_ix, ticks_len, time_iter, prices[price_ix], volumes[price_ix], last_tick_price);
+        times[price_ix] = time_iter;
+        volumes[price_ix] = 0;
+        prices[price_ix] = last_tick_price;
+        if (tick_ix < ticks_len && ticks[tick_ix].time == time_iter)
+            last_tick_price = calc_msec_twap(ticks, tick_ix, ticks_len, time_iter, prices[price_ix], volumes[price_ix]);
     }
 
     return last_tick_price;
@@ -383,12 +392,11 @@ AveragePrice::AveragePrice(const MqlTick &ticks[], const datetime bar_time, cons
         
     for (datetime time_iter = bar_time; time_iter < bar_time + duration_sec; ++time_iter) {
         for (; tick_ix < ticks_len && ticks[tick_ix].time < time_iter; ++tick_ix) last_tick_price.set(ticks[tick_ix]);
-              
         if (tick_ix >= ticks_len || ticks[tick_ix].time > time_iter) value += last_tick_price;
         else if (ticks[tick_ix].time == time_iter) {
-            aprice cur_price;
-            uint cur_vol;
-            last_tick_price = calc_msec_twap(ticks, tick_ix, ticks_len, time_iter, cur_price, cur_vol, last_tick_price);
+            aprice cur_price = last_tick_price;
+            uint cur_vol = 0;
+            last_tick_price = calc_msec_twap(ticks, tick_ix, ticks_len, time_iter, cur_price, cur_vol);
             value += cur_price;
             volume += cur_vol;
         }

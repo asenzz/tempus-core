@@ -4,6 +4,9 @@
 #include <string>
 #include <boost/log/trivial.hpp>
 #include <oneapi/tbb/mutex.h>
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
 #include "common/types.hpp"
 #include "common/logging.hpp"
 
@@ -158,7 +161,9 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(float, oemd_skipdiv, 1) // (0..num quantisations], higher means more refined
 
-    CONFPROP(float, oemd_acor_weig, 1) // OEMD tuning autocorrelation weight in validation score
+    CONFPROP(float, oemd_xcor_weig, 1) // OEMD tuning labels to features correlation weight in validation score
+
+    CONFPROP(float, oemd_acor_weig, 1) // OEMD tuning labels autocorrelation weight in validation score
 
     CONFPROP(float, oemd_rel_pow_w, 1) // OEMD tuning relative power of output signal in validation score weight
 
@@ -217,13 +222,13 @@ public:
     explicit AppConfig(const std::string &app_config_file, const char delimiter = '=');
 
     static uint8_t S_log_threshold;
-
+#ifdef USE_MPI
     static int get_mpi_rank();
 
     static int get_mpi_size();
 
-    static int get_mpi_comm();
-
+    static DTYPE(MPI_COMM_WORLD) get_mpi_comm();
+#endif
     std::string get_oemd_masks_dir() const noexcept;
 
     ConcreteDaoType get_dao_type() const noexcept;

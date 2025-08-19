@@ -5,6 +5,7 @@
  *      Author: skondrat
  */
 
+#include <lz4.h>
 #include "util/CompressionUtils.hpp"
 
 // #pragma warning ( push )

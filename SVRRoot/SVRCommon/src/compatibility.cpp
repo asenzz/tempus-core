@@ -1,10 +1,11 @@
-#include "common/compatibility.hpp"
-
 #include <cstdio>
 #include <cstdlib>
 #include <execinfo.h>
 #include <cxxabi.h>
+#ifdef USE_PETSC_SOLVER
 #include <petsc.h>
+#endif
+#include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
 #include "util/validation_utils.hpp"
 
@@ -45,6 +46,8 @@ bool operator != (const std::deque<std::string> &lhs, const std::deque<std::stri
 
 namespace common {
 
+#ifdef USE_PETSC_SOLVER
+
 void init_petsc()
 {
     PetscCallCXXAbort(PETSC_COMM_SELF, PetscInitializeNoArguments());
@@ -58,6 +61,8 @@ void uninit_petsc()
 {
     PetscCallCXXAbort(PETSC_COMM_SELF, PetscFinalize());
 }
+
+#endif
 
 // TODO Do a GPU handler and ctx from a queue
 bool file_exists(const std::string &filename)

@@ -523,7 +523,7 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
 
     auto p_features = dataset.get_calc_cache().get_features(
         *p_labels, ensemble.get_aux_decon_queues(), *p_params, aux_resolution, main_resolution, dataset.get_max_lookback_time_gap(), *p_label_times);
-    model.get_gradient()->set_param_set({p_params}); // Reset paremeters after tuning of feature mechanics
+    model.get_gradient()->set_param_set({p_params}); // Reset parameters after tuning of feature mechanics
     assert(p_labels->n_rows == p_features->n_rows);
     const auto p_weights =
 #ifdef INSTANCE_WEIGHTS
@@ -538,8 +538,7 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
 }
 
 
-void
-ModelService::prepare_labels(
+void ModelService::prepare_labels(
     arma::mat &all_labels, arma::vec &all_last_knowns, datamodel::data_row_container &all_times, const datamodel::datarow_crange &main_data,
     const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, const uint16_t level, const bpt::time_duration &resolution_aux, const bpt::ptime &last_modeled_value_time,
     const bpt::time_duration &resolution_main, const uint16_t multistep, const uint32_t lag)
@@ -589,10 +588,9 @@ ModelService::prepare_labels(
             continue;
         }
 
-        const auto L_end_time = L_start_time + label_duration;
-        const auto L_end_it = lower_bound(L_start_it, aux_data.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : aux_data.cend(), L_end_time);
+        const auto L_end_it = lower_bound(L_start_it, aux_data.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : aux_data.cend(), L_start_time + label_duration);
         if (L_end_it - L_start_it < 1) {
-            LOG4_TRACE("No aux data for time " << L_start_time << " label ending at " << L_end_time);
+            LOG4_TRACE("No aux data for time " << L_start_time);
             continue;
         }
         const auto L_end_it_time = L_end_it == aux_data.cend() ? (**std::prev(L_end_it)).get_value_time() : (**L_end_it).get_value_time();
@@ -611,12 +609,12 @@ ModelService::prepare_labels(
         t_label_ix this_label_ixs{.n_ixs = label_len};
         try {
             if constexpr (C_label_bias == 0)
-                generate_twap_indexes(aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux, label_len, this_label_ixs.label_ixs);
+                generate_twap_indexes(aux_data.cbegin(), L_start_it, L_end_it, L_start_time, label_duration, label_len, this_label_ixs.label_ixs);
             else
-                this_label_ixs.special_x = generate_twap_bias(this_label_ixs.label_ixs, false /*askbid*/, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution_aux,
+                this_label_ixs.special_x = generate_twap_bias(this_label_ixs.label_ixs, false /*askbid*/, aux_data.cbegin(), L_start_it, L_end_it, L_start_time, label_duration,
                                                               label_len, level);
         } catch (...) {
-            LOG4_WARN("Failed to generate label indexes for time " << L_start_time << ", until " << L_end_time << ", aux start iterator time " << (**L_start_it).get_value_time());
+            LOG4_WARN("Failed to generate label indexes for time " << L_start_time << ", aux start iterator time " << (**L_start_it).get_value_time());
             continue;
         }
         LOG4_TRACE("Adding row at " << L_start_time << " label at " << *this_label_ixs.label_ixs << " with " << F_end_ix << " index, of length " << label_len);

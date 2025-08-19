@@ -41,25 +41,20 @@ template<typename I> inline void generate_twap_indexes(
         const I &start_it, // At start time or before
         const I &it_end, // At end time or after
         const bpt::ptime &start_time, // Exact start time
-        const bpt::ptime &end_time, // Exact end time
-        const bpt::time_duration &resolution, // Aux input queue resolution
+        const bpt::time_duration &duration, // Exact end time
         const uint32_t n_out, // Count of positions to output
         uint32_t *const out)
 {
     assert(it_end >= start_it);
     assert(end_time >= start_time);
     auto it = start_it;
-    const uint32_t inlen = (end_time - start_time) / resolution;
-    uint32_t inctr = 0;
-    const auto inout_ratio = double(n_out) / double(inlen);
-    UNROLL()
-    for (auto time_iter = start_time; time_iter < end_time; time_iter += resolution, ++inctr) {
-        while (it != it_end && is_valid(it) && get_time(it) < time_iter) ++it;
-        out[uint32_t(inctr * inout_ratio)] = it - cbegin - (it >= it_end || !is_valid(it) || (get_time(it) != time_iter && it != start_it && it != cbegin));
+    for (DTYPE(n_out) outctr = 0; outctr < n_out; ++outctr) {
+        const auto time_iter = start_time + duration * outctr / n_out;
+        while (it < it_end && is_valid(it) && get_time(it) < time_iter) ++it;
+        out[outctr] = it - cbegin - (it > cbegin && (it == it_end || !is_valid(it) || get_time(it) > time_iter));
     }
 #ifndef NDEBUG
-    const auto dist_it = it - start_it;
-    if (dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
+    if (const auto dist_it = it - start_it; dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", distance " << dist_it);
 #endif
 }
 
@@ -70,51 +65,31 @@ template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
         const I &start_it, // At start time or before
         const I &it_end, // At end time or after
         const bpt::ptime &start_time, // Exact start time
-        const bpt::ptime &end_time, // Exact end time
-        const bpt::time_duration &resolution, // Aux input queue resolution
+        const bpt::time_duration &duration, // Exact end time
         const uint32_t n_out, // Count of positions to output
         const uint16_t level // Level
         )
 {
     assert(it_end >= start_it);
-    assert(end_time >= start_time);
     auto it = start_it;
-    const uint32_t inlen = (end_time - start_time) / resolution;
-    uint32_t inctr = 0;
-    const auto inout_ratio = double(n_out) / double(inlen);
     auto maxmin_v = maxmin ? std::numeric_limits<double>::max() : std::numeric_limits<double>::min();
     uint32_t maxmin_i = start_it - cbegin;
-    UNROLL()
-    for (auto time_iter = start_time; time_iter < end_time; time_iter += resolution, ++inctr) {
+    for (DTYPE(n_out) outctr = 0; outctr < n_out; ++outctr) {
+        const auto time_iter = start_time + duration * outctr / n_out;
         while (it != it_end && is_valid(it) && get_time(it) < time_iter) ++it;
-        const auto out_i = uint32_t(inctr * inout_ratio);
-        out[out_i] = it - cbegin - (it >= it_end || !is_valid(it) || (get_time(it) != time_iter && it != start_it && it != cbegin));
-        const auto v = get_value(cbegin + out[out_i], level);
+        out[outctr] = it - cbegin - (it > cbegin && (it == it_end || !is_valid(it) || get_time(it) > time_iter));
+        const auto v = get_value(cbegin + out[outctr], level);
         if ((maxmin && v > maxmin_v) || (!maxmin && v < maxmin_v)) {
             maxmin_v = v;
-            maxmin_i = out[out_i];
+            maxmin_i = out[outctr];
         }
     }
 #ifndef NDEBUG
-    const auto dist_it = it - start_it;
-    if (dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", resolution " << resolution << ", distance " << dist_it);
+    if (const auto dist_it = it - start_it; dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", distance " << dist_it);
 #endif
     return maxmin_i;
 }
 
-inline std::vector<uint32_t> generate_twap_indexes(
-        const datamodel::DataRow::container::const_iterator &cbegin, // Begin of container
-        const datamodel::DataRow::container::const_iterator &start_it, // At start time or before
-        const datamodel::DataRow::container::const_iterator &it_end, // At end time or after
-        const bpt::ptime &start_time, // Exact start time
-        const bpt::ptime &end_time, // Exact end time
-        const bpt::time_duration &resolution, // Aux input queue resolution
-        const uint32_t n_out)
-{
-    std::vector<uint32_t> out(n_out);
-    generate_twap_indexes(cbegin, start_it, it_end, start_time, end_time, resolution, n_out, out.data());
-    return out;
-}
 
 }
 }

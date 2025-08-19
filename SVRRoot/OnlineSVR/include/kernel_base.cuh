@@ -11,6 +11,7 @@
 #include "common/gpu_handler.hpp"
 #include "common/cuda_util.cuh"
 #include "util/math_utils.hpp"
+#include "model/SVRParameters.hpp"
 
 namespace svr {
 namespace kernel {

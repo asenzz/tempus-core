@@ -76,7 +76,7 @@ template<typename Derived, typename Base>
 std::unique_ptr<Derived> dynamic_ptr_cast(std::unique_ptr<Base> &&base)
 {
     if (auto derived = dynamic_cast<Derived *>(base.get())) {
-        base.release();
+        (void) base.release();
         return std::unique_ptr<Derived>(derived);
     }
     return nullptr;
@@ -406,9 +406,13 @@ template<typename C> inline size_t capacity(const C &um)
     return um.bucket_count() * um.max_load_factor();
 }
 
+#ifdef USE_PETSC_SOLVER
+
 void init_petsc();
 
 void uninit_petsc();
+
+#endif
 
 void print_stacktrace();
 
@@ -467,8 +471,7 @@ bool Equals(const double &lhs, const double &rhs);
 
 double Round(const double &dbl);
 
-template<typename T>
-std::vector<std::shared_ptr<T> > inline
+template<typename T> std::vector<std::shared_ptr<T> > inline
 clone_shared_ptr_elements(const std::vector<std::shared_ptr<T> > &arg)
 {
     std::vector<std::shared_ptr<T> > res;
@@ -476,8 +479,7 @@ clone_shared_ptr_elements(const std::vector<std::shared_ptr<T> > &arg)
     return res;
 }
 
-template<typename T>
-std::deque<std::shared_ptr<T> > inline
+template<typename T> std::deque<std::shared_ptr<T> > inline
 clone_shared_ptr_elements(const std::deque<std::shared_ptr<T> > &arg)
 {
     std::deque<std::shared_ptr<T> > res;
@@ -660,13 +662,11 @@ struct copyatomic
 {
     std::atomic<T> _a;
 
-    copyatomic()
-        : _a()
+    copyatomic() : _a()
     {
     }
 
-    copyatomic(const std::atomic<T> &a)
-        : _a(a.load(std::memory_order_relaxed))
+    explicit copyatomic(const std::atomic<T> &a) : _a(a.load(std::memory_order_relaxed))
     {
     }
 
@@ -678,11 +678,13 @@ struct copyatomic
     copyatomic &operator=(const copyatomic &other)
     {
         _a.store(other._a.load(), std::memory_order_relaxed);
+        return *this;
     }
 
     copyatomic &operator=(const T &other) const
     {
         _a.store(other, std::memory_order_relaxed);
+        return *this;
     }
 
     bool operator==(const T &other) const

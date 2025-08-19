@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "execution": "cpp",
+        "any": "cpp",
+        "bitset": "cpp",
+        "memory": "cpp",
+        "random": "cpp",
+        "future": "cpp",
+        "optional": "cpp",
+        "*.tpp": "cpp"
+    },
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=${workspaceFolder}"
+    ]
+}

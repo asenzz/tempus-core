@@ -21,10 +21,10 @@ void meyer(int N,double lb,double ub,double *phi,double *psi,double *tgrid) {
 	}
 	
 	obj = fft_init(N,-1);
-	w = (double*)memalign(sizeof(double), sizeof(double)*N);
-	phiw = (fft_data*) memalign(sizeof(double), sizeof(fft_data) * N);
-	psiw = (fft_data*) memalign(sizeof(double), sizeof(fft_data) * N);
-	oup = (fft_data*) memalign(sizeof(double), sizeof(fft_data) * N);
+	w = (double*)aligned_alloc(sizeof(double), sizeof(double)*N);
+	phiw = (fft_data*) aligned_alloc(sizeof(double), sizeof(fft_data) * N);
+	psiw = (fft_data*) aligned_alloc(sizeof(double), sizeof(fft_data) * N);
+	oup = (fft_data*) aligned_alloc(sizeof(double), sizeof(fft_data) * N);
 	
 	delta = 2 * (ub-lb) / PI2;
 	

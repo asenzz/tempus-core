@@ -9,7 +9,7 @@
 #include <cufft.h>
 #include <sstream>
 #include <thrust/device_vector.h>
-#include <thrust/async/for_each.h>
+#include <thrust/for_each.h>
 #include <nppdefs.h>
 #include "common/logging.hpp"
 #include "common/defines.h"
@@ -23,16 +23,9 @@ constexpr uint32_t C_cufft_input_limit = 64e5;
 // #define HETEROGENOUS_GPU_HW
 
 #define tid_ threadIdx.x
-#ifdef PRODUCTION_BUILD
-#define CU_STRIDED_FOR_i(N)                             \
-    const auto __stride = blockDim.x * gridDim.x;       \
-    UNROLL()                                            \
-    for (auto i = blockIdx.x * blockDim.x + threadIdx.x; i < (N); i += __stride)
-#else
 #define CU_STRIDED_FOR_i(N)                         \
     const auto __stride = blockDim.x * gridDim.x;   \
     for (auto i = blockIdx.x * blockDim.x + threadIdx.x; i < (N); i += __stride)
-#endif
 
 #define CU_THREADS(n) unsigned((n) > common::C_cu_block_size ? common::C_cu_block_size : (n))
 #define CU_BLOCKS(n) (unsigned) CDIVI((n), common::C_cu_block_size)

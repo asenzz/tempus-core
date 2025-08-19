@@ -1,6 +1,9 @@
 //
 // Created by zarko on 27/03/2025.
 //
+
+#if defined(USE_PETSC_SOLVER) || defined(USE_GINKGO_SOLVER)
+
 #include <semaphore>
 #include <cmath>
 #include <iostream>
@@ -226,3 +229,5 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 }
 }
 }
+
+#endif // #if defined(USE_PETSC_SOLVER) || defined(USE_GINKGO_SOLVER)

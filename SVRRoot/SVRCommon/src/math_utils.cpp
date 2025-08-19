@@ -7,11 +7,11 @@
 #include <viennacl/vector_proxy.hpp>
 #endif
 
-#include <common.hpp>
 #include <map>
 #include <mkl_vml.h>
-#include "sobol.hpp"
 #include <xoshiro.h>
+#include "common.hpp"
+#include "sobol.hpp"
 
 namespace svr {
 std::vector<double> operator*(const std::vector<double> &v1, const double &m)

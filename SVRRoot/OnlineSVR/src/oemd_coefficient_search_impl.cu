@@ -478,9 +478,8 @@ oemd_coefficients_search::create_random_mask(
                 } else {
                     mask[i] = start_mask[i] * (1. + step * (2 * common::drander(buffer) - 1));
                 }
-            } else {
+            } else
                 mask[i] = start_mask[i];
-            }
         }
     }
 
@@ -572,7 +571,7 @@ template<typename T> __device__ inline T sinc(const T x)
     return x == T(0) ? 1 : sin(M_PI * x) / (M_PI * x);
 }
 
-__global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const uint32_t len, const double len_2, const double len_1, const double f_2)
+__global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const uint32_t n, const double len_2, const double len_1, const double f_2)
 {
     constexpr double alpha0 = .42;
     constexpr double alpha1 = .5;
@@ -580,7 +579,7 @@ __global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const u
     constexpr auto pi_2 = 2 * M_PI;
     constexpr auto pi_4 = 4 * M_PI;
 
-    CU_STRIDED_FOR_i(len)d_mask[i] = /* low-pass */ f_2 * sinc(f_2 * (i - len_2)) * /* blackman */ (alpha0 - alpha1 * cos(pi_2 * i / len_1) - alpha2 * cos(pi_4 * i / len_1));
+    CU_STRIDED_FOR_i(n)d_mask[i] = /* low-pass */ f_2 * sinc(f_2 * (i - len_2)) * /* blackman */ (alpha0 - alpha1 * cos(pi_2 * i / len_1) - alpha2 * cos(pi_4 * i / len_1));
 }
 
 double *generate_fir_mask(const uint32_t len, const double f, const cudaStream_t custream)
@@ -682,6 +681,46 @@ std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_
     return FIR_lowpass;
 }
 
+__global__ void G_calc_variance(RPTR(double) var, CRPTRd d_labels, const uint32_t n, const double mean)
+{
+    double this_var = 0;
+    CU_STRIDED_FOR_i(n) {
+        const auto v = d_labels[i] - mean;
+        this_var += v * v;
+    }
+    atomicAdd(var, this_var);
+}
+
+__global__ void G_autocorrelation_score(RPTR(double) res, CRPTRd labels, CRPTRd labels_mean, const uint32_t n, const double mean, const double variance)
+{
+    double thread_acf = 0;
+    CU_STRIDED_FOR_i(n) {
+        double this_acf = 0;
+        const auto ni = n - i;
+        for (DTYPE(n) j = 0; j < ni; ++j) this_acf += labels_mean[j] * (labels[j + i] - mean);
+        thread_acf += ni * variance / abs(this_acf); // score is Σ 1 / cor
+    }
+    atomicAdd(res, thread_acf);
+}
+
+double autocorrelation(CRPTR(double) d_labels, const uint32_t n, const cudaStream_t custream)
+{
+    const auto mean = solvers::mean(d_labels, n, custream);
+    auto d_var = cucalloc<double>(custream);
+    G_calc_variance<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_var, d_labels, n, mean);
+    double var;
+    cufreecopy(&var, d_var, custream);
+    var /= n;
+    auto d_res = cucalloc<double>(custream);
+	double *d_labels_mean;
+    cu_errchk(cudaMallocAsync(&d_labels_mean, n * sizeof(*d_labels), custream));
+    thrust::transform(thrust::cuda::par.on(custream), d_labels, d_labels + n, d_labels_mean, [mean] __device__(const double x) -> double { return x - mean; });
+    G_autocorrelation_score<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_res, d_labels, d_labels_mean, n, mean, var);
+	cu_errchk(cudaFreeAsync(d_labels_mean, custream));
+    double res;
+    cufreecopy(&res, d_res, custream);
+    return res;
+}
 
 double
 oemd_coefficients_search::evaluate_mask(
@@ -694,9 +733,10 @@ oemd_coefficients_search::evaluate_mask(
         return common::C_bad_validation;
     }
 
-    static const double rel_pow_w = PROPS.get_oemd_rel_pow_w();
-    static const double autocor_w = PROPS.get_oemd_acor_weig();
-    static const double inv_entropy_w = PROPS.get_oemd_entweight();
+    static const auto rel_pow_w = PROPS.get_oemd_rel_pow_w();
+    static const auto xcor_w = PROPS.get_oemd_xcor_weig();
+    static const auto acor_w = PROPS.get_oemd_acor_weig();
+    static const auto inv_entropy_w = PROPS.get_oemd_entweight();
 
     const uint32_t mask_len = mask.size();
     CTX_CUSTREAM
@@ -713,8 +753,7 @@ oemd_coefficients_search::evaluate_mask(
     const auto d_imf = d_workspace + mask_offset;
     double stub_sf, stub_dc;
     // business::ScalingFactorService::cu_scale_calc_I(d_imf, d_imf_len, stub_sf, stub_dc, custream);
-#if 1 // Component power
-    const auto meanabs_imf = std::abs(rel_pow_w) > std::numeric_limits<DTYPE(rel_pow_w) >::epsilon() ? solvers::meanabs(d_imf, d_imf_len, custream) : 1;
+    const auto meanabs_imf = rel_pow_w > 0 ? solvers::meanabs(d_imf, d_imf_len, custream) : 1;
     if (!std::isnormal(meanabs_imf)) {
         LOG4_WARN("Bad IMF " << meanabs_imf << ", workspace " << common::present(workspace) << ", siftings " << siftings << ", mask size " << mask_len <<
             ", attenuation " << att << ", pass frequency " << fp << ", stop frequency " << fs << ", prev mask len " << prev_masks_len);
@@ -723,17 +762,13 @@ oemd_coefficients_search::evaluate_mask(
         return common::C_bad_validation;
     }
     const auto rel_pow = std::abs(meanabs_input / meanabs_imf - levels + 1.);
-#else
-    constexpr double meanabs_imf = 1;
-    constexpr double rel_pow = 1;
-#endif
 
-    double autocor;
-    if (autocor_w <= std::numeric_limits<DTYPE(autocor_w) >::epsilon()) {
-        autocor = 1;
-        goto __skip_autocor;
-    } else autocor = common::C_bad_validation;
-    { // Autocorrelation
+    double xcor, acor;
+    if (xcor_w <= 0 && acor_w <= 0) {
+        xcor = 1, acor = 1;
+        goto __skip_correlation;
+    } else xcor = common::C_bad_validation;
+    {
         double *d_features, *d_scores;
         auto feat_params_it = feat_params.cbegin();
         while (feat_params_it < feat_params.cend() && feat_params_it->ix_end < max_row_len + mask_offset) ++feat_params_it;
@@ -751,8 +786,10 @@ oemd_coefficients_search::evaluate_mask(
         G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
             d_imf, d_labels, validate_rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
         business::ScalingFactorService::cu_scale_calc_I(d_labels, validate_rows, stub_sf, stub_dc, custream);
+        acor = acor_w > 0 ? autocorrelation(d_labels, validate_rows, custream) : 1;
         cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
         cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
+        const auto [mean_sq_diff_L, d_diff_L] = prepare_diff_labels(d_labels, validate_rows, custream);
         const uint32_t full_feat_cols = PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count;
         static const auto column_interleave = PROPS.get_oemd_interleave();
         const uint32_t feat_cols_ileave = full_feat_cols / column_interleave;
@@ -783,35 +820,36 @@ oemd_coefficients_search::evaluate_mask(
             business::ScalingFactorService::cu_scale_calc_I(d_features, features_len, stub_sf, stub_dc, custream);
             G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
                 d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, stretch_limit,
-                align_window, shift_limit, stretch_coef);
+                align_window, shift_limit, stretch_coef, mean_sq_diff_L, d_diff_L);
             double score;
             if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
                 thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
                 score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
             } else
                 score = solvers::sum(d_scores, feat_cols_ileave, custream);
-            if (score < autocor) {
+            if (score < xcor) {
                 LOG4_TRACE(
                     "Quantisation " << qt << ", index " << q << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<
-                    ", mask offset " << mask_offset << ", score " << score << ", best autocor " << autocor);
-                autocor = score;
+                    ", mask offset " << mask_offset << ", score " << score << ", best xcor " << xcor);
+                xcor = score;
             }
             assert(score != 0);
         }
         cu_errchk(cudaFreeAsync(d_scores, custream));
         cu_errchk(cudaFreeAsync(d_features, custream));
         cu_errchk(cudaFreeAsync(d_labels, custream));
+        cu_errchk(cudaFreeAsync(d_diff_L, custream));
     }
-__skip_autocor:
+__skip_correlation:
 
     // Spectral entropy
-    const auto inv_entropy = std::abs(inv_entropy_w) > std::numeric_limits<DTYPE(inv_entropy_w) >::epsilon() ? compute_spectral_entropy_cufft(d_imf, d_imf_len, custream) : 1.;
+    const auto inv_entropy = inv_entropy_w > 0 ? compute_spectral_entropy_cufft(d_imf, d_imf_len, custream) : 1.;
     cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is a chunk of d_workspace
     cu_errchk(cudaStreamDestroy(custream));
 
     // Weights and final score
-    const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(autocor, autocor_w) * std::pow(inv_entropy, inv_entropy_w);
-    LOG4_TRACE("Returning autocorrelation " << autocor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy << ", meanabs imf " <<
+    const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(xcor, xcor_w) * std::pow(acor, acor_w) * std::pow(inv_entropy, inv_entropy_w);
+    LOG4_TRACE("Returning cross-correlation " << xcor << ", labels autocorrelation " << acor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy << ", meanabs imf " <<
         meanabs_imf << ", meanabs input " << meanabs_input);
     return score;
 }
@@ -984,8 +1022,7 @@ oemd_coefficients_search::run(
             else --L_start_it;
             if (*L_start_it > L_start_time) continue;
         }
-        const auto L_end_time = L_start_time + label_duration;
-        const auto L_end_it = std::lower_bound(L_start_it, times.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : times.cend(), L_end_time);
+        const auto L_end_it = std::lower_bound(L_start_it, times.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : times.cend(), L_start_time + label_duration);
         if (L_end_it == L_start_it) continue;
 
         auto F_end_it = lower_bound(L_start_it - times.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : times.cbegin(), L_start_it, L_start_time - horizon_duration);
@@ -998,7 +1035,7 @@ oemd_coefficients_search::run(
             L_ins = &label_ixs.emplace_back(t_label_ix{.n_ixs = label_len});
             (void) feat_params.emplace_back(t_feat_params{.ix_end = F_end_ix});
         }
-        business::generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, L_start_time, L_end_time, resolution, label_len, L_ins->label_ixs);
+        business::generate_twap_indexes(times.cbegin(), L_start_it, L_end_it, L_start_time, label_duration, label_len, L_ins->label_ixs);
     }
     assert(label_ixs.size() == feat_params.size());
     RELEASE_CONT(times);

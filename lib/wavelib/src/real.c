@@ -12,7 +12,7 @@ fft_real_object fft_real_init(int N, int sgn) {
 	fft_type theta;
 	int k;
 
-	obj = (fft_real_object) memalign(sizeof(fft_type), sizeof(struct fft_real_set) + sizeof(fft_data)* (N/2));
+	obj = (fft_real_object) aligned_alloc(sizeof(fft_type), sizeof(struct fft_real_set) + sizeof(fft_data)* (N/2));
 	memset(obj, 0, sizeof(struct fft_real_set));
 	obj->cobj = fft_init(N/2,sgn);
 	
@@ -35,8 +35,8 @@ void fft_r2c_exec(fft_real_object obj,fft_type *inp,fft_data *oup) {
 	N2 = obj->cobj->N;
 	N = N2*2;
 	
-	cinp = (fft_data*) memalign(sizeof(fft_type), sizeof(fft_data) * N2);
-	coup = (fft_data*) memalign(sizeof(fft_type), sizeof(fft_data) * N2);
+	cinp = (fft_data*) aligned_alloc(sizeof(fft_type), sizeof(fft_data) * N2);
+	coup = (fft_data*) aligned_alloc(sizeof(fft_type), sizeof(fft_data) * N2);
 	
 	for (i = 0; i < N2; ++i) {
 		cinp[i].re = inp[2*i];
@@ -80,8 +80,8 @@ void fft_c2r_exec(fft_real_object obj,fft_data *inp,fft_type *oup) {
 	N2 = obj->cobj->N;
 
 	size_t c_size = sizeof(fft_data) * N2;
-	cinp = (fft_data*) memalign(sizeof(fft_type), c_size);
-	coup = (fft_data*) memalign(sizeof(fft_type), c_size);
+	cinp = (fft_data*) aligned_alloc(sizeof(fft_type), c_size);
+	coup = (fft_data*) aligned_alloc(sizeof(fft_type), c_size);
 	
 	for (i = 0; i < N2; ++i) {
 		temp1 = -inp[i].im - inp[N2-i].im ;

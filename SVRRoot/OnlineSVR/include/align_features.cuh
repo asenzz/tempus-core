@@ -31,7 +31,7 @@ __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { r
 __global__ void G_align_features(
     CRPTRd features, CRPTRd labels,
     RPTR(double) scores, RPTR(float) stretches, RPTR(unsigned) shifts, const uint32_t n_rows, const uint32_t n_cols,
-    const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate, const uint32_t shift_limit, const float stretch_multiplier);
+    const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate, const uint32_t shift_limit, const float stretch_multiplier, const double mean_sq_diff_y, CRPTRd diff_y);
 
 __global__ void G_quantise_features(
         RPTR(double) features /* zeroed out before */, CRPTRd d_decon_F, CRPTR(t_feat_params) d_feat_params,
@@ -72,8 +72,9 @@ template<const bool do_label_bias = false> __global__ void G_quantise_labels(
 
 #endif
 
-void
-quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs, const std::vector<uint32_t> &feat_params,
+std::pair<double, double *> prepare_diff_labels(CRPTRd d_labels, const uint32_t n, const cudaStream_t custream);
+
+void quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs, const std::vector<uint32_t> &feat_params,
                 RPTR(double) p_labels, const uint16_t multistep);
 
 }

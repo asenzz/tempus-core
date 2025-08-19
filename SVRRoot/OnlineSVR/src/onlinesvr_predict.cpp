@@ -114,7 +114,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
             l2.unset();
         }
     }
-
+#ifdef USE_MPI
     if (const auto world_size = PROPS.get_mpi_size(); world_size > 1) {
         if (PROPS.get_mpi_rank()) {
             mpi_errchk(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, nullptr, 0, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
@@ -125,7 +125,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
                 prediction += arma::mat(mpi_all_predictions.data() + i * prediction.n_elem, prediction.n_rows, prediction.n_cols, false, true);
         }
     }
-
+#endif
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }

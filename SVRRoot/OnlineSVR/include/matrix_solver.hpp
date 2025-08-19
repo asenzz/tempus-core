@@ -1,16 +1,16 @@
 //
 // Created by zarko on 06/03/2025.
 //
+#if defined(USE_PETSC_SOLVER) || defined(USE_GINKGO_SOLVER)
 
 #ifndef SVR_MATRIX_SOLVER_HPP
 #define SVR_MATRIX_SOLVER_HPP
 
-#define USE_PETSC_SOLVER
-
 #include <mpi.h>
 #ifdef USE_PETSC_SOLVER
 #include <petsc.h>
-#else
+#endif
+#ifdef USE_GINKGO_SOLVER
 #include <ginkgo/ginkgo.hpp>
 #endif
 
@@ -25,7 +25,8 @@ public:
     using Tv = PetscScalar;
     using Ti = PetscInt;
 
-#else
+#endif
+#ifdef USE_GINKGO_SOLVER
 
     using Tv = double;
     using Ti = uint32_t;
@@ -57,3 +58,5 @@ public:
 }
 
 #endif //SVR_MATRIX_SOLVER_HPP
+
+#endif // #if defined(USE_PETSC_SOLVER) || defined(USE_GINKGO_SOLVER)

@@ -9,7 +9,6 @@
 
 #include <string>
 #include <sstream>
-#include <lz4.h>
 #include <algorithm>
 
 namespace svr {

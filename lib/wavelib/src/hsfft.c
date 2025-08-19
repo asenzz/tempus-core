@@ -16,7 +16,7 @@ fft_object fft_init(int N, int sgn) {
 	out = dividebyN(N);
 
 	if (out == 1) {
-		obj = (fft_object) memalign (sizeof(fft_type), sizeof(struct fft_set) + sizeof(fft_data)* (N-1));
+		obj = (fft_object) aligned_alloc (sizeof(fft_type), sizeof(struct fft_set) + sizeof(fft_data)* (N-1));
 		memset(obj, 0, sizeof(struct fft_set));
 		obj->lf = factors(N,obj->factors);
 		longvectorN(obj->twiddle,N,obj->factors,obj->lf);
@@ -31,7 +31,7 @@ fft_object fft_init(int N, int sgn) {
 		} else {
 			M = K;
 		}
-		obj = (fft_object) memalign (sizeof(fft_type), sizeof(struct fft_set) + sizeof(fft_data)* (M-1));
+		obj = (fft_object) aligned_alloc (sizeof(fft_type), sizeof(struct fft_set) + sizeof(fft_data)* (M-1));
 		memset(obj, 0, sizeof(struct fft_set));
 		obj->lf = factors(M,obj->factors);
 		longvectorN(obj->twiddle,M,obj->factors,obj->lf);

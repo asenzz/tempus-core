@@ -32,7 +32,7 @@ wave_object wave_init(char* wname) {
                                         */
 	}
 
-	obj = (wave_object)memalign(sizeof(double), sizeof(struct wave_set) + sizeof(double)* 4 * retval); 
+	obj = (wave_object)aligned_alloc(sizeof(double), sizeof(struct wave_set) + sizeof(double)* 4 * retval); 
 	memset(obj, 0, sizeof(struct wave_set));
 
 	obj->filtlength = retval;
@@ -57,7 +57,7 @@ wave_object wave_init1(int filter) {
     wave_object obj = NULL;
     int retval = 0;
     
-    obj = (wave_object)memalign(sizeof(double), sizeof(struct wave_set) );
+    obj = (wave_object)aligned_alloc(sizeof(double), sizeof(struct wave_set) );
     memset(obj, 0, sizeof(struct wave_set));
     
    retval = filtlength1(filter);  
@@ -815,11 +815,11 @@ static void dwt1(wt_object wt,double *sig,int len_sig, double *cA, int len_cA, d
 		//printf("\n YES %s \n", wt->ext);
 		lf = wt->wave->lpd_len;// lpd and hpd have the same length
 
-		signal = (double*)memalign(sizeof(double), sizeof(double)* (len_sig + 2 * (lf - 1)));
+		signal = (double*)aligned_alloc(sizeof(double), sizeof(double)* (len_sig + 2 * (lf - 1)));
 
 		len_sig = symm_ext(sig, len_sig, lf - 1, signal);
 
-		cA_undec = (double*)memalign(sizeof(double), sizeof(double)* (len_sig + 3 * (lf - 1)));
+		cA_undec = (double*)aligned_alloc(sizeof(double), sizeof(double)* (len_sig + 3 * (lf - 1)));
 
 		if (wt->wave->lpd_len == wt->wave->hpd_len && (!strcmp(wt->cmethod, "fft") || !strcmp(wt->cmethod, "FFT"))) {
             if (wt->cobj) free_conv(wt->cobj);
@@ -866,8 +866,8 @@ void dwt(wt_object wt,double *inp) {
 	wt->length[J + 1] = temp_len;
 	wt->outlength = 0;
 	wt->zpad = 0;
-	orig = (double*)memalign(sizeof(double), sizeof(double)* temp_len);
-	orig2 = (double*)memalign(sizeof(double), sizeof(double)* temp_len);
+	orig = (double*)aligned_alloc(sizeof(double), sizeof(double)* temp_len);
+	orig2 = (double*)aligned_alloc(sizeof(double), sizeof(double)* temp_len);
 	/*
 	if ((temp_len % 2) == 0) {
 	wt->zpad = 0;
@@ -983,7 +983,7 @@ void wtree(wtree_object wt,double *inp) {
 	wt->length[J + 1] = temp_len;
 	wt->outlength = 0;
 	wt->zpad = 0;
-	orig = (double*)memalign(sizeof(double), sizeof(double)* temp_len);
+	orig = (double*)aligned_alloc(sizeof(double), sizeof(double)* temp_len);
 	/*
 	if ((temp_len % 2) == 0) {
 		wt->zpad = 0;
@@ -1699,10 +1699,10 @@ void idwt(wt_object wt, double *dwtop) {
 		N = 2 * wt->length[J];
 		lf = (wt->wave->lpr_len + wt->wave->hpr_len) / 2;
 
-		cA_up = (double*)memalign(sizeof(double), sizeof(double)* N);
-		temp = (double*)memalign(sizeof(double), sizeof(double)* (N + lf));
-		X_lp = (double*)memalign(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
-		X_hp = (double*)memalign(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
+		cA_up = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+		temp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + lf));
+		X_lp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
+		X_hp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
 		iter = app_len;
 
 		for (i = 0; i < app_len; ++i) {
@@ -1733,7 +1733,7 @@ void idwt(wt_object wt, double *dwtop) {
 		N = 2 * wt->length[J];
 		lf = (wt->wave->lpr_len + wt->wave->hpr_len) / 2;
 
-		X_lp = (double*)memalign(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
+		X_lp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
 		iter = app_len;
 
 		for (i = 0; i < app_len; ++i) {
@@ -1762,7 +1762,7 @@ void idwt(wt_object wt, double *dwtop) {
 		N = 2 * wt->length[J] - 1;
 		lf = (wt->wave->lpr_len + wt->wave->hpr_len) / 2;
 
-		X_lp = (double*)memalign(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
+		X_lp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + 2 * lf - 1));
 		iter = app_len;
 
 		for (i = 0; i < app_len; ++i) {
@@ -1789,9 +1789,9 @@ void idwt(wt_object wt, double *dwtop) {
 		lf = wt->wave->lpd_len;// lpd and hpd have the same length
 
 		N = 2 * wt->length[J] - 1;
-		cA_up = (double*)memalign(sizeof(double), sizeof(double)* N);
-		X_lp = (double*)memalign(sizeof(double), sizeof(double)* (N + lf - 1));
-		X_hp = (double*)memalign(sizeof(double), sizeof(double)* (N + lf - 1));
+		cA_up = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+		X_lp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + lf - 1));
+		X_hp = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + lf - 1));
 
 		for (i = 0; i < app_len; ++i) {
 			out[i] = wt->output[i];
@@ -1916,12 +1916,12 @@ void idwpt(wpt_object wt, double *dwtop) {
 	lf = (wt->wave->lpr_len + wt->wave->hpr_len) / 2;
 	xlen = p * (app_len + 2 * lf);
 
-	X_lp = (double*)memalign(sizeof(double), sizeof(double)* 2 * (wt->length[J] + lf));
-	X = (double*)memalign(sizeof(double), sizeof(double)* xlen);
-	out = (double*)memalign(sizeof(double), sizeof(double)* wt->length[J]);
-	out2 = (double*)memalign(sizeof(double), sizeof(double)* wt->length[J]);
-	prep = (int*)memalign(sizeof(int), sizeof(int)* p);
-	ptemp = (int*)memalign(sizeof(int), sizeof(int)* p);
+	X_lp = (double*)aligned_alloc(sizeof(double), sizeof(double)* 2 * (wt->length[J] + lf));
+	X = (double*)aligned_alloc(sizeof(double), sizeof(double)* xlen);
+	out = (double*)aligned_alloc(sizeof(double), sizeof(double)* wt->length[J]);
+	out2 = (double*)aligned_alloc(sizeof(double), sizeof(double)* wt->length[J]);
+	prep = (int*)aligned_alloc(sizeof(int), sizeof(int)* p);
+	ptemp = (int*)aligned_alloc(sizeof(int), sizeof(int)* p);
 	n1 = 1;
 	llb = 1;
 	index2 = xlen / p;
@@ -2249,11 +2249,11 @@ static void swt_fft(wt_object wt, double *inp) {
 
 	len_filt = wt->wave->filtlength;
 
-	low_pass = (double*)memalign(sizeof(double), sizeof(double)* M * len_filt);
-	high_pass = (double*)memalign(sizeof(double), sizeof(double)* M * len_filt);
-	sig = (double*)memalign(sizeof(double), sizeof(double)* (M * len_filt + temp_len + (temp_len%2)));
-	cA = (double*)memalign(sizeof(double), sizeof(double)* (2 * M * len_filt + temp_len + (temp_len % 2)) - 1);
-	cD = (double*)memalign(sizeof(double), sizeof(double)* (2 * M * len_filt + temp_len + (temp_len % 2)) - 1);
+	low_pass = (double*)aligned_alloc(sizeof(double), sizeof(double)* M * len_filt);
+	high_pass = (double*)aligned_alloc(sizeof(double), sizeof(double)* M * len_filt);
+	sig = (double*)aligned_alloc(sizeof(double), sizeof(double)* (M * len_filt + temp_len + (temp_len%2)));
+	cA = (double*)aligned_alloc(sizeof(double), sizeof(double)* (2 * M * len_filt + temp_len + (temp_len % 2)) - 1);
+	cD = (double*)aligned_alloc(sizeof(double), sizeof(double)* (2 * M * len_filt + temp_len + (temp_len % 2)) - 1);
 
 	M = 1;
 
@@ -2336,8 +2336,8 @@ static void swt_direct(wt_object wt, double *inp) {
 	}
 
 
-	cA = (double*)memalign(sizeof(double), sizeof(double)* temp_len);
-	cD = (double*)memalign(sizeof(double), sizeof(double)* temp_len);
+	cA = (double*)aligned_alloc(sizeof(double), sizeof(double)* temp_len);
+	cD = (double*)aligned_alloc(sizeof(double), sizeof(double)* temp_len);
 
 	M = 1;
 
@@ -2388,19 +2388,19 @@ void iswt(wt_object wt, double *swtop) {
 	U = 2;
 	lf = wt->wave->lpr_len;
 
-	appx_sig = (double*)memalign(sizeof(double), sizeof(double)* N);
-	det_sig = (double*)memalign(sizeof(double), sizeof(double)* N);
-	appx1 = (double*)memalign(sizeof(double), sizeof(double)* N);
-	det1 = (double*)memalign(sizeof(double), sizeof(double)* N);
-	appx2 = (double*)memalign(sizeof(double), sizeof(double)* N);
-	det2 = (double*)memalign(sizeof(double), sizeof(double)* N);
-	tempx = (double*)memalign(sizeof(double), sizeof(double)* N);
-	cL0 = (double*)memalign(sizeof(double), sizeof(double)* (N + (N%2) + lf));
-	cH0 = (double*)memalign(sizeof(double), sizeof(double)* (N + (N % 2) + lf));
-	oup00L = (double*)memalign(sizeof(double), sizeof(double)* (N + 2 * lf));
-	oup00H = (double*)memalign(sizeof(double), sizeof(double)* (N + 2 * lf));
-	oup00 = (double*)memalign(sizeof(double), sizeof(double)* N);
-	oup01 = (double*)memalign(sizeof(double), sizeof(double)* N);
+	appx_sig = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	det_sig = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	appx1 = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	det1 = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	appx2 = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	det2 = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	tempx = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	cL0 = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + (N%2) + lf));
+	cH0 = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + (N % 2) + lf));
+	oup00L = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + 2 * lf));
+	oup00H = (double*)aligned_alloc(sizeof(double), sizeof(double)* (N + 2 * lf));
+	oup00 = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
+	oup01 = (double*)aligned_alloc(sizeof(double), sizeof(double)* N);
 
 
 
