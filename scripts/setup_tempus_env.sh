@@ -35,24 +35,29 @@ export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 # export LD_PRELOAD="${LD_PRELOAD}:libduma.so"
 # export DUMA_OPTIONS=debug=1,log=/tmp/${BIN}.duma.log
 
-export LD_PRELOAD="${LD_PRELOAD}:${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so"
+# export LD_PRELOAD="${LD_PRELOAD}:${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so"
 
 export VGRIND=/usr/local/bin/valgrind
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib:/opt/cudnn/lib"
-
+if [ -d /usr/local/cuda/targets/x86_64-linux/lib ]; then
+  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib:/opt/cudnn/lib";
+fi
+if [ -z LIBRARY_PATH ]; then
+  LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$LIBRARY_PATH";
+fi
 # Debugger
-# export DBG=/usr/bin/gdb # GNU debugger for GCC builds
-export DBG=${ONEAPI_ROOT}/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
+export DBG=gdb # GNU debugger for GCC builds
+# export DBG=${ONEAPI_ROOT}/debugger/latest/opt/debugger/bin/gdb-oneapi # Intel debugger for ICPX builds
 # export DBG=/usr/local/cuda/bin/cuda-gdb # NVidia
 
 # export PERF=${ONEAPI_ROOT}/vtune/2024.1/bin64/amplxe-perf
-export PERF=/usr/bin/perf
+export PERF=perf
 export PROFGEN=${ONEAPI_ROOT}/compiler/latest/bin/compiler/llvm-profgen
 
 export DAEMON_DIR=${PWD} # /mnt/faststore/repo/tempus-core/build
 export DAEMON_CONFIG=$DAEMON_DIR/../config/daemon.config
 
-export LOGDIR=/mnt/slowstore/var/log/
+export LOGDIR=$PROJECT_ROOT/var/log
+if [ ! -d $LOGDIR ]; then mkdir -p $LOGDIR; fi
 export ONLINETEST_OUTPUT=${LOGDIR}svronline_tests.log
 export BUSINESSTEST_OUTPUT=${LOGDIR}svrbusiness_tests.log
 export BACKTEST_OUTPUT=${LOGDIR}svrbacktest.log
@@ -74,7 +79,7 @@ NUM_THREADS=$(( 1 * $(grep -c ^processor /proc/cpuinfo) ))
 printf "\n\n${GR}Default thread pool size is ${NUM_THREADS} threads.${NC}\n\n"
 
 # export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}${ONEAPI_ROOT}/compiler/latest/lib:${ONEAPI_ROOT}/mkl/latest/lib/intel64:${ONEAPI_ROOT}/compiler/latest/linux/compiler/lib/intel64_lin/:${ONEAPI_ROOT}/tbb/latest/lib/intel64/gcc4.8"
-export LD_PRELOAD="${LD_PRELOAD}:`/usr/local/bin/jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`"
+export LD_PRELOAD="${LD_PRELOAD}:`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision`"
 # export LSAN_OPTIONS=suppressions=../sanitize-blacklist.txt
 
 export OMP_NESTED=true

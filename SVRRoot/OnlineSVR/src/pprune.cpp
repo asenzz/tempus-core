@@ -6,7 +6,6 @@
 #include <oneapi/tbb/mutex.h>
 #include <deque>
 #include <prima/prima.h>
-#include <xoshiro.h>
 #include <biteopt/biteopt.h>
 
 #ifdef USE_KNITRO

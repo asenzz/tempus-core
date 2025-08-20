@@ -1,6 +1,10 @@
 #include <magma_auxiliary.h>
+#ifdef USE_MPI
 #include <mpi.h>
+#endif
+#ifdef USE_IPP
 #include <ipp/ippcore.h>
+#endif
 #include <sys/mman.h>
 #include "appcontext.hpp"
 #include "common.hpp"
@@ -141,7 +145,9 @@ AppContext::AppContext(const std::string &config_path, const bool use_threadsafe
 #endif
 
     mlockall(MCL_CURRENT | MCL_FUTURE);
+#ifdef USE_IPP
     ip_errchk(ippInit());
+#endif
     ma_errchk(magma_init());
 }
 

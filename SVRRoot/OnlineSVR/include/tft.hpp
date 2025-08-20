@@ -1,6 +1,7 @@
 //
 // Created by zarko on 17/06/2025.
 //
+#ifdef USE_TORCH
 
 #ifndef TFT_HPP
 #define TFT_HPP
@@ -53,3 +54,5 @@ TORCH_MODULE(TemporalFusionTransformer);
 }
 
 #endif //TFT_HPP
+
+#endif // Use Torch

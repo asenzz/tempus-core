@@ -76,7 +76,7 @@ std::string &lowertrim(std::string &s);
 
 constexpr inline char ctoupper(const char c);
 
-template<const size_t N> constexpr auto ctoupper(const char (&input)[N]);
+template<const size_t N> constexpr std::string ctoupper(const char *const input);
 
 #define CTOUPPER(X) common::ctoupper<ARRAYLEN(X)>(X)
 

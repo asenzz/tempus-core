@@ -7,7 +7,7 @@ struct hash<boost::posix_time::time_duration>
 {
     std::size_t operator()(const boost::posix_time::time_duration &k) const
     {
-        return svr::common::highway_hash_pod((std::size_t) k.total_milliseconds());
+        return svr::common::hash_pod((std::size_t) k.total_milliseconds());
     }
 };
 
@@ -16,7 +16,7 @@ struct hash<boost::posix_time::ptime>
 {
     std::size_t operator()(const boost::posix_time::ptime &k) const
     {
-        return svr::common::highway_hash_pod((std::size_t) to_time_t(k));
+        return svr::common::hash_pod((std::size_t) to_time_t(k));
     }
 };
 
@@ -26,8 +26,8 @@ struct hash<arma::SizeMat>
     std::size_t operator()(const arma::SizeMat &k) const
     {
         std::size_t seed = 0;
-        boost::hash_combine(seed, svr::common::highway_hash_pod(k.n_rows));
-        boost::hash_combine(seed, svr::common::highway_hash_pod(k.n_cols));
+        boost::hash_combine(seed, svr::common::hash_pod(k.n_rows));
+        boost::hash_combine(seed, svr::common::hash_pod(k.n_cols));
         return seed;
     }
 };

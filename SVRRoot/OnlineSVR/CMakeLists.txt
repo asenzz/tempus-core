@@ -26,7 +26,6 @@ IF (EXPERIMENTAL_FEATURES)
     STRING(REGEX REPLACE "[\n ]" "" PYINCLUDES "${PYINCLUDES}")
     FIND_PACKAGE(Python3 REQUIRED)
     INCLUDE_DIRECTORIES("${MATLAB_INCLUDE_DIR}" "${PYINCLUDES}" "/usr/include/python3.6m") # "/usr/local/include/eigen3" "/usr/local/include/google/protobuf"
-    #FIND_PACKAGE(Torch REQUIRED)
     LINK_LIBRARIES(fftw3 MatlabDataArray MatlabEngine python3.6m) # osqp::osqpstatic clblast tensorflow_all
     APPEND(TEST_DEPENDENCIES ${PROJECT_NAME} python3.6m) # tensorflow_all
 ENDIF()
@@ -34,21 +33,16 @@ ENDIF()
 IF(WITH_TESTS AND PROJECT_NAME MATCHES "${WITH_TESTS}")
     MESSAGE("~~ Building ${PROJECT_NAME}-test")
     SET(TEST_DEPENDENCIES ${PROJECT_NAME} SVRCommon SVRBusiness SVRPersist SVRModel wavelib fftw3)
-
     SET_PROPERTY(DIRECTORY PROPERTY TEST_MODULES "${PROJECT_NAME}")
-
-    SET(GTEST_ROOT "/usr")
 
     FIND_PACKAGE(GTest REQUIRED )
     FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED CONFIG)
     INCLUDE_DIRECTORIES(${GTEST_ROOT}/include)
 
-    LINK_DIRECTORIES(${GTEST_ROOT}/lib)
-
     FILE(GLOB TEST_SOURCE_FILES "test/*.cpp")
 
     ADD_EXECUTABLE(${PROJECT_NAME}-test ${TEST_SOURCE_FILES} ${COMMON_SOURCE_FILES})
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} hdbscan hdbscan_utils collections ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES} sycl ${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so) # absl::hash absl::flags_reflection absl::raw_hash_set
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME}-test ${DEPENDENCIES} hdbscan hdbscan_utils collections ${TEST_DEPENDENCIES} gtest gtest_main pthread ${Boost_LIBRARIES}) # absl::hash absl::flags_reflection absl::raw_hash_set # ${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so # sycl
 ENDIF()
 
 ADD_LIBRARY(${PROJECT_NAME} ${SOURCE_FILES})

@@ -1,4 +1,3 @@
-#include <ipp.h>
 #include <iterator>
 #include <limits>
 #include "common/constants.hpp"

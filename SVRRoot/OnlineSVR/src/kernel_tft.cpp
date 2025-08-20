@@ -8,22 +8,23 @@
 #include <vector>
 #include <fstream>
 #include "common/compatibility.hpp"
+#ifdef USE_TORCH
 GCC_PUSH_DIAGNOSTIC_DISABLE_DANGLING_REF
 #include <torch/torch.h>
 GCC_DIAGNOSTIC_POP
+#endif
 #include "kernel_tft.hpp"
-
 #include "appcontext.hpp"
+#ifdef USE_TORCH
 #include "tft.hpp"
+#endif
 
 namespace svr {
 namespace kernel {
 
 #define T double
 
-template<> kernel_tft<T>::kernel_tft(datamodel::SVRParameters &p) : kernel_base<T>(p)
-{
-}
+#ifdef USE_TORCH
 
 torch::Device get_cuda_device()
 {
@@ -36,8 +37,16 @@ torch::Device get_cuda_device()
     return device = torch::Device(torch::kCPU);
 }
 
+#endif
+
+template<> kernel_tft<T>::kernel_tft(datamodel::SVRParameters &p) : kernel_base<T>(p)
+{
+}
+
 template<> arma::Mat<T> kernel_tft<T>::kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const
 {
+#ifdef USE_TORCH
+
     LOG4_BEGIN();
     const int64_t n_samples = X.n_cols * Xy.n_cols;
     const int64_t n_manifold_features = X.n_rows + Xy.n_rows;
@@ -79,10 +88,14 @@ template<> arma::Mat<T> kernel_tft<T>::kernel(const arma::Mat<T> &X, const arma:
             res(i, j) = preds_acc[0][i + X.n_cols * j][0];
     LOG4_TRACE("Predicted labels " << common::present(res));
     return res;
+#else
+    return {};
+#endif
 }
 
 template<> void kernel_tft<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t chunk_ix)
 {
+#ifdef USE_TORCH
     LOG4_BEGIN();
     const auto &X = svrmod.get_X(chunk_ix);
     const auto &Y = svrmod.get_Y(chunk_ix);
@@ -140,6 +153,7 @@ template<> void kernel_tft<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t
 #endif
     kernel_base::wrapup(svrmod, chunk_ix);
     LOG4_END();
+#endif // #ifdef USE_TORCH
 }
 
 template<> arma::Mat<T> kernel_tft<T>::distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const

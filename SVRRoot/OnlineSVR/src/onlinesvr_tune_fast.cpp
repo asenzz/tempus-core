@@ -1,7 +1,6 @@
 //
 // Created by zarko on 9/29/22.
 //
-#include <jemalloc/jemalloc.h>
 #include <execution>
 #include <cublas_v2.h>
 #include <armadillo>

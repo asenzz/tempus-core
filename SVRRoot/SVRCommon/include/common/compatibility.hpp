@@ -822,17 +822,23 @@ public:
 }
 }
 
+#ifdef USE_HIGHWAYHASH
 #include "highwayhash/highwayhash_target.h"
 #include "highwayhash/instruction_sets.h"
+#endif
 
 namespace svr {
 namespace common {
-template<typename T> size_t highway_hash_pod(const T v)
+template<typename T> size_t hash_pod(const T v)
 {
+#ifdef USE_HIGHWAYHASH
     constexpr highwayhash::HHKey highway_key = {0xbeefef0123456789ULL, 0x1122334455667788ULL, 0x99aabbccddeeff00ULL, 0x1234567890abcdefULL};
     highwayhash::HHResult64 hash;
     highwayhash::InstructionSets::Run<highwayhash::HighwayHash>(highway_key, (char *) &v, sizeof(v), &hash);
     return hash;
+#else
+    return boost::hash_value(v);
+#endif
 }
 
 struct hash_pair
@@ -850,17 +856,18 @@ template<typename Tuple, std::size_t Index = 0> class tuple_hash_helper
 {
     template<typename E> static void apply(std::string &seed, const E &el)
     {
-        if constexpr (std::is_trivial_v<E> && std::is_standard_layout_v<E>)
+        if constexpr (std::is_trivial_v<E> && std::is_standard_layout_v<E>) // POD
             seed.append((const char *) (&el), sizeof(el));
-        else if constexpr (svr::common::is_iterable_v<E>)
+        else if constexpr (svr::common::is_iterable_v<E>) // Container
             for (const auto &e: el) apply(seed, e);
-        else if constexpr (std::is_same_v<E, boost::posix_time::time_duration>) {
+        else if constexpr (std::is_same_v<E, boost::posix_time::time_duration>) { // BPT duration
             const size_t ticks = el.ticks();
             seed.append((const char *) (&ticks), sizeof(ticks));
-        } else if constexpr (std::is_same_v<E, boost::posix_time::ptime>) {
+        } else if constexpr (std::is_same_v<E, boost::posix_time::ptime>) { // BPT
             const size_t utime = to_time_t(el) + el.time_of_day().total_milliseconds() % 1000;
             seed.append((const char *) (&utime), sizeof(utime));
-        } else {
+        } else { // Unknown, send to boost hasher
+            std::cerr << "[tuple_hash_helper::apply] Unknown type, " << typeid(E).name() << " using boost hasher." << std::endl;
             boost::hash<DTYPE(el) > hasher;
             const auto hashed = hasher(el);
             seed.append((const char *) (&hashed), sizeof(hashed));
@@ -886,15 +893,19 @@ struct tuple_equal
 
 struct hash_tuple
 {
-    static constexpr highwayhash::HHKey highway_key = {0xabcdef0123456789ULL, 0x1122334455667788ULL, 0x99aabbccddeeff00ULL, 0x1234567890abcdefULL};
-
     template<typename... Elements> std::size_t operator()(const std::tuple<Elements...> &k) const
     {
+#ifdef USE_HIGHWAYHASH
+        static constexpr highwayhash::HHKey highway_key = {0xabcdef0123456789ULL, 0x1122334455667788ULL, 0x99aabbccddeeff00ULL, 0x1234567890abcdefULL};
+
         std::string seed;
         tuple_hash_helper<std::tuple<Elements...> >::applyt(seed, k);
         highwayhash::HHResult64 hash;
         highwayhash::InstructionSets::Run<highwayhash::HighwayHash>(highway_key, seed.data(), seed.size(), &hash);
         return hash;
+#else
+        return boost::hash_value(k);
+#endif
     }
 };
 

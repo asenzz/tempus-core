@@ -1,18 +1,16 @@
 #include "EnsembleService.hpp"
-#include <util/time_utils.hpp>
-#include <util/PerformanceUtils.hpp>
-
+#include "util/time_utils.hpp"
+#include "util/PerformanceUtils.hpp"
 #include "appcontext.hpp"
-#include <model/Ensemble.hpp>
-#include <model/Dataset.hpp>
-#include <DAO/EnsembleDAO.hpp>
+#include "model/Ensemble.hpp"
+#include "model/Dataset.hpp"
+#include "DAO/EnsembleDAO.hpp"
 #include "DeconQueueService.hpp"
 #include "ModelService.hpp"
 #include "InputQueueService.hpp"
 #include "SVRParametersService.hpp"
-#include <common/thread_pool.hpp>
+#include "common/thread_pool.hpp"
 #include "onlinesvr.hpp"
-#include "DaemonFacade.hpp"
 #include "DataRowService.hpp"
 
 namespace svr {
@@ -35,8 +33,6 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
         const tbb::mutex::scoped_lock lk(res_l);
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
     }
-
-    LOG4_END();
 
     return res;
 }
@@ -138,9 +134,8 @@ bool EnsembleService::is_ensemble_input_queue(const datamodel::Ensemble &ensembl
             [&p_decon_queue](const std::string &column_name) -> bool { return column_name == p_decon_queue->get_input_queue_column_name(); }
     );
 
-    if (!res)
-        LOG4_WARN("Skipping ensemble for column " << p_decon_queue->get_input_queue_column_name() <<
-                                                  " of input queue " << p_decon_queue->get_input_queue_table_name() << ". Not a value column.");
+    if (!res) LOG4_WARN("Skipping ensemble for column " << p_decon_queue->get_input_queue_column_name() <<
+                                                        " of input queue " << p_decon_queue->get_input_queue_table_name() << ". Not a value column.");
 
     return res;
 }
@@ -332,8 +327,7 @@ EnsembleService::update_ensemble_decon_queues(
 {
     LOG4_BEGIN();
 
-    if (ensembles.size() != new_decon_queues.size())
-        LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
+    if (ensembles.size() != new_decon_queues.size()) LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
 #pragma omp parallel ADJ_THREADS(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
 #pragma omp single
     {
@@ -345,8 +339,7 @@ EnsembleService::update_ensemble_decon_queues(
                         p_ensemble->get_decon_queue()->get_input_queue_table_name(),
                         p_ensemble->get_decon_queue()->get_input_queue_column_name());
                 if (p_decon_queue) p_ensemble->get_decon_queue()->update_data(p_decon_queue->get_data());
-                else
-                    LOG4_WARN("New data for " << *p_ensemble->get_decon_queue() << " not found!");
+                else LOG4_WARN("New data for " << *p_ensemble->get_decon_queue() << " not found!");
             }
             OMP_TASKLOOP(p_ensemble->get_aux_decon_queues().size())
             for (auto p_ensemble_aux_decon_queue: p_ensemble->get_aux_decon_queues()) {
@@ -355,8 +348,7 @@ EnsembleService::update_ensemble_decon_queues(
                         p_ensemble_aux_decon_queue->get_input_queue_table_name(),
                         p_ensemble_aux_decon_queue->get_input_queue_column_name());
                 if (p_decon_queue) p_ensemble_aux_decon_queue->update_data(p_decon_queue->get_data());
-                else
-                    LOG4_WARN("New data for auxiliary " << *p_ensemble->get_decon_queue() << " not found!");
+                else LOG4_WARN("New data for auxiliary " << *p_ensemble->get_decon_queue() << " not found!");
             }
         }
     }

@@ -11,10 +11,15 @@ ENDIF()
 SET(BUILD_MAIN OFF)
 
 #Define project dependencies
-SET(DEPENDENCIES SVRPersist SVRCommon SVRFix-shared SVRModel OnlineSVR)
+SET(DEPENDENCIES SVRPersist SVRCommon SVRModel OnlineSVR)
+IF(USE_FIX)
+    LIST(APPEND DEPENDENCIES SVRFix-shared)
+ENDIF()
 
 INCLUDE(../../cmake/IncludeDependencies.cmake)
-INCLUDE_DIRECTORIES(../SVRFix/include)
+IF(USE_FIX)
+    INCLUDE_DIRECTORIES(../SVRFix/include)
+ENDIF()
 INCLUDE("../../cmake/SourceList.cmake")
 
 INCLUDE_DIRECTORIES(include)
@@ -33,7 +38,9 @@ ENDIF()
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} crypto rt wavelib)
 
-LIST (FIND MODULES "SVRFix" idx)
-if (${idx} GREATER -1)
-    TARGET_LINK_LIBRARIES(${PROJECT_NAME} SVRFix-shared)
-endif()
+IF(USE_FIX)
+    LIST(FIND MODULES "SVRFix" idx)
+    if (${idx} GREATER -1)
+        TARGET_LINK_LIBRARIES(${PROJECT_NAME} SVRFix-shared)
+    endif()
+ENDIF()

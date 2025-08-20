@@ -27,7 +27,7 @@ constexpr inline char ctoupper(const char c)
     return (c >= 'a' && c <= 'z') ? (c - 'a' + 'A') : c;
 }
 
-template<const size_t N> constexpr auto ctoupper(const char (&input)[N])
+template<const size_t N> constexpr std::string ctoupper(const char *const input)
 {
     std::string result(N - 1, '\0');
 #ifdef __clang__

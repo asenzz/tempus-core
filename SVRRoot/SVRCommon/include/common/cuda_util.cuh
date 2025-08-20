@@ -351,9 +351,6 @@ template<typename T> __host__ __device__ __forceinline__ int8_t signum(const T v
     return (T(0) < val) - (val < T(0));
 }
 
-// ICPX bug forced to move this out of cuvalidate
-uint8_t get_streams_per_gpu(const uint32_t n_rows);
-
 template<typename T> __device__ inline T min(const T a, const T b, const T c)
 {
     T m = a;

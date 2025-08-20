@@ -7,7 +7,6 @@
 #include "pprune.hpp"
 #include <cstddef>
 #include <magma_auxiliary.h>
-#include <xoshiro.h>
 #include "kernel_factory.hpp"
 #include "matrix_solver.hpp"
 #include "common/barrier.hpp"
@@ -157,6 +156,7 @@ void OnlineSVR::learn(
     const auto new_rows_ct = new_x.n_rows;
 
     if (is_manifold()) {
+#if 0
         auto gen = common::reproducibly_seeded_64<xso::rng64>();
         common::threadsafe_uniform_int_distribution<uint32_t> rand_int(0, PROPS.get_interleave());
         const auto new_manifold_rows_ct = new_x.n_rows * p_features->n_rows / PROPS.get_interleave();
@@ -182,6 +182,7 @@ void OnlineSVR::learn(
         p_labels->shed_rows(0, new_rows_ct - 1);
         p_features->insert_rows(p_features->n_rows, new_x);
         p_labels->insert_rows(p_labels->n_rows, new_y);
+#endif
         return;
     }
 

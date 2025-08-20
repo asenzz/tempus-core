@@ -2,7 +2,9 @@
 // Created by zarko on 2/21/24.
 //
 #include <boost/unordered/unordered_flat_map.hpp>
+#ifdef USE_HIGHWAYHASH
 #include <highwayhash/highwayhash.h>
+#endif
 #include "common/types.hpp"
 #include "WScalingFactorService.hpp"
 #include "model/Dataset.hpp"

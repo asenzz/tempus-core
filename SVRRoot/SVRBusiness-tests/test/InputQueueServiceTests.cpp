@@ -5,7 +5,6 @@
 #include "include/InputQueueRowDataGenerator.hpp"
 #include "model/InputQueue.hpp"
 #include "model/User.hpp"
-#include "view/UserView.hpp"
 
 using namespace svr;
 

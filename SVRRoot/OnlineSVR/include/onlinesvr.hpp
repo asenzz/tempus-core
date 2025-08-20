@@ -1,7 +1,6 @@
 #pragma once
 
 #include <boost/date_time/posix_time/ptime.hpp>
-#include <boost/math/ccmath/ccmath.hpp>
 #include <oneapi/tbb/mutex.h>
 #include <memory>
 #include <set>

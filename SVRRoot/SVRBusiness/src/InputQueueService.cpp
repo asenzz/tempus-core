@@ -6,7 +6,9 @@
 #include "DataRowService.hpp"
 #include "DAO/InputQueueDAO.hpp"
 #include "DAO/ScopedTransaction.hpp"
+#ifdef USE_FIX
 #include "InterprocessReader.hpp"
+#endif
 #include "model/Ensemble.hpp"
 #include "model/DataRow.hpp"
 #include "model/Dataset.hpp"
@@ -125,7 +127,7 @@ InputQueueService::load_latest_from_mmf(
         const bpt::ptime &last_time)
 {
     datamodel::data_row_container result;
-#ifndef BUILD_WITHOUT_SVR_FIX
+#ifdef USE_FIX
     if (not input_queue.get_uses_fix_connection()) return result;
 
     svr::fix::mm_file_reader::bid_ask_spread_container values;
@@ -133,22 +135,19 @@ InputQueueService::load_latest_from_mmf(
     try {
         svr::fix::mm_file_reader reader(input_queue.get_logical_name());
         values = reader.read_new(last_time);
-    }
-    catch (std::runtime_error const &) {
+    } catch (const std::runtime_error &ex) {
+        LOG4_ERROR("Runtime error, " << ex.what());
         return result;
-    }
-    catch (boost::interprocess::interprocess_exception &) {
+    } catch (const boost::interprocess::interprocess_exception &ex) {
+        LOG4_ERROR("Interprocess communication error, " << ex.what());
         return result;
     }
 
-    if (last_time < values.front().time - input_queue.get_resolution())
-        return result;
+    if (last_time < values.front().time - input_queue.get_resolution()) return result;
 
     for (const auto &bas: values)
-        result.emplace_back(ptr<svr::datamodel::DataRow>(bas.time, bas.time, 0,
-                                                         std::vector<double>{bas.ask_px, double(bas.ask_qty), bas.bid_px,
-                                                                             double(bas.bid_qty)}));
-#endif //BUILD_WITHOUT_SVR_FIX
+        result.emplace_back(ptr<svr::datamodel::DataRow>(bas.time, bas.time, 0, std::vector<double>{bas.ask_px, double(bas.ask_qty), bas.bid_px, double(bas.bid_qty)}));
+#endif // USE_FIX
     return result;
 }
 

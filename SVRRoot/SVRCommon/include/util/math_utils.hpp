@@ -13,7 +13,6 @@
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
 #endif
-#include <boost/math/ccmath/ccmath.hpp>
 #include <mkl_cblas.h>
 #include "common.hpp"
 #include "common/compatibility.hpp"
@@ -36,7 +35,7 @@ template<typename A, typename B> using common_signed_t = std::conditional_t<std:
 #define OMPMINAS(X, Y) X = _MIN(X, Y)
 #define OMPMAXAS(X, Y) X = _MAX(X, Y)
 
-#define CDIV(X, Y) boost::math::ccmath::ceil(double(X) / double(Y))
+#define CDIV(X, Y) (uint32_t) std::ceil(float(X) / float(Y))
 #define CDIVI(X, Y) ((X) / (Y) + ((X) % (Y) != 0))
 #define LDi(i, m, ld) (((i) % (m)) + ((i) / (m)) * (ld))
 
@@ -228,8 +227,6 @@ double stdscore(double *const v, size_t len);
 double meanabs_hiquant(double *const v, size_t len, double q);
 
 double meanabs_loquant(double *const v, size_t len, double q);
-
-double meanabs_quant(double *const v, size_t len, double q);
 
 double mean_hiquant(double *const v, size_t len, double q);
 

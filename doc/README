@@ -53,32 +53,31 @@ platform independent libraries to ensure maximum portability while maintaining h
 
 Dependencies on a Ubuntu or Debian system:
 
-Intel HPC kit
 libPQ
 libPQXX
 Postgresql
 Boost
 CPPCMS
-QuickFix
+QuickFix*
 Jemalloc
 Nvidia CUDA
 Armadillo
 OpenMP
 GoogleTest
-GCC or ICPX
+Ginkgo*
+GCC
 Cmake
 libLZ4
 libFFTW
 MAGMA
 OpenSSL
-Prima (optional)
+Prima*
 BiteOpt
-libspqr (SuiteSparse)
-libUMFPack
-libKLU
-libMUMPS
-libOMP5 from CLang
-libMetis
-Intel TBB, MKL, OpenMP, MPI, ICPX, GDB
-OpenCL-Headers 
-libNetCDF
+Intel TBB, MKL, OpenMP, MPI*, Compiler*, IPP*
+HighwayHash*
+Torch*
+OpenCL-Headers*
+HDBScan*
+Xoshiro*
+
+* means optional

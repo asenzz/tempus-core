@@ -1,6 +1,8 @@
 //
 // Created by zarko on 17/06/2025.
 //
+#ifdef USE_TORCH
+
 #include "common/compatibility.hpp"
 GCC_PUSH_DIAGNOSTIC_DISABLE_DANGLING_REF
 #include <torch/optim.h>
@@ -96,3 +98,5 @@ torch::Tensor TemporalFusionTransformerImpl::forward(const torch::Tensor &x)
 
 }
 }
+
+#endif // USE_TORCH

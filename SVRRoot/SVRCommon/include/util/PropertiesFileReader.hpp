@@ -18,23 +18,24 @@ enum class ConcreteDaoType : uint8_t
     AsyncDao
 };
 
-#define CONFPROP(T, x, D)                                               \
+#define CONFPROP(T, X, D)                                               \
 private:                                                                \
-    static constexpr auto x = CTOUPPER(#x);                             \
-    T x##_;                                                             \
-    bool x##_set_ = false;                                              \
+    static constexpr std::string X##_name = #X;                         \
+    const std::string X = common::ctoupper<X##_name.size()>(X##_name.data()); \
+    T X##_;                                                             \
+    bool X##_set_ = false;                                              \
 public:                                                                 \
-    static constexpr T C_default_##x = D;                               \
-    static constexpr std::string C_default_str_##x = #D;                \
-    inline T get_##x() {                                                \
-        if (x##_set_ == false) {                                        \
+    static constexpr T C_default_##X = D;                               \
+    static constexpr std::string C_default_str_##X = #D;                \
+    inline T get_##X() {                                                \
+        if (X##_set_ == false) {                                        \
            const tbb::mutex::scoped_lock lk(set_mx);                    \
-           if (x##_set_ == false) {                                     \
-                x##_ = get_property<T>(config_file, x, #D);             \
-                x##_set_ = true;                                        \
+           if (X##_set_ == false) {                                     \
+                X##_ = get_property<T>(config_file, X, #D);             \
+                X##_set_ = true;                                        \
            }                                                            \
         }                                                               \
-        return x##_;                                                    \
+        return X##_;                                                    \
     }
 
 #define CONFPRO_(x, D) CONFPROP(DTYPE(D), x, D)
