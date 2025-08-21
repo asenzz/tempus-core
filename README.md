@@ -53,6 +53,7 @@ Ben Gurion University at Ber-Sheva for another computing server, students at FIN
 - Vladimir Hizanov - Parameter tuning
 
 Thanks to:
+- Angel Pavlov - designed the Tempus logo
 - Kristina Eskenazi - PR and connections
 - Petar Ivanov - Web interface code
 - George Kour - ML consulting
