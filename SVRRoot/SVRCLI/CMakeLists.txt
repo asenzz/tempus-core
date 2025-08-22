@@ -1,0 +1,10 @@
+PROJECT(SVRCLI)
+
+#Define project dependencies
+SET(DEPENDENCIES SVRBusiness SVRPersist SVRCommon SVRModel OnlineSVR)
+
+INCLUDE(../../cmake/IncludeDependencies.cmake)
+INCLUDE(../../cmake/SourceList.cmake)
+FIND_PACKAGE(Boost ${Boost_MIN_VERSION} COMPONENTS program_options REQUIRED CONFIG)
+ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${JEMALLOC_LIBRARIES} ${DEPENDENCIES} ${Boost_LIBRARIES})

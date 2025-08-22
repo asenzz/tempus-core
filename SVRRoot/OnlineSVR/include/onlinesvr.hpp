@@ -94,7 +94,7 @@ public:
 
     OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
-    OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown,
+    OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_iweights,
               const bpt::ptime &last_value_time, const matrices_ptr &p_kernel_matrices = nullptr, const Dataset_ptr &p_dataset = nullptr);
 
     explicit OnlineSVR(const bigint id, const bigint model_id, std::stringstream &input_stream);

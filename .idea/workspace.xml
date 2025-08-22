@@ -46,47 +46,38 @@
     <option name="reloaded" value="true" />
   </component>
   <component name="CMakeRunConfigurationManager">
-    <generated />
+    <generated>
+      <config projectName="SVR" targetName="SVRBusiness" />
+      <config projectName="SVR" targetName="SVRPersist-unit-tests" />
+      <config projectName="SVR" targetName="SVRCLI" />
+      <config projectName="SVR" targetName="SVRPersist" />
+      <config projectName="SVR" targetName="connector-tester" />
+      <config projectName="SVR" targetName="SVRModel-unit-tests" />
+      <config projectName="SVR" targetName="SVRCommon" />
+      <config projectName="SVR" targetName="SVRModel" />
+      <config projectName="SVR" targetName="victor-tester" />
+      <config projectName="SVR" targetName="OnlineSVR" />
+      <config projectName="SVR" targetName="SVRCommon-unit-tests" />
+      <config projectName="SVR" targetName="OnlineSVR-test" />
+      <config projectName="SVR" targetName="SVRDaemon-blackbox-tests" />
+      <config projectName="SVR" targetName="SVRBusiness-tests" />
+    </generated>
   </component>
   <component name="CMakeSettings" AUTO_RELOAD="true">
     <configurations>
-      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build" CONFIG_NAME="Release" />
+      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build" CONFIG_NAME="Release" GENERATION_OPTIONS="-DCMAKE_CUDA_ARCHITECTURES:STRING=80 -DCUDA_ARCHITECTURES:STRING=80" BUILD_OPTIONS="-j3" />
     </configurations>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cc8418c2-62f8-4b92-86c8-7b9409132682" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRCLI/CMakeLists.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/CMakeLists.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/tft.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/tft.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/kernel_tft.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/kernel_tft.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_train.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_train.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune_fast.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune_fast.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/pprune.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/pprune.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/tft.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/tft.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/EnsembleServiceTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/EnsembleServiceTests.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/InputQueueServiceTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/InputQueueServiceTests.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DQScalingFactorService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/DQScalingFactorService.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/EnsembleService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/EnsembleService.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/InputQueueService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/InputQueueService.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ScalingFactorService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ScalingFactorService.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/calc_cache.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/calc_cache.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/compatibility.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/compatibility.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/cuda_util.cuh" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/cuda_util.cuh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/hashing.tpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/hashing.tpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/math_utils.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/math_utils.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.tpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.tpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/cuda_util.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/cuda_util.cu" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/math_utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/math_utils.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-init.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/doc/README" beforeDir="false" afterPath="$PROJECT_DIR$/doc/README" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/configure_quickfix.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/configure_wavelib.sh" beforeDir="false" afterPath="$PROJECT_DIR$/lib/configure_wavelib.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCLI/src/SVRCLI.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCLI/src/SVRCLI.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/logging.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/logging.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/setup_tempus_env.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/setup_tempus_env.sh" afterDir="false" />
     </list>
     <list id="b911cfe9-5e99-464b-b960-ad0631e8da5f" name="Frequently changed" comment="" />
@@ -97,6 +88,9 @@
   </component>
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
+    <option name="completeInNamespacesByDefault" value="true" />
+    <option name="indexerShowProgress" value="true" />
+    <option name="indexerStaticOnly" value="false" />
     <option name="indexerUseModules" value="false" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Release" />
@@ -171,14 +165,14 @@
     &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
     &quot;ctest.advertisement.all.test.configuration.is.created&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;support-vectors-manifold&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/zarko/repo/tempus/doc&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/zarko/repo/tempus/SVRRoot/SVRCLI&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
     &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;CMakeSettings&quot;,
     &quot;structure.view.defaults.are.configured&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
@@ -193,11 +187,11 @@
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/SVRRoot/SVRCLI" />
       <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/src" />
       <recent name="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common" />
       <recent name="$PROJECT_DIR$/SVRRoot/opencl-libsvm/libsvm/kernels" />
       <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/include" />
-      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/test" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/SVRRoot/SVRModel/test/_deprecated" />
@@ -208,9 +202,10 @@
     </key>
   </component>
   <component name="RunManager" selected="CMake Application.OnlineSVR">
-    <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="OnlineSVR-unit-tests">
+    <configuration name="OnlineSVR-test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-test" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-test" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
       </method>
     </configuration>
     <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-unit-tests">
@@ -223,10 +218,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="OnlineSVR" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="OnlineSVR" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="OnlineSVR">
-      <envs>
-        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
-      </envs>
+    <configuration name="OnlineSVR-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-unit-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -255,7 +247,10 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRBusiness-tests">
+    <configuration name="OnlineSVR" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -270,7 +265,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRBusiness">
+    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -285,7 +280,12 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRCommon-unit-tests">
+    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCLI" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCLI" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCLI">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -300,7 +300,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRCommon">
+    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -315,7 +315,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
+    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -330,7 +330,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRDaemon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRDaemon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRDaemon">
+    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -345,22 +345,12 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRFix-shared">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-shared">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
     <configuration name="SVRFix-shared" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix-shared" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix-shared">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRFix-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRFix-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRFix-unit-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -375,22 +365,12 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRFix">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
     <configuration name="SVRFix" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRFix" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRFix">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRModel-unit-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -405,7 +385,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRModel">
+    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -420,7 +400,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRPersist-unit-tests">
+    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -435,7 +415,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRPersist">
+    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -450,12 +430,12 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRWeb">
+    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRWebSkin" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="SVRWebSkin" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="SVRWebSkin">
+    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWeb">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -475,19 +455,6 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRWeb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRWeb" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRWeb">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="connector-tester">
-      <envs>
-        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
-      </envs>
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="connector-tester">
       <envs>
         <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
@@ -512,7 +479,15 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="victor-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Project" TARGET_NAME="victor-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="Project" RUN_TARGET_NAME="victor-tester">
+    <configuration name="connector-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="connector-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="connector-tester">
+      <envs>
+        <env name="export LD_LIBRARY_PATH" value="${LD_LIBRARY_PATH}:/opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin/" />
+      </envs>
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="victor-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="victor-tester" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="victor-tester">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -977,26 +952,28 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="CMake Application.SVRDaemon" />
+      <item itemvalue="CMake Application.SVRFix" />
+      <item itemvalue="CMake Application.SVRFix-shared" />
+      <item itemvalue="CMake Application.SVRFix-unit-tests" />
+      <item itemvalue="CMake Application.SVRWeb" />
+      <item itemvalue="CMake Application.SVRWebSkin" />
       <item itemvalue="CMake Application.OnlineSVR-unit-tests" />
       <item itemvalue="CMake Application.OnlineSVR" />
       <item itemvalue="CMake Application.SVRBusiness-tests" />
       <item itemvalue="CMake Application.SVRBusiness" />
+      <item itemvalue="CMake Application.SVRCLI" />
       <item itemvalue="CMake Application.SVRCommon-unit-tests" />
       <item itemvalue="CMake Application.SVRCommon" />
       <item itemvalue="CMake Application.SVRDaemon-blackbox-tests" />
-      <item itemvalue="CMake Application.SVRDaemon" />
-      <item itemvalue="CMake Application.SVRFix-shared" />
-      <item itemvalue="CMake Application.SVRFix-unit-tests" />
-      <item itemvalue="CMake Application.SVRFix" />
       <item itemvalue="CMake Application.SVRModel-unit-tests" />
       <item itemvalue="CMake Application.SVRModel" />
       <item itemvalue="CMake Application.SVRPersist-unit-tests" />
       <item itemvalue="CMake Application.SVRPersist" />
-      <item itemvalue="CMake Application.SVRWebSkin" />
-      <item itemvalue="CMake Application.SVRWeb" />
       <item itemvalue="CMake Application.connector-tester" />
       <item itemvalue="CMake Application.victor-tester" />
       <item itemvalue="CTest Application.All CTest" />
+      <item itemvalue="Google Test.OnlineSVR-test" />
       <item itemvalue="Python.show_graph" />
       <item itemvalue="Python.average_price_range" />
       <item itemvalue="Python.test_linear" />
@@ -1578,7 +1555,12 @@
       <workItem from="1755544833931" duration="79000" />
       <workItem from="1755548561400" duration="1863000" />
       <workItem from="1755633104056" duration="33542000" />
-      <workItem from="1755717084796" duration="6580000" />
+      <workItem from="1755717084796" duration="10937000" />
+      <workItem from="1755792590177" duration="5015000" />
+      <workItem from="1755848462433" duration="3151000" />
+      <workItem from="1755852391022" duration="6790000" />
+      <workItem from="1755863739510" duration="2631000" />
+      <workItem from="1755878332370" duration="955000" />
     </task>
     <task id="LOCAL-00001" summary="Stabilized data preparation across running instances: VMD memory corruption fixed, decon queue saving fixed, scaling factors calculation fixed to a predetermined number of rows, added more detailed logging info.">
       <created>1625999927377</created>

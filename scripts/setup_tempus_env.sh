@@ -37,7 +37,7 @@ export TSAN_OPTIONS=log_path=/tmp/${BIN}.tsan.log
 
 # export LD_PRELOAD="${LD_PRELOAD}:${ONEAPI_ROOT}/compiler/latest/lib/libomptarget.sycl.wrap.so"
 
-export VGRIND=/usr/local/bin/valgrind
+export VGRIND=valgrind
 if [ -d /usr/local/cuda/targets/x86_64-linux/lib ]; then
   export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/lib:/opt/cudnn/lib";
 fi

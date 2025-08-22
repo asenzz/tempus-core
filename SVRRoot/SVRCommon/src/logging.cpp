@@ -2,7 +2,6 @@
 // Created by zarko on 5/26/24.
 //
 
-#include <ipp/ippcore.h>
 #include <boost/log/expressions/formatters/format.hpp>
 
 #include <boost/shared_ptr.hpp>
@@ -20,8 +19,6 @@
 
 logging::logging()
 {
-    // ip_errchk(ippInit());
-
     auto p_log_core = boost::log::core::get();
     p_log_core->remove_all_sinks();
     p_log_core->set_filter(boost::log::trivial::severity >= boost::log::trivial::severity_level(svr::common::AppConfig::S_log_threshold));

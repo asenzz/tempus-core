@@ -60,7 +60,7 @@ OnlineSVR::OnlineSVR(
         const bigint id,
         const bigint model_id,
         const t_param_set &param_set,
-        const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const vec_ptr &p_ylastknown, const bpt::ptime &last_value_time,
+        const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_iweights, const bpt::ptime &last_value_time,
         const matrices_ptr &kernel_matrices,
         const Dataset_ptr &p_dataset) :
         Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
@@ -71,7 +71,7 @@ OnlineSVR::OnlineSVR(
     init_id();
 #endif
     PROFILE_INFO(
-            batch_train(p_xtrain, p_ytrain, nullptr, last_value_time, kernel_matrices),
+            batch_train(p_xtrain, p_ytrain, p_iweights, last_value_time, kernel_matrices),
             "Batch SVM train on " << arma::size(*p_ytrain) << " labels and " << arma::size(*p_xtrain) << " features, parameters " << *front(param_set));
 }
 

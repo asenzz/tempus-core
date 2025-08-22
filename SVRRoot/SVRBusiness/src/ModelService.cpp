@@ -527,8 +527,7 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     assert(p_labels->n_rows == p_features->n_rows);
     const auto p_weights =
 #ifdef INSTANCE_WEIGHTS
-            dataset.get_calc_cache().get_weights(
-                    dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
+            dataset.get_calc_cache().get_weights(dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
             assert(p_labels->n_rows == p_weights->n_rows);
 #else
             ptr<arma::mat>();

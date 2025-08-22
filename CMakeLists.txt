@@ -337,7 +337,7 @@ if (USE_CUDA)
     ENABLE_LANGUAGE(CUDA)
     FIND_PACKAGE(CUDAToolkit)
     ADD_COMPILE_DEFINITIONS(USE_CUDA)
-    SET(CUDA_ARCHITECTURES "70" CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
+    SET(CUDA_ARCHITECTURES "80" CACHE STRING "List of CUDA architectures (e.g. Pascal, Volta, etc) or \
                                         compute capability versions (6.1, 7.0, etc) to generate code for. \
                                         Set to Auto for automatic detection (default)."
     )
@@ -510,10 +510,8 @@ SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 MESSAGE(STATUS "BUILD_TYPE: " ${CMAKE_BUILD_TYPE})
 MESSAGE(STATUS "CMAKE_CXX_COMPILER: " ${CMAKE_CXX_COMPILER})
 
-# Workaround for QtCreator to show headers
-SET(IDE QT_CREATOR)
 SET(SVRROOT_DIR SVRRoot)
-LIST(APPEND MODULES SVRBusiness OnlineSVR SVRPersist SVRCommon SVRModel)
+LIST(APPEND MODULES SVRBusiness OnlineSVR SVRPersist SVRCommon SVRModel SVRCLI)
 
 OPTION(USE_FIX "Enable the FIX protocol data connector" OFF)
 IF(USE_FIX)
@@ -556,11 +554,11 @@ FOREACH (module ${MODULES})
 ENDFOREACH (module)
 
 if (WITH_BENCHMARKS)
-    message("********************************************************************************")
-    message("*  Registering the following benchmarks:")
+    MESSAGE("********************************************************************************")
+    MESSAGE("*  Registering the following benchmarks:")
     ADD_SUBDIRECTORY(${SVRROOT_DIR}/SVRBenchmarks)
-    message("********************************************************************************")
-endif ()
+    MESSAGE("********************************************************************************")
+ENDIF ()
 
 if (WITH_TESTS)
     ENABLE_TESTING()
