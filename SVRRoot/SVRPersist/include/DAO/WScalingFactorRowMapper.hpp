@@ -19,6 +19,18 @@ public:
                 row_set["dc_offset"].as<double>(0)
         );
     }
+
+    datamodel::WScalingFactor_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    {
+        return ptr<datamodel::WScalingFactor>(
+                common::dd_get_value(row_set, row, col_count, "id", bigint(0)),
+                common::dd_get_value(row_set, row, col_count, "dataset_id", bigint(0)),
+                common::dd_get_value(row_set, row, col_count, "step" uint16_t(0)),
+                common::dd_get_value(row_set, row, col_count, "scaling_factor", double(1)),
+                common::dd_get_value(row_set, row, col_count, "dc_offset", double(0))
+        );
+    }
+
 };
 
 }

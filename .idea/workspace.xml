@@ -10,7 +10,8 @@
   <component name="BackendCodeEditorMiscSettings">
     <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="3" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
-    <option name="/Default/Housekeeping/OptionsDialog/SelectedPageId/@EntryValue" value="CppFormatterOtherPage" type="string" />
+    <option name="/Default/Housekeeping/LiveTemplatesHousekeeping/HotspotSessionHintIsShown/@EntryValue" value="true" type="bool" />
+    <option name="/Default/Housekeeping/OptionsDialog/SelectedPageId/@EntryValue" value="CppFormatterSpacesPage" type="string" />
   </component>
   <component name="BranchesTreeState">
     <expand>
@@ -65,20 +66,61 @@
   </component>
   <component name="CMakeSettings" AUTO_RELOAD="true">
     <configurations>
-      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build" CONFIG_NAME="Release" GENERATION_OPTIONS="-DCMAKE_CUDA_ARCHITECTURES:STRING=80 -DCUDA_ARCHITECTURES:STRING=80" BUILD_OPTIONS="-j3" />
+      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build-clion" CONFIG_NAME="Release" GENERATION_OPTIONS="-DCMAKE_CUDA_ARCHITECTURES:STRING=80 -DCUDA_ARCHITECTURES:STRING=80" BUILD_OPTIONS="-j3" />
     </configurations>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cc8418c2-62f8-4b92-86c8-7b9409132682" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRCLI/CMakeLists.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.tpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/db_utils.hpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/db_utils.tpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/db_utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.vscode/settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/settings.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/cuqrsolve.cuh" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/cuqrsolve.cuh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCLI/src/SVRCLI.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCLI/src/SVRCLI.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/logging.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/logging.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/setup_tempus_env.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/setup_tempus_env.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/PredictionTaskService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/PredictionTaskService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/SVRParametersService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/SVRParametersService.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/constants.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/constants.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/PropertiesFileReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/PropertiesFileReader.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/AutotuneTask.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/AutotuneTask.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/PredictionTask.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/PredictionTask.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/AutotuneTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/AutotuneTaskRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DQScalingFactorRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DQScalingFactorRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataRowRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataRowRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DatasetRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DatasetRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DeconQueueRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DeconQueueRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DecrementTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DecrementTaskRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DummyRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DummyRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/EnsembleRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/EnsembleRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IQScalingFactorRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IQScalingFactorRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ModelRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ModelRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/PredictionTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/PredictionTaskRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/RequestRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/RequestRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScalingFactorsTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScalingFactorsTaskRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScopedTransaction.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScopedTransaction.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/UserRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/UserRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/WScalingFactorRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/WScalingFactorRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/common.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/common.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/boostPqxxConvertor.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/DataSource.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/DataSource.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/ScopedTransaction.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/ScopedTransaction.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/UserRowMapper.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/UserRowMapper.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/app.config" beforeDir="false" afterPath="$PROJECT_DIR$/config/app.config" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/doc/.clang-format" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/doc/clion-code-style.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/doc/coding-style.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/doc/eclipse-cpp-google-style.xml" beforeDir="false" />
     </list>
     <list id="b911cfe9-5e99-464b-b960-ad0631e8da5f" name="Frequently changed" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -116,8 +158,7 @@
     <option name="SIGN_OFF_COMMIT" value="true" />
   </component>
   <component name="HighlightingSettingsPerFile">
-    <setting file="mock:///home/zarko/repo/tempus/SVRRoot/SVRBusiness/include/DataRowService.tpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/zarko/repo/tempus/SVRRoot/SVRBusiness/include/DataRowService.tpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/db_utils.hpp" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="JsbtTreeLayoutManager">
     <layout place="tools.popupGrunt">
@@ -165,14 +206,14 @@
     &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
     &quot;ctest.advertisement.all.test.configuration.is.created&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;support-vectors-manifold&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/zarko/repo/tempus/SVRRoot/SVRCLI&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/zarko/repo/tempus/SVRRoot/SVRPersist/include/misc&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
     &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;CMakeSettings&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.sourceCode.C++&quot;,
     &quot;structure.view.defaults.are.configured&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
@@ -187,11 +228,11 @@
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc" />
+      <recent name="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO" />
       <recent name="$PROJECT_DIR$/SVRRoot/SVRCLI" />
       <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/src" />
       <recent name="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common" />
-      <recent name="$PROJECT_DIR$/SVRRoot/opencl-libsvm/libsvm/kernels" />
-      <recent name="$PROJECT_DIR$/SVRRoot/OnlineSVR/include" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/SVRRoot/SVRModel/test/_deprecated" />
@@ -203,6 +244,36 @@
   </component>
   <component name="RunManager" selected="CMake Application.OnlineSVR">
     <configuration name="OnlineSVR-test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="OnlineSVR-test" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="OnlineSVR-test" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRBusiness-tests" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRCommon-unit-tests" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRDaemon-blackbox-tests" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRModel-unit-tests" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SVRPersist-unit-tests" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
         <option name="BeforeTestRunTask" enabled="true" />
@@ -265,12 +336,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRBusiness-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness-tests">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRBusiness">
+    <configuration name="SVRBusiness" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRBusiness" CONFIG_NAME="Release">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -300,7 +366,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRCommon-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon-unit-tests">
+    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -311,16 +377,6 @@
       </method>
     </configuration>
     <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRCommon" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRCommon" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRCommon">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRDaemon-blackbox-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRDaemon-blackbox-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRDaemon-blackbox-tests">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -385,12 +441,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRModel-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel-unit-tests">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRModel">
+    <configuration name="SVRModel" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRModel" CONFIG_NAME="Release">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -415,12 +466,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="SVRPersist-unit-tests" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist-unit-tests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist-unit-tests">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="SVR" RUN_TARGET_NAME="SVRPersist">
+    <configuration name="SVRPersist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SVR" TARGET_NAME="SVRPersist" CONFIG_NAME="Release">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -952,12 +998,12 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="CMake Application.SVRDaemon" />
-      <item itemvalue="CMake Application.SVRFix" />
-      <item itemvalue="CMake Application.SVRFix-shared" />
-      <item itemvalue="CMake Application.SVRFix-unit-tests" />
-      <item itemvalue="CMake Application.SVRWeb" />
-      <item itemvalue="CMake Application.SVRWebSkin" />
+      <item itemvalue="Google Test.OnlineSVR-test" />
+      <item itemvalue="Google Test.SVRBusiness-tests" />
+      <item itemvalue="Google Test.SVRCommon-unit-tests" />
+      <item itemvalue="Google Test.SVRDaemon-blackbox-tests" />
+      <item itemvalue="Google Test.SVRModel-unit-tests" />
+      <item itemvalue="Google Test.SVRPersist-unit-tests" />
       <item itemvalue="CMake Application.OnlineSVR-unit-tests" />
       <item itemvalue="CMake Application.OnlineSVR" />
       <item itemvalue="CMake Application.SVRBusiness-tests" />
@@ -966,16 +1012,21 @@
       <item itemvalue="CMake Application.SVRCommon-unit-tests" />
       <item itemvalue="CMake Application.SVRCommon" />
       <item itemvalue="CMake Application.SVRDaemon-blackbox-tests" />
+      <item itemvalue="CMake Application.SVRDaemon" />
+      <item itemvalue="CMake Application.SVRFix-shared" />
+      <item itemvalue="CMake Application.SVRFix-unit-tests" />
+      <item itemvalue="CMake Application.SVRFix" />
       <item itemvalue="CMake Application.SVRModel-unit-tests" />
       <item itemvalue="CMake Application.SVRModel" />
       <item itemvalue="CMake Application.SVRPersist-unit-tests" />
       <item itemvalue="CMake Application.SVRPersist" />
+      <item itemvalue="CMake Application.SVRWebSkin" />
+      <item itemvalue="CMake Application.SVRWeb" />
       <item itemvalue="CMake Application.connector-tester" />
       <item itemvalue="CMake Application.victor-tester" />
       <item itemvalue="CTest Application.All CTest" />
-      <item itemvalue="Google Test.OnlineSVR-test" />
-      <item itemvalue="Python.show_graph" />
       <item itemvalue="Python.average_price_range" />
+      <item itemvalue="Python.show_graph" />
       <item itemvalue="Python.test_linear" />
       <item itemvalue="Python.train_predict_test_pt_2" />
       <item itemvalue="Python.train_predict_test_xgboost" />
@@ -1560,7 +1611,13 @@
       <workItem from="1755848462433" duration="3151000" />
       <workItem from="1755852391022" duration="6790000" />
       <workItem from="1755863739510" duration="2631000" />
-      <workItem from="1755878332370" duration="955000" />
+      <workItem from="1755878332370" duration="10295000" />
+      <workItem from="1755926990536" duration="3141000" />
+      <workItem from="1755932393731" duration="29015000" />
+      <workItem from="1755976658088" duration="21617000" />
+      <workItem from="1756029611800" duration="421000" />
+      <workItem from="1756056988201" duration="211000" />
+      <workItem from="1756058771189" duration="29000" />
     </task>
     <task id="LOCAL-00001" summary="Stabilized data preparation across running instances: VMD memory corruption fixed, decon queue saving fixed, scaling factors calculation fixed to a predetermined number of rows, added more detailed logging info.">
       <created>1625999927377</created>

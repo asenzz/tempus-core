@@ -25,7 +25,6 @@ class calc_cache;
 
 namespace datamodel {
 #define FORGET_MIN_WEIGHT
-// #define SOLVE_PRUNE // Matrix solver is PPrune instead of PETSc
 
 struct t_gradient_data
 {

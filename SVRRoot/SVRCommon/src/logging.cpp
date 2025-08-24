@@ -3,7 +3,6 @@
 //
 
 #include <boost/log/expressions/formatters/format.hpp>
-
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/log/core.hpp>
@@ -54,6 +53,8 @@ void logging::flush() const
 
 const logging l__ = []{ return logging(); } ();
 
+#ifdef __CUDACC__
+
 std::string cufft_get_error_string(const cufftResult s)
 {
     switch (s) {
@@ -79,3 +80,5 @@ std::string cufft_get_error_string(const cufftResult s)
             return "Unknown error";
     }
 }
+
+#endif

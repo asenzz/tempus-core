@@ -17,7 +17,13 @@ public:
     {
         row.at(0).as<T>();
     }
+
+    T map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    {
+        return common::dd_get_value<T>(row_set, row, col);
+    }
 };
+
 }
 }
 

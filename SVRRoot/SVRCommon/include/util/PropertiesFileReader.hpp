@@ -63,7 +63,7 @@ protected:
     const std::string config_file;
 
 public:
-    PropertiesReader(const char delimiter, const std::string &config_file);
+    PropertiesReader(char delimiter, const std::string &config_file);
 
     const MessageProperties::mapped_type &read_properties(const std::string &property_file);
 
@@ -78,7 +78,7 @@ public:
     }
 };
 
-class AppConfig : public PropertiesReader
+class AppConfig final : public PropertiesReader
 {
     CONFPROP(uint32_t, gpu_chunk, 18000)
 
@@ -150,6 +150,10 @@ class AppConfig : public PropertiesReader
 
     CONFPROP(uint16_t, weight_layers, 1)
 
+    CONFPROP(uint16_t, db_retries, 10)
+
+    CONFPROP(uint32_t, db_wait, 100)
+
     CONFPROP(uint16_t, tune_particles1, 10)
 
     CONFPROP(uint16_t, tune_particles2, 10)
@@ -192,6 +196,7 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char SCALING_ALPHA[] = "SCALING_ALPHA";
     static constexpr char CONNECTION_STRING[] = "CONNECTION_STRING";
     static constexpr char SLIDE_COUNT[] = "SLIDE_COUNT";
+    static constexpr char SLIDE_SKIP[] = "SLIDE_SKIP";
     static constexpr char TUNE_RUN_LIMIT[] = "TUNE_RUN_LIMIT";
     static constexpr char SELF_REQUEST[] = "SELF_REQUEST";
     static constexpr char NUM_QUANTISATIONS[] = "NUM_QUANTISATIONS"; // Higher number of quantisations means more precision (more resource usage)
@@ -201,21 +206,14 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
     static constexpr char OEMD_MASK_DIR[] = "OEMD_MASK_DIR"; // Directory for OEMD masks
 
-    ConcreteDaoType dao_type;
-    size_t feature_quantization_;
-    double prediction_horizon_;
-    bool set_thread_affinity_;
-    size_t multistep_len, multiout, online_learn_iter_limit_, stabilize_iterations_count_;
-    double scaling_alpha_;
-    bool recombine_parameters_, tune_parameters_;
-    size_t slide_count_, slide_skip_, tune_run_limit_;
-    std::string db_connection_string_, oemd_masks_dir_;
-    boost::log::trivial::severity_level log_level_;
-    bool self_request_;
-    std::chrono::milliseconds loop_interval_, stream_loop_interval_;
-    bool daemonize_;
-    uint16_t num_quantisations_, quantisation_divisor_, oemd_tune_particles_, oemd_tune_iterations_;
-    float solve_iterations_coefficient_;
+    const ConcreteDaoType dao_type;
+    const size_t slide_count_, slide_skip_, tune_run_limit_, feature_quantization_, multistep_len, multiout, online_learn_iter_limit_, stabilize_iterations_count_;
+    const float prediction_horizon_, scaling_alpha_, solve_iterations_coefficient_;
+    const bool set_thread_affinity_, recombine_parameters_, tune_parameters_, self_request_, daemonize_,  is_duck_;
+    const std::string db_connection_string_, oemd_masks_dir_, db_file_;
+    const boost::log::trivial::severity_level log_level_;
+    const std::chrono::milliseconds loop_interval_, stream_loop_interval_;
+    const uint16_t num_quantisations_, quantisation_divisor_, oemd_tune_particles_, oemd_tune_iterations_;
 
 public:
     virtual ~AppConfig();
@@ -236,7 +234,7 @@ public:
 
     size_t get_default_feature_quantization() const noexcept;
 
-    double get_prediction_horizon() const noexcept;
+    float get_prediction_horizon() const noexcept;
 
     const std::string &get_db_connection_string() const noexcept;
 
@@ -250,7 +248,7 @@ public:
 
     size_t get_stabilize_iterations_count() const noexcept;
 
-    double get_scaling_alpha() const noexcept;
+    float get_scaling_alpha() const noexcept;
 
     bool get_tune_parameters() const noexcept;
 
@@ -284,9 +282,13 @@ public:
 
     static boost::log::trivial::severity_level set_global_log_level(const std::string &log_level_value);
 
-    static boost::log::trivial::severity_level set_global_log_level(const boost::log::trivial::severity_level log_threshold);
+    static boost::log::trivial::severity_level set_global_log_level(boost::log::trivial::severity_level log_threshold);
 
-    static boost::log::trivial::severity_level set_global_log_level(const uint8_t log_value);
+    static boost::log::trivial::severity_level set_global_log_level(uint8_t log_value);
+
+    const std::string &get_db_file() const noexcept;
+
+    bool is_duck() const noexcept;
 };
 
 using MessageSource_ptr = std::shared_ptr<common::AppConfig>;

@@ -60,7 +60,7 @@ size_t AppConfig::get_default_feature_quantization() const noexcept
     return feature_quantization_;
 }
 
-double AppConfig::get_prediction_horizon() const noexcept
+float AppConfig::get_prediction_horizon() const noexcept
 {
     return prediction_horizon_;
 }
@@ -95,7 +95,7 @@ size_t AppConfig::get_stabilize_iterations_count() const noexcept
     return stabilize_iterations_count_;
 }
 
-double AppConfig::get_scaling_alpha() const noexcept
+float AppConfig::get_scaling_alpha() const noexcept
 {
     return scaling_alpha_;
 }
@@ -237,35 +237,57 @@ PropertiesReader::PropertiesReader(const char delimiter, const std::string &conf
     property_files_location = get_property<DTYPE(property_files_location) >(config_file, SQL_PROPERTIES_DIR_KEY, C_default_sql_properties_dir);
 }
 
-// TODO Move hardcoded values to header file using the CONFPROP macro
-AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) : PropertiesReader(delimiter, app_config_file), dao_type(ConcreteDaoType::PgDao)
+std::string prepare_oemd_masks_dir(const std::string &masks_dir)
 {
-    feature_quantization_ = get_property<DTYPE(feature_quantization_) >(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str);
-    prediction_horizon_ = get_property<DTYPE(prediction_horizon_) >(app_config_file, PREDICTION_HORIZON, C_default_prediction_horizon_str);
-    recombine_parameters_ = get_property<DTYPE(recombine_parameters_) >(app_config_file, RECOMBINE_PARAMETERS, C_default_recombine_parameters_str);
-    tune_parameters_ = get_property<DTYPE(tune_parameters_) >(app_config_file, TUNE_PARAMETERS, C_default_tune_parameters_str);
-    log_level_ = set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, C_default_log_level));
-    dao_type = get_property<std::string>(app_config_file, DAO_TYPE_KEY, C_default_DAO_type) == "async" ? ConcreteDaoType::AsyncDao : ConcreteDaoType::PgDao;
-    set_thread_affinity_ = get_property<DTYPE(set_thread_affinity_) >(app_config_file, SET_THREAD_AFFINITY, "0");
-    multistep_len = get_property<DTYPE(multistep_len) >(app_config_file, MULTISTEP_LEN, C_default_multistep_len_str);
-    multiout = get_property<DTYPE(multiout) >(app_config_file, MULTIOUT, C_default_multiout_str);
-    online_learn_iter_limit_ = get_property<DTYPE(online_learn_iter_limit_) >(app_config_file, ONLINE_LEARN_ITER_LIMIT, C_default_online_iter_limit_str);
-    stabilize_iterations_count_ = get_property<DTYPE(stabilize_iterations_count_) >(app_config_file, STABILIZE_ITERATIONS_COUNT, C_default_stabilize_iterations_count_str);
-    slide_count_ = get_property<DTYPE(slide_count_) >(app_config_file, SLIDE_COUNT, C_default_slide_count_str);
-    tune_run_limit_ = get_property<DTYPE(tune_run_limit_) >(app_config_file, TUNE_RUN_LIMIT, C_default_tune_run_limit_str);
-    self_request_ = get_property<DTYPE(self_request_) >(app_config_file, SELF_REQUEST, "0");
-    scaling_alpha_ = get_property<DTYPE(scaling_alpha_) >(app_config_file, SCALING_ALPHA, C_default_scaling_alpha_str);
-    db_connection_string_ = get_property<DTYPE(db_connection_string_) >(app_config_file, CONNECTION_STRING, C_default_connection_str);
-    loop_interval_ = std::chrono::milliseconds(get_property<long>(app_config_file, LOOP_INTERVAL, C_default_loop_interval_ms));
-    stream_loop_interval_ = std::chrono::milliseconds(get_property<long>(app_config_file, STREAM_LOOP_INTERVAL, C_default_stream_loop_interval_ms));
-    daemonize_ = get_property<DTYPE(daemonize_) >(app_config_file, DAEMONIZE, C_default_daemonize);
-    num_quantisations_ = get_property<DTYPE(num_quantisations_) >(app_config_file, NUM_QUANTISATIONS, C_default_num_quantisations);
-    quantisation_divisor_ = get_property<DTYPE(quantisation_divisor_) >(app_config_file, QUANTISATION_DIVISOR, C_default_quantisation_divisor);
-    oemd_tune_particles_ = get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles);
-    oemd_tune_iterations_ = get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations);
-    solve_iterations_coefficient_ = get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient);
-    oemd_masks_dir_ = get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir);
-    if (oemd_masks_dir_[oemd_masks_dir_.size() - 1] != '/') oemd_masks_dir_.append("/");
+    auto res = masks_dir;
+    if (res[res.size() - 1] != '/') res.append("/");
+    return res;
+}
+
+constexpr std::string C_dbfile_prefix = "dbfile=";
+
+bool is_a_duck(const std::string &connection_str)
+{
+    return connection_str.find(C_dbfile_prefix);
+}
+
+std::string extract_db_file_path(const std::string &connection_str)
+{
+    return connection_str.substr(connection_str.find(C_dbfile_prefix) + C_dbfile_prefix.size(), connection_str.size());
+}
+
+// TODO Move hardcoded values to header file using the CONFPROP macro
+AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
+        PropertiesReader(delimiter, app_config_file),
+        dao_type(get_property<std::string>(app_config_file, DAO_TYPE_KEY, C_default_DAO_type) == "async" ? ConcreteDaoType::AsyncDao : ConcreteDaoType::PgDao),
+        slide_count_(get_property<DTYPE(slide_count_) >(app_config_file, SLIDE_COUNT, C_default_slide_count_str)),
+        slide_skip_(get_property<DTYPE(slide_skip_) >(app_config_file, SLIDE_SKIP, C_default_slide_skip_str)),
+        tune_run_limit_(get_property<DTYPE(tune_run_limit_) >(app_config_file, TUNE_RUN_LIMIT, C_default_tune_run_limit_str)),
+        feature_quantization_(get_property<DTYPE(feature_quantization_) >(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str)),
+        multistep_len(get_property<DTYPE(multistep_len) >(app_config_file, MULTISTEP_LEN, C_default_multistep_len_str)),
+        multiout(get_property<DTYPE(multiout) >(app_config_file, MULTIOUT, C_default_multiout_str)),
+        online_learn_iter_limit_(get_property<DTYPE(online_learn_iter_limit_) >(app_config_file, ONLINE_LEARN_ITER_LIMIT, C_default_online_iter_limit_str)),
+        stabilize_iterations_count_(get_property<DTYPE(stabilize_iterations_count_) >(app_config_file, STABILIZE_ITERATIONS_COUNT, C_default_stabilize_iterations_count_str)),
+        prediction_horizon_(get_property<DTYPE(prediction_horizon_) >(app_config_file, PREDICTION_HORIZON, C_default_prediction_horizon_str)),
+        scaling_alpha_(get_property<DTYPE(scaling_alpha_) >(app_config_file, SCALING_ALPHA, C_default_scaling_alpha_str)),
+        solve_iterations_coefficient_(get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient)),
+        set_thread_affinity_(get_property<DTYPE(set_thread_affinity_) >(app_config_file, SET_THREAD_AFFINITY, "0")),
+        recombine_parameters_(get_property<DTYPE(recombine_parameters_) >(app_config_file, RECOMBINE_PARAMETERS, C_default_recombine_parameters_str)),
+        tune_parameters_(get_property<DTYPE(tune_parameters_) >(app_config_file, TUNE_PARAMETERS, C_default_tune_parameters_str)),
+        self_request_(get_property<DTYPE(self_request_) >(app_config_file, SELF_REQUEST, "0")),
+        daemonize_(get_property<DTYPE(daemonize_) >(app_config_file, DAEMONIZE, C_default_daemonize)),
+        is_duck_(is_a_duck(db_connection_string_)),
+        db_connection_string_(get_property<DTYPE(db_connection_string_) >(app_config_file, CONNECTION_STRING, C_default_connection_str)),
+        oemd_masks_dir_(prepare_oemd_masks_dir(get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir))),
+        db_file_(is_duck_ ? extract_db_file_path(db_connection_string_) : ""),
+        log_level_(set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, C_default_log_level))),
+        loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, LOOP_INTERVAL, C_default_loop_interval_ms))),
+        stream_loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, STREAM_LOOP_INTERVAL, C_default_stream_loop_interval_ms))),
+        num_quantisations_(get_property<DTYPE(num_quantisations_) >(app_config_file, NUM_QUANTISATIONS, C_default_num_quantisations)),
+        quantisation_divisor_(get_property<DTYPE(quantisation_divisor_) >(app_config_file, QUANTISATION_DIVISOR, C_default_quantisation_divisor)),
+        oemd_tune_particles_(get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles)),
+        oemd_tune_iterations_(get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations))
+{
 }
 
 std::string AppConfig::get_oemd_masks_dir() const noexcept
@@ -359,5 +381,17 @@ const std::string &PropertiesReader::get_property_value(const std::string &prope
     LOG4_TRACE("Property " << key << " not found, returning default value " << default_value);
     return default_value;
 }
+
+
+const std::string &AppConfig::get_db_file() const noexcept
+{
+    return db_file_;
+}
+
+bool AppConfig::is_duck() const noexcept
+{
+    return is_duck_;
+}
+
 } /* namespace common */
 } /* namespace svr */

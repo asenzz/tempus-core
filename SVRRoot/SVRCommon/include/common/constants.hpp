@@ -83,6 +83,7 @@ constexpr char C_default_recombine_parameters_str[] = "0";
 constexpr char C_default_prediction_horizon_str[] = "0.1"; // Prediction is ahead of last-known by main queue resolution * OFFSET_PRED_MUL
 constexpr char C_default_feature_quantization_str[] = "10";
 constexpr char C_default_slide_count_str[] = "13";
+constexpr char C_default_slide_skip_str[] = "5";
 constexpr char C_default_tune_run_limit_str[] = "14400";
 constexpr char C_default_scaling_alpha_str[] = "0.01";
 constexpr char C_default_connection_str[] = "dbname=svrwave user=svrwave password=svrwave host=/var/run/postgresql";
@@ -110,6 +111,8 @@ constexpr uint16_t C_default_level_count = 1;
 
 constexpr uint16_t C_default_hardware_concurrency = 16;
 const boost::posix_time::time_duration C_default_features_max_time_gap = boost::posix_time::hours(60);
+const boost::posix_time::time_duration C_default_legal_time_deviation = boost::posix_time::seconds(1);
+const boost::posix_time::time_duration C_default_resolution = boost::posix_time::hours(1);
 
 constexpr uint32_t C_gigabyte = 1024 * 1024 * 1024;
 }

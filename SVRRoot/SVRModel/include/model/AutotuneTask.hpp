@@ -7,7 +7,6 @@ namespace datamodel {
 
 class AutotuneTask : public Entity
 {
-private:
     bigint dataset_id;
     bigint result_dataset_id;
     bpt::ptime creation_time;
@@ -34,7 +33,7 @@ private:
     int status = 0;         // 0 - new, 1 - in process, 2 - done, 3 - error
     double mse = -1.0;
 
-    virtual void init_id() override
+    void init_id() override
     {
         if (!id) {
             boost::hash_combine(id, dataset_id);
@@ -425,8 +424,7 @@ public:
     }
 };
 
+using AutotuneTask_ptr = std::shared_ptr<AutotuneTask>;
 
 } /* namespace datamodel */
 } /* namespace svr */
-
-using AutotuneTask_ptr = std::shared_ptr<svr::datamodel::AutotuneTask>;

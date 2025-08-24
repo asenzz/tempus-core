@@ -160,10 +160,12 @@ extern const logging l__;
         svr::common::memory_manager::get_proc_rss() << " MB");
 #define PROFIL3(X) PROFILE_INFO(X, #X)
 
-#include <cufft.h>
 #include <sstream>
 
+#ifdef __CUDACC__
+#include <cufft.h>
 std::string cufft_get_error_string(const cufftResult s);
+#endif
 
 #ifdef PRODUCTION_BUILD
 

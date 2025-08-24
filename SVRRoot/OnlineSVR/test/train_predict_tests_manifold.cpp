@@ -49,7 +49,7 @@ View definition:
 #include <cmath>
 #include <cstdlib>
 #include <gtest/gtest.h>
-#include <pqxx/pqxx>
+#include "DataSource.hpp"
 #include "EnsembleService.hpp"
 #include "IQScalingFactorService.hpp"
 #include "ModelService.hpp"
@@ -105,9 +105,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     constexpr char C_last_test_time[] = "2025-07-21 22:29:58";
 
     try {
-        pqxx::connection c(PROPS.get_db_connection_string());
-        pqxx::work w(c);
-        const std::string q =
+        const std::string query =
                 "DROP VIEW IF EXISTS " + C_test_aux_input_table_name + "; " \
                 "CREATE VIEW " + C_test_aux_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_1 "
                 "WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_data_len_h_str + " * " STR_MAIN_QUEUE_RES ") ORDER BY value_time ASC; " \
@@ -118,8 +116,14 @@ TEST(manifold_tune_train_predict, basic_integration)
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
                 "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
-        (void) w.exec(q).no_rows();
-        w.commit();
+        if (PROPS.is_duck()) {
+            const auto trx = open_file();
+            auto res = trx->exec(query);
+            duckdb_destroy_result(&res);
+        } else {
+            const auto trx = open_transaction();
+            (void) trx->exec(query);
+        }
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << " while preparing test queue.");
         return;

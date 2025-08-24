@@ -1,10 +1,5 @@
 #include "DAO/StatementPreparerDBTemplate.hpp"
 
-using pqxx::to_string;
-using std::shared_ptr;
-using std::string;
-using bpt::ptime;
-using bpt::time_duration;
 
 namespace svr {
 namespace dao {
@@ -12,24 +7,22 @@ namespace dao {
 
 string StatementPreparerDBTemplate::prepare_statement(const char *format)
 {
-    return string(format);
+    return std::string(format);
 }
 
 string StatementPreparerDBTemplate::escape(const string &t)
 {
-//    if (!connection.is_open()) connection = pqxx::connection(connection.connection_string());
     return "'" + connection.esc(t) + "'";
 }
 
 string StatementPreparerDBTemplate::escape(const char *t)
 {
-//    if (!connection.is_open()) connection = pqxx::connection(connection.connection_string());
     return "'" + connection.esc(string(t)) + "'";
 }
 
 string StatementPreparerDBTemplate::escape(datamodel::ROLE role)
 {
-    return string("'") + (role == datamodel::ROLE::ADMIN ? "ADMIN" : "USER") + "'";
+    return std::string("'") + (role == datamodel::ROLE::ADMIN ? "ADMIN" : "USER") + "'";
 }
 
 string StatementPreparerDBTemplate::escape(const ptime &time)
@@ -38,12 +31,12 @@ string StatementPreparerDBTemplate::escape(const ptime &time)
     if (time.is_pos_infinity()) return "infinity";
     if (time.is_not_a_date_time()) return "NULL";
     if (time.is_special()) THROW_EX_FS(std::invalid_argument, "Cannot transform special timestamp value to SQL type!");
-    return "'" + to_simple_string(time) + "'::timestamp";
+    return "'" + bpt::to_simple_string(time) + "'::timestamp";
 }
 
 string StatementPreparerDBTemplate::escape(const time_duration &interval)
 {
-    return "'" + to_simple_string(interval) + "'::interval";
+    return "'" + bpt::to_simple_string(interval) + "'::interval";
 }
 
 string StatementPreparerDBTemplate::escape(const bool &flag)

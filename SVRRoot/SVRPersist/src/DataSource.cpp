@@ -15,8 +15,7 @@ DataSource::~DataSource()
 {
 }
 
-DataSource::DataSource(const std::string &connection_string, const bool commit_on_scope_exit) :
-        connection_string(connection_string)
+DataSource::DataSource(const std::string &connection_string, const bool commit_on_scope_exit) : connection_string(connection_string)
 {
     LOG4_DEBUG("Opening connection using connection string " << connection_string);
     try {
@@ -54,6 +53,11 @@ void DataSource::reopen_connection()
 scoped_transaction_guard_ptr DataSource::open_transaction()
 {
     return ptr<scoped_transaction_guard>(connection_string, *this);
+}
+
+scoped_file_guard_ptr DataSource::open_file()
+{
+    return ptr<scoped_file_guard>(connection_string, *this);
 }
 
 long DataSource::batch_update(const std::string &table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)

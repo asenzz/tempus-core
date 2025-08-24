@@ -3,14 +3,14 @@
 #include <memory>
 #include <common/types.hpp>
 
-namespace svr { namespace dao { class PredictionTaskDAO; } }
+namespace svr { namespace dao { class PredictionTaskDAO; }
 
-namespace svr { namespace datamodel { class PredictionTask; } }
+namespace datamodel { 
+class PredictionTask; 
 using PredictionTask_ptr = std::shared_ptr<svr::datamodel::PredictionTask>;
+}
 
-namespace svr {
 namespace business {
-
 
 class PredictionTaskService {
 
@@ -28,7 +28,7 @@ public:
     PredictionTask_ptr get_by_id(const bigint id);
 };
 
+using PredictionTaskService_ptr = std::shared_ptr<svr::business::PredictionTaskService>;
+
 } /* namespace business */
 } /* namespace svr */
-
-using PredictionTaskService_ptr = std::shared_ptr<svr::business::PredictionTaskService>;

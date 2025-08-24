@@ -129,7 +129,7 @@ public:
     }
 };
 
+using PredictionTask_ptr = std::shared_ptr<svr::datamodel::PredictionTask>;
+
 } /* namespace datamodel */
 } /* namespace svr */
-
-using PredictionTask_ptr = std::shared_ptr<svr::datamodel::PredictionTask>;
