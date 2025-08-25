@@ -536,7 +536,7 @@ ENDIF ()
 
 SET(Boost_MIN_VERSION 1.80)
 SET(PQXX_LIBRARIES -lpqxx -lpq)
-LINK_LIBRARIES(_lightgbm armadillo mkl_rt mkl_gf_lp64 mkl_gnu_thread mkl_core) # hdf5_serial
+LINK_LIBRARIES(_lightgbm armadillo mkl_rt mkl_gf_lp64 mkl_gnu_thread mkl_core duckdb) # hdf5_serial
 OPTION(USE_HIGHWAYHASH "Use Highwayhash instead of Boost hashing." OFF)
 IF(USE_HIGHWAYHASH)
     LINK_LIBRARIES(highwayhash)

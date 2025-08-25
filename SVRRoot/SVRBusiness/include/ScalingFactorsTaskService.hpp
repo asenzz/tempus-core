@@ -1,31 +1,32 @@
 #pragma once
 
-#include <memory>
 #include <common/types.hpp>
-
-namespace svr { namespace dao { class ScalingFactorsTaskDAO; }}
-
-namespace svr { namespace datamodel { class ScalingFactorsTask; }}
-using ScalingFactorsTask_ptr = std::shared_ptr<svr::datamodel::ScalingFactorsTask>;
+#include <memory>
 
 namespace svr {
-namespace business {
 
+namespace dao {
+class ScalingFactorsTaskDAO;
+}
+
+namespace datamodel {
+class ScalingFactorsTask;
+}
+using ScalingFactorsTask_ptr = std::shared_ptr<svr::datamodel::ScalingFactorsTask>;
+
+namespace business {
 
 class ScalingFactorsTaskService
 {
 
-    svr::dao::ScalingFactorsTaskDAO &scalingFactorsTaskDao;
+    svr::dao::ScalingFactorsTaskDAO& scalingFactorsTaskDao;
 
 public:
+    ScalingFactorsTaskService(svr::dao::ScalingFactorsTaskDAO& scalingFactorsTaskDao) : scalingFactorsTaskDao(scalingFactorsTaskDao) {}
 
-    ScalingFactorsTaskService(svr::dao::ScalingFactorsTaskDAO &scalingFactorsTaskDao) :
-            scalingFactorsTaskDao(scalingFactorsTaskDao)
-    {}
+    bool exists(const ScalingFactorsTask_ptr&);
 
-    bool exists(const ScalingFactorsTask_ptr &);
-
-    int save(ScalingFactorsTask_ptr &scalingFactorsTask);
+    int save(ScalingFactorsTask_ptr& scalingFactorsTask);
 
     ScalingFactorsTask_ptr get_by_id(const bigint id);
 };

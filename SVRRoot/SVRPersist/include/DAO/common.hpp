@@ -3,7 +3,7 @@
 #include <duckdb.h>
 #include "common/types.hpp"
 #include "util/CompressionUtils.hpp"
-#include "misc/db_utils.hpp"
+#include "util/db_utils.hpp"
 
 #if PQXX_VERSION_MAJOR == 4
 using pqxx_tuple = pqxx::tuple;

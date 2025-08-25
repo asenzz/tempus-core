@@ -39,17 +39,16 @@ View definition:
 
  */
 
-#include "common/defines.h"
-#include "InputQueueService.hpp"
-#include "DeconQueueService.hpp"
-#include "RequestService.hpp"
-
 #ifdef INTEGRATION_TEST
 
 #include <cmath>
 #include <cstdlib>
 #include <gtest/gtest.h>
-#include "DataSource.hpp"
+#include "common/defines.h"
+#include "InputQueueService.hpp"
+#include "DeconQueueService.hpp"
+#include "RequestService.hpp"
+#include "DAO/DataSource.hpp"
 #include "EnsembleService.hpp"
 #include "IQScalingFactorService.hpp"
 #include "ModelService.hpp"
@@ -116,12 +115,13 @@ TEST(manifold_tune_train_predict, basic_integration)
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
                 "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
+        dao::data_source ds(PROPS.get_db_connection_string());
         if (PROPS.is_duck()) {
-            const auto trx = open_file();
+            const auto trx = ds.open_file();
             auto res = trx->exec(query);
             duckdb_destroy_result(&res);
         } else {
-            const auto trx = open_transaction();
+            const auto trx = ds.open_transaction();
             (void) trx->exec(query);
         }
     } catch (const std::exception &ex) {

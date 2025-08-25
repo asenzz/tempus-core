@@ -304,6 +304,11 @@ struct MissedHoursrow_mapper : public IRowMapper<bpt::ptime>
             return ptr<bpt::ptime>();
         return ptr<bpt::ptime>(row_set[0].as<bpt::ptime>(bpt::not_a_date_time));
     }
+
+    std::shared_ptr<bpt::ptime> map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    {
+        return ptr<bpt::ptime>(common::dd_get_time(row_set, row, 0));
+    }
 };
 
 struct TimeRange_mapper : public IRowMapper<TimeRange>
@@ -317,8 +322,14 @@ struct TimeRange_mapper : public IRowMapper<TimeRange>
             return std::shared_ptr<TimeRange>();
 #pragma GCC diagnostic pop
 
-        return ptr<TimeRange>(row_set[0].as<bpt::ptime>({}), row_set[1].as<bpt::ptime>(bpt::ptime{}));
+        return ptr<TimeRange>(row_set[0].as<bpt::ptime>(bpt::not_a_date_time), row_set[1].as<bpt::ptime>(bpt::not_a_date_time));
     }
+
+    std::shared_ptr<TimeRange> map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    {
+        return ptr<TimeRange>(common::dd_get_time(row_set, row, 0), common::dd_get_time(row_set, row, 1));
+    }
+
 };
 
 

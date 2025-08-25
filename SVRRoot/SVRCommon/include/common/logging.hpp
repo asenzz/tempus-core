@@ -162,10 +162,8 @@ extern const logging l__;
 
 #include <sstream>
 
-#ifdef __CUDACC__
 #include <cufft.h>
 std::string cufft_get_error_string(const cufftResult s);
-#endif
 
 #ifdef PRODUCTION_BUILD
 

@@ -19,5 +19,7 @@ public:
 	virtual ~IRowMapper() = 0; // make this class abstract
 };
 
+template <typename T> IRowMapper<T>::~IRowMapper() {}
+
 } /* namespace dao */
 } /* namespace svr */

@@ -51,7 +51,7 @@ public:
             common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_tuning_time", bpt::not_a_date_time),
             common::dd_get_value(row_set, row, col_count, "vp_sliding_direction", size_t(0)),
             common::dd_get_value(row_set, row, col_count, "vp_slide_count", size_t(0)),
-            common::dd_get_value(row_set, row, col_count, "vp_slide_period_sec", bpt::seconds(0)),
+            common::dd_get_value<bpt::time_duration>(row_set, row, col_count, "vp_slide_period_sec", bpt::seconds(0)),
             common::dd_get_value(row_set, row, col_count, "pso_best_points_counter", size_t(0)),
             common::dd_get_value(row_set, row, col_count, "pso_iteration_number", size_t(0)),
             common::dd_get_value(row_set, row, col_count, "pso_particles_number", size_t(0)),

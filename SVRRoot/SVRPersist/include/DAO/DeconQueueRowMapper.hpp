@@ -24,13 +24,13 @@ public:
     {
         return ptr<datamodel::DeconQueue>(
             common::dd_get_value(row_set, row, col_count, "table_name", std::string()),
-            common::dd_get_value(row_set, row, col_count, "dataset_name", std::string()),
+            common::dd_get_value(row_set, row, col_count, "input_queue_table_name", std::string()),
             common::dd_get_value(row_set, row, col_count, "input_queue_column_name", std::string()),
             common::dd_get_value(row_set, row, col_count, "dataset_id", bigint(0)),
-            common::dd_get_value(row_set, row, col_count, "levels", uint16_t(0)),
+            common::dd_get_value(row_set, row, col_count, "levels", uint16_t(0))
         );
-    };
-}
+    }
+};
 
 }
 }

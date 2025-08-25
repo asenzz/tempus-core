@@ -38,20 +38,24 @@ template<typename T, class ...Args> T DataSource::query_for_type(const std::stri
 {
     if (sql.empty()) THROW_EX_FS(std::invalid_argument, "Invalid SQL query passed, cannot be null!");
 
-    LOG4_DEBUG("Query for " << svr::common::demangle(typeid(T).name()) << ", " << sql);
+    LOG4_DEBUG("Query for " << common::demangle(typeid(T).name()) << ", " << sql);
     std::string query;
     try {
         query = statement_preparer_template->prepare_statement(sql, args...);
-        if (PROPS.is_duck()) {
+        if (PROPS.is_duck()) { // DuckDB
             auto res = open_file()->exec(query);
             T ret;
-            if (duckdb_row_count(&res) && duckdb_column_count(&res)) ret = common::dd_get_value<T>(res, 0, 0);
-            else LOG4_DEBUG("No data returned for " << query);
+            const auto column_count = duckdb_column_count(&res);
+            bool no_data = false;
+            if (duckdb_row_count(&res) && column_count) ret = common::dd_get_value(res, 0, column_count, "", ret);
+            else no_data = true;
             duckdb_destroy_result(&res);
+            if (no_data) LOG4_THROW("No data returned for " << query);
             return ret;
         }
+        // Postgres
         const auto res = open_transaction()->exec(query);
-        if (res.empty()) return T();
+        if (res.empty()) LOG4_THROW("No data returned for " << query);
         return res.at(0, 0).as<T>();
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << ", while executing " << query);
@@ -65,7 +69,7 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
 {
     if (sql.empty()) THROW_EX_FS(std::invalid_argument, "Invalid SQL query passed, cannot be null!");
 
-    LOG4_DEBUG("Query for " << svr::common::demangle(typeid(Container<T, std::allocator<T>>).name()) << " of " << common::demangle(typeid(T).name()) << ", " << sql);
+    LOG4_DEBUG("Query for " << common::demangle(typeid(Container<T, std::allocator<T>>).name()) << " of " << common::demangle(typeid(T).name()) << ", " << sql);
     std::string query;
     Container<T, std::allocator<T>> res;
     try {

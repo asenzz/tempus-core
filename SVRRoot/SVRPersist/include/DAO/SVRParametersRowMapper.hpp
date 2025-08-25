@@ -34,9 +34,9 @@ public:
         );
     }
 
-    datamodel::ScalingFactorsTask_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    datamodel::SVRParameters_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
-        return ptr<datamodel::ScalingFactorsTask>(
+        return ptr<datamodel::SVRParameters>(
                 common::dd_get_value(row_set, row, col_count, "id", bigint(0)),
                 common::dd_get_value(row_set, row, col_count, "dataset_id", bigint(0)),
                 common::dd_get_value(row_set, row, col_count, "intel_queue_table_name", std::string()),

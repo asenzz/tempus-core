@@ -1,8 +1,8 @@
 IF(USE_CUDA)
-	PROJECT(OnlineSVR LANGUAGES CUDA CXX)
+    PROJECT(OnlineSVR LANGUAGES CUDA CXX)
     LINK_LIBRARIES(CUDA::cudart CUDA::cublas CUDA::cufftw CUDA::cusolver CUDA::nppc CUDA::npps) # CUDA::cuda_driver
 ELSE()
-	PROJECT(OnlineSVR CXX)
+    PROJECT(OnlineSVR CXX)
 ENDIF()
 
 SET(DEPENDENCIES SVRCommon SVRModel)

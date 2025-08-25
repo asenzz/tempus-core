@@ -2,7 +2,7 @@
 // Created by zarko on 8/24/25.
 //
 
-#include "misc/db_utils.hpp"
+#include "util/db_utils.hpp"
 
 namespace pqxx {
 
@@ -80,8 +80,8 @@ std::string string_traits<boost::posix_time::time_duration>::to_string(const boo
 
 namespace svr {
 namespace common {
-		
-int32_t dd_column_name(duckdb_result &res, CRPTR(char) name, const uint32_t column_count)
+
+int32_t dd_column_name(duckdb_result &res, const char *name, const uint32_t column_count)
 {
     if (strlen(name) < 1) return 0;
     for (DTYPE(column_count) i = 0; i < column_count; ++i)
@@ -113,7 +113,7 @@ bpt::time_duration dd_get_duration(duckdb_result& res, const uint32_t row, const
     return bpt::duration_from_string(dd_get_string(res, row, col));
 }
 
-template <> std::string dd_get_value<std::string>(duckdb_result& res, const uint32_t row, const uint32_t column_count, CRPTR(char) column_name, const std::string &default_value) 
+template <> std::string dd_get_value<std::string>(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const std::string &default_value) 
 { 
     const auto col = dd_column_name(res, column_name, column_count); 
     if (col < 0) {
@@ -123,7 +123,7 @@ template <> std::string dd_get_value<std::string>(duckdb_result& res, const uint
     return dd_get_string(res, row, col);
 }
 
-template <> std::vector<uint8_t> dd_get_value<std::vector<uint8_t>>(duckdb_result& res, const uint32_t row, const uint32_t column_count, CRPTR(char) column_name, const std::vector<uint8_t> &default_value) 
+template <> std::vector<uint8_t> dd_get_value<std::vector<uint8_t>>(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const std::vector<uint8_t> &default_value) 
 { 
     const auto col = dd_column_name(res, column_name, column_count); 
     if (col < 0) {
@@ -133,7 +133,7 @@ template <> std::vector<uint8_t> dd_get_value<std::vector<uint8_t>>(duckdb_resul
     return dd_get_blob(res, row, col);
 }
 
-template <> bpt::time_duration dd_get_value<bpt::time_duration>(duckdb_result& res, const uint32_t row, const uint32_t column_count, CRPTR(char) column_name, const bpt::time_duration &default_value) 
+template <> bpt::time_duration dd_get_value<bpt::time_duration>(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const bpt::time_duration &default_value) 
 { 
     const auto col = dd_column_name(res, column_name, column_count); 
     if (col < 0) {
@@ -143,7 +143,7 @@ template <> bpt::time_duration dd_get_value<bpt::time_duration>(duckdb_result& r
     return dd_get_duration(res, row, col);
 }
 
-template <> bpt::ptime dd_get_value<bpt::ptime>(duckdb_result& res, const uint32_t row, const uint32_t column_count, CRPTR(char) column_name, const bpt::ptime &default_value) 
+template <> bpt::ptime dd_get_value<bpt::ptime>(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const bpt::ptime &default_value) 
 { 
     const auto col = dd_column_name(res, column_name, column_count); 
     if (col < 0) {
@@ -153,9 +153,8 @@ template <> bpt::ptime dd_get_value<bpt::ptime>(duckdb_result& res, const uint32
     return dd_get_time(res, row, col);
 }
 
-
 #define SPECIALIZE_GET(T, S) \
-template <> T dd_get_value<T>(duckdb_result& res, const uint32_t row, const uint32_t column_count, CRPTR(char) column_name, const T &default_value) \
+template <> T dd_get_value<T>(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const T &default_value) \
 { \
     const auto col = dd_column_name(res, column_name, column_count); \
     if (col < 0) { \
@@ -165,12 +164,15 @@ template <> T dd_get_value<T>(duckdb_result& res, const uint32_t row, const uint
     return duckdb_value_##S (&res, row, col); \
 }
 
+SPECIALIZE_GET(bool, boolean)
 SPECIALIZE_GET(int8_t, int8)
 SPECIALIZE_GET(uint8_t, uint8)
 SPECIALIZE_GET(int16_t, int16)
 SPECIALIZE_GET(uint16_t, uint16)
 SPECIALIZE_GET(int32_t, int32)
 SPECIALIZE_GET(uint32_t, uint32)
+SPECIALIZE_GET(int64_t, int64)
+SPECIALIZE_GET(uint64_t, uint64)
 SPECIALIZE_GET(float, float)
 SPECIALIZE_GET(double, double)
 

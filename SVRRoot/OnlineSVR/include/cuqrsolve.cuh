@@ -1,4 +1,4 @@
-2#pragma once
+#pragma once
 
 #include <oneapi/tbb/mutex.h>
 #include <deque>

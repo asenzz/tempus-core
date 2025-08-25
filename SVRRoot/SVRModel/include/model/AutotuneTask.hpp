@@ -19,7 +19,7 @@ class AutotuneTask : public Entity
 
     size_t vp_sliding_direction = 0;
     size_t vp_slide_count = 0;
-    bpt::seconds vp_slide_period_sec;
+    bpt::time_duration vp_slide_period;
 
     size_t pso_best_points_counter = 0;
     size_t pso_iteration_number = 0;
@@ -43,7 +43,7 @@ class AutotuneTask : public Entity
         }
     }
 public:
-    AutotuneTask() : Entity(), vp_slide_period_sec(bpt::seconds(0))
+    AutotuneTask() : Entity()
     {}
 
     AutotuneTask(const bigint id, const bigint dataset_id, const bigint result_dataset_id,
@@ -51,7 +51,7 @@ public:
                  const std::map<std::string, std::string> &parameters,
                  const bpt::ptime &start_train_time, const bpt::ptime &end_train_time,
                  const bpt::ptime &start_validation_time, const bpt::ptime &end_validation_time,
-                 const size_t vp_sliding_direction, const size_t vp_slide_count, bpt::seconds vp_slide_period_sec,
+                 const size_t vp_sliding_direction, const size_t vp_slide_count, const bpt::time_duration &vp_slide_period,
                  const size_t pso_best_points_counter, const size_t pso_iteration_number,
                  const size_t pso_particles_number, const size_t pso_topology,
                  const size_t nm_max_iteration_number, double nm_tolerance,
@@ -68,7 +68,7 @@ public:
               end_validation_time(end_validation_time),
               vp_sliding_direction(vp_sliding_direction),
               vp_slide_count(vp_slide_count),
-              vp_slide_period_sec(vp_slide_period_sec),
+              vp_slide_period(vp_slide_period),
               pso_best_points_counter(pso_best_points_counter),
               pso_iteration_number(pso_iteration_number),
               pso_particles_number(pso_particles_number),
@@ -84,7 +84,7 @@ public:
                  const std::string &parameters,
                  const bpt::ptime &start_train_time, const bpt::ptime &end_train_time,
                  const bpt::ptime &start_validation_time, const bpt::ptime &end_validation_time,
-                 const size_t vp_sliding_direction, const size_t vp_slide_count, bpt::seconds vp_slide_period_sec,
+                 const size_t vp_sliding_direction, const size_t vp_slide_count, const bpt::time_duration &vp_slide_period,
                  const size_t pso_best_points_counter, const size_t pso_iteration_number,
                  const size_t pso_particles_number, const size_t pso_topology,
                  const size_t nm_max_iteration_number, double nm_tolerance,
@@ -100,7 +100,7 @@ public:
               end_validation_time(end_validation_time),
               vp_sliding_direction(vp_sliding_direction),
               vp_slide_count(vp_slide_count),
-              vp_slide_period_sec(vp_slide_period_sec),
+              vp_slide_period(vp_slide_period),
               pso_best_points_counter(pso_best_points_counter),
               pso_iteration_number(pso_iteration_number),
               pso_particles_number(pso_particles_number),
@@ -297,14 +297,14 @@ public:
         vp_slide_count = value;
     }
 
-    bpt::seconds get_vp_slide_period_sec() const
+    bpt::time_duration get_vp_slide_period() const
     {
-        return vp_slide_period_sec;
+        return vp_slide_period;
     }
 
-    void set_vp_slide_period_sec(const bpt::seconds &value)
+    void set_vp_slide_period(const bpt::time_duration &value)
     {
-        vp_slide_period_sec = value;
+        vp_slide_period = value;
     }
 
     size_t get_pso_best_points_counter() const

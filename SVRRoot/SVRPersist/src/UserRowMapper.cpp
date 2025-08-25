@@ -7,25 +7,14 @@ namespace dao {
 
 datamodel::User_ptr UserRowMapper::map_row(const pqxx_tuple& row_set) const
 {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-	if (row_set.empty()){
-		LOG4_ERROR("No row returned from database!");
-		return nullptr;
-	}
-#pragma GCC diagnostic pop
-	datamodel::ROLE role;
-	datamodel::Priority priority = static_cast<datamodel::Priority>(row_set["priority"].as<int>((int)datamodel::Priority::Normal));
-
-	const auto role = common::ignore_case_equals(row_set["role"].as<std::string>(""), "admin") ? datamodel::ROLE::ADMIN : datamodel::ROLE::USER;
-
     return ptr<datamodel::User>(
             row_set["user_id"].as<bigint>(0),
             row_set["username"].as<std::string>(),
             row_set["email"].as<std::string>(),
             row_set["password"].as<std::string>(),
             row_set["name"].as<std::string>(),
-            role, priority);
+            common::ignore_case_equals(row_set["role"].as<std::string>(""), "admin") ? datamodel::ROLE::ADMIN : datamodel::ROLE::USER, 
+            datamodel::Priority(row_set["priority"].as<int>((int)datamodel::Priority::Normal)));
 }
 
 datamodel::User_ptr UserRowMapper::map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const

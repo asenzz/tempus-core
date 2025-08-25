@@ -14,7 +14,7 @@ using namespace svr;
 class EnsembleIntegrationTests : public DaoTestFixture
 {
 protected:
-    scoped_transaction_guard_ptr trx;
+    dao::scoped_transaction_guard_ptr trx;
 
     datamodel::User_ptr testUser;
     datamodel::InputQueue_ptr testQueue;
@@ -164,7 +164,7 @@ protected:
     virtual void TearDown() override
     {
         removeDbData();
-        trx = nullptr;
+        trx.reset();
     }
 };
 

@@ -5,27 +5,27 @@ namespace svr {
 namespace dao {
 
 
-string StatementPreparerDBTemplate::prepare_statement(const char *format)
+std::string StatementPreparerDBTemplate::prepare_statement(const char *format)
 {
     return std::string(format);
 }
 
-string StatementPreparerDBTemplate::escape(const string &t)
+std::string StatementPreparerDBTemplate::escape(const std::string &t)
 {
     return "'" + connection.esc(t) + "'";
 }
 
-string StatementPreparerDBTemplate::escape(const char *t)
+std::string StatementPreparerDBTemplate::escape(const char *t)
 {
-    return "'" + connection.esc(string(t)) + "'";
+    return "'" + connection.esc(std::string(t)) + "'";
 }
 
-string StatementPreparerDBTemplate::escape(datamodel::ROLE role)
+std::string StatementPreparerDBTemplate::escape(datamodel::ROLE role)
 {
     return std::string("'") + (role == datamodel::ROLE::ADMIN ? "ADMIN" : "USER") + "'";
 }
 
-string StatementPreparerDBTemplate::escape(const ptime &time)
+std::string StatementPreparerDBTemplate::escape(const bpt::ptime &time)
 {
     if (time.is_neg_infinity()) return "-infinity";
     if (time.is_pos_infinity()) return "infinity";
@@ -34,12 +34,12 @@ string StatementPreparerDBTemplate::escape(const ptime &time)
     return "'" + bpt::to_simple_string(time) + "'::timestamp";
 }
 
-string StatementPreparerDBTemplate::escape(const time_duration &interval)
+std::string StatementPreparerDBTemplate::escape(const bpt::time_duration &interval)
 {
     return "'" + bpt::to_simple_string(interval) + "'::interval";
 }
 
-string StatementPreparerDBTemplate::escape(const bool &flag)
+std::string StatementPreparerDBTemplate::escape(const bool &flag)
 {
     return flag ? "TRUE" : "FALSE";
 }

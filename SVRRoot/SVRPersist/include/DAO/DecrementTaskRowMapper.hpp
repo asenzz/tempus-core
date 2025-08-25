@@ -6,15 +6,15 @@
 namespace svr {
 namespace dao {
 
-class DecrementTaskRowMapper : public IRowMapper<svr::datamodel::DecrementTask>
+class DecrementTaskRowMapper : public IRowMapper<datamodel::DecrementTask>
 {
 private:
     // empty
 
 public:
-    DecrementTask_ptr map_row(const pqxx_tuple& row_set) const override
+    datamodel::DecrementTask_ptr map_row(const pqxx_tuple& row_set) const override
     {
-        return ptr<svr::datamodel::DecrementTask>(
+        return ptr<datamodel::DecrementTask>(
                     row_set["id"].as<bigint>(0),
                     row_set["dataset_id"].as<bigint>(0),
                     row_set["start_task_time"].as<bpt::ptime>(bpt::not_a_date_time),
@@ -34,25 +34,29 @@ public:
                 );
     }
 
-    datamodel::DeconQueue_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    datamodel::DecrementTask_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
-        return ptr<datamodel::DeconQueue>(
+        return ptr<datamodel::DecrementTask>(
             common::dd_get_value(row_set, row, col_count, "id", bigint(0)),
             common::dd_get_value(row_set, row, col_count, "dataset_id", bigint(0)),
-            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "start_task_time", bpt::not_a_date_time)),
-            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_task_time", bpt::not_a_date_time)),
-            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "start_train_time", bpt::not_a_date_time)),
-            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_train_time", bpt::not_a_date_time)),
-            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "start_validation_time", bpt::not_a_date_time)),
-            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_validation_time", bpt::not_a_date_time)),
+            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "start_task_time", bpt::not_a_date_time),
+            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_task_time", bpt::not_a_date_time),
+            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "start_train_time", bpt::not_a_date_time),
+            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_train_time", bpt::not_a_date_time),
+            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "start_validation_time", bpt::not_a_date_time),
+            common::dd_get_value<bpt::ptime>(row_set, row, col_count, "end_validation_time", bpt::not_a_date_time),
             common::dd_get_value(row_set, row, col_count, "parameters", std::string()),
             common::dd_get_value(row_set, row, col_count, "status", int(0)),
             common::dd_get_value(row_set, row, col_count, "decrement_step", std::string()),
             common::dd_get_value(row_set, row, col_count, "vp_sliding_direction", uint32_t(0)),
             common::dd_get_value(row_set, row, col_count, "vp_slide_count", uint32_t(0)),
+            bpt::seconds(common::dd_get_value(row_set, row, col_count, "vp_slide_period_sec", uint32_t(0))),
             common::dd_get_value(row_set, row, col_count, "values", std::string()),
             common::dd_get_value(row_set, row, col_count, "suggested_value", std::string())
         );
+    }
+
+};
 
 }
 }

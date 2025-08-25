@@ -53,8 +53,6 @@ void logging::flush() const
 
 const logging l__ = []{ return logging(); } ();
 
-#ifdef __CUDACC__
-
 std::string cufft_get_error_string(const cufftResult s)
 {
     switch (s) {
@@ -80,5 +78,3 @@ std::string cufft_get_error_string(const cufftResult s)
             return "Unknown error";
     }
 }
-
-#endif

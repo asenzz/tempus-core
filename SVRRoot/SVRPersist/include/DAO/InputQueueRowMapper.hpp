@@ -21,15 +21,15 @@ public:
     {
         if (row_set["table_name"].is_null()) LOG4_THROW("Cannot map a row with empty table_name");
         datamodel::InputQueue_ptr result = ptr<datamodel::InputQueue>(
-                row_set["table_name"].as<std::string>(""),
-                row_set["logical_name"].as<std::string>(""),
-                row_set["user_name"].as<std::string>(""),
-                row_set["description"].as<std::string>(""),
-                row_set["resolution"].as<bpt::time_duration>(common::C_default_resolution),
-                row_set["legal_time_deviation"].as<bpt::time_duration>(common::C_default_legal_time_deviation),
-                row_set["timezone"].as<std::string>(""),
-                common::from_sql_array(row_set["value_columns"].as<std::string>("")), // Should be in order of appearance
-                row_set["uses_fix_connection"].as<bool>(false)
+                row_set["table_name"].as<std::string>(),
+                row_set["logical_name"].as<std::string>(),
+                row_set["user_name"].as<std::string>(),
+                row_set["description"].as<std::string>(),
+                row_set["resolution"].as(common::C_default_resolution),
+                row_set["legal_time_deviation"].as(common::C_default_legal_time_deviation),
+                row_set["timezone"].as<std::string>(),
+                common::from_sql_array(row_set["value_columns"].as<std::string>()), // Should be in order of appearance
+                row_set["uses_fix_connection"].as(false)
         );
         return result;
     }
@@ -65,9 +65,9 @@ public:
         return ptr<std::string>(row_set[0].as<std::string>());
     }
 
-    datamodel::InputQueue_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
+    std::shared_ptr<std::string> map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
-        return ptr<std::string>(common::dd_get_value<std::string>(row_set, 0, 0));
+        return ptr<std::string>(common::dd_get_string(row_set, 0, 0));
     }
 
 };

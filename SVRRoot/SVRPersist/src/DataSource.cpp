@@ -15,13 +15,13 @@ DataSource::~DataSource()
 {
 }
 
-DataSource::DataSource(const std::string &connection_string, const bool commit_on_scope_exit) : connection_string(connection_string)
+DataSource::DataSource(const std::string &connection_string) : connection_string(connection_string)
 {
     LOG4_DEBUG("Opening connection using connection string " << connection_string);
     try {
         statement_preparer_template = std::make_unique<StatementPreparerDBTemplate>(connection_string);
     } catch (const std::exception &e) {
-        LOG4_FATAL(e.what());
+        LOG4_FATAL("Error instantiating, " << e.what());
         throw e;
     }
 }

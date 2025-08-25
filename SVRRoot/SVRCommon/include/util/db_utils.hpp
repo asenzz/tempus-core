@@ -48,9 +48,9 @@ template <> struct string_traits<boost::posix_time::time_duration>
 namespace svr {
 namespace common {
 
-int32_t dd_column_name(duckdb_result& res, CRPTR(char) name, uint32_t column_count);
+int32_t dd_column_name(duckdb_result& res, const char *name, uint32_t column_count);
 
-template <typename T> T dd_get_value(duckdb_result& res, uint32_t row, uint32_t column_count, CRPTR(char) column_name, const T& default_value);
+template <typename T> T dd_get_value(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const T &default_value);
 
 std::vector<uint8_t> dd_get_blob(duckdb_result& res, const uint32_t row, const uint32_t col);
 

@@ -26,7 +26,7 @@ public:
     pqxx::work* get_pqxx_work() const;
 };
 
-typedef std::shared_ptr<svr::dao::scoped_transaction_guard> scoped_transaction_guard_ptr;
+typedef std::shared_ptr<scoped_transaction_guard> scoped_transaction_guard_ptr;
 
 class scoped_file_guard
 {
@@ -40,7 +40,7 @@ public:
     duckdb_result exec(const std::string &query) const;
 };
 
-typedef std::shared_ptr<svr::dao::scoped_file_guard> scoped_file_guard_ptr;
+typedef std::shared_ptr<scoped_file_guard> scoped_file_guard_ptr;
 
 }
 }

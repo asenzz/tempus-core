@@ -309,7 +309,7 @@ public:
 
 };
 
+using DecrementTask_ptr = std::shared_ptr<svr::datamodel::DecrementTask>;
+
 } // namespace datamodel
 } // namespace svr
-
-using DecrementTask_ptr = std::shared_ptr<svr::datamodel::DecrementTask>;
