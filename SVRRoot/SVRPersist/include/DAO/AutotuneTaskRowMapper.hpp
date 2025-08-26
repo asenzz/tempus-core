@@ -35,7 +35,7 @@ public:
             row_set["mse"].as<double>(-1)
         );
     }
-
+#ifdef USE_DUCKDB
     AutotuneTask_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::AutotuneTask>(
@@ -62,6 +62,7 @@ public:
             common::dd_get_value(row_set, row, col_count, "mse", double(-1))
         );
     }
+#endif
 };
 
 }

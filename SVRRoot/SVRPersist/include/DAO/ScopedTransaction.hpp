@@ -1,10 +1,12 @@
 #pragma once
 
 #include "common.hpp"
+#ifdef USE_DUCKDB
 #include "duckdb.h"
+#endif
 
-namespace svr{
-namespace dao{
+namespace svr {
+namespace dao {
 
 class DataSource;
 
@@ -28,6 +30,8 @@ public:
 
 typedef std::shared_ptr<scoped_transaction_guard> scoped_transaction_guard_ptr;
 
+#ifdef USE_DUCKDB
+
 class scoped_file_guard
 {
     duckdb_database db;
@@ -41,6 +45,8 @@ public:
 };
 
 typedef std::shared_ptr<scoped_file_guard> scoped_file_guard_ptr;
+
+#endif
 
 }
 }

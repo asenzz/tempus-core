@@ -33,7 +33,7 @@ public:
                 row_set["last_modeled_value_time"].as<bpt::ptime>(bpt::not_a_date_time)
         );
     }
-
+#ifdef USE_DUCKDB
     datamodel::Model_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::Model>(
@@ -49,7 +49,7 @@ public:
             common::dd_get_value<bpt::ptime>(row_set, row, col_count, "last_modeled_value_time", bpt::not_a_date_time)
         );
     }
-
+#endif
 };
 
 class SVRModelRowMapper : public IRowMapper<datamodel::OnlineSVR>
@@ -62,7 +62,7 @@ public:
         model_bin.write((const char *)binstr.c_str(), binstr.size());
         return ptr<datamodel::OnlineSVR>(row_set["id"].as<bigint>(0), row_set["model_id"].as<bigint>(0), model_bin);
     }
-
+#ifdef USE_DUCKDB
     datamodel::OnlineSVR_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         std::stringstream model_bin;
@@ -73,6 +73,7 @@ public:
             common::dd_get_value(row_set, row, col_count, "model_id", bigint(0)), 
             model_bin);
     }
+#endif
 };
 
 

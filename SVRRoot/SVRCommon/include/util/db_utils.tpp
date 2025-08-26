@@ -6,6 +6,8 @@
 
 namespace svr {
 namespace common {
+
+#ifdef USE_DUCKDB
 #if 0
 template <typename T> T dd_get_value(duckdb_result& res, const uint32_t row, const uint32_t column_count, CRPTR(char) column_name, const T &default_value)
 {
@@ -17,6 +19,7 @@ template <typename T> T dd_get_value(duckdb_result& res, const uint32_t row, con
 
     return boost::lexical_cast<T>(dd_get_string(res, row, col));
 }
+#endif
 #endif
 }
 }

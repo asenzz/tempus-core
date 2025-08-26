@@ -2,7 +2,9 @@
 #define DB_UTILS_HPP
 
 #include <boost/date_time/posix_time/posix_time.hpp>
+#ifdef USE_DUCKDB
 #include <duckdb.h>
+#endif
 #include <pqxx/pqxx>
 #include <string>
 #include "common/compatibility.hpp"
@@ -48,6 +50,8 @@ template <> struct string_traits<boost::posix_time::time_duration>
 namespace svr {
 namespace common {
 
+#ifdef USE_DUCKDB
+
 int32_t dd_column_name(duckdb_result& res, const char *name, uint32_t column_count);
 
 template <typename T> T dd_get_value(duckdb_result& res, const uint32_t row, const uint32_t column_count, const char *column_name, const T &default_value);
@@ -59,6 +63,8 @@ std::string dd_get_string(duckdb_result& res, const uint32_t row, const uint32_t
 bpt::ptime dd_get_time(duckdb_result& res, const uint32_t row, const uint32_t col);
 
 bpt::time_duration dd_get_duration(duckdb_result& res, const uint32_t row, const uint32_t col);
+
+#endif
 
 } // namespace common
 } // namespace svr

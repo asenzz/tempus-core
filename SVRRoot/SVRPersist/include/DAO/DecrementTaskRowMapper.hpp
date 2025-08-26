@@ -34,6 +34,8 @@ public:
                 );
     }
 
+#ifdef USE_DUCKDB
+
     datamodel::DecrementTask_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::DecrementTask>(
@@ -55,6 +57,8 @@ public:
             common::dd_get_value(row_set, row, col_count, "suggested_value", std::string())
         );
     }
+
+#endif
 
 };
 

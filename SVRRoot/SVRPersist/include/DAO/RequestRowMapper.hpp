@@ -24,6 +24,7 @@ struct MultivalRequestRowMapper : public IRowMapper<datamodel::MultivalRequest> 
         return p_request;
     }
 
+#ifdef USE_DUCKDB
     datamodel::MultivalRequest_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         datamodel::MultivalRequest_ptr p_request = ptr<datamodel::MultivalRequest>();
@@ -37,6 +38,8 @@ struct MultivalRequestRowMapper : public IRowMapper<datamodel::MultivalRequest> 
         p_request->value_columns = common::dd_get_value(row_set, row, col_count, "value_columns", std::string());
         return p_request;
     }
+#endif
+
 };
 
 struct MultivalResponseRowMapper : public IRowMapper<datamodel::MultivalResponse> {
@@ -51,6 +54,7 @@ struct MultivalResponseRowMapper : public IRowMapper<datamodel::MultivalResponse
         return p_response;
     }
 
+#ifdef USE_DUCKDB
     datamodel::MultivalResponse_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         datamodel::MultivalResponse_ptr p_response = ptr<datamodel::MultivalResponse>();
@@ -61,6 +65,7 @@ struct MultivalResponseRowMapper : public IRowMapper<datamodel::MultivalResponse
         p_response->value = common::dd_get_value(row_set, row, col_count, "value", std::numeric_limits<double>::quiet_NaN());
         return p_response;
     }
+#endif
 };
 
 struct ValueRequestRowMapper : public IRowMapper<datamodel::ValueRequest> {
@@ -74,6 +79,7 @@ struct ValueRequestRowMapper : public IRowMapper<datamodel::ValueRequest> {
         return p_request;
     }
 
+#ifdef USE_DUCKDB
     datamodel::ValueRequest_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         datamodel::ValueRequest_ptr p_request = ptr<datamodel::ValueRequest>();
@@ -83,6 +89,8 @@ struct ValueRequestRowMapper : public IRowMapper<datamodel::ValueRequest> {
         p_request->value_column = common::dd_get_value(row_set, row, col_count, "value_column", std::string());
         return p_request;
     }
+#endif
+
 };
 
 }

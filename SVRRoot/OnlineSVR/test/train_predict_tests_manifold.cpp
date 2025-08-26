@@ -115,15 +115,19 @@ TEST(manifold_tune_train_predict, basic_integration)
                 "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
                 "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
                 "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
+#ifdef USE_DUCKDB
         dao::data_source ds(PROPS.get_db_connection_string());
         if (PROPS.is_duck()) {
             const auto trx = ds.open_file();
             auto res = trx->exec(query);
             duckdb_destroy_result(&res);
         } else {
+#endif
             const auto trx = ds.open_transaction();
             (void) trx->exec(query);
+#ifdef USE_DUCKDB
         }
+#endif
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << " while preparing test queue.");
         return;

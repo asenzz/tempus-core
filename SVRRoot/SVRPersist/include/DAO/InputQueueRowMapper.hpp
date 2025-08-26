@@ -34,6 +34,7 @@ public:
         return result;
     }
 
+#ifdef USE_DUCKDB
     datamodel::InputQueue_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::InputQueue>(
@@ -48,6 +49,8 @@ public:
             common::dd_get_value(row_set, row, col_count, "uses_fix_connection", false)
         );
     }
+#endif
+
 };
 
 
@@ -64,12 +67,12 @@ public:
     {
         return ptr<std::string>(row_set[0].as<std::string>());
     }
-
+#ifdef USE_DUCKDB
     std::shared_ptr<std::string> map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<std::string>(common::dd_get_string(row_set, 0, 0));
     }
-
+#endif
 };
 
 } /* namespace dao */

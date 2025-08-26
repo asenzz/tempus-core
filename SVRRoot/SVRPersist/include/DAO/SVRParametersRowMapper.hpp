@@ -33,7 +33,7 @@ public:
                 datamodel::t_feature_mechanics::load(row_set["feature_mechanics"].as<std::string>(""))
         );
     }
-
+#ifdef USE_DUCKDB
     datamodel::SVRParameters_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::SVRParameters>(
@@ -59,6 +59,7 @@ public:
                 datamodel::t_feature_mechanics::load(common::dd_get_value(row_set, row, col_count, "feature_mechanics", std::string()))
             );
     }
+#endif
 };
 
 }

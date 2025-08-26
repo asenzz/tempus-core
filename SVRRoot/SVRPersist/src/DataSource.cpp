@@ -55,10 +55,12 @@ scoped_transaction_guard_ptr DataSource::open_transaction()
     return ptr<scoped_transaction_guard>(connection_string, *this);
 }
 
+#ifdef USE_DUCKDB
 scoped_file_guard_ptr DataSource::open_file()
 {
     return ptr<scoped_file_guard>(connection_string, *this);
 }
+#endif
 
 long DataSource::batch_update(const std::string &table_name, const datamodel::DataRow::container &data, const bpt::ptime &start_time)
 {

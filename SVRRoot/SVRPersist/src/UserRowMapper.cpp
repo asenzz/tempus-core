@@ -17,6 +17,7 @@ datamodel::User_ptr UserRowMapper::map_row(const pqxx_tuple& row_set) const
             datamodel::Priority(row_set["priority"].as<int>((int)datamodel::Priority::Normal)));
 }
 
+#ifdef USE_DUCKDB
 datamodel::User_ptr UserRowMapper::map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const
 {
     return ptr<datamodel::User>(
@@ -28,6 +29,7 @@ datamodel::User_ptr UserRowMapper::map_row(duckdb_result& row_set, const size_t 
             common::ignore_case_equals("admin", common::dd_get_value(row_set, row, col_count, "admin", std::string())) ? datamodel::ROLE::ADMIN : datamodel::ROLE::USER, 
 			datamodel::Priority(common::dd_get_value(row_set, row, col_count, "priority", int(datamodel::Priority::Normal))));
 }
+#endif
 
 } /* namespace dao */
 } /* namespace svr */

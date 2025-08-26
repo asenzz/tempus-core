@@ -22,6 +22,7 @@ public:
         );
     }
 
+#ifdef USE_DUCKDB
     datamodel::PredictionTask_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::PredictionTask>(
@@ -35,6 +36,7 @@ public:
             common::dd_get_value(row_set, row, col_count, "mse", double(0))
         );
     }
+#endif
 
 };
 }

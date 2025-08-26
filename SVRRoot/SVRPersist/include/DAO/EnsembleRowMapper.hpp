@@ -16,7 +16,7 @@ public:
                 common::from_sql_array(row_set["aux_decon_queues_table_names"].as<std::string>())
         );
     }
-
+#ifdef USE_DUCKDB
     datamodel::Ensemble_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::Ensemble>(
@@ -26,6 +26,7 @@ public:
             common::from_sql_array(common::dd_get_value(row_set, row, col_count, "decon_queue_table_name", std::string()))
         );
     }
+#endif
 };
 }
 }

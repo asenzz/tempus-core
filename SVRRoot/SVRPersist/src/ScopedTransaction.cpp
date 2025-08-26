@@ -53,6 +53,8 @@ pqxx::work *scoped_transaction_guard::get_pqxx_work() const
     return trx;
 }
 
+#ifdef USE_DUCKDB
+
 scoped_file_guard::scoped_file_guard(const std::string &path, DataSource &data_source) : data_source(data_source), wait(PROPS.get_db_wait())
 {
     int dd_err, retries = 0;
@@ -86,5 +88,7 @@ duckdb_result scoped_file_guard::exec(const std::string &query) const
     if (dd_err != DuckDBSuccess) LOG4_THROW("Error " << dd_err << " querying " << query);
     return res; // Don't forget to call duckdb_destroy_result()
 }
+
+#endif
 
 }

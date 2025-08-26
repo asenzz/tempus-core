@@ -29,7 +29,7 @@ public:
             values
         );
     }
-
+#ifdef USE_DUCKDB
     datamodel::DataRow_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         if (col_count < 4) {
@@ -47,7 +47,7 @@ public:
                 values
             );
     }
-
+#endif
 };
 
 } /* namespace dao */

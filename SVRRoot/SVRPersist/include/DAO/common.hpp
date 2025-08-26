@@ -1,6 +1,8 @@
 #pragma once
 #include <pqxx/pqxx>
+#ifdef USE_DUCKDB
 #include <duckdb.h>
+#endif
 #include "common/types.hpp"
 #include "util/CompressionUtils.hpp"
 #include "util/db_utils.hpp"

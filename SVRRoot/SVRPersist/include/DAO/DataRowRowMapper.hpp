@@ -33,6 +33,7 @@ public:
         );
     }
 
+#ifdef USE_DUCKDB
     datamodel::DataRow_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         if (col_count < 3) {
@@ -53,6 +54,8 @@ public:
             common::dd_get_value(row_set, row, col_count, "tick_volume", std::numeric_limits<double>::quiet_NaN()),
             levels);
     }
+#endif
+
 };
 }
 }

@@ -18,7 +18,9 @@ class UserRowMapper: public IRowMapper<svr::datamodel::User>
 {
 public:
     datamodel::User_ptr map_row(const pqxx_tuple& row_set) const override;
+#ifdef USE_DUCKDB
     datamodel::User_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override;
+#endif
 };
 
 } /* namespace dao */

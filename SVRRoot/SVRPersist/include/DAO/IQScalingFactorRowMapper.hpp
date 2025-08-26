@@ -20,7 +20,7 @@ public:
                 row_set["dc_offset"].as<double>(0)
         );
     }
-
+#ifdef USE_DUCKDB
     datamodel::IQScalingFactor_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::IQScalingFactor>(
@@ -31,6 +31,7 @@ public:
             common::dd_get_value(row_set, row, col_count, "scaling_factor", double(1)),
             common::dd_get_value(row_set, row, col_count, "dc_offset", double(0)));
     }
+#endif
 };
 
 }

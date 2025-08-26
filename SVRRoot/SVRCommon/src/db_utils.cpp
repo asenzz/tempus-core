@@ -81,6 +81,8 @@ std::string string_traits<boost::posix_time::time_duration>::to_string(const boo
 namespace svr {
 namespace common {
 
+#ifdef USE_DUCKDB
+
 int32_t dd_column_name(duckdb_result &res, const char *name, const uint32_t column_count)
 {
     if (strlen(name) < 1) return 0;
@@ -175,6 +177,8 @@ SPECIALIZE_GET(int64_t, int64)
 SPECIALIZE_GET(uint64_t, uint64)
 SPECIALIZE_GET(float, float)
 SPECIALIZE_GET(double, double)
+
+#endif
 
 }
 }

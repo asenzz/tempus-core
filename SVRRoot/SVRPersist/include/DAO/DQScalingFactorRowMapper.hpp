@@ -24,7 +24,7 @@ public:
                     row_set["chunk"].as<uint16_t>(0)
                 );
     }
-
+#ifdef USE_DUCKDB
     datamodel::DQScalingFactor_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::DQScalingFactor>(
@@ -39,6 +39,7 @@ public:
             common::dd_get_value(row_set, row, col_count, "gradient", uint16_t(0)),
             common::dd_get_value(row_set, row, col_count, "chunk", uint16_t(0)));
     }
+#endif
 };
 
 }

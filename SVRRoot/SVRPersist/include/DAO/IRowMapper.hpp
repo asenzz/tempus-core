@@ -14,9 +14,11 @@ namespace dao {
 
 template <class T> class IRowMapper {
 public:
-	virtual std::shared_ptr<T> map_row(const pqxx_tuple& row_set) const = 0;
+    virtual std::shared_ptr<T> map_row(const pqxx_tuple& row_set) const = 0;
+#ifdef USE_DUCKDB
     virtual std::shared_ptr<T> map_row(duckdb_result& row_set, size_t col_count, size_t row) const = 0;
-	virtual ~IRowMapper() = 0; // make this class abstract
+#endif
+    virtual ~IRowMapper() = 0; // make this class abstract
 };
 
 template <typename T> IRowMapper<T>::~IRowMapper() {}

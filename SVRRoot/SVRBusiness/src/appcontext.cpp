@@ -54,8 +54,14 @@ struct AppContext::AppContextImpl : StoreBufferInitializer
 
     AppContextImpl(const std::string &config_path, const bool use_threadsafe_dao)
         : app_properties(*new common::AppConfig(config_path)),
-          data_source(*new dao::DataSource(app_properties.is_duck() ? app_properties.get_db_file() : app_properties.get_db_connection_string())),
-          user_dao(*dao::UserDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
+          data_source(*new dao::DataSource(
+#ifdef USE_DUCKDB
+          app_properties.is_duck() ? app_properties.get_db_file() : app_properties.get_db_connection_string()
+#else
+          app_properties.get_db_connection_string()
+#endif
+           )),
+	  user_dao(*dao::UserDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
           input_queue_dao(*dao::InputQueueDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
           svr_parameters_dao(*dao::SVRParametersDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),
           dataset_dao(*dao::DatasetDAO::build(app_properties, data_source, app_properties.get_dao_type(), use_threadsafe_dao)),

@@ -244,17 +244,21 @@ std::string prepare_oemd_masks_dir(const std::string &masks_dir)
     return res;
 }
 
+#ifdef USE_DUCKDB
+
 constexpr std::string C_dbfile_prefix = "dbfile=";
 
 bool is_a_duck(const std::string &connection_str)
 {
-    return connection_str.find(C_dbfile_prefix);
+    return connection_str.find(C_dbfile_prefix) != std::string::npos;
 }
 
 std::string extract_db_file_path(const std::string &connection_str)
 {
     return connection_str.substr(connection_str.find(C_dbfile_prefix) + C_dbfile_prefix.size(), connection_str.size());
 }
+
+#endif
 
 // TODO Move hardcoded values to header file using the CONFPROP macro
 AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
@@ -276,10 +280,14 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
         tune_parameters_(get_property<DTYPE(tune_parameters_) >(app_config_file, TUNE_PARAMETERS, C_default_tune_parameters_str)),
         self_request_(get_property<DTYPE(self_request_) >(app_config_file, SELF_REQUEST, "0")),
         daemonize_(get_property<DTYPE(daemonize_) >(app_config_file, DAEMONIZE, C_default_daemonize)),
+#ifdef USE_DUCKDB
         is_duck_(is_a_duck(db_connection_string_)),
+#endif
         db_connection_string_(get_property<DTYPE(db_connection_string_) >(app_config_file, CONNECTION_STRING, C_default_connection_str)),
         oemd_masks_dir_(prepare_oemd_masks_dir(get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir))),
+#ifdef USE_DUCKDB
         db_file_(is_duck_ ? extract_db_file_path(db_connection_string_) : ""),
+#endif
         log_level_(set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, C_default_log_level))),
         loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, LOOP_INTERVAL, C_default_loop_interval_ms))),
         stream_loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, STREAM_LOOP_INTERVAL, C_default_stream_loop_interval_ms))),
@@ -388,10 +396,14 @@ const std::string &AppConfig::get_db_file() const noexcept
     return db_file_;
 }
 
+#ifdef USE_DUCKDB
+
 bool AppConfig::is_duck() const noexcept
 {
     return is_duck_;
 }
+
+#endif
 
 } /* namespace common */
 } /* namespace svr */

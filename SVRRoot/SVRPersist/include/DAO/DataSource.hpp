@@ -24,9 +24,9 @@ public:
     virtual ~DataSource();
 
     scoped_transaction_guard_ptr open_transaction();
-
+#ifdef USE_DUCKDB
     scoped_file_guard_ptr open_file();
-
+#endif
     template<typename T, typename ...Args> std::shared_ptr<T>
     query_for_object(IRowMapper<T> *row_mapper, const std::string &sql, Args &&... args);
 

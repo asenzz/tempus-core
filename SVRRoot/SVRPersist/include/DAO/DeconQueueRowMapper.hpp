@@ -19,7 +19,8 @@ public:
             row_set["levels"].as<uint16_t>(0)
         );
     }
-    
+
+#ifdef USE_DUCKDB    
     datamodel::DeconQueue_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::DeconQueue>(
@@ -30,6 +31,8 @@ public:
             common::dd_get_value(row_set, row, col_count, "levels", uint16_t(0))
         );
     }
+#endif
+
 };
 
 }

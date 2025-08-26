@@ -30,6 +30,7 @@ public:
         );
     }
 
+#ifdef USE_DUCKDB
     datamodel::Dataset_ptr map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<datamodel::Dataset>(
@@ -50,6 +51,7 @@ public:
             common::dd_get_value(row_set, row, col_count, "is_active", false)
         );
     }
+#endif
 
 };
 
@@ -61,7 +63,7 @@ public:
               row_set["linked_user_name"].as<std::string>(""), dataset_mapper.map_row(row_set)
         );
     }
-
+#ifdef USE_DUCKDB
     std::shared_ptr<std::pair<std::string, datamodel::Dataset_ptr>> map_row(duckdb_result& row_set, const size_t col_count, const size_t row) const override
     {
         return ptr<std::pair<std::string, datamodel::Dataset_ptr>>(
@@ -69,7 +71,7 @@ public:
             dataset_mapper.map_row(row_set, col_count, row)
         );
     }
-
+#endif
 };
 
 }

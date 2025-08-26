@@ -15,15 +15,19 @@ template<typename T, typename ...Args> std::shared_ptr<T> DataSource::query_for_
     std::string query;
     try {
         query = statement_preparer_template->prepare_statement(sql, args...);
+#ifdef USE_DUCKDB
         if (PROPS.is_duck()) {
             const auto trx = open_file();
             auto res = trx->exec(query);
             if (duckdb_row_count(&res) && duckdb_column_count(&res)) p_object = row_mapper->map_row(res, 1, 0);
             duckdb_destroy_result(&res);
         } else {
+#endif
             const auto trx = open_transaction();
             if (const auto result = trx->exec(query); !result.empty()) p_object = row_mapper->map_row(result.at(0));
+#ifdef USE_DUCKDB
         }
+#endif
     } catch (const pqxx::broken_connection &ex) {
         LOG4_ERROR("Broken connection, " << ex.what() << ", while executing " << query);
     } catch (const std::exception &ex) {
@@ -42,6 +46,7 @@ template<typename T, class ...Args> T DataSource::query_for_type(const std::stri
     std::string query;
     try {
         query = statement_preparer_template->prepare_statement(sql, args...);
+#ifdef USE_DUCKDB
         if (PROPS.is_duck()) { // DuckDB
             auto res = open_file()->exec(query);
             T ret;
@@ -53,6 +58,7 @@ template<typename T, class ...Args> T DataSource::query_for_type(const std::stri
             if (no_data) LOG4_THROW("No data returned for " << query);
             return ret;
         }
+#endif // USE_DUCKDB
         // Postgres
         const auto res = open_transaction()->exec(query);
         if (res.empty()) LOG4_THROW("No data returned for " << query);
@@ -74,6 +80,7 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
     Container<T, std::allocator<T>> res;
     try {
         query = statement_preparer_template->prepare_statement(sql, args...);
+#ifdef USE_DUCKDB
         if (PROPS.is_duck()) {
             auto dbres = open_file()->exec(query);
             const auto row_count = duckdb_row_count(&dbres);
@@ -87,6 +94,7 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
             duckdb_destroy_result(&dbres);
             return res;
         }
+#endif // USE_DUCKDB
         // Postgres
         auto trx = open_transaction();
         // Create a counted query
@@ -161,12 +169,14 @@ template<typename ...Args> int DataSource::update(const std::string &sql, Args &
     std::string query;
     try {
         query = statement_preparer_template->prepare_statement(sql, args...);
+#ifdef USE_DUCKDB
         if (PROPS.is_duck()) {
             auto res = open_file()->exec(query);
             const auto ret = duckdb_rows_changed(&res);
             duckdb_destroy_result(&res);
             return ret;
         }
+#endif // USE_DUCKDB
         return open_transaction()->exec(query).affected_rows();
     } catch (const pqxx::failure &ex) {
         LOG4_ERROR("Error " << ex.what() << ", while executing " << query);
