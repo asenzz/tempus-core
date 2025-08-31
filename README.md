@@ -1,30 +1,39 @@
-<h1 align="center">About Tempus</h1>
+<h1 align="left">About Tempus</h1>
 
-Tempus is a project aimed at utilizing the cutting edge methods to solve non-linear regression problems. In it's core Tempus uses an advanced SVM implementation that fixes several inconsistencies of the original theory by prof. Vapnik and Chervonenkis to achieve forecast precision better than any other algorithm currently available in the field of statistical learning. This is accomplished by calculating the ideal kernel matrix for the given observations (labels) and then produce a kernel function fitted as tight as possible to it in order to extract all relevant information contained in the dataset. Having the ideal kernel matrix available for any given data allows this SVM implementation to nest several support vector machines into each other as kernel functions, or having a different statistical model produce the kernel function (eg. gradient boosted trees using <a href="https://github.com/microsoft/LightGBM">LightGBM</a> or a temporal fusion transformer using <a href="https://pytorch.org/">Torch</a>). Several conventional kernel methods are also implemented as part of Tempus, such are a fast variant of the <a href="https://www.scitepress.org/PublishedPapers/2013/42673/">Path Kernel (Baisero et al.)</a>, the Radial-basis function, the <a href="https://marcocuturi.net/GA.html">Global Alignment Kernel (Cuturi et al.)</a>. For this implementation there is no need to tune the regularization cost parameter, epsilon thresholding or do tuning of hyperparameters using a train-predict validation cycle. The model produced is optimal for the available data and hardware resources configured. Beside nesting of kernel functions, three other methods of model scaling (or ensembling) are provided; in the spectral domain using a modified online empirical model decomposition, in the time domain or time slicing and sequential residuals or gradient boosting (the last one is work in progress). Each SVM model can have multiple weight layers according to the complexity of the trained data. Weights are produced by a non-linear <code>(A+b<sup>T</sup>)x=b<i>m</i></code> matrix optimizer - Pruned <a href="https://github.com/avaneev/biteopt">BiteOpt</a> which is based on the CMA-ES algorithm, but interfaces to <a href="https://petsc.org/release">PETSc</a>, <a href="https://github.com/icl-utk-edu/magma">MAGMA</a>, <a href="https://developer.nvidia.com/cusolver">CUSolver</a> and pruned <a href="https://github.com/libprima">PRIMA</a> are also available. Feature alignment and outlier filtering of the input data is implemented using the <a href="https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-summary-statistics-notes/2021-1/using-the-bacon-algorithm-for-outlier-detection.html">BACON</a> algorithm, <a href="https://github.com/ojmakhura/hdbscan">HDBScan</a> and simple Euclidean distance works good enough. This allows Tempus to efficiently model extremely noisy data.  
+Tempus is a project aimed at utilizing the cutting edge methods to solve non-linear regression problems. In it's core Tempus uses an advanced SVM implementation that fixes several inconsistencies of the original theory by prof. Vapnik and Chervonenkis to achieve forecast precision better than any other algorithm currently available in the field of statistical learning. This is accomplished by calculating the ideal kernel matrix for the provided observations (labels) and produce a kernel function fitted as tight as possible to it in order to extract all relevant information contained in the dataset. Having the ideal kernel matrix available for any given data allows this SVM implementation to nest several support vector machines into each other as kernel functions, or having an altogether different statistical model produce the kernel function (eg. gradient boosted trees using <a href="https://github.com/microsoft/LightGBM">LightGBM</a> or a temporal fusion transformer using <a href="https://pytorch.org/">Torch</a>). Several conventional kernel methods are also implemented as part of Tempus, such are a fast variant of the <a href="https://www.scitepress.org/PublishedPapers/2013/42673/">Path Kernel (Baisero et al.)</a>, the Radial-basis function, the <a href="https://marcocuturi.net/GA.html">Global Alignment Kernel (Cuturi et al.)</a>.
+
+For this implementation there is no need to tune the regularization cost parameter, epsilon thresholding or do tuning of kernel hyperparameters using a train-predict validation cycle. The model produced is optimal for the available data and hardware resources configured. Beside nesting of kernel functions, three other methods of model scaling (or ensembling) are provided; in the spectral domain using a modified online EMDn or VMD, in the time domain or dynamic time slicing and sequential residuals or gradient boosting - the last one is work in progress. Each SVM model can have multiple internal weight layers - configured manually according to the complexity of the trained data. Weights are produced by a combination of a linear IRWLS solver with <a href="https://github.com/asenzz/magma">MAGMA's GESV RBT</a> and a non-linear <code>(A+b<sup>T</sup>)x=b<i>m</i></code> matrix optimizer - Pruned <a href="https://github.com/avaneev/biteopt">BiteOpt</a> which is based on the CMA-ES algorithm, but interfaces to <a href="https://petsc.org/release">PETSc</a>, <a href="https://github.com/icl-utk-edu/magma">MAGMA</a>, <a href="https://developer.nvidia.com/cusolver">CUSolver</a> and pruned <a href="https://github.com/libprima">PRIMA</a> are also available. 
+Feature alignment and outlier filtering of the input data is implemented using the <a href="https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-summary-statistics-notes/2021-1/using-the-bacon-algorithm-for-outlier-detection.html">BACON</a> algorithm, <a href="https://github.com/ojmakhura/hdbscan">HDBScan</a> and simple Euclidean distance works good enough. This allows Tempus to efficiently model extremely noisy data. Feature selection is done by measuring normalized columns correlation to the labels trained.
 An online learning mode is in the works.
 
-Tempus is a project that unites researchers and engineers from several countries and academic institutions in order to exchange ideas, learn and achieve the best performance in time series analysis using the latest methods in statistical analysis and signal processing. It makes use of HPC technologies such is OpenCL, Cilk Plus, CUDA and MPI to deliver maximum performance over highly scaled systems. Tempus can scale on many GPUs and and CPUs increasing precision and almost linear increase in performance in data processing.
+Tempus is a project that unites researchers and engineers from several countries and academic institutions in order to exchange ideas, learn and achieve the best performance in time series analysis using the latest methods in statistics and signal processing. It makes use of HPC technologies such are OpenCL, OpenMP, CUDA and MPI to deliver optimal performance over highly parallel systems.
 
-It consists of multiple modules (libraries):
+<h2>File system</h2>
 
-- SVRMain (Main app for configuring and running)
-- SVRBusiness (the Service layer for managing domain model objects)
-- SVRPersist (the persistence layer for storing and reading persisted objects)
-- SVRCommon (the common (shared) functionality accross modules)
-- SVRModel (the domain model classes)
+It consists of several libraries:
+
+- SVRDaemon - the executable that stays resident in memory and processes user requests
+- SVRBusiness - the service layer for managing domain model objects)
+- SVRPersist - the persistence layer for storing and reading persisted objects
+- SVRCommon - the common (shared) functionality accross modules
+- SVRModel - the domain model classes
+- lib - contains third party libraries and patches to them
+- SVRFix - the FIX protocol data connector
+- mql - contains MQL code for the MetaQuotes data connector
+- OnlineSVR - modeling algorithms are extension to the business layer
+- SVRWeb - an HTTP service, serving two roles: as MQL-over-JSON protocol data connector and presenting a Web user interface for monitoring and management
+  Each module is associated with its unit tests
 
 To build the app you create a build directory and run CMake pointing to the directory containing tempus-core/CMakeLists.txt eg. 
 <code> cd ~/tempus-core; mkdir build; cd build ; ccmake .. </code> and choose the appropriate options.
 
 To run the app you need to:
 
-1. configure PostgreSQL database (connection string is configurable in SVRMain/include/main-config.hpp)
-2. If you are linking dynamically, add the SVRBusiness, SVRCommon and SVRPersist libraries to LD_LIBRARY_PATH:
-		- LD_LIBRARY_PATH=~/git/master/SVRWorkspace/SVRCommon/Debug:~/git/master/SVRWorkspace/SVRBusiness/Debug:~/git/master/SVRWorkspace/SVRPersist/Debug
-		- export LD_LIBRARY_PATH
+- install the dependencies specified in doc/INSTALL
+- configure PostgreSQL database, the connection string is configurable in <b>app.config</b>
 
 Note:
-	- Change the value of *SQL_PROPERTIES_LOCATION* config variable according to the location on your disk (which is located in SVRWorkspace/SVRCommon/include/config/common.hpp)
+	- Change the value of *SQL_PROPERTIES_LOCATION* config variable according to the location on your disk (which is located in SVRRoot/SVRCommon/include/config/common.hpp)
 
 
 <h2>History</h2>
