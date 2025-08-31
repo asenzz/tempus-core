@@ -1,7 +1,9 @@
 #ifndef DATASOURCE_TPP
 #define DATASOURCE_TPP
 
+#ifndef DATASOURCE_HPP
 #include "DataSource.hpp"
+#endif
 #include "DAO/DummyRowMapper.hpp"
 
 

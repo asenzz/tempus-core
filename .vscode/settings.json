@@ -90,5 +90,8 @@
     ],
     "cmake.buildArgs": [
         "-DCMAKE_CUDA_ARCHITECTURES=80 -DCUDA_ARCHITECTURES=80"
-    ]
+    ],
+    "editor.wordWrap": "wordWrapColumn",
+    "editor.wordWrapColumn": 180,
+    "C_Cpp.default.intelliSenseMode": "linux-gcc-x64"
 }

@@ -66,61 +66,55 @@
   </component>
   <component name="CMakeSettings" AUTO_RELOAD="true">
     <configurations>
-      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build-clion" CONFIG_NAME="Release" GENERATION_OPTIONS="-DCMAKE_CUDA_ARCHITECTURES:STRING=80 -DCUDA_ARCHITECTURES:STRING=80" BUILD_OPTIONS="-j3" />
+      <configuration PROFILE_NAME="Release" ENABLED="true" GENERATION_DIR="$PROJECT_DIR$/build-clion" CONFIG_NAME="Release" GENERATION_OPTIONS="-DCMAKE_CUDA_ARCHITECTURES:STRING=80 -DCUDA_ARCHITECTURES:STRING=80 -DUSE_DUCKDB=ON" BUILD_OPTIONS="-j3" />
     </configurations>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cc8418c2-62f8-4b92-86c8-7b9409132682" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.tpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/db_utils.hpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/db_utils.tpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/db_utils.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.vscode/c_cpp_properties.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/c_cpp_properties.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.vscode/settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/settings.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/cuqrsolve.cuh" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/cuqrsolve.cuh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/include/onlinesvr.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/PredictionTaskService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/PredictionTaskService.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/SVRParametersService.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/include/SVRParametersService.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/constants.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/common/constants.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/PropertiesFileReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/PropertiesFileReader.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/AutotuneTask.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/AutotuneTask.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/PredictionTask.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRModel/include/model/PredictionTask.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/AutotuneTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/AutotuneTaskRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DQScalingFactorRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DQScalingFactorRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataRowRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataRowRowMapper.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/kernel_base.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/kernel_base.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune_fast.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune_fast.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/deconstructed_etalon.txtfk4x2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/deconstructed_etalon.txtfk4x8" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/deconstructed_etalon.txtfk8x8" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/inputqueue_long.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_3600_test_data.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/inverse_output_real" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/inverse_transform_input" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/inverse_transform_output" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/transform_output_real" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/stft_test_data/deconstructed_etalon.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/stft_test_data/input_queue_etalon.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/stft_test_data/r_matrix_200.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/10000_mimo_path.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/GA_trainpredict-basic_integration-input.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/all_feat_vectors.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/all_labels.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/batch-trained-model.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/batch_train_output_saved01.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/features_input_path.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/features_level_0.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/mimo_batch_train_model.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/mimo_model_avg_level3.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/online_svr_final_state.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/path_trainpredict-basic_integration-input.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/train_predict_test_eurusd_twap_1h.tsv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/vectors_200.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/vectors_200_path.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/x.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/xauusd_1_2023_short.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/xauusd_3600_2023.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/xauusd_3600_2023_short.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/y.txt" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DatasetRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DatasetRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DeconQueueRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DeconQueueRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DecrementTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DecrementTaskRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DummyRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DummyRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/EnsembleRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/EnsembleRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IQScalingFactorRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IQScalingFactorRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/IRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/InputQueueRowRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ModelRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ModelRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/PredictionTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/PredictionTaskRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/RequestRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/RequestRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/SVRParametersRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScalingFactorsTaskRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScalingFactorsTaskRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScopedTransaction.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/ScopedTransaction.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/UserRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/UserRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/WScalingFactorRowMapper.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/WScalingFactorRowMapper.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/common.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/common.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc/boostPqxxConvertor.hpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/DataSource.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/DataSource.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/ScopedTransaction.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/ScopedTransaction.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/UserRowMapper.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/UserRowMapper.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/app.config" beforeDir="false" afterPath="$PROJECT_DIR$/config/app.config" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/doc/.clang-format" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/doc/clion-code-style.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/doc/coding-style.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/doc/eclipse-cpp-google-style.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.tpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.tpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tags" beforeDir="false" />
     </list>
     <list id="b911cfe9-5e99-464b-b960-ad0631e8da5f" name="Frequently changed" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -206,14 +200,14 @@
     &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
     &quot;ctest.advertisement.all.test.configuration.is.created&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;support-vectors-manifold&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/zarko/repo/tempus/SVRRoot/SVRPersist/include/misc&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/zarko/run_vscode.sh&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
     &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.sourceCode.C++&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;CMakeSettings&quot;,
     &quot;structure.view.defaults.are.configured&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
@@ -998,12 +992,6 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Google Test.OnlineSVR-test" />
-      <item itemvalue="Google Test.SVRBusiness-tests" />
-      <item itemvalue="Google Test.SVRCommon-unit-tests" />
-      <item itemvalue="Google Test.SVRDaemon-blackbox-tests" />
-      <item itemvalue="Google Test.SVRModel-unit-tests" />
-      <item itemvalue="Google Test.SVRPersist-unit-tests" />
       <item itemvalue="CMake Application.OnlineSVR-unit-tests" />
       <item itemvalue="CMake Application.OnlineSVR" />
       <item itemvalue="CMake Application.SVRBusiness-tests" />
@@ -1025,8 +1013,14 @@
       <item itemvalue="CMake Application.connector-tester" />
       <item itemvalue="CMake Application.victor-tester" />
       <item itemvalue="CTest Application.All CTest" />
-      <item itemvalue="Python.average_price_range" />
+      <item itemvalue="Google Test.OnlineSVR-test" />
+      <item itemvalue="Google Test.SVRBusiness-tests" />
+      <item itemvalue="Google Test.SVRCommon-unit-tests" />
+      <item itemvalue="Google Test.SVRDaemon-blackbox-tests" />
+      <item itemvalue="Google Test.SVRModel-unit-tests" />
+      <item itemvalue="Google Test.SVRPersist-unit-tests" />
       <item itemvalue="Python.show_graph" />
+      <item itemvalue="Python.average_price_range" />
       <item itemvalue="Python.test_linear" />
       <item itemvalue="Python.train_predict_test_pt_2" />
       <item itemvalue="Python.train_predict_test_xgboost" />
@@ -1618,6 +1612,21 @@
       <workItem from="1756029611800" duration="421000" />
       <workItem from="1756056988201" duration="211000" />
       <workItem from="1756058771189" duration="29000" />
+      <workItem from="1756462645476" duration="1734000" />
+      <workItem from="1756478319916" duration="1945000" />
+      <workItem from="1756492896501" duration="319000" />
+      <workItem from="1756493465539" duration="529000" />
+      <workItem from="1756494180172" duration="27000" />
+      <workItem from="1756494460954" duration="789000" />
+      <workItem from="1756495352250" duration="89000" />
+      <workItem from="1756497097876" duration="262000" />
+      <workItem from="1756499256083" duration="87000" />
+      <workItem from="1756500190281" duration="115000" />
+      <workItem from="1756500750173" duration="1284000" />
+      <workItem from="1756502249352" duration="1246000" />
+      <workItem from="1756536132037" duration="400000" />
+      <workItem from="1756536745101" duration="1488000" />
+      <workItem from="1756569405373" duration="695000" />
     </task>
     <task id="LOCAL-00001" summary="Stabilized data preparation across running instances: VMD memory corruption fixed, decon queue saving fixed, scaling factors calculation fixed to a predetermined number of rows, added more detailed logging info.">
       <created>1625999927377</created>

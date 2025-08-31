@@ -60,6 +60,8 @@ public:
 
 } /* namespace svr::dao */
 
+#ifndef DATASOURCE_TPP
 #include "DataSource.tpp"
+#endif
 
 #endif

@@ -1,0 +1,17 @@
+buildType:
+      default: release
+      choices:
+        debug:
+          short: Debug
+          long: Emit debug information
+          buildType: Debug
+          settings:
+            CUDA_ARCHITECTURES: 80
+            CMAKE_CUDA_ARCHITECTURES: 80
+        release:
+          short: Release
+          long: Optimize generated code
+          buildType: Release
+          settings:
+            CUDA_ARCHITECTURES: 80
+            CMAKE_CUDA_ARCHITECTURES: 80

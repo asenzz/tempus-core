@@ -95,6 +95,8 @@ template<> void kernel_from_distances<T>(RPTR(T) Kz, const uint32_t m, const uin
 
 template<> void kernel_from_distances<T>(RPTR(T) K, CRPTR(T) Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree)
 {
+    LOG4_BEGIN();
+
     const auto mn = m * n;
     // const auto mat_size = mn * sizeof(T);
     CTX4_CUSTREAM;
@@ -102,19 +104,25 @@ template<> void kernel_from_distances<T>(RPTR(T) K, CRPTR(T) Z, const uint32_t m
     if (false /* m == n */) G_kernel_from_distances_symm<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_Kz, m, gamma, mean, degree);
     else G_kernel_from_distances<<<CU_BLOCKS_THREADS(mn), 0, custream>>>(d_Kz, mn, gamma, mean, degree);
     cufreecopy(K, d_Kz, custream, mn);
-    LOG4_TRACE("Distances " << m << "x" << n << " " << common::to_string(Z, std::min<uint32_t>(mn, 10)) << ", parameters gamma " << gamma << ", mean " << mean << ", degree " << degree
-        << ", to kernel " << common::to_string(K, std::min<uint32_t>(mn, 10)) << ", mean " << common::mean(K, mn));
+    LOG4_TRACE("Distances " << m << "x" << n << " " << common::to_string(Z, std::min<uint32_t>(mn, 10)) << ", parameters gamma " << gamma << ", mean " << mean << 
+        ", degree " << degree << ", to kernel " << common::to_string(K, std::min<uint32_t>(mn, 10)) << ", mean " << common::mean(K, mn));
     cusyndestroy(custream);
+
+    LOG4_END();
 }
 
 template<> void d_kernel_from_distances<T>(
         RPTR(T) d_K, CRPTR(T) d_Z, const uint32_t m, const uint32_t n, const T gamma, const T mean, const T degree, const cudaStream_t custream)
 {
+    LOG4_BEGIN();
+
     if (false /* m == n */) G_kernel_from_distances_symm<<<CU_BLOCKS_THREADS(m), 0, custream>>>(d_K, d_Z, m, gamma, mean, degree);
     else {
         const auto mn = m * n;
         G_kernel_from_distances<<<CU_BLOCKS_THREADS(mn), 0, custream>>>(d_K, d_Z, mn, gamma, mean, degree);
     }
+
+    LOG4_END();
 }
 
 #undef T

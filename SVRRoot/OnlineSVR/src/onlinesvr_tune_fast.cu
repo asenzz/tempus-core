@@ -2,27 +2,25 @@
 // Created by zarko on 4/29/24.
 //
 #include <armadillo>
+#include <cooperative_groups.h>
 #include <cublas_v2.h>
-#include <driver_types.h>
-#include <limits>
-#include <thread>
-#include <magma_v2.h>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#include <cooperative_groups.h>
-#include <tuple>
+#include <driver_types.h>
+#include <limits>
+#include <magma_v2.h>
 #include <thrust/reduce.h>
-#include "common/compatibility.hpp"
-#include "common/logging.hpp"
-#include "common/gpu_handler.hpp"
-#include "common/constants.hpp"
-#include "cuqrsolve.cuh"
-#include "onlinesvr.hpp"
-#include "util/math_utils.hpp"
+#include <tuple>
 #include "appcontext.hpp"
-#include "kernel_base.cuh"
-#include "kernel_factory.hpp"
+#include "common/compatibility.hpp"
 #include "common/cuda_util.cuh"
+#include "common/gpu_handler.hpp"
+#include "common/logging.hpp"
+#include "cuqrsolve.cuh"
+#include "kernel_base.cuh"
+#include "kernel_base.hpp"
+#include "kernel_factory.hpp"
+#include "util/math_utils.hpp"
 
 namespace svr {
 namespace kernel {
@@ -48,29 +46,29 @@ datamodel::SVRParameters make_tuning_template(const datamodel::SVRParameters &ex
 #endif
 }
 
-cutuner::cutuner(
-    const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const datamodel::SVRParameters &parameters)
-    : n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count()), template_parameters(make_tuning_template(parameters)),
-      weighted(train_W.n_elem), n(train_label_chunk.n_cols), train_len(train_F.n_cols),
-      calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), train_F_rows(train_F.n_rows), K_train_len(train_len * train_len),
-      K_train_size(K_train_len * sizeof(double)), K_calc_len(calc_len * calc_len), K_off(calc_start * train_len + calc_start),
-      train_len_n(train_len * n), train_n_size(train_len_n * sizeof(double)), ref_K(kernel::get_reference_Z(train_label_chunk)),
-      train_F(train_F), ref_K_mean(common::mean(ref_K)), ref_K_meanabs(common::meanabs(ref_K)) // TODO Consider normalizing ref_K
+cutuner::cutuner(const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const datamodel::SVRParameters &parameters) :
+    n_gpus(common::gpu_handler<cutuner::streams_per_gpu>::get().get_gpu_devices_count()), template_parameters(make_tuning_template(parameters)), weighted(train_W.n_elem),
+    n(train_label_chunk.n_cols), train_len(train_F.n_cols), calc_start(PROPS.get_tune_skip()), calc_len(train_len - calc_start), train_F_rows(train_F.n_rows),
+    K_train_len(train_len * train_len), K_train_size(K_train_len * sizeof(double)), K_calc_len(calc_len * calc_len), K_off(calc_start * train_len + calc_start),
+    train_len_n(train_len * n), train_n_size(train_len_n * sizeof(double)), ref_K(kernel::get_reference_Z(train_label_chunk)), train_F(train_F), ref_K_mean(common::mean(ref_K)),
+    ref_K_meanabs(common::meanabs(ref_K)) // TODO Consider normalizing ref_K
 {
     LOG4_TRACE("Train len " << train_len << ", streams per GPU " << streams_per_gpu << ", calc len " << calc_len);
     dx.resize(n_gpus);
     const auto K_train_l = common::extrude_rows(train_label_chunk.t().eval(), train_len);
-    const double as_err = common::sumabs<double>((K_train_l + ref_K) * arma::ones<arma::vec>(train_len) - train_len * train_label_chunk);
+    const auto as_err = common::sumabs<double>((K_train_l + ref_K) * arma::ones<arma::vec>(train_len) - train_len * train_label_chunk);
     if (as_err > 0)
         LOG4_WARN("Tune ftor parameters " << parameters << "(K_train_l + ref_K) * ones are not equal to labels " << as_err / train_len << ", K_train_l "
-        << common::present(K_train_l) + ", ref_K " << common::present(ref_K) << ", train_label_chunk " << common::present(train_label_chunk) <<
-        ", train features " << common::present(train_F));
-    OMP_FOR_i(n_gpus) {
+                                          << common::present(K_train_l) + ", ref_K " << common::present(ref_K) << ", train_label_chunk " << common::present(train_label_chunk)
+                                          << ", train features " << common::present(train_F));
+    OMP_FOR_i(n_gpus)
+    {
         {
             // Read-only buffers per device
             DEV_CUSTREAM(i);
             dx[i].d_ref_K = cumallocopy(ref_K, custream);
-            if (weighted) dx[i].d_train_W = cumallocopy(train_W, custream);
+            if (weighted)
+                dx[i].d_train_W = cumallocopy(train_W, custream);
             dx[i].d_train_F = cumallocopy(train_F, custream);
             cusyndestroy(custream);
         }
@@ -83,22 +81,27 @@ cutuner::cutuner(
             magma_queue_create(i, &dxsx.ma_queue);
             dxsx.custream = magma_queue_get_cuda_stream(dxsx.ma_queue);
             dxsx.cublas_H = magma_queue_get_cublas_handle(dxsx.ma_queue);
-            cu_errchk(cudaMallocAsync((void **) &dxsx.d_K_train, K_train_size, dxsx.custream));
+            cu_errchk(cudaMallocAsync((void **)&dxsx.d_K_train, K_train_size, dxsx.custream));
             dxsx.K_train_off = dxsx.d_K_train + K_off;
             cu_errchk(cudaStreamSynchronize(dxsx.custream));
         }
     }
+
+    LOG4_END();
 }
 
 cutuner::~cutuner()
 {
-    OMP_FOR_i(n_gpus) {
+    OMP_FOR_i(n_gpus)
+    {
         {
             DEV_CUSTREAM(i);
             cu_errchk(cudaFreeAsync(dx[i].d_train_F, custream));
             cu_errchk(cudaFreeAsync(dx[i].d_ref_K, custream));
-            if (weighted) cu_errchk(cudaFreeAsync(dx[i].d_train_W, custream));
-            if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH) cu_errchk(cudaFreeAsync(dx[i].d_D_paths, custream));
+            if (weighted)
+                cu_errchk(cudaFreeAsync(dx[i].d_train_W, custream));
+            if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH)
+                cu_errchk(cudaFreeAsync(dx[i].d_D_paths, custream));
             cusyndestroy(custream);
         }
         cu_errchk(cudaSetDevice((i)));
@@ -148,7 +151,8 @@ std::tuple<double, double, double> cutuner::phase1(const double tau, const doubl
     svr_parameters_.set_D_feedback(D);
     svr_parameters_.set_V_feedback(V);
     cu_errchk(cudaSetDevice(gpu_id));
-    kernel::IKernel<double>::get<kernel::kernel_path<double> >(svr_parameters_)->kernel_base::d_distances(dx_.d_train_F, train_F_rows, train_len, dxsx.d_K_train, dxsx.custream);
+    kernel::IKernel<double>::get<kernel::kernel_path<double>>(svr_parameters_)
+        ->kernel_base<double>::d_distances(dx_.d_train_F, train_F_rows, train_len, dxsx.d_K_train, dxsx.custream);
     cu_errchk(cudaStreamSynchronize(dxsx.custream));
     return normalize_result(dx_, dxsx, svr_parameters_);
 }
@@ -159,11 +163,13 @@ void cutuner::prepare_second_phase(const datamodel::SVRParameters &first_phase_p
 
     arma::mat Z;
     if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH)
-        Z = kernel::IKernel<double>::get<kernel::kernel_path<double> >(template_parameters)->kernel_base::distances(train_F);
-    OMP_FOR_i(n_gpus) {
+        Z = kernel::IKernel<double>::get<kernel::kernel_path<double>>(template_parameters)->kernel_base<double>::distances(train_F);
+    OMP_FOR_i(n_gpus)
+    {
         // Read-only buffers per device
         DEV_CUSTREAM(i);
-        if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH) dx[i].d_D_paths = cumallocopy(Z, custream);
+        if (template_parameters.get_kernel_type() == datamodel::e_kernel_type::PATH)
+            dx[i].d_D_paths = cumallocopy(Z, custream);
         cusyndestroy(custream);
     }
 }
@@ -179,9 +185,10 @@ std::tuple<double, double, double> cutuner::phase2(const double lambda) const
     auto svr_parameters_ = template_parameters;
     svr_parameters_.set_svr_kernel_param2(lambda);
     thrust::transform(thrust::cuda::par.on(dxsx.custream), dx_.d_D_paths, dx_.d_D_paths + K_train_len, dxsx.d_K_train,
-                      [lambda] __device__ (const double z) { return kernel::K_from_Z(z, lambda); });
+                      [lambda] __device__(const double z) { return kernel::K_from_Z(z, lambda); });
     cu_errchk(cudaStreamSynchronize(dxsx.custream));
     return normalize_result(dx_, dxsx, svr_parameters_);
 }
-}
-}
+
+} // namespace kernel
+} // namespace svr
