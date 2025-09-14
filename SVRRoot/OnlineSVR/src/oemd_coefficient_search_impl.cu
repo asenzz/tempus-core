@@ -681,44 +681,29 @@ std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_
     return FIR_lowpass;
 }
 
-__global__ void G_calc_variance(RPTR(double) var, CRPTRd d_labels, const uint32_t n, const double mean)
+__global__ void G_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_len, const uint32_t x_len, const double mean)
 {
-    double this_var = 0;
-    CU_STRIDED_FOR_i(n) {
-        const auto v = d_labels[i] - mean;
-        this_var += v * v;
+    CU_STRIDED_FOR_i(ac_len) {
+        double num = 0, den = 0;
+        for (uint32_t j = 0; j < x_len; ++j) {
+            const auto xjm = x[j] - mean;
+            num += xjm * (x[(j + i) % x_len] - mean);
+            den += xjm * xjm;
+        }
+        ac[i] = num / den;
     }
-    atomicAdd(var, this_var);
 }
 
-__global__ void G_autocorrelation_score(RPTR(double) res, CRPTRd labels, CRPTRd labels_mean, const uint32_t n, const double mean, const double variance)
-{
-    double thread_acf = 0;
-    CU_STRIDED_FOR_i(n) {
-        double this_acf = 0;
-        const auto ni = n - i;
-        for (DTYPE(n) j = 0; j < ni; ++j) this_acf += labels_mean[j] * (labels[j + i] - mean);
-        thread_acf += ni * variance / abs(this_acf); // score is Σ 1 / cor
-    }
-    atomicAdd(res, thread_acf);
-}
 
 double autocorrelation(CRPTR(double) d_labels, const uint32_t n, const cudaStream_t custream)
 {
     const auto mean = solvers::mean(d_labels, n, custream);
-    auto d_var = cucalloc<double>(custream);
-    G_calc_variance<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_var, d_labels, n, mean);
-    double var;
-    cufreecopy(&var, d_var, custream);
-    var /= n;
-    auto d_res = cucalloc<double>(custream);
-	double *d_labels_mean;
-    cu_errchk(cudaMallocAsync(&d_labels_mean, n * sizeof(*d_labels), custream));
-    thrust::transform(thrust::cuda::par.on(custream), d_labels, d_labels + n, d_labels_mean, [mean] __device__(const double x) -> double { return x - mean; });
-    G_autocorrelation_score<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_res, d_labels, d_labels_mean, n, mean, var);
-	cu_errchk(cudaFreeAsync(d_labels_mean, custream));
-    double res;
-    cufreecopy(&res, d_res, custream);
+    const auto n2 = n / 2;
+    double *d_autocorrelation;
+    cu_errchk(cudaMallocAsync(&d_autocorrelation, n2 * sizeof(double), custream));
+    G_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n, mean);
+    const auto res = solvers::sumabs(d_autocorrelation, n2, custream);
+    cu_errchk(cudaFreeAsync(d_autocorrelation, custream));
     return res;
 }
 
@@ -739,7 +724,7 @@ oemd_coefficients_search::evaluate_mask(
     static const auto inv_entropy_w = PROPS.get_oemd_entweight();
 
     const uint32_t mask_len = mask.size();
-    CTX_CUSTREAM
+    CTX_CUSTREAM_(2)
     const auto d_mask = cumallocopy(mask, custream);
     const auto d_workspace = cumallocopy(workspace, custream);
     double *d_tmp;
@@ -769,7 +754,6 @@ oemd_coefficients_search::evaluate_mask(
         goto __skip_correlation;
     } else xcor = common::C_bad_validation;
     {
-        double *d_features, *d_scores;
         auto feat_params_it = feat_params.cbegin();
         while (feat_params_it < feat_params.cend() && feat_params_it->ix_end < max_row_len + mask_offset) ++feat_params_it;
         static const auto align_window = PROPS.get_align_window();
@@ -789,56 +773,59 @@ oemd_coefficients_search::evaluate_mask(
         acor = acor_w > 0 ? autocorrelation(d_labels, validate_rows, custream) : 1;
         cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
         cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
-        const auto [mean_sq_diff_L, d_diff_L] = prepare_diff_labels(d_labels, validate_rows, custream);
-        const uint32_t full_feat_cols = PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count;
-        static const auto column_interleave = PROPS.get_oemd_interleave();
-        const uint32_t feat_cols_ileave = full_feat_cols / column_interleave;
-        const uint32_t features_len = validate_rows * feat_cols_ileave;
-        const auto features_size = features_len * sizeof(double);
-        cu_errchk(cudaMallocAsync((void **) &d_features, features_size, custream));
-        cu_errchk(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(double), custream));
-        std::vector<t_feat_params> feat_params_q(feat_params_trimmed.begin(), feat_params_trimmed.end());
-        const auto skipdiv = PROPS.get_oemd_skipdiv();
-        const auto &quantisations = business::ModelService::get_quantisations();
-        const uint16_t num_quantisations = quantisations.size();
-        static const auto stretch_coef = PROPS.get_stretch_coef();
-        static const auto shift_limit = PROPS.get_shift_limit();
-        static const auto stretch_limit = PROPS.get_stretch_limit();
-        LOG4_TRACE(
-            "Allocating " << features_len << " features and " << feat_cols_ileave << " scores, rows " << validate_rows << ", feat params " << feat_params_q.size() << ", shift limit " <<
-            shift_limit << ", align_window " << align_window << ", num_quantisations " << num_quantisations << ", skipdiv " << skipdiv);
-        if (validate_rows - shift_limit < align_window)
-            LOG4_THROW("Validate rows " << validate_rows << ", shift limit " << shift_limit << ", increase ALIGN_WINDOW " << align_window << " to above " << validate_rows - shift_limit);
-        UNROLL(2)
-        for (DTYPE(num_quantisations) q = 0; q < num_quantisations; q += std::max<DTYPE(q)>(1, CAST2(skipdiv)q / skipdiv)) {
-            const auto qt = quantisations[q];
-            OMP_FOR_i(validate_rows) feat_params_q[i].ix_start = feat_params_q[i].ix_end - full_feat_cols * qt + 1 - mask_offset;
-            const auto d_feat_params_q = cumallocopy(feat_params_q, custream);
-            cu_errchk(cudaMemsetAsync(d_features, 0, features_size, custream));
-            G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
-            cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
-            business::ScalingFactorService::cu_scale_calc_I(d_features, features_len, stub_sf, stub_dc, custream);
-            G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
-                d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, stretch_limit,
-                align_window, shift_limit, stretch_coef, mean_sq_diff_L, d_diff_L);
-            double score;
-            if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
-                thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
-                score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
-            } else
-                score = solvers::sum(d_scores, feat_cols_ileave, custream);
-            if (score < xcor) {
-                LOG4_TRACE(
-                    "Quantisation " << qt << ", index " << q << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<
-                    ", mask offset " << mask_offset << ", score " << score << ", best xcor " << xcor);
-                xcor = score;
+        if (xcor_w <= 0) {
+            xcor = 1;
+        } else {
+            double *d_features, *d_scores;
+            const uint32_t full_feat_cols = PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count;
+            static const auto column_interleave = PROPS.get_oemd_interleave();
+            const uint32_t feat_cols_ileave = full_feat_cols / column_interleave;
+            const uint32_t features_len = validate_rows * feat_cols_ileave;
+            const auto features_size = features_len * sizeof(double);
+            cu_errchk(cudaMallocAsync((void **) &d_features, features_size, custream));
+            cu_errchk(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(double), custream));
+            std::vector<t_feat_params> feat_params_q(feat_params_trimmed.begin(), feat_params_trimmed.end());
+            const auto skipdiv = PROPS.get_oemd_skipdiv();
+            const auto &quantisations = business::ModelService::get_quantisations();
+            const uint16_t num_quantisations = quantisations.size();
+            static const auto stretch_coef = PROPS.get_stretch_coef();
+            static const auto shift_limit = PROPS.get_shift_limit();
+            static const auto stretch_limit = PROPS.get_stretch_limit();
+            LOG4_TRACE(
+                "Allocating " << features_len << " features and " << feat_cols_ileave << " scores, rows " << validate_rows << ", feat params " << feat_params_q.size() << ", shift limit " <<
+                shift_limit << ", align_window " << align_window << ", num_quantisations " << num_quantisations << ", skipdiv " << skipdiv);
+            if (validate_rows - shift_limit < align_window)
+                LOG4_THROW("Validate rows " << validate_rows << ", shift limit " << shift_limit << ", increase ALIGN_WINDOW " << align_window << " to above " << validate_rows - shift_limit);
+            UNROLL(2)
+            for (DTYPE(num_quantisations) q = 0; q < num_quantisations; q += std::max<DTYPE(q)>(1, CAST2(skipdiv)q / skipdiv)) {
+                const auto qt = quantisations[q];
+                OMP_FOR_i(validate_rows) feat_params_q[i].ix_start = feat_params_q[i].ix_end - full_feat_cols * qt + 1 - mask_offset;
+                const auto d_feat_params_q = cumallocopy(feat_params_q, custream);
+                cu_errchk(cudaMemsetAsync(d_features, 0, features_size, custream));
+                G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
+                cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
+                business::ScalingFactorService::cu_scale_calc_I(d_features, features_len, stub_sf, stub_dc, custream);
+                G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
+                    d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, stretch_limit,
+                    align_window, shift_limit, stretch_coef);
+                double score;
+                if (feat_cols_ileave > datamodel::C_default_svrparam_lag_count) {
+                    thrust::sort(thrust::cuda::par.on(custream), d_scores, d_scores + feat_cols_ileave);
+                    score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
+                } else
+                    score = solvers::sum(d_scores, feat_cols_ileave, custream);
+                if (score < xcor) {
+                    LOG4_TRACE(
+                        "Quantisation " << qt << ", index " << q << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<
+                        ", mask offset " << mask_offset << ", score " << score << ", best xcor " << xcor);
+                    xcor = score;
+                }
+                assert(score != 0);
             }
-            assert(score != 0);
+            cu_errchk(cudaFreeAsync(d_scores, custream));
+            cu_errchk(cudaFreeAsync(d_features, custream));
         }
-        cu_errchk(cudaFreeAsync(d_scores, custream));
-        cu_errchk(cudaFreeAsync(d_features, custream));
         cu_errchk(cudaFreeAsync(d_labels, custream));
-        cu_errchk(cudaFreeAsync(d_diff_L, custream));
     }
 __skip_correlation:
 

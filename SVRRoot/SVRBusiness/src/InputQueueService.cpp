@@ -2,16 +2,16 @@
 #include "InputQueueService.hpp"
 #include "DeconQueueService.hpp"
 #include "model/InputQueue.hpp"
+#include "model/Ensemble.hpp"
 #include "appcontext.hpp"
 #include "DataRowService.hpp"
 #include "DAO/InputQueueDAO.hpp"
-#include "DAO/ScopedTransaction.hpp"
 #ifdef USE_FIX
 #include "InterprocessReader.hpp"
 #endif
-#include "model/Ensemble.hpp"
 #include "model/DataRow.hpp"
 #include "model/Dataset.hpp"
+#include "common/exceptions.hpp"
 
 
 std::string svr::business::InputQueueService::make_queue_table_name(const std::string &user_name, const std::string &logical_name, const bpt::time_duration &resolution)

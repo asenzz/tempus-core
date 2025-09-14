@@ -1,4 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.27)
+SET(CMAKE_SKIP_BUILD_RPATH TRUE)
 
 # The PROJECT_ROOT environment variable specifies a chroot under which the include, lib and lib64 subdirectories will be searched for project files
 
@@ -240,9 +241,9 @@ ELSE ()
     LIST(PREPEND CXX_OPTIMIZATION_FLAGS_ICX -g3 -debug extended)
 ENDIF ()
 
-OPTION(VALGRIND_BUILD "Build for testing with Valgrind" OFF)
-IF (VALGRIND_BUILD)
-    ADD_COMPILE_DEFINITIONS(VALGRIND_BUILD)
+OPTION(MINIMAL_INTEGRATION_TEST "Build with minimal parameters for testing with Valgrind" OFF)
+IF (MINIMAL_INTEGRATION_TEST)
+    ADD_COMPILE_DEFINITIONS(MINIMAL_INTEGRATION_TEST)
 ENDIF ()
 
 OPTION(PROFILE_OPTIMIZE "Generate profiling instrumentation code" OFF)

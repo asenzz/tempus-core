@@ -45,24 +45,22 @@ __device__ __forceinline__ double vec_dist(CRPTRd mean_L, CRPTRd features, const
 }
 
 
-__device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd features, const uint32_t validate_rows, const float st, const float sk, const uint32_t align_validate,
-                                                   const double mean_sq_diff_y, CRPTRd diff_y)
+__device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd features, const uint32_t validate_rows, const float st, const float sk, const uint32_t align_validate)
 {
-#if 1
-    double mean_x = 0, numerator = 0, mean_sq_diff_x = 0;
-    const auto validate_start = validate_rows - align_validate;
-    for (auto r = validate_start; r < validate_rows; ++r) mean_x += features[STRETCHSKIP_(r)];
-    mean_x /= align_validate;
-    for (auto r = validate_start; r < validate_rows; ++r) {
-        const auto diff_x = features[STRETCHSKIP_(r)] - mean_x;
-        numerator += diff_x * diff_y[r];
-        mean_sq_diff_x += diff_x * diff_x;
-    } 
-    const auto denominator = sqrt(mean_sq_diff_y * mean_sq_diff_x / align_validate);
-    if (denominator == 0) return 0;
-    return numerator / (align_validate * denominator);
-#else
-    double res = 0
+#if 1 // Normalised cross correlation
+    double sum_X = 0, sum_Y = 0, sum_XY = 0;
+    double squareSum_X = 0, squareSum_Y = 0;
+    for (uint32_t r = validate_rows - align_validate; r < validate_rows; ++r) {
+	const auto X_r = features[STRETCHSKIP_(r)];
+        sum_XY += X_r * labels[r];
+        sum_X += X_r;
+        squareSum_X += X_r * X_r;
+        sum_Y += labels[r]; // TODO Optimize by moving labels related calculation out of this kernel, test thoroughly since validate_rows varies
+        squareSum_Y += labels[r] * labels[r]; // this too
+    }
+    return 2 - ((validate_rows * sum_XY - sum_X * sum_Y) / sqrt((validate_rows * squareSum_X - sum_X * sum_X) * (validate_rows * squareSum_Y - sum_Y * sum_Y)) + 1);
+#else // Absolute Euclidean distance
+    double res = 0;
     for (auto r = validate_rows - align_validate; r < validate_rows; ++r) res += abs(labels[r] - features[STRETCHSKIP_(r)]);
     return res;
 #endif
@@ -72,7 +70,7 @@ __global__ void G_align_features(
     CRPTRd features, CRPTRd labels,
     RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts,
     const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate,
-    const uint32_t shift_limit, const float stretch_multiplier, const double mean_sq_diff_y, CRPTRd diff_y)
+    const uint32_t shift_limit, const float stretch_multiplier)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
@@ -82,7 +80,7 @@ __global__ void G_align_features(
             const auto validate_rows = n_rows - sh;
             UNROLL()
             for (float st = 1; st > stretch_limit; st *= stretch_multiplier) {
-                const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1, align_validate, mean_sq_diff_y, diff_y);
+                const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1, align_validate);
                 if (score >= scores[i]) continue;
                 scores[i] = score;
                 if (shifts) shifts[i] = sh;
@@ -90,21 +88,6 @@ __global__ void G_align_features(
             }
         }
     }
-}
-
-std::pair<double, double*> prepare_diff_labels(CRPTRd d_labels, const uint32_t n, const cudaStream_t custream)
-{
-    const auto mean_L = solvers::mean(d_labels, n, custream);
-    const auto mean_sq_diff_L = thrust::transform_reduce(thrust::cuda::par.on(custream), d_labels, d_labels + n, [mean_L] __device__(const double x) -> double {
-        const auto r = x - mean_L;
-        return r * r;
-    }, double(0), thrust::plus<double>());
-    cu_errchk(cudaStreamSynchronize(custream));
-    double *d_diff_L;
-    cu_errchk(cudaMallocAsync((void **) &d_diff_L, n * sizeof(double), custream));
-    thrust::transform(thrust::cuda::par.on(custream), d_labels, d_labels + n, d_diff_L, [mean_L] __device__(const double x) -> double { return x - mean_L; });
-    cu_errchk(cudaStreamSynchronize(custream));
-    return std::make_pair(mean_sq_diff_L, d_diff_L);
 }
 
 void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, float *const p_stretches, RPTR(uint32_t) p_shifts, const uint32_t n_rows, const uint32_t n_cols)
@@ -127,13 +110,11 @@ void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, floa
     cu_errchk(cudaMallocAsync((void **) &d_stretches, cols_size_float, custream));
     uint32_t *d_shifts;
     cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
-    const auto [mean_sq_diff_L, d_diff_L] = prepare_diff_labels(d_labels, n_rows_integration, custream);
     G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(
         d_features, d_labels, d_scores, d_stretches, d_shifts, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(), align_window, PROPS.get_shift_limit(),
-        PROPS.get_stretch_coef(), mean_sq_diff_L, d_diff_L);
+        PROPS.get_stretch_coef());
     cu_errchk(cudaFreeAsync(d_features, custream));
     cu_errchk(cudaFreeAsync(d_labels, custream));
-    cu_errchk(cudaFreeAsync(d_diff_L, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
     cufreecopy(p_stretches, d_stretches, custream, n_cols);
     cufreecopy(p_shifts, d_shifts, custream, n_cols);

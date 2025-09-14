@@ -3,24 +3,19 @@
 //
 #include <vector>
 #include <cmath>
-#include <cstdio>
 //#include <osqp.h>
-#include <complex>
-#include <iomanip>
-#include "appcontext.hpp"
-#include "util/math_utils.hpp"
-#include "oemd_coefficient_search.hpp"
-
-#include <filesystem>
-
-#include "common/gpu_handler.hpp"
-#include "oemd_coefficients.hpp"
 #include "ModelService.hpp"
-#include "align_features.cuh"
+#include "appcontext.hpp"
+#include "oemd_coefficient_search.hpp"
+#include "oemd_coefficients.hpp"
+#include "util/math_utils.hpp"
+#include "util/time_utils.hpp"
+#include <complex>
+#include <filesystem>
+#include <iomanip>
 
 namespace svr {
 namespace oemd {
-
 
 oemd_coefficients_search::oemd_coefficients_search(const uint16_t levels, const bpt::time_duration &resolution, const uint32_t label_len) :
         resolution(resolution),

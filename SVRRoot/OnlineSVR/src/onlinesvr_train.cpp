@@ -1,15 +1,12 @@
+#include <magma_auxiliary.h>
 #include "onlinesvr.hpp"
 #include "common/parallelism.hpp"
-#include "model/Model.hpp"
 #include "DQScalingFactorService.hpp"
 #include "appcontext.hpp"
 #include "util/math_utils.hpp"
 #include "pprune.hpp"
-#include <cstddef>
-#include <magma_auxiliary.h>
 #include "kernel_factory.hpp"
 #include "matrix_solver.hpp"
-#include "common/barrier.hpp"
 
 namespace svr {
 namespace datamodel {
@@ -69,8 +66,7 @@ OnlineSVR::batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const m
         PROFILE_INFO(tune(), "Tune kernel parameters for level " << level << ", step " << step << ", gradient " << (**param_set.cbegin()).get_grad_level());
     }
 
-// TODO Unstable when chunk >= 4000 samples
-// #pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_gpu_chunk() / ixs.front().n_elem)) default(shared) firstprivate(num_chunks)
+#pragma omp parallel for schedule(static, 1) ADJ_THREADS(std::min<uint32_t>(num_chunks, PROPS.get_gpu_chunk() / ixs.front().n_elem)) default(shared) firstprivate(num_chunks)
     for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
         auto p_params = get_params_ptr(i);
         if (p_kernel_matrices->at(i).empty()) {

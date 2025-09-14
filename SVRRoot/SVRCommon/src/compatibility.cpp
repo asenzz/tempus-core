@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <execinfo.h>
 #include <cxxabi.h>
+#include <filesystem>
 #ifdef USE_PETSC_SOLVER
 #include <petsc.h>
 #endif
@@ -67,7 +68,7 @@ void uninit_petsc()
 // TODO Do a GPU handler and ctx from a queue
 bool file_exists(const std::string &filename)
 {
-    return std::ifstream(filename).good();
+    return std::filesystem::exists(filename);
 }
 
 

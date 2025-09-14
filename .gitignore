@@ -1,4 +1,6 @@
 .cache
+compile_commands.json
+SVRRoot/TAGS
 
 */SVRWeb/template/SVRWebSkin.cpp
 lib/gtest-1.7.0/*Makefile

@@ -1,13 +1,9 @@
 #include <boost/date_time/posix_time/ptime.hpp>
 #include <armadillo>
 #include <cstdlib>
-#include <execution>
-#include <limits>
 #include <iterator>
-#include <memory>
 #include <utility>
 #include <algorithm>
-#include <vector>
 #include "DeconQueueService.hpp"
 #include "EnsembleService.hpp"
 #include "IQScalingFactorService.hpp"
@@ -16,19 +12,12 @@
 #include "UserService.hpp"
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
-#include "common/compatibility.hpp"
 #include "model/DataRow.hpp"
 #include "appcontext.hpp"
 #include "DAO/DatasetDAO.hpp"
 #include "model/User.hpp"
-#include "common/rtp_thread_pool.hpp"
 #include "SVRParametersService.hpp"
 #include "ModelService.hpp"
-
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpass-failed"
-#endif
 
 namespace svr {
 namespace business {

@@ -107,6 +107,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
     const uint32_t test_offset = resolution_ratio > 1 ? business::lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :
             input_queue.size() - common::C_integration_test_validation_window;
     auto p_test_input_queue = input_queue.clone(0, test_offset);
+    p_test_input_queue->set_table_name(input_queue.get_table_name());
     PROFILE_INFO(dataset.set_iq_scaling_factors(calculate(*p_test_input_queue, dataset.get_id(), calc_len), true),
                       "Calculate test input queue scaling factors for " << input_queue.get_table_name() << ", last label time " << last_label_time);
     p_test_input_queue.reset();
@@ -117,7 +118,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     if (!save_factors) return;
     const auto &dataset_iqsf = dataset.get_iq_scaling_factors(input_queue);
-OMP_FOR(dataset_iqsf.size())
+    OMP_FOR(dataset_iqsf.size())
     for (const auto &p_sf: dataset_iqsf) {
         if (exists(p_sf)) (void) remove(p_sf);
         (void) save(p_sf);

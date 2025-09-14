@@ -1,16 +1,12 @@
-#pragma once
+#ifndef STRING_UTILS_HPP
+#define STRING_UTILS_HPP
 
 #include <cstddef>
-#include <execution>
 #include <ostream>
 #include <string>
 #include <set>
 #include <oneapi/tbb/concurrent_set.h>
-#include <algorithm>
-#include <locale>
-#include <codecvt>
 #include <vector>
-#include "common/types.hpp"
 #include "common/compatibility.hpp"
 
 namespace svr {
@@ -176,3 +172,5 @@ template<typename TupleT, std::size_t TupSize = std::tuple_size<TupleT>::value> 
 }
 
 #include "string_utils.tpp"
+
+#endif // #define STRING_UTILS_HPP

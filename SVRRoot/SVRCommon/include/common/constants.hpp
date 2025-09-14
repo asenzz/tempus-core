@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <string>
 #include <execution>
+#include <cstdint>
 #include <cmath>
 #include "defines.h"
 

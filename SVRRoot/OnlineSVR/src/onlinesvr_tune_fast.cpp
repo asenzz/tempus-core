@@ -1,31 +1,20 @@
 //
 // Created by zarko on 9/29/22.
 //
-#include <execution>
 #include <cublas_v2.h>
 #include <armadillo>
-#include <exception>
-#include <iterator>
-#include <limits>
-#include <cmath>
-#include <complex>
 #include <deque>
-#include <tuple>
 #include <mkl_vsl.h>
 #include <magma_auxiliary.h>
 #ifdef USE_HDBSCAN
 #include <hdbscan/hdbscan.h>
 #include <hdbscan/logger.h>
 #endif
-#include "pprune.hpp"
-#include "DQScalingFactorService.hpp"
-#include "SVRParametersService.hpp"
 #include "onlinesvr.hpp"
 #include "appcontext.hpp"
 #include "recombine_parameters.cuh"
 #include "common/logging.hpp"
 #include "kernel_factory.hpp"
-#include "kernel_gbm.hpp"
 
 namespace svr {
 namespace datamodel {

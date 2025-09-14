@@ -86,7 +86,7 @@ template<typename Derived, typename Base>
 std::shared_ptr<Derived> dynamic_ptr_cast(std::shared_ptr<Base> &&base)
 {
     if (auto derived = dynamic_cast<Derived *>(base.get())) {
-        base.release();
+        (void) base.release();
         return std::shared_ptr<Derived>(derived);
     }
     return nullptr;
@@ -416,16 +416,14 @@ void uninit_petsc();
 
 void print_stacktrace();
 
-template<typename C, typename T = typename C::value_type> auto
-empty(const C &container)
+template<typename C, typename T = typename C::value_type> auto empty(const C &container)
 {
     bool res = true;
     for (T v: container) res &= v.empty();
     return res;
 }
 
-template<typename C, typename T = typename C::value_type> auto
-max_size(const C &container)
+template<typename C, typename T = typename C::value_type> auto max_size(const C &container)
 {
     size_t max = 0;
     for (const auto &item: container)
@@ -435,8 +433,7 @@ max_size(const C &container)
 }
 
 
-template<typename T>
-arma::uvec lower_bound(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
+template<typename T> arma::uvec lower_bound(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
 {
     arma::uvec r;
 #pragma omp parallel for ordered schedule(static, 1 + m2.size() / C_n_cpu) num_threads(adj_threads(m2.size()))

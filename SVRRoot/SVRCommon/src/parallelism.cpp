@@ -34,6 +34,7 @@ t_omp_lock::~t_omp_lock()
 
 std::pair<uint32_t, uint32_t> get_mpi_bounds(const uint32_t n_threads)
 {
+#ifdef USE_MPI
     const auto rank = PROPS.get_mpi_rank();
     const auto world_size = PROPS.get_mpi_size();
     assert(n_threads);
@@ -42,6 +43,10 @@ std::pair<uint32_t, uint32_t> get_mpi_bounds(const uint32_t n_threads)
     const auto end_thread = rank == world_size - 1 ? n_threads : (rank + 1) * n_threads / world_size;
     LOG4_DEBUG("Bounds for " << n_threads << " threads, starting " << start_thread << ", end " << end_thread << ", rank " << rank << ", world size " << world_size);
     return {start_thread, end_thread};
+#else
+    return {0, n_threads};
+#endif
 }
+
 
 }

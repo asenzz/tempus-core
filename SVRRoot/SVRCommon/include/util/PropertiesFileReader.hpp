@@ -8,7 +8,7 @@
 #include <mpi.h>
 #endif
 #include "common/types.hpp"
-#include "common/logging.hpp"
+#include "string_utils.hpp"
 
 namespace svr {
 namespace common {

@@ -5,6 +5,7 @@
 #ifndef STRING_UTILS_TPP
 #define STRING_UTILS_TPP
 
+#include <codecvt>
 #include "string_utils.hpp"
 
 namespace svr {
@@ -29,9 +30,9 @@ constexpr inline char ctoupper(const char c)
 
 template<const size_t N> constexpr std::string ctoupper(const char *const input)
 {
-    std::string result(N - 1, '\0');
+    std::string result(N, '\0');
 #ifdef __clang__
-#pragma unroll N - 1
+#pragma unroll N
 #endif
     for (size_t i = 0; i < result.size(); ++i) result[i] = ctoupper(input[i]);
     return result;

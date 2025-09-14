@@ -6,17 +6,11 @@
 #include <set>
 #include <armadillo>
 #include <vector>
-#include <any>
-#include <cstdarg>
-#include <numeric>
 #ifdef ENABLE_OPENCL
 #include <viennacl/matrix.hpp>
 #include <viennacl/scalar.hpp>
 #endif
 #include <mkl_cblas.h>
-#include "common.hpp"
-#include "common/compatibility.hpp"
-#include "util/math_utils.hpp"
 #include "common/gpu_handler.hpp"
 #include "common/parallelism.hpp"
 

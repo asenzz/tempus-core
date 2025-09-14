@@ -203,7 +203,8 @@ public:
     void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::mat &new_w, const bpt::ptime &last_value_time,
                const bool temp_learn = false, const std::deque<uint32_t> &forget_ixs = {});
 
-    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &time,
+    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain,
+                     const mat_ptr &p_input_weights_, const bpt::ptime &time,
                      const matrices_ptr &precalc_kernel_matrices = {});
 
     arma::mat &get_features();

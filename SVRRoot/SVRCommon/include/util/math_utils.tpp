@@ -5,6 +5,7 @@
 #ifndef MATH_UTILS_TPP
 #define MATH_UTILS_TPP
 
+#include "common/parallelism.hpp"
 #include "math_utils.hpp"
 
 namespace svr {

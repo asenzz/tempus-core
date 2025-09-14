@@ -39,12 +39,13 @@ View definition:
 
  */
 
+#include "common/defines.h"
+
 #ifdef INTEGRATION_TEST
 
 #include <cmath>
 #include <cstdlib>
 #include <gtest/gtest.h>
-#include "common/defines.h"
 #include "InputQueueService.hpp"
 #include "DeconQueueService.hpp"
 #include "RequestService.hpp"
@@ -54,7 +55,6 @@ View definition:
 #include "ModelService.hpp"
 #include "appcontext.hpp"
 #include "DataRowService.hpp"
-#include "DQScalingFactorService.hpp"
 #include "model/Priority.hpp"
 #include "common/compatibility.hpp"
 #include "common/constants.hpp"
@@ -80,7 +80,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     // Save first N forecasts to database for later analysis
     constexpr uint16_t C_save_forecast = 115;
     constexpr auto C_online_validate = false;
-#ifdef VALGRIND_BUILD
+#ifdef MINIMAL_INTEGRATION_TEST
     constexpr uint32_t C_test_decrement = 5;
 #else
     const uint32_t C_test_decrement = .5 * PROPS.get_kernel_length() + PROPS.get_shift_limit() + PROPS.get_outlier_slack(); // 14e3 - common::C_integration_test_validation_window;
@@ -89,10 +89,12 @@ TEST(manifold_tune_train_predict, basic_integration)
 #define STR_MAIN_QUEUE_RES TOSTR(MAIN_QUEUE_RES)
     const bpt::seconds C_placement_delay(2);
     const auto C_test_labels_len_h = C_test_decrement + common::C_integration_test_validation_window;
-    const std::string C_test_input_name = "q_svrwave_test_xauusd_avg_";
+    const std::string C_symbol = "xauusd_avg";
+    const std::string C_test_input_name = "q_svrwave_test_" + C_symbol + "_";
+    const std::string C_input_queue_name = "q_svrwave_" + C_symbol + "_";
     const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
     const std::string C_test_aux_input_table_name(C_test_input_name + "1");
-    constexpr uint16_t C_test_levels = 16; // Spectral levels
+    constexpr uint16_t C_test_levels = 6; // Spectral levels
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
     const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
@@ -105,18 +107,34 @@ TEST(manifold_tune_train_predict, basic_integration)
 
     try {
         const std::string query =
-                "DROP VIEW IF EXISTS " + C_test_aux_input_table_name + "; " \
-                "CREATE VIEW " + C_test_aux_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_1 "
+            "INSERT INTO input_queues SELECT '" + C_test_input_table_name + "', '" + C_symbol + "', user_name, description, resolution, legal_time_deviation, timezone, " \
+                "value_columns, missing_hours_retention, uses_fix_connection FROM input_queues WHERE table_name = '" + C_input_queue_name + STR_MAIN_QUEUE_RES
+                "' and not exists (select 1 from input_queues where table_name = '" + C_test_aux_input_table_name + "');" +
+
+            "INSERT INTO input_queues SELECT '" + C_test_aux_input_table_name + "', '" + C_symbol + "', user_name, description, resolution, legal_time_deviation, timezone, " \
+                "value_columns, missing_hours_retention, uses_fix_connection FROM input_queues WHERE table_name = '" + C_input_queue_name + "1" \
+                "' and not exists (select 1 from input_queues where table_name = '" + C_test_aux_input_table_name + "');" +
+
+            "DROP VIEW IF EXISTS " + C_test_aux_input_table_name + ";" \
+
+            "CREATE VIEW " + C_test_aux_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_1 "
                 "WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_data_len_h_str + " * " STR_MAIN_QUEUE_RES ") ORDER BY value_time ASC; " \
-                "DROP VIEW IF EXISTS " + C_test_input_table_name + ";" \
-                "CREATE VIEW " + C_test_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_" STR_MAIN_QUEUE_RES \
-                     " WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_data_len_h_str + ") ORDER BY value_time ASC;" \
-                "DELETE FROM w_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
-                "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
-                "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
-                "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str + ";";
+
+            "DROP VIEW IF EXISTS " + C_test_input_table_name + ";" \
+
+            "CREATE VIEW " + C_test_input_table_name + " AS SELECT * FROM (SELECT * FROM q_svrwave_xauusd_avg_" STR_MAIN_QUEUE_RES \
+                 " WHERE value_time < '" + C_last_test_time + "' ORDER BY value_time DESC LIMIT " + C_test_data_len_h_str + ") ORDER BY value_time ASC;" \
+
+            "DELETE FROM w_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
+
+            "DELETE FROM iq_scaling_factors WHERE dataset_id = " + C_dataset_id_str + ";" \
+
+            "DELETE FROM dq_scaling_factors WHERE model_id IN (SELECT id FROM models WHERE ensemble_id IN (SELECT id FROM ensembles WHERE dataset_id = " + C_dataset_id_str + ")) ;" \
+
+            "DELETE FROM svr_parameters WHERE dataset_id = " + C_dataset_id_str;
+
+        dao::DataSource ds(PROPS.get_db_connection_string());
 #ifdef USE_DUCKDB
-        dao::data_source ds(PROPS.get_db_connection_string());
         if (PROPS.is_duck()) {
             const auto trx = ds.open_file();
             auto res = trx->exec(query);
@@ -313,8 +331,8 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", cumulative alpha " << cml_alpha_pct << "pc" \
                        ", recon error " << cur_recon_error << \
                        ", recon error last-known " << cur_recon_lk_error << \
-                       ", recon label MAE " << 100. * recon_mae / i_div << \
-                       ", recon last-known MAE " << 100. * recon_lk_mae / i_div << \
+                       ", recon label MAE " << recon_mae / i_div << \
+                       ", recon last-known MAE " << recon_lk_mae / i_div << \
                        ", price hits " << 100. * price_hits / i_div << "pc" \
                        ", won " << pips_won << \
                        ", lost " << pips_lost << \

@@ -5,7 +5,7 @@ ELSE()
     PROJECT(OnlineSVR CXX)
 ENDIF()
 
-SET(DEPENDENCIES SVRCommon SVRModel)
+SET(DEPENDENCIES SVRPersist SVRCommon SVRModel)
 INCLUDE(../../cmake/IncludeDependencies.cmake)
 INCLUDE(../../cmake/SourceList.cmake)
 

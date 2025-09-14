@@ -96,42 +96,45 @@ DataSource::query_for_type_array(const IRowMapper<M> &row_mapper, const std::str
             duckdb_destroy_result(&dbres);
             return res;
         }
-#endif // USE_DUCKDB
+#endif
         // Postgres
-        auto trx = open_transaction();
-        // Create a counted query
-        const std::string c_query = "WITH data AS (" + query + ") SELECT COUNT(*)::bigint AS total_rows FROM data UNION ALL SELECT NULL, data.* FROM data";
-        pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> c_cursor(
-                *trx->get_pqxx_work(), query, C_tempus_cursor_name, false);
-        const auto c_result = c_cursor.retrieve(0, 1);
-        if (c_result.size() < 1) LOG4_THROW("Counting cursor didn't return expected size 1, got " << c_result.size() << " instead.");
-        const auto result_size = c_result.at(0, 0).as<size_t>(0);
+        query = statement_preparer_template->prepare_statement(sql, args...);
+        scoped_transaction_guard_ptr trx = open_transaction();
+        const std::string count_query = "SELECT COUNT(*) FROM (" + query + ") AS SUBQ";
+        const auto result = trx->exec(count_query);
+        if (result.empty()) LOG4_THROW("Failed getting result size, using query " << count_query);
+        const auto result_size = result[0][0].as<size_t>(0);
+        trx.reset();
         const auto num_cursors = std::min<uint32_t>(PROPS.get_db_num_threads(), result_size / common::C_min_cursor_rows + 1);
         const auto cursor_size = result_size / num_cursors;
         LOG4_DEBUG("Getting up to " << result_size << " rows for " << query);
-        res.resize(result_size);
+        res.resize(result_size, nullptr);
 #pragma omp parallel ADJ_THREADS(result_size)
 #pragma omp single
         {
             OMP_TASKLOOP_1(untied firstprivate(num_cursors, result_size))
             for (DTYPE(num_cursors) cur_ix = 0; cur_ix < num_cursors; ++cur_ix) {
-                const auto start_ix = cur_ix * cursor_size + 1;
+                const auto start_ix = cur_ix * cursor_size;
                 if (start_ix >= result_size) continue;
                 const auto end_ix = cur_ix == num_cursors - 1 ? result_size : start_ix + cursor_size;
-                const auto l_trx = open_transaction();
+                scoped_transaction_guard_ptr l_trx = open_transaction();
                 pqxx::stateless_cursor<pqxx::cursor_base::read_only, pqxx::cursor_base::owned> l_cursor(
-                        *l_trx->get_pqxx_work(), c_query, std::to_string(cur_ix) + C_tempus_cursor_name, false);
+                    *l_trx->get_pqxx_work(), query, std::to_string(cur_ix) + C_tempus_cursor_name, false);
                 const auto l_result = l_cursor.retrieve(start_ix, end_ix);
-                const auto this_cursor_size = end_ix - start_ix;
-                if (l_result.size() < 1 || size_t(l_result.size()) != this_cursor_size)
-                    LOG4_ERROR("Cursor didn't return expected size " << this_cursor_size << ", got " << l_result.size() << " instead.");
+                if (l_result.size() < 1 || size_t(l_result.size()) != end_ix - start_ix)
+                    LOG4_ERROR("Cursor didn't return expected size " << end_ix - start_ix << ", got " << l_result.size() << " instead.");
                 else
                     LOG4_DEBUG("Got " << l_result.size() << " rows for cursor " << cur_ix << " range " << start_ix << " - " << end_ix);
-                // OMP_TASKLOOP_(l_result.size(), untied firstprivate(start_ix)) // TODO OMP bug, freezes here when result size is 1, nested taskloops run over end barrier
-                for (DTYPE(this_cursor_size) r = 0; r < this_cursor_size; ++r) res[r + start_ix - 1] = r < size_t(l_result.size()) ? row_mapper.map_row(l_result[r]) : nullptr;
+                // OMP_TASKLOOP_(l_result.size(), untied firstprivate(start_ix)) // TODO OMP bug, doesn't respect barrier at end of nested taskloops if non collapsed
+                for (size_t r = 0; r < size_t(l_result.size()); ++r) {
+                    res[r + start_ix] = row_mapper.map_row(l_result[r]);
+                    if (res[r + start_ix]) continue;
+                    LOG4_ERROR("Result for " << r + start_ix << " is empty, row string " << l_result[r][0]);
+                }
             }
         }
-        trx.reset();
+        for (auto it_res = res.begin(); it_res != res.end();)
+            if (*it_res) ++it_res; else it_res = res.erase(it_res);
         return res;
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << ", while executing " << query);

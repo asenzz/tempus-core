@@ -5,6 +5,7 @@
 #include <iterator>
 #include "DataRowService.hpp"
 #include "util/math_utils.hpp"
+#include "common/exceptions.hpp"
 
 namespace svr {
 namespace business {

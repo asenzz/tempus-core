@@ -27,16 +27,11 @@ Iztok Fister Jr. (iztok.fister1@um.si)
 #include <cstring>
 #include <armadillo>
 #include <algorithm>
-#include <execution>
-
 #include "firefly.hpp"
-#include "common/compatibility.hpp"
 #include "sobol.hpp"
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "util/math_utils.hpp"
-#include "common/gpu_handler.hpp"
-
 #ifdef FIREFLY_CUDA
 #include "firefly.cuh"
 #endif

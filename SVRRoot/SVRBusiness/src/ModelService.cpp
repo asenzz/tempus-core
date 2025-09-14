@@ -1,10 +1,8 @@
 #include <algorithm>
 #include <armadillo>
 #include <cmath>
-#include <complex>
 #include <cstdlib>
 #include <deque>
-#include <execution>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -32,8 +30,6 @@
 #include "common/defines.h"
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
-#include "common/rtp_thread_pool.hpp"
-#include "DAO/DatasetDAO.hpp"
 #include "DAO/ModelDAO.hpp"
 #include "model/DataRow.hpp"
 #include "model/Model.hpp"
@@ -42,6 +38,7 @@
 #include "util/string_utils.hpp"
 #include "util/time_utils.hpp"
 #include "util/validation_utils.hpp"
+#include "common/exceptions.hpp"
 
 
 namespace svr {
@@ -1091,7 +1088,9 @@ void ModelService::predict(
     if (multistep > 1) prediction /= multistep;
     const tbb::mutex::scoped_lock lck(insemx);
     datamodel::DataRow::insert_rows(out, prediction, predict_features.times, model.get_decon_level(), ensemble.get_level_ct(), true);
+#ifndef NDEBUG
     LOG4_TRACE("Predicted " << common::present(prediction) << " for " << predict_features.times.size() << " times, container " << common::to_string(out));
+#endif
 }
 
 #endif
