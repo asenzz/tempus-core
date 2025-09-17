@@ -110,7 +110,7 @@ public:
         const datamodel::Ensemble &ensemble, datamodel::Model &model, const datamodel::t_level_predict_features &predict_features, const bpt::time_duration &resolution, tbb::mutex &insmx,
         const arma::mat &labels, datamodel::data_row_container &output_data);
 
-    static std::tuple<double, double, arma::vec, arma::vec, double, arma::vec> validate(
+    static std::tuple<double, double, arma::vec, arma::vec, arma::vec, double, arma::vec> validate(
         uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features, const arma::mat &labels,
         const arma::vec &last_knowns, const arma::mat &weights, const datamodel::data_row_container &times, bool online, bool verbose);
 #endif

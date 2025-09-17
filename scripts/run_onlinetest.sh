@@ -55,7 +55,7 @@ elif [[ $1 == "-f" ]]; then # Fork
 	$MPIEXEC ./${BIN} --gtest_filter="$2" >> "${ONLINETEST_OUTPUT}" 2>&1 &
   renice -n ${NICENESS} -p $(pidof ${BIN})
 elif [[ $1 == "-l" ]]; then # Log file
-	$MPIEXEC ./${BIN} --gtest_filter="$1" >> "${ONLINETEST_OUTPUT}" 2>&1
+	$MPIEXEC ./${BIN} --gtest_filter="$2" >> "${ONLINETEST_OUTPUT}" 2>&1
 else # Vanilla stdout
 	$MPIEXEC ./${BIN} --gtest_filter="$1"
 fi

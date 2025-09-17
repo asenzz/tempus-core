@@ -179,7 +179,7 @@ arma::mat aux_train_predict(const datamodel::SVRParameters &param, const arma::m
 }
 
 // Utility function used in tests, does predict, unscale and then validate
-std::tuple<double, double, arma::vec, arma::vec, double, arma::vec>
+std::tuple<double, double, arma::vec, arma::vec, arma::vec, double, arma::vec>
 ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model, const arma::mat &features,
                        const arma::mat &labels, const arma::vec &last_knowns, const arma::mat &weights, const datamodel::data_row_container &times, const bool online, const bool verbose)
 {
@@ -211,8 +211,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     OMP_FOR_i(actual.n_cols) actual.col(i) += lastknown; // common::sexp<double>(actual.col(i)) + lastknown;
 #endif
     double sum_absdiff_batch = 0, sum_absdiff_lk = 0, sum_abs_labels = 0, sum_absdiff_online = 0, sum_absdiff_lgbm = 0;
-    double batch_correct_directions = 0, lgbm_correct_directions = 0, lgbm_correct_predictions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions =
-            0;
+    double batch_correct_directions = 0, lgbm_correct_directions = 0, lgbm_correct_predictions = 0, batch_correct_predictions = 0, online_correct_directions = 0, online_correct_predictions = 0;
     for (uint32_t ix_future = start_ix; ix_future <= ix_fini; ++ix_future) {
         const auto ix = ix_future - start_ix;
         predicted_batch[ix] = stepping * batch_predicted[ix]->at(level);
@@ -282,7 +281,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     const auto &sum_absdiff = online ? sum_absdiff_online : sum_absdiff_batch;
     const auto &predicted = online ? predicted_online : predicted_batch;
     LOG4_INFO("Parameters " << param_pair << ", predictions start " << start_ix << ", last index " << ix_fini << ", concession " << common::present<double>(actual - predicted));
-    return {sum_absdiff / double(num_preds), common::mape(sum_absdiff, sum_abs_labels), predicted, actual, mape_lk, lastknown};
+    return {sum_absdiff / double(num_preds), common::mape(sum_absdiff, sum_abs_labels), predicted, predict_lgbm, actual, mape_lk, lastknown};
 }
 
 #endif
@@ -676,7 +675,7 @@ void ModelService::tune_features(
     LOG4_BEGIN();
     assert(labels.n_rows == label_times.size());
     const uint32_t n_rows = labels.n_rows;
-    const uint32_t lag = params.get_lag_count();
+    const auto lag = params.get_lag_count();
     const auto adjacent_levels = params.get_adjacent_levels();
     const uint32_t coef_lag = PROPS.get_lag_multiplier() * lag;
 #ifdef EMO_DIFF

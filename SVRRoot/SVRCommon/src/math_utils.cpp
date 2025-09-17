@@ -7,13 +7,13 @@
 #include <viennacl/vector_proxy.hpp>
 #endif
 
-#include <map>
 #include <mkl_vml.h>
 #ifdef USE_XOSHIRO
 #include <xoshiro.h>
 #endif
-#include "common.hpp"
 #include "sobol.hpp"
+#include "common/constants.hpp"
+#include "util/math_utils.tpp"
 
 namespace svr {
 std::vector<double> operator*(const std::vector<double> &v1, const double &m)
@@ -167,7 +167,7 @@ ifftshift(const arma::cx_mat &input)
 {
     arma::cx_mat output(arma::size(input));
     const auto N = input.n_elem;
-#pragma omp parallel for schedule(static, 1 + N / C_n_cpu) num_threads(adj_threads(N))
+#pragma omp parallel for schedule(static, 1 + N / C_n_cpu) ADJ_THREADS(N)
     for (size_t i = 0; i < N; ++i)
         output(i) = input((i + N - N / 2) % N);
     return output;
@@ -256,7 +256,7 @@ get_uniform_random_vector(const std::pair<std::vector<double>, std::vector<doubl
 {
     std::vector<double> random_vector{get_uniform_random_vector(boundaries.first.size())};
     const auto l = std::min<size_t>(boundaries.first.size(), boundaries.second.size());
-#pragma omp parallel for num_threads(adj_threads(l))
+#pragma omp parallel for ADJ_THREADS(l)
     for (size_t i = 0; i < l; ++i)
         random_vector[i] = random_vector[i] * (boundaries.second[i] - boundaries.first[i]) + boundaries.first[i];
 

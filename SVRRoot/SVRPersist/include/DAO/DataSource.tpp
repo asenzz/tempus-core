@@ -5,6 +5,8 @@
 #include "DataSource.hpp"
 #endif
 #include "DAO/DummyRowMapper.hpp"
+#include "appcontext.hpp"
+#include "util/math_utils.hpp"
 
 
 namespace svr {
@@ -21,7 +23,8 @@ template<typename T, typename ...Args> std::shared_ptr<T> DataSource::query_for_
         if (PROPS.is_duck()) {
             const auto trx = open_file();
             auto res = trx->exec(query);
-            if (duckdb_row_count(&res) && duckdb_column_count(&res)) p_object = row_mapper->map_row(res, 1, 0);
+            const auto cols = duckdb_column_count(&res);
+            if (duckdb_row_count(&res) && cols) p_object = row_mapper->map_row(res, cols, 0);
             duckdb_destroy_result(&res);
         } else {
 #endif

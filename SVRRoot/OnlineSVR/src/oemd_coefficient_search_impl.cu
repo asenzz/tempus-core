@@ -681,6 +681,7 @@ std::vector<double> lbp_fir(const double As_, const double fp_, const double fs_
     return FIR_lowpass;
 }
 
+
 __global__ void G_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_len, const uint32_t x_len, const double mean)
 {
     CU_STRIDED_FOR_i(ac_len) {
@@ -690,7 +691,7 @@ __global__ void G_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_l
             num += xjm * (x[(j + i) % x_len] - mean);
             den += xjm * xjm;
         }
-        ac[i] = num / den;
+        atomicAdd(ac, abs(num / den));
     }
 }
 
@@ -700,11 +701,12 @@ double autocorrelation(CRPTR(double) d_labels, const uint32_t n, const cudaStrea
     const auto mean = solvers::mean(d_labels, n, custream);
     const auto n2 = n / 2;
     double *d_autocorrelation;
-    cu_errchk(cudaMallocAsync(&d_autocorrelation, n2 * sizeof(double), custream));
+    cu_errchk(cudaMallocAsync(&d_autocorrelation, sizeof(double), custream));
     G_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n, mean);
-    const auto res = solvers::sumabs(d_autocorrelation, n2, custream);
+    double res;
+    cu_errchk(cudaMemcpyAsync(&res, d_autocorrelation, sizeof(double), cudaMemcpyDeviceToHost, custream));
     cu_errchk(cudaFreeAsync(d_autocorrelation, custream));
-    return res;
+    return res / n2;
 }
 
 double
@@ -814,6 +816,7 @@ oemd_coefficients_search::evaluate_mask(
                     score = solvers::sum(d_scores, datamodel::C_default_svrparam_lag_count, custream);
                 } else
                     score = solvers::sum(d_scores, feat_cols_ileave, custream);
+		score /= validate_rows; 
                 if (score < xcor) {
                     LOG4_TRACE(
                         "Quantisation " << qt << ", index " << q << ", full feat cols " << full_feat_cols << ", feat cols ileave " << feat_cols_ileave << ", validate rows " << validate_rows <<

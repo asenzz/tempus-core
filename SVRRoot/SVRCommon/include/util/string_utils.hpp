@@ -154,6 +154,10 @@ template<typename T> T inline from_string(const std::string &s);
 
 template<typename T, std::enable_if_t<std::is_floating_point_v<T>, bool>  = true> inline std::string to_string(const T v);
 
+std::string pg_esc(const std::string &input);
+
+std::string pg_esc(const char input[]);
+
 } // namespace common
 } // namespace svr
 

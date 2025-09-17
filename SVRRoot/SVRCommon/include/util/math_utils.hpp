@@ -12,7 +12,6 @@
 #endif
 #include <mkl_cblas.h>
 #include "common/gpu_handler.hpp"
-#include "common/parallelism.hpp"
 
 namespace svr {
 template<typename A, typename B> using common_signed_t = std::conditional_t<std::is_unsigned_v<A> && std::is_unsigned_v<B>,

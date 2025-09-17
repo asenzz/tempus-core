@@ -70,6 +70,22 @@ const std::string &AppConfig::get_db_connection_string() const noexcept
     return db_connection_string_;
 }
 
+std::tuple<bool, std::string> AppConfig::get_connection_arguments() const
+{
+    return std::make_tuple(
+#ifdef USE_DUCKDB
+    is_duck()
+#else
+    false
+#endif
+        ,
+#ifdef USE_DUCKDB
+        is_duck() ? get_db_file() :
+#endif
+            get_db_connection_string()
+        );
+}
+
 bool AppConfig::get_set_thread_affinity() const noexcept
 {
     return set_thread_affinity_;
@@ -248,7 +264,7 @@ std::string prepare_oemd_masks_dir(const std::string &masks_dir)
 
 constexpr std::string C_dbfile_prefix = "dbfile=";
 
-bool is_a_duck(const std::string &connection_str)
+bool AppConfig::is_a_duck(const std::string &connection_str)
 {
     return connection_str.find(C_dbfile_prefix) != std::string::npos;
 }
@@ -275,19 +291,17 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
         prediction_horizon_(get_property<DTYPE(prediction_horizon_) >(app_config_file, PREDICTION_HORIZON, C_default_prediction_horizon_str)),
         scaling_alpha_(get_property<DTYPE(scaling_alpha_) >(app_config_file, SCALING_ALPHA, C_default_scaling_alpha_str)),
         solve_iterations_coefficient_(get_property<DTYPE(solve_iterations_coefficient_) >(app_config_file, SOLVE_ITERATIONS_COEFFICIENT, C_defaut_solve_iterations_coefficient)),
+        db_connection_string_(get_property<DTYPE(db_connection_string_) >(app_config_file, CONNECTION_STRING, C_default_connection_str)),
+        oemd_masks_dir_(prepare_oemd_masks_dir(get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir))),
+#ifdef USE_DUCKDB
+        db_file_(is_duck_ ? extract_db_file_path(db_connection_string_) : ""),
+        is_duck_(is_a_duck(db_connection_string_)),
+#endif
         set_thread_affinity_(get_property<DTYPE(set_thread_affinity_) >(app_config_file, SET_THREAD_AFFINITY, "0")),
         recombine_parameters_(get_property<DTYPE(recombine_parameters_) >(app_config_file, RECOMBINE_PARAMETERS, C_default_recombine_parameters_str)),
         tune_parameters_(get_property<DTYPE(tune_parameters_) >(app_config_file, TUNE_PARAMETERS, C_default_tune_parameters_str)),
         self_request_(get_property<DTYPE(self_request_) >(app_config_file, SELF_REQUEST, "0")),
         daemonize_(get_property<DTYPE(daemonize_) >(app_config_file, DAEMONIZE, C_default_daemonize)),
-#ifdef USE_DUCKDB
-        is_duck_(is_a_duck(db_connection_string_)),
-#endif
-        db_connection_string_(get_property<DTYPE(db_connection_string_) >(app_config_file, CONNECTION_STRING, C_default_connection_str)),
-        oemd_masks_dir_(prepare_oemd_masks_dir(get_property<DTYPE(oemd_masks_dir_)>(app_config_file, OEMD_MASK_DIR, C_default_oemd_masks_dir))),
-#ifdef USE_DUCKDB
-        db_file_(is_duck_ ? extract_db_file_path(db_connection_string_) : ""),
-#endif
         log_level_(set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, C_default_log_level))),
         loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, LOOP_INTERVAL, C_default_loop_interval_ms))),
         stream_loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, STREAM_LOOP_INTERVAL, C_default_stream_loop_interval_ms))),

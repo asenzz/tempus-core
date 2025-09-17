@@ -1,14 +1,10 @@
 #ifndef DATASOURCE_HPP
 #define DATASOURCE_HPP
 
-#include <mutex>
-#include "appcontext.hpp"
-#include "common.hpp"
 #include "DAO/IRowMapper.hpp"
 #include "DAO/StatementPreparerDBTemplate.hpp"
 #include "DAO/ScopedTransaction.hpp"
-#include "common/logging.hpp"
-#include "util/math_utils.hpp"
+#include "model/DataRow.hpp"
 
 namespace svr::dao {
 
@@ -19,7 +15,7 @@ class DataSource
     std::shared_ptr<StatementPreparerDBTemplate> statement_preparer_template;
 
 public:
-    explicit DataSource(const std::string &connection_string);
+    explicit DataSource(const bool is_file_db, const std::string &connection_string);
 
     virtual ~DataSource();
 

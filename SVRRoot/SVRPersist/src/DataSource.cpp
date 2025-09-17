@@ -15,11 +15,11 @@ DataSource::~DataSource()
 {
 }
 
-DataSource::DataSource(const std::string &connection_string) : connection_string(connection_string)
+DataSource::DataSource(const bool is_file_db, const std::string &connection_str) : connection_string(connection_str)
 {
-    LOG4_DEBUG("Opening connection using connection string " << connection_string);
+    LOG4_DEBUG("Opening connection using connection string " << connection_str);
     try {
-        statement_preparer_template = std::make_unique<StatementPreparerDBTemplate>(connection_string);
+        statement_preparer_template = std::make_unique<StatementPreparerDBTemplate>(is_file_db, connection_str);
     } catch (const std::exception &e) {
         LOG4_FATAL("Error instantiating, " << e.what());
         throw e;

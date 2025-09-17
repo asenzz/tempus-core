@@ -71,50 +71,31 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cc8418c2-62f8-4b92-86c8-7b9409132682" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/StatementPreparerDBTemplate.tpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/config/dbschema.duckdb" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/config/dbschema.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/config/initdb.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/sonar-project.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.vscode/c_cpp_properties.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/c_cpp_properties.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.vscode/settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/settings.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/kernel_base.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/kernel_base.cu" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune_fast.cu" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/src/onlinesvr_tune_fast.cu" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/deconstructed_etalon.txtfk4x2" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/deconstructed_etalon.txtfk4x8" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/deconstructed_etalon.txtfk8x8" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/modwt_test_data/inputqueue_long.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/0.98_eurusd_avg_3600_test_data.sql" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/inverse_output_real" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/inverse_transform_input" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/inverse_transform_output" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/online_emd_test_data/transform_output_real" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/stft_test_data/deconstructed_etalon.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/stft_test_data/input_queue_etalon.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/stft_test_data/r_matrix_200.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/10000_mimo_path.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/10k_mimo_model_level1_close" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/5000_mimo_model.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/GA_trainpredict-basic_integration-input.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/all_feat_vectors.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/all_labels.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/batch-trained-model.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/batch_train_output_saved01.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/features_input_path.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/features_level_0.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/mimo_batch_train_model.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/mimo_model_avg_level3.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/online_svr_final_state.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/path_trainpredict-basic_integration-input.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/train_predict_test_eurusd_twap_1h.tsv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/vectors_200.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/vectors_200_path.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/x.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/xauusd_1_2023_short.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/xauusd_3600_2023.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/xauusd_3600_2023_short.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/test_data/y.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_manifold.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/OnlineSVR/test/train_predict_tests_manifold.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/SVRParametersServiceTests.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness-tests/test/SVRParametersServiceTests.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/ModelService.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRBusiness/src/appcontext.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/PropertiesFileReader.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/math_utils.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/math_utils.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/include/util/string_utils.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/PropertiesFileReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/PropertiesFileReader.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/db_utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/db_utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/math_utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/math_utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/string_utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRCommon/src/string_utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/CMakeLists.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.tpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/DataSource.tpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tags" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/StatementPreparerDBTemplate.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/include/DAO/StatementPreparerDBTemplate.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/DataSource.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/DataSource.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/PgDAO/PgEnsembleDAO.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/PgDAO/PgEnsembleDAO.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/StatementPreparerDBTemplate.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/SVRRoot/SVRPersist/src/StatementPreparerDBTemplate.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/app.config" beforeDir="false" afterPath="$PROJECT_DIR$/config/app.config" afterDir="false" />
     </list>
     <list id="b911cfe9-5e99-464b-b960-ad0631e8da5f" name="Frequently changed" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -184,42 +165,42 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
-    &quot;TODO_SCOPE&quot;: &quot;All Places&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
-    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;ctest.advertisement.all.test.configuration.is.created&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;support-vectors-manifold&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/zarko/run_vscode.sh&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;CMakeSettings&quot;,
-    &quot;structure.view.defaults.are.configured&quot;: &quot;true&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.RadMigrateCodeStyle": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "RunOnceActivity.west.config.association.type.startup.service": "true",
+    "TODO_SCOPE": "All Places",
+    "WebServerToolWindowFactoryState": "false",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "ctest.advertisement.all.test.configuration.is.created": "true",
+    "git-widget-placeholder": "support-vectors-manifold",
+    "last_opened_file_path": "/home/zarko/run_vscode.sh",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "run.code.analysis.last.selected.profile": "pProject Default",
+    "settings.editor.selected.configurable": "advanced.settings",
+    "structure.view.defaults.are.configured": "true",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;DatabaseDriversLRU&quot;: [
-      &quot;postgresql&quot;
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "postgresql"
     ],
-    &quot;com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File&quot;: [
-      &quot;ObjectiveC&quot;
+    "com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File": [
+      "ObjectiveC"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/SVRRoot/SVRPersist/include/misc" />
@@ -1627,6 +1608,7 @@
       <workItem from="1756536132037" duration="400000" />
       <workItem from="1756536745101" duration="1488000" />
       <workItem from="1756569405373" duration="695000" />
+      <workItem from="1757996760831" duration="866000" />
     </task>
     <task id="LOCAL-00001" summary="Stabilized data preparation across running instances: VMD memory corruption fixed, decon queue saving fixed, scaling factors calculation fixed to a predetermined number of rows, added more detailed logging info.">
       <created>1625999927377</created>

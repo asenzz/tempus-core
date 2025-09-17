@@ -209,11 +209,11 @@ private: // TODO port properties below to use the CONFPROP macro
     const ConcreteDaoType dao_type;
     const size_t slide_count_, slide_skip_, tune_run_limit_, feature_quantization_, multistep_len, multiout, online_learn_iter_limit_, stabilize_iterations_count_;
     const float prediction_horizon_, scaling_alpha_, solve_iterations_coefficient_;
-    const bool set_thread_affinity_, recombine_parameters_, tune_parameters_, self_request_, daemonize_;
+    const std::string db_connection_string_, oemd_masks_dir_, db_file_;
 #ifdef USE_DUCKDB
     const bool is_duck_;
 #endif
-    const std::string db_connection_string_, oemd_masks_dir_, db_file_;
+    const bool set_thread_affinity_, recombine_parameters_, tune_parameters_, self_request_, daemonize_;
     const boost::log::trivial::severity_level log_level_;
     const std::chrono::milliseconds loop_interval_, stream_loop_interval_;
     const uint16_t num_quantisations_, quantisation_divisor_, oemd_tune_particles_, oemd_tune_iterations_;
@@ -289,10 +289,15 @@ public:
 
     static boost::log::trivial::severity_level set_global_log_level(uint8_t log_value);
 
-    const std::string &get_db_file() const noexcept;
 #ifdef USE_DUCKDB
+    const std::string &get_db_file() const noexcept;
+
     bool is_duck() const noexcept;
+
+    static bool is_a_duck(const std::string &connection_str);
 #endif
+
+    std::tuple<bool, std::string> get_connection_arguments();
 };
 
 using MessageSource_ptr = std::shared_ptr<common::AppConfig>;

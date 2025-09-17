@@ -5,6 +5,7 @@
 #include "DAO/InputQueueDAO.hpp"
 #include "include/DaoTestFixture.h"
 #include "model/User.hpp"
+#include "model/Dataset.hpp"
 
 using namespace svr;
 

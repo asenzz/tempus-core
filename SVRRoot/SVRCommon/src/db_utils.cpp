@@ -85,9 +85,16 @@ namespace common {
 
 int32_t dd_column_name(duckdb_result &res, const char *name, const uint32_t column_count)
 {
-    if (strlen(name) < 1) return 0;
-    for (DTYPE(column_count) i = 0; i < column_count; ++i)
-        if (strcmp(duckdb_column_name(&res, i), name) == 0) return i;
+    if (strlen(name) < 1) {
+        LOG4_WARN("Column name is empty, column count " << column_count);
+        return 0;
+    }
+    for (DTYPE(column_count) i = 0; i < column_count; ++i) {
+        const auto column_name = duckdb_column_name(&res, i);
+        if (!column_name) LOG4_ERROR("Column name for " << i << " not found.");
+//        LOG4_TRACE("Columns count " << column_count << ", i " << i << ", name " << name << ", column name " << column_name);
+        if (strcmp(column_name, name) == 0) return i;
+    }
     return -1;
 }
 

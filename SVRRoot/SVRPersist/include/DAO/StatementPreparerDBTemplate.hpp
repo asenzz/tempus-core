@@ -1,9 +1,9 @@
-#pragma once
+#ifndef STATEMENTPREPARERDBTEMPLATE_HPP
+#define STATEMENTPREPARERDBTEMPLATE_HPP
 
 #include <set>
 #include "common.hpp"
 #include "model/User.hpp"
-#include "model/Dataset.hpp"
 #include "onlinesvr.hpp"
 
 
@@ -14,7 +14,7 @@ namespace dao {
 
 class StatementPreparerDBTemplate
 {
-    pqxx::connection connection;
+    pqxx::connection *p_pg_con = nullptr;
 
     std::string escape(std::nullptr_t);
 
@@ -30,138 +30,45 @@ class StatementPreparerDBTemplate
 
     std::string escape(const char *s);
 
-    inline static std::string escape(char c)
-    {
-        std::string result;
-        result += "'";
-        result += c;
-        result += "'";
-        return result;
-    }
+    static std::string escape(char c);
 
     std::string escape(const bool &);
 
-    static inline std::string escape(const long v)
-    { return std::to_string(v); }
-
-    static inline std::string escape(const bigint v)
-    { return std::to_string(v); }
-
-    static inline std::string escape(const float v)
-    { return common::to_string_with_precision(v); }
-
-    static inline std::string escape(const double v)
-    { return common::to_string_with_precision(v); }
-
+    static std::string escape(const long v);
+    static std::string escape(const bigint v);
+    static std::string escape(const float v);
+    static std::string escape(const double v);
     std::string escape(datamodel::ROLE role);
 
-    template<typename T>
-    inline std::string escape(T t)
-    {
-        return boost::lexical_cast<std::string>(t);
-    }
+    template<typename T> std::string escape(T t);
 
-    template<typename InputIterator>
-    inline std::deque<std::string> escape(InputIterator begin, InputIterator end)
-    {
-        std::deque<std::string> r;
-        for (; begin != end; ++begin) {
-            std::string tmp = escape(*begin);
-            size_t pos = tmp.find_first_of("'");
-            if (pos != std::string::npos) {
-                tmp.replace(pos, 1, "\"");
-                pos = tmp.find_last_of("'");
-                if (pos != std::string::npos)
-                    tmp.replace(pos, 1, "\"");
-            }
-            r.push_back(tmp);
-        }
-        return r;
-    }
+    template<typename InputIterator> std::deque<std::string> escape(InputIterator begin, InputIterator end);
 
-    template<typename T>
-    inline std::string escape(const std::vector<T> &v)
-    {
-        std::stringstream ss;
-        ss.precision(std::numeric_limits<double>::max_digits10);
-        std::deque<std::string> vals = escape(begin(v), end(v));
-        ss << "'{";
-        if (!vals.empty()) ss << vals[0];
-        for (size_t col_num = 1; col_num < vals.size(); col_num++)
-            ss << ", " << vals[col_num];
-        ss << "}'";
-
-        return ss.str();
-    }
-
-    template<typename T>
-    inline std::string escape(const std::deque<T> &v)
-    {
-        std::stringstream ss;
-        ss.precision(std::numeric_limits<double>::max_digits10);
-        std::deque<std::string> vals = escape(v.begin(), v.end());
-        ss << "'{";
-        if (!vals.empty()) ss << vals[0];
-        for (size_t col_num = 1; col_num < vals.size(); col_num++)
-            ss << ", " << vals[col_num];
-        ss << "}'";
-
-        return ss.str();
-    }
-
-    template<typename T>
-    inline std::string escape(const std::set<T> &v)
-    {
-        std::stringstream ss;
-        ss.precision(std::numeric_limits<double>::max_digits10);
-        std::deque<std::string> vals = escape(v.begin(), v.end());
-        ss << "'{";
-        if (vals.size() > 0)
-            ss << vals[0];
-        for (size_t col_num = 1; col_num < vals.size(); ++col_num)
-            ss << ", " << vals[col_num];
-        ss << "}'";
-
-        return ss.str();
-    }
-
+    template<typename T> inline std::string escape(const std::vector<T> &v);
+    
+    template<typename T> inline std::string escape(const std::deque<T> &v);
+    
+    template<typename T> inline std::string escape(const std::set<T> &v);
+    
     std::string prepare_statement(const char *format);
 
 public:
+    explicit StatementPreparerDBTemplate(const bool is_file_db, const std::string &connection_str);
 
-    explicit StatementPreparerDBTemplate(const std::string &connection_string) : connection(connection_string)
-    {}
+    ~StatementPreparerDBTemplate();
 
-    //    virtual ~StatementPreparerDBTemplate() {}
-
-
-    template<typename T, typename... Targs>
-    std::string prepare_statement(const char *format, T value, Targs... Fargs)
-    {
-        std::string s;
-        for (; *format != '\0'; format++) {
-            if (*format == '?') { // ? is the argument placeholder which will be replaced with concrete escaped value
-                s += (std::string) (escape(value));
-                s += (std::string) (prepare_statement(format + 1, Fargs...)); // recursive call
-                return s;
-            }
-            s += *format;
-        }
-        return s;
-    }
-
-    template<typename T, typename... Targs>
-    std::string prepare_statement(const std::string &format, T value, Targs... Fargs)
-    {
-        return prepare_statement(format.c_str(), value, Fargs...);
-    }
-
-    static std::string prepare_statement(const std::string &format)
-    {
-        return format;
-    }
+    template<typename T> std::string esc(const T &str);
+    
+    template<typename T, typename... Targs> std::string prepare_statement(const char *format, T value, Targs... Fargs);
+    
+    template<typename T, typename... Targs> std::string prepare_statement(const std::string &format, T value, Targs... Fargs);
+    
+    static std::string prepare_statement(const std::string &format);
 };
 
 }
 } // dao
 
+#include "StatementPreparerDBTemplate.tpp"
+
+#endif // STATEMENTPREPARERDBTEMPLATE_HPP

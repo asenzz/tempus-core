@@ -4,10 +4,9 @@
 #include <sstream>
 #include <boost/algorithm/string.hpp>
 #include <openssl/evp.h>
-
+#include <libpq-fe.h>
 #include "util/string_utils.hpp"
 #include "common/logging.hpp"
-#include "util/math_utils.hpp"
 #include <common/constants.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
@@ -313,6 +312,42 @@ parse_string_range(const std::string &parameter_string, const std::vector<std::s
     return result;
 }
 
+std::string pg_esc(const std::string &input)
+{
+    // Allocate buffer: worst case, each char could be escaped (needs +1 for null terminator)
+    std::string output;
+    output.resize(input.size() * 2 + 1);
+
+    const auto escaped_len = PQescapeString(
+        output.data(),   // destination buffer
+        input.c_str(),   // source string
+        input.size()     // length of source
+        );
+
+    // shrink output to actual size
+    output.resize(escaped_len);
+
+    return output;
+}
+
+std::string pg_esc(const char input[])
+{
+    const auto n = strlen(input);
+    // Allocate buffer: worst case, each char could be escaped (needs +1 for null terminator)
+    std::string output;
+    output.resize(n * 2 + 1);
+
+    const auto escaped_len = PQescapeString(
+        output.data(),   // destination buffer
+        input,   // source string
+        n     // length of source
+        );
+
+    // shrink output to actual size
+    output.resize(escaped_len);
+
+    return output;
+}
 
 } // namespace common
 } // namespace svr
