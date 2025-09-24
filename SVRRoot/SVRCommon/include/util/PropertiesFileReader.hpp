@@ -80,6 +80,7 @@ public:
 
 class AppConfig final : public PropertiesReader
 {
+
     CONFPROP(uint32_t, gpu_chunk, 18000)
 
     CONFPROP(float, solve_radius, .5)
@@ -113,6 +114,8 @@ class AppConfig final : public PropertiesReader
     CONFPROP(uint16_t, parallel_models, 1)
 
     CONFPROP(uint16_t, parallel_chunks, 2)
+
+    CONFPROP(bool, xresidual, false)
 
     CONFPROP(uint32_t, oemd_interleave, 2)
 
@@ -163,6 +166,8 @@ class AppConfig final : public PropertiesReader
     CONFPROP(uint16_t, tune_iteration2, 10)
 
     CONFPROP(float, chunk_overlap, .0) // 0..1, higher means more chunks
+
+    CONFPROP(float, oemd_descent, 3) // (1..inf) How much an OEMD output component RMS level should be lower than the previous level beneath it
 
     CONFPROP(float, oemd_skipdiv, 1) // (0..num quantisations], higher means more refined
 
@@ -297,7 +302,7 @@ public:
     static bool is_a_duck(const std::string &connection_str);
 #endif
 
-    std::tuple<bool, std::string> get_connection_arguments();
+    std::tuple<bool, std::string> get_connection_arguments() const;
 };
 
 using MessageSource_ptr = std::shared_ptr<common::AppConfig>;

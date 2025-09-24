@@ -73,11 +73,18 @@ void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::E
     if (load_decon_data) load_decon(ensemble);
 }
 
+uint16_t EnsembleService::get_levels_limit(const uint16_t spectral_levels)
+{
+    return spectral_levels - (PROPS.get_xresidual() && spectral_levels > 1);
+}
 
 void EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
 {
+    const auto level_lim = get_levels_limit(dataset.get_spectral_levels());
     OMP_FOR(std::min<unsigned>(PROPS.get_parallel_models(), ensemble.get_model_ct()))
-    for (auto p_model: ensemble.get_models()) ModelService::train(dataset, ensemble, *p_model);
+    for (auto p_model: ensemble.get_models()) 
+       if (p_model->get_decon_level() < level_lim) 
+           ModelService::train(dataset, ensemble, *p_model);
 }
 
 datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::data_row_container &times) noexcept
@@ -97,9 +104,11 @@ datamodel::DeconQueue_ptr EnsembleService::predict(const datamodel::Dataset &dat
     auto p_aux_decon = ensemble.get_label_aux_decon()->clone_empty();
     const auto main_res = dataset.get_input_queue()->get_resolution();
     tbb::mutex insert_mx;
+    const auto level_lim = get_levels_limit(dataset.get_spectral_levels());
     OMP_FOR(ensemble.get_model_ct())
     for (auto &p_model: ensemble.get_models())
-        ModelService::predict(ensemble, *p_model, features.at(std::tuple{p_model->get_decon_level(), p_model->get_step()}), main_res, insert_mx, *p_aux_decon);
+       if (p_model->get_decon_level() < level_lim) 
+            ModelService::predict(ensemble, *p_model, features.at(std::tuple{p_model->get_decon_level(), p_model->get_step()}), main_res, insert_mx, *p_aux_decon);
 
     return p_aux_decon;
 }

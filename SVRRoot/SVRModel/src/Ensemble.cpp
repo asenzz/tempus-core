@@ -237,8 +237,11 @@ std::string Ensemble::to_string() const
 
 uint16_t Ensemble::get_level_ct() const
 {
-    assert(model.size());
-    return business::ModelService::to_level_ct(models.size());
+    int16_t max_level = -1;
+    for (const auto &p_model: models)
+        if (max_level < p_model->get_decon_level())
+            max_level = p_model->get_decon_level();
+    return uint16_t(max_level + 1);
 }
 
 uint16_t Ensemble::get_model_ct() const

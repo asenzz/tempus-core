@@ -73,6 +73,8 @@ public:
 
     static void get_decon_queues_from_input_queue(const datamodel::Dataset &dataset, const datamodel::InputQueue &input_queue, std::deque<datamodel::DeconQueue_ptr> &decon_queues);
 
+    static uint16_t get_levels_limit(const uint16_t spectral_levels);
+
     static void train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
 
     static datamodel::DeconQueue_ptr predict(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::t_predict_features &features);

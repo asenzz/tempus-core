@@ -94,7 +94,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const std::string C_input_queue_name = "q_svrwave_" + C_symbol + "_";
     const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
     const std::string C_test_aux_input_table_name(C_test_input_name + "1");
-    constexpr uint16_t C_test_levels = 6; // Spectral levels
+    constexpr uint16_t C_test_levels = 12; // Spectral levels
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
     const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
@@ -156,7 +156,8 @@ TEST(manifold_tune_train_predict, basic_integration)
             C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
-#pragma omp parallel ADJ_THREADS(std::min<uint16_t>(PROPS.get_parallel_models(), p_dataset->get_spectral_levels() * p_dataset->get_multistep())) default(shared)
+    const auto nl = business::EnsembleService::get_levels_limit(p_dataset->get_spectral_levels());
+#pragma omp parallel ADJ_THREADS(std::min<uint16_t>(PROPS.get_parallel_models(), nl * p_dataset->get_multistep())) default(shared)
 #pragma omp single
     {
         // OMP_TASKLOOP_1() // To preserve order of processing, do not parallelize
@@ -175,7 +176,7 @@ TEST(manifold_tune_train_predict, basic_integration)
             arma::vec recon_last_knowns(common::C_integration_test_validation_window, arma::fill::zeros);
             tbb::mutex recon_l;
             OMP_TASKLOOP_1(collapse(2)) // To preserve order of processing, do not parallelize
-            for (uint16_t l = 0; l < p_dataset->get_spectral_levels(); l += LEVEL_STEP)
+            for (uint16_t l = 0; l < nl; l += LEVEL_STEP)
                 for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
                         auto p_model = p_ensemble->get_model(l, s);
@@ -403,17 +404,17 @@ TEST(manifold_tune_train_predict, basic_integration)
                        ", mean leverage " << leverage << /* net won to average drawdown ratio */ \
                        ", absolute leverage " << abs_leverage << /* net won to maximum drawdown ratio */ \
                        ", trade rating " << abs_leverage * positive_preds_pc * cml_alpha_pct << \
-                       ", price hits " << 100. * price_hits_lgbm / i_div << "pc" \
-                       ", won " << pips_won_lgbm << \
-                       ", lost " << pips_lost_lgbm << \
-                       ", neto " << net_pips_lgbm << \
-                       ", value per position " << pips_pos_lgbm << \
-                       ", drawdown per position " << drawdown_pos_lgbm << \
-                       ", sum drawdown " << drawdown_lgbm << \
-                       ", max drawdown " << max_drawdown_lgbm << \
-                       ", mean leverage " << leverage_lgbm << /* net won to average drawdown ratio */ \
-                       ", absolute leverage " << abs_leverage_lgbm << /* net won to maximum drawdown ratio */ \
-                       ", trade rating " << abs_leverage_lgbm * positive_preds_lgbm_pc * cml_alpha_lgbm_pct);
+                       ", price hits LGBM " << 100. * price_hits_lgbm / i_div << "pc" \
+                       ", won LGBM " << pips_won_lgbm << \
+                       ", lost LGBM " << pips_lost_lgbm << \
+                       ", neto LGBM " << net_pips_lgbm << \
+                       ", value per position LGBM " << pips_pos_lgbm << \
+                       ", drawdown per position LGBM " << drawdown_pos_lgbm << \
+                       ", sum drawdown LGBM " << drawdown_lgbm << \
+                       ", max drawdown LGBM " << max_drawdown_lgbm << \
+                       ", mean leverage LGBM  " << leverage_lgbm << /* net won to average drawdown ratio */ \
+                       ", absolute leverage LGBM " << abs_leverage_lgbm << /* net won to maximum drawdown ratio */ \
+                       ", trade rating LGBM " << abs_leverage_lgbm * positive_preds_lgbm_pc * cml_alpha_lgbm_pct);
                 if (i < C_save_forecast && std::isnormal(recon_predicted[i]))
                     APP.request_service.save(ptr<datamodel::MultivalResponse>(0, 0, cur_time, column, recon_predicted[i]));
             }

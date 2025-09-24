@@ -188,6 +188,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const arma::mat &y_refe
             l2.unset();
         }
     }
+    if (level == 7) prediction.zeros();
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }

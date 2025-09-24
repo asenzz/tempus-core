@@ -705,6 +705,7 @@ double autocorrelation(CRPTR(double) d_labels, const uint32_t n, const cudaStrea
     G_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n, mean);
     double res;
     cu_errchk(cudaMemcpyAsync(&res, d_autocorrelation, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    LOG4_TRACE("Labels mean " << mean << ", count " << n << ", res " << res);
     cu_errchk(cudaFreeAsync(d_autocorrelation, custream));
     return res / n2;
 }
@@ -748,7 +749,7 @@ oemd_coefficients_search::evaluate_mask(
         cu_errchk(cudaStreamDestroy(custream));
         return common::C_bad_validation;
     }
-    const auto rel_pow = std::abs(meanabs_input / meanabs_imf - levels + 1.);
+    const auto rel_pow = std::abs(meanabs_input / meanabs_imf - PROPS.get_oemd_descent());
 
     double xcor, acor;
     if (xcor_w <= 0 && acor_w <= 0) {
