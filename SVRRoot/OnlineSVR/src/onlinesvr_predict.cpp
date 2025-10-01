@@ -117,10 +117,10 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
 #ifdef USE_MPI
     if (const auto world_size = PROPS.get_mpi_size(); world_size > 1) {
         if (PROPS.get_mpi_rank()) {
-            mpi_errchk(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, nullptr, 0, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
+            MPI_ERRCHK(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, nullptr, 0, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
         } else {
             std::vector<double> mpi_all_predictions(prediction.n_elem * world_size);
-            mpi_errchk(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, mpi_all_predictions.data(), prediction.n_elem, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
+            MPI_ERRCHK(MPI_Gather(prediction.mem, prediction.n_elem, MPI_DOUBLE, mpi_all_predictions.data(), prediction.n_elem, MPI_DOUBLE, 0, PROPS.get_mpi_comm()));
             for (DTYPE(world_size) i = 0; i < world_size; ++i)
                 prediction += arma::mat(mpi_all_predictions.data() + i * prediction.n_elem, prediction.n_rows, prediction.n_cols, false, true);
         }
@@ -188,7 +188,6 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const arma::mat &y_refe
             l2.unset();
         }
     }
-    if (level == 7) prediction.zeros();
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }

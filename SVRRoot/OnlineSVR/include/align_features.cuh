@@ -14,12 +14,6 @@ namespace svr {
 
 // constexpr float C_skip_multiplier = 1. + 1e-3;
 // constexpr float C_skip_limit = C_skip_multiplier;
-constexpr uint32_t C_max_label_ixs = 24 * 3'600 + 1; // TODO Deduce from main input queue resolution and remove this constant
-constexpr double C_label_bias = 0; // Bias toward TWAP, set to zero to disable bias
-
-typedef struct _label_ix {
-    uint32_t n_ixs, label_ixs[C_max_label_ixs], special_x;
-} t_label_ix, *t_label_ix_ptr;
 
 #ifndef __CUDACC__
 __device__ __host__ inline unsigned umin(const unsigned a, const unsigned b) { return _MIN(a, b); }

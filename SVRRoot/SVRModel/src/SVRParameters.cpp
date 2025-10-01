@@ -14,6 +14,8 @@
 
 namespace svr {
 namespace datamodel {
+
+
 e_kernel_type fromstring(const std::string &kernel_type_str)
 {
     e_kernel_type kernel_type = e_kernel_type::LINEAR;
@@ -109,6 +111,11 @@ bool less_SVRParameters_ptr::operator()(const SVRParameters_ptr &lhs, const SVRP
     return lhs->operator<(*rhs);
 }
 
+SVRParameters::SVRParameters() : Entity(0)
+{
+}
+
+
 SVRParameters::SVRParameters(
     const bigint id,
     const bigint dataset_id,
@@ -183,7 +190,7 @@ SVRParameters::SVRParameters(const SVRParameters &o) : SVRParameters(
     D_feedback = o.D_feedback;
     V_feedback = o.V_feedback;
     min_Z = o.min_Z;
-    tft_model = o.tft_model;
+    model_blob = o.model_blob;
 }
 
 SVRParameters &SVRParameters::operator=(const SVRParameters &o)
@@ -214,7 +221,7 @@ SVRParameters &SVRParameters::operator=(const SVRParameters &o)
     kernel_type = o.kernel_type;
     lag_count = o.lag_count;
     feature_mechanics = o.feature_mechanics;
-    tft_model = o.tft_model;
+    model_blob = o.model_blob;
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
@@ -288,7 +295,7 @@ bigint SVRParameters::get_dataset_id() const
     return dataset_id;
 }
 
-void SVRParameters::set_dataset_id(const bigint &value)
+void SVRParameters::set_dataset_id(const bigint value)
 {
     dataset_id = value;
 }
@@ -472,9 +479,9 @@ t_feature_mechanics SVRParameters::get_feature_mechanics() const
     return feature_mechanics;
 }
 
-void SVRParameters::set_feature_mechanics(const t_feature_mechanics &f)
+t_feature_mechanics &SVRParameters::set_feature_mechanics(const t_feature_mechanics &f)
 {
-    feature_mechanics = f;
+    return feature_mechanics = f;
 }
 
 std::string SVRParameters::to_string() const
@@ -493,7 +500,7 @@ std::string SVRParameters::to_string() const
             << ", vertical path feedback " << V_feedback
             << ", decrement distance " << svr_decremental_distance
             << ", min Z " << min_Z
-            << ", compressed model " << tft_model.size() << " bytes"
+            << ", compressed model " << model_blob.size() << " bytes"
             << ", svr adjacent levels ratio " << svr_adjacent_levels_ratio
             << ", kernel type " << static_cast<int>(kernel_type)
             << ", lag count " << lag_count

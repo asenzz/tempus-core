@@ -21,7 +21,7 @@ class InputQueue;
 
 class Dataset;
 
-using DeconQueue_Ptr = std::shared_ptr<DeconQueue>;
+using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
 using InputQueue_ptr = std::shared_ptr<InputQueue>;
 using Dataset_ptr = std::shared_ptr<Dataset>;
 }

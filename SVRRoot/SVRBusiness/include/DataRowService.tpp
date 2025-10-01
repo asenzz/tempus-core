@@ -43,7 +43,7 @@ template<typename I> inline void generate_twap_indexes(
         const bpt::ptime &start_time, // Exact start time
         const bpt::time_duration &duration, // Exact end time
         const uint32_t n_out, // Count of positions to output
-        uint32_t *const out)
+        RPTR(uint32_t) out)
 {
     assert(it_end >= start_it);
     assert(end_time >= start_time);
@@ -76,7 +76,7 @@ template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
     uint32_t maxmin_i = start_it - cbegin;
     for (DTYPE(n_out) outctr = 0; outctr < n_out; ++outctr) {
         const auto time_iter = start_time + duration * outctr / n_out;
-        while (it != it_end && is_valid(it) && get_time(it) < time_iter) ++it;
+        while (it < it_end && is_valid(it) && get_time(it) < time_iter) ++it;
         out[outctr] = it - cbegin - (it > cbegin && (it == it_end || !is_valid(it) || get_time(it) > time_iter));
         const auto v = get_value(cbegin + out[outctr], level);
         if ((maxmin && v > maxmin_v) || (!maxmin && v < maxmin_v)) {

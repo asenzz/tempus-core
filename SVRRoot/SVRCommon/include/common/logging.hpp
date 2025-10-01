@@ -161,83 +161,83 @@ extern const logging l__;
 #define PROFIL3(X) PROFILE_INFO(X, #X)
 
 #include <sstream>
-
 #include <cufft.h>
+
 std::string cufft_get_error_string(const cufftResult s);
 
 #ifdef PRODUCTION_BUILD
 
-#define cf_errchk(cmd) (cmd)
-#define ma_errchk(cmd) (cmd)
-#define ma_errchki(cmd) (cmd)
-#define cu_errchk(cmd) (cmd)
-#define cb_errchk(cmd) (cmd)
-#define cs_errchk(cmd) (cmd)
-#define ip_errchk(cmd) (cmd)
-#define vs_errchk(cmd) (cmd)
-#define np_errchk(cmd) (cmd)
-#define lg_errchk(cmd) (cmd)
+#define CUFFT_ERRCHK(cmd) (cmd)
+#define MAG_ERRCHK(cmd) (cmd)
+#define MAG_ERRCHKI(cmd) (cmd)
+#define CU_ERRCHK(cmd) (cmd)
+#define CB_ERRCHK(cmd) (cmd)
+#define CS_ERRCHK(cmd) (cmd)
+#define IPP_ERRCHK(cmd) (cmd)
+#define VSL_ERRCHK(cmd) (cmd)
+#define NPP_ERRCHK(cmd) (cmd)
+#define LGBM_ERRCHK(cmd) (cmd)
 
 #else
 
-#ifndef np_errchk
-#define np_errchk(cmd) { \
+#ifndef NPP_ERRCHK
+#define NPP_ERRCHK(cmd) { \
     NppStatus __err;     \
     if ((__err = cmd) != NPP_SUCCESS) \
         LOG4_THROW("NVidia perfomance primitive call " #cmd " failed with error " << int(__err)); }
 #endif
 
-#ifndef vs_errchk
-#define vs_errchk(cmd) {       \
+#ifndef VSL_ERRCHK
+#define VSL_ERRCHK(cmd) {       \
     int __err;                 \
     if ((__err = cmd) != VSL_STATUS_OK) \
         LOG4_THROW("Intel VSL call " #cmd " failed with error " << __err); }
 #endif
 
-#ifndef ip_errchk
-#define ip_errchk(cmd) {               \
+#ifndef IPP_ERRCHK
+#define IPP_ERRCHK(cmd) {               \
     IppStatus __err;                 \
     if ((__err = cmd) != ippStsNoErr) \
         LOG4_THROW("Intel Performance Primitives call " #cmd " failed with error " << int(__err) << ", " << ippGetStatusString(__err)); \
     }
 #endif
 
-#ifndef cf_errchk
-#define cf_errchk(cmd) {               \
+#ifndef CUFFT_ERRCHK
+#define CUFFT_ERRCHK(cmd) {               \
     cufftResult __err;                 \
     if ((__err = cmd) != CUFFT_SUCCESS)  \
         LOG4_THROW("CUDA FFT call " #cmd " failed with error " << int(__err) << ", " << cufft_get_error_string(__err)); \
     }
 #endif
 
-#ifndef ma_errchk
-#define ma_errchk(cmd) {   \
+#ifndef MAG_ERRCHK
+#define MAG_ERRCHK(cmd) {   \
         magma_int_t __err; \
         if ((__err = (cmd)) < MAGMA_SUCCESS) \
             LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err)); \
     }
 #endif
 
-#ifndef ma_errchki
-#define ma_errchki(cmd, INFO) {   \
+#ifndef MAG_ERRCHKI
+#define MAG_ERRCHKI(cmd, INFO) {   \
         magma_int_t __err; \
         if ((__err = (cmd)) < MAGMA_SUCCESS || (INFO) != MAGMA_SUCCESS) \
             LOG4_THROW("Magma call " #cmd " failed with error " << __err << " " << magma_strerror(__err) << ", info " << (INFO)); \
     }
 #endif
 
-#ifndef lg_errchk
-#define lg_errchk(cmd) {               \
+#ifndef LGBM_ERRCHK
+#define LGBM_ERRCHK(cmd) {               \
         const auto __err = (cmd);      \
         if (__err != 0) LOG4_THROW("LightGBM call " #cmd " failed with error " << __err << ", " << LGBM_GetLastError()); \
     }
 #endif
 
-#ifndef cu_errchk
+#ifndef CU_ERRCHK
 
 constexpr unsigned C_cu_alloc_retries = 1e2;
 
-#define cu_errchk(cmd) {               \
+#define CU_ERRCHK(cmd) {               \
     cudaError_t __err = (cmd);                 \
     if (false /* __err == cudaErrorMemoryAllocation */ ) {        \
         unsigned __retries = 0;                                             \
@@ -253,24 +253,24 @@ constexpr unsigned C_cu_alloc_retries = 1e2;
 
 #endif
 
-#ifndef cb_errchk
-#define cb_errchk(cmd) {      \
+#ifndef CB_ERRCHK
+#define CB_ERRCHK(cmd) {      \
         cublasStatus_t __err; \
         if ((__err = (cmd)) != CUBLAS_STATUS_SUCCESS) \
             LOG4_THROW("Cublas call " #cmd " failed with " << int(__err) << " " << cublasGetStatusName(__err) << ", " << cublasGetStatusString(__err)); \
         }
 #endif
 
-#ifndef cs_errchk
-#define cs_errchk(cmd) {                                             \
+#ifndef CS_ERRCHK
+#define CS_ERRCHK(cmd) {                                             \
         cusolverStatus_t __err;                                      \
         if ((__err = (cmd)) != CUSOLVER_STATUS_SUCCESS)              \
             LOG4_ERROR("Cusolver call " #cmd " failed with " << int(__err));  \
 }
 #endif
 
-#ifndef mpi_errchk
-#define mpi_errchk(cmd) { \
+#ifndef MPI_ERRCHK
+#define MPI_ERRCHK(cmd) { \
     int __err = (cmd); \
     if (__err != MPI_SUCCESS) LOG4_THROW("MPU call " #cmd " failed with error " << __err); \
 }

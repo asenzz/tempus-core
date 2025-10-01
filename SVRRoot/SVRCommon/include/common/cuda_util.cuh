@@ -124,40 +124,40 @@ constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set 
 #ifdef NDEBUG
 
 #define DEV_CUSTREAM(x)                             \
-    cu_errchk(cudaSetDevice((x)));                  \
+    CU_ERRCHK(cudaSetDevice((x)));                  \
     cudaStream_t custream;                          \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+    CU_ERRCHK(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
 
 #define CTX_CUSTREAM_(x)                                                                \
     common::gpu_context_<(x)> ctx;                                                      \
-    cu_errchk(cudaSetDevice(ctx.phy_id()));                                             \
+    CU_ERRCHK(cudaSetDevice(ctx.phy_id()));                                             \
     cudaStream_t custream;                                                              \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+    CU_ERRCHK(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
 
 #else
 
 #define DEV_CUSTREAM(x)                             \
-    cu_errchk(cudaSetDevice((x)));                  \
+    CU_ERRCHK(cudaSetDevice((x)));                  \
     cudaStream_t custream;                          \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+    CU_ERRCHK(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
     if (!custream) LOG4_THROW("CUDA stream handle not initialized.");                   \
     int devid, stream_devid;                                                            \
-    cu_errchk(cudaGetDevice(&devid));                                                   \
+    CU_ERRCHK(cudaGetDevice(&devid));                                                   \
     if (devid != (x)) LOG4_THROW("CUDA device id mismatch " << devid << " should be " << (x)); \
-    cu_errchk(cudaStreamGetDevice(custream, &stream_devid));                            \
+    CU_ERRCHK(cudaStreamGetDevice(custream, &stream_devid));                            \
     if (stream_devid != (x)) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << (x)); \
     LOG4_TRACE("CUDA stream device id " << stream_devid << " created on device " << devid);
 
 #define CTX_CUSTREAM_(x)                                                                \
     const common::gpu_context_<(x)> ctx;                                                      \
-    cu_errchk(cudaSetDevice(ctx.phy_id()));                                             \
+    CU_ERRCHK(cudaSetDevice(ctx.phy_id()));                                             \
     cudaStream_t custream;                                                              \
-    cu_errchk(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
+    CU_ERRCHK(cudaStreamCreateWithFlags(&custream, C_cu_default_stream_flags));         \
     if (!custream) LOG4_THROW("CUDA stream handle not initialized.");                   \
     int devid, stream_devid;                                                            \
-    cu_errchk(cudaGetDevice(&devid));                                                   \
+    CU_ERRCHK(cudaGetDevice(&devid));                                                   \
     if (devid != ctx.phy_id()) LOG4_THROW("CUDA device id mismatch " << devid << " should be " << ctx.phy_id()); \
-    cu_errchk(cudaStreamGetDevice(custream, &stream_devid));                            \
+    CU_ERRCHK(cudaStreamGetDevice(custream, &stream_devid));                            \
     if (stream_devid != ctx.phy_id()) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << ctx.phy_id()); \
     LOG4_TRACE("CUDA stream device id " << stream_devid << " created on device " << devid);
 
@@ -180,24 +180,24 @@ __host__ __device__ inline constexpr unsigned clamp_n(const unsigned n)
 template<typename T> inline T *cumallocopy(const std::vector<T> &v, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     T *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * element_size, custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &ptr, v.size() * element_size, custream));
+    CU_ERRCHK(cudaMemcpyAsync(ptr, v.data(), v.size() * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
 template<typename T> inline T *cumallocopy(const std::span<T> &v, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     std::decay_t<T> *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, v.size() * element_size, custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.data(), v.size() * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &ptr, v.size() * element_size, custream));
+    CU_ERRCHK(cudaMemcpyAsync(ptr, v.data(), v.size() * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
 template<typename T> inline T *cumallocopy(const arma::Mat<T> &v, const cudaStream_t custream = nullptr, const size_t element_size = sizeof(T))
 {
     T *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, v.n_elem * element_size, custream));
-    cu_errchk(cudaMemcpyAsync(ptr, v.mem, v.n_elem * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &ptr, v.n_elem * element_size, custream));
+    CU_ERRCHK(cudaMemcpyAsync(ptr, v.mem, v.n_elem * element_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
@@ -205,22 +205,30 @@ template<typename I, typename T = typename I::value_type> inline T *cumallocopy(
 {
     T *ptr;
     const auto size = std::distance(begin, end) * element_size;
-    cu_errchk(cudaMallocAsync((void **) &ptr, size, custream));
-    cu_errchk(cudaMemcpyAsync(ptr, &*begin, size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    if (size < 1) {
+        LOG4_WARN("Size is " << size << ", returning null.");
+        return nullptr;
+    }
+    CU_ERRCHK(cudaMallocAsync((void **) &ptr, size, custream));
+    CU_ERRCHK(cudaMemcpyAsync(ptr, &*begin, size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
     return ptr;
 }
 
 template<typename T> inline T *cucalloc(const cudaStream_t custream = nullptr, const size_t count = 1)
 {
     T *ptr;
-    cu_errchk(cudaMallocAsync((void **) &ptr, count * sizeof(T), custream));
-    cu_errchk(cudaMemsetAsync(ptr, 0, count * sizeof(T), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &ptr, count * sizeof(T), custream));
+    CU_ERRCHK(cudaMemsetAsync(ptr, 0, count * sizeof(T), custream));
     return ptr;
 }
 
 template<typename T> inline T *
-cumallocopy(const T *source, const cudaStream_t custream = nullptr, const unsigned len = 1, const cudaMemcpyKind kind = cudaMemcpyHostToDevice)
+cumallocopy(CRPTR(T) source, const cudaStream_t custream = nullptr, const unsigned len = 1, const cudaMemcpyKind kind = cudaMemcpyHostToDevice)
 {
+    if (source == nullptr) {
+        LOG4_WARN("Source is null, returning null.");
+        return nullptr;
+    }
     const auto size = len * sizeof(T);
     T *ptr;
     switch (kind) {
@@ -230,32 +238,44 @@ cumallocopy(const T *source, const cudaStream_t custream = nullptr, const unsign
             break;
         case cudaMemcpyDeviceToDevice:
         case cudaMemcpyHostToDevice:
-        case cudaMemcpyDefault: cu_errchk(cudaMallocAsync((void **) &ptr, size, custream));
+        case cudaMemcpyDefault: CU_ERRCHK(cudaMallocAsync((void **) &ptr, size, custream));
             break;
     }
-    cu_errchk(cudaMemcpyAsync(ptr, source, size, kind, custream));
+    CU_ERRCHK(cudaMemcpyAsync(ptr, source, size, kind, custream));
     return ptr;
 }
 
-template<typename T> void cufreecopy(T *output, const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)
+template<typename T> void cufreecopy(RPTR(T) output, CRPTR(T) source, const cudaStream_t custream = nullptr, const size_t len = 1)
 {
-    cu_errchk(cudaMemcpyAsync(output, source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync((void *) source, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
+    if (source == nullptr) {
+        LOG4_WARN("Source is null, returning null.");
+        return;
+    }
+    CU_ERRCHK(cudaMemcpyAsync(output, source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync((void *) source, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
 }
 
-template<typename T> std::vector<T> cufreecopy(const T *source, const cudaStream_t custream = nullptr, const size_t len = 1)
+template<typename T> std::vector<T> cufreecopy(CRPTR(T) source, const cudaStream_t custream = nullptr, const size_t len = 1)
 {
+    if (source == nullptr) {
+        LOG4_WARN("Source is null, returning null.");
+        return {};
+    }
     std::vector<T> res(len);
-    cu_errchk(cudaMemcpyAsync(res.data(), source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync((void *) source, custream));
+    CU_ERRCHK(cudaMemcpyAsync(res.data(), source, len * sizeof(T), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync((void *) source, custream));
     return res;
 }
 
-template<typename T> std::vector<T> cucopy(const T *source, const size_t length, const cudaStream_t custream = nullptr)
+template<typename T> std::vector<T> cucopy(CRPTR(T) source, const size_t length, const cudaStream_t custream = nullptr)
 {
+    if (source == nullptr) {
+        LOG4_WARN("Source is null, returning null.");
+        return {};
+    }
     std::vector<T> res(length);
-    cu_errchk(cudaMemcpyAsync(res.data(), source, length * sizeof(T), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaMemcpyAsync(res.data(), source, length * sizeof(T), cudaMemcpyDeviceToHost, custream));
     return res;
 }
 
@@ -263,14 +283,14 @@ template<typename T> std::vector<T>
 cucopy(const thrust::device_vector<T> &source, const cudaStream_t custream = nullptr)
 {
     std::vector<T> res(source.size());
-    cu_errchk(cudaMemcpyAsync(res.data(), thrust::raw_pointer_cast(source.data()), source.size() * sizeof(T), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaMemcpyAsync(res.data(), thrust::raw_pointer_cast(source.data()), source.size() * sizeof(T), cudaMemcpyDeviceToHost, custream));
     return res;
 }
 
-template<typename T> inline void
-cucopy(RPTR(T) dest, CRPTR(T) src, const size_t length = 1, const cudaStream_t custream = nullptr, const cudaMemcpyKind kind = cudaMemcpyDeviceToDevice, const unsigned stride = 1)
+template<typename T> inline void cucopy(
+        RPTR(T) dest, CRPTR(T) src, const size_t length = 1, const cudaStream_t custream = nullptr, const cudaMemcpyKind kind = cudaMemcpyDeviceToDevice, const unsigned stride = 1)
 {
-    cu_errchk(cudaMemcpy2DAsync(dest, sizeof(T), src, stride * sizeof(T), sizeof(T), length / stride, kind));
+    CU_ERRCHK(cudaMemcpy2DAsync(dest, sizeof(T), src, stride * sizeof(T), sizeof(T), length / stride, kind));
 }
 
 
@@ -350,6 +370,9 @@ template<typename T> __host__ __device__ __forceinline__ int8_t signum(const T v
 {
     return (T(0) < val) - (val < T(0));
 }
+
+// ICPX bug forced me to move this out of cuvalidate
+uint8_t get_streams_per_gpu(const uint32_t n_rows);
 
 template<typename T> __device__ inline T min(const T a, const T b, const T c)
 {

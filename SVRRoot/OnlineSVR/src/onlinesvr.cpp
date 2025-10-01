@@ -142,12 +142,12 @@ arma::uvec OnlineSVR::get_active_ixs() const
     return arma::unique(active_ixs);
 }
 
-DTYPE(OnlineSVR::param_set) OnlineSVR::get_param_set() const noexcept
+DTYPE(OnlineSVR::param_set) &OnlineSVR::get_param_set() noexcept
 {
     return param_set;
 }
 
-DTYPE(OnlineSVR::param_set) &OnlineSVR::get_param_set() noexcept
+DTYPE(OnlineSVR::param_set) OnlineSVR::get_param_set() const noexcept
 {
     return param_set;
 }
@@ -297,12 +297,13 @@ arma::mat OnlineMIMOSVR::do_ocl_solve(CPTRd host_a, double *host_b, const int m,
 
 #endif
 
-double OnlineSVR::score_weights(const uint32_t m, const uint32_t n, const uint16_t layers, CRPTRd L_mean_mask, CRPTRd K, CRPTRd w, RPTR(double) tmp)
+double OnlineSVR::score_weights(const uint32_t m, const uint32_t n, const uint32_t k, const uint16_t layers, CRPTRd L_mean_mask, CRPTRd K, CRPTRd w, RPTR(double) tmp)
 {
     const auto mn = m * n;
+    const auto nk = n * k;
     memcpy(tmp, L_mean_mask, mn * sizeof(double));
     for (DTYPE(layers) i = 0; i < layers; ++i) {
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, m, 1, K, m, w + i * mn, m, -1, tmp, m);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, K, m, w + i * nk, k, -1, tmp, m);
         if (i < layers - 1) cblas_dscal(mn, -1, tmp, 1);
     }
     return cblas_dasum(mn, tmp, 1);
@@ -320,7 +321,7 @@ std::deque<arma::mat> OnlineSVR::solve_batched_irwls(
     LOG4_TRACE("Batch size " << K.size() << ", m " << m << ", n " << n << ", K front " << arma::size(K.front()) << ", K back " << arma::size(K.back()) << ", rhs front "
                              << arma::size(rhs.front()) << ", rhs back " << arma::size(rhs.back()) << ", solved front " << arma::size(solved.front()) << ", solved back "
                              << arma::size(solved.back()));
-    cu_errchk(cudaSetDevice(gpu_phy_id));
+    CU_ERRCHK(cudaSetDevice(gpu_phy_id));
     auto [d_K, d_rhs] = solvers::init_magma_batch_solver(batch_size, m, n);
 
     solvers::iter_magma_batch_solve(m, n, K_epsco, rhs, solved, magma_queue, d_K, d_rhs, gpu_phy_id);
@@ -492,7 +493,11 @@ void OnlineSVR::reset()
     p_kernel_matrices = ptr<std::deque<arma::mat>>();
 
     weight_chunks.clear();
-    all_weights.clear();
+    instance_weights.clear();
+    total_weights.clear();
+    active_total_weights.clear();
+    chunks_score.clear();
+    active_rows.clear();
     ixs.clear();
     train_feature_chunks_t.clear();
     train_label_chunks.clear();
@@ -516,8 +521,7 @@ arma::vec OnlineSVR::calc_gammas(const arma::mat &Z, const arma::mat &L)
 {
     arma::vec mean_Z, min_Z, max_Z, min_L, max_L, mean_L;
 
-#pragma omp parallel ADJ_THREADS(6)
-#pragma omp single
+OMP_PAR(6)
     {
 #pragma omp task
         mean_Z = arma::mean(Z, 1);

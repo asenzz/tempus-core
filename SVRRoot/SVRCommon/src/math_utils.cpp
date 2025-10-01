@@ -13,6 +13,7 @@
 #endif
 #include "sobol.hpp"
 #include "common/constants.hpp"
+#include "appcontext.hpp"
 #include "util/math_utils.tpp"
 
 namespace svr {
@@ -436,7 +437,7 @@ double max(const arma::mat &input)
 {
 #ifdef USE_IPP // IPP freezes on init
     double r;
-    ip_errchk(ippsMax_64f(input.mem, input.n_elem, &r));
+    IPP_ERRCHK(ippsMax_64f(input.mem, input.n_elem, &r));
     return r;
 #else
     return input.max();
@@ -447,7 +448,7 @@ double min(const arma::mat &input)
 {
 #ifdef USE_IPP
     double r;
-    ip_errchk(ippsMin_64f(input.mem, input.n_elem, &r));
+    IPP_ERRCHK(ippsMin_64f(input.mem, input.n_elem, &r));
     return r;
 #else
     return input.min();
@@ -461,7 +462,7 @@ double min(const arma::mat &input)
 template<> double mean(const arma::Mat<TSCALAR> &input)
 {
     TSCALAR r;
-    ip_errchk(ippsMean_64f(input.mem, input.n_elem, &r));
+    IPP_ERRCHK(ippsMean_64f(input.mem, input.n_elem, &r));
     return r;
 }
 
@@ -471,7 +472,7 @@ template<> double mean(const arma::Mat<TSCALAR> &input)
 template<> TSCALAR mean(const arma::Mat<TSCALAR> &input)
 {
     TSCALAR r;
-    ip_errchk(ippsMean_32f(input.mem, input.n_elem, &r, IppHintAlgorithm::ippAlgHintAccurate));
+    IPP_ERRCHK(ippsMean_32f(input.mem, input.n_elem, &r, IppHintAlgorithm::ippAlgHintAccurate));
     return r;
 }
 
@@ -483,11 +484,11 @@ double mean(const double *const input, const size_t len)
 {
 #ifdef USE_IPP // IPP freezes when initialized in multiple shared objects
     double r;
-    ip_errchk(ippsMean_64f(input, len, &r));
+    IPP_ERRCHK(ippsMean_64f(input, len, &r));
     LOG4_TRACE("Returning mean " << r << " for " << common::to_string(input, std::min<size_t>(len, 5)));
     return r;
 #else
-    return std::accumulate(input, input + len, double(0)) / len;
+    return std::reduce(C_default_exec_policy, input, input + len, double(0), std::plus<double>()) / len;
 #endif
 }
 
@@ -496,7 +497,7 @@ double stdscore(const double *const v, const size_t len)
 #ifdef USE_IPP
     const auto meanabs = cblas_dasum(len, v, 1) / len;
     double stddev;
-    ip_errchk(ippsStdDev_64f(v, len, &stddev));
+    IPP_ERRCHK(ippsStdDev_64f(v, len, &stddev));
     return meanabs * std::pow(stddev, .1);
 #else
     const arma::vec vv((double *)v, len, false, true);
@@ -507,8 +508,8 @@ double stdscore(const double *const v, const size_t len)
 double medianabs(double *const v, const size_t len)
 {
 #ifdef USE_IPP
-    ip_errchk(ippsAbs_64f_I(v, len));
-    ip_errchk(ippsSortAscend_64f_I(v, len));
+    IPP_ERRCHK(ippsAbs_64f_I(v, len));
+    IPP_ERRCHK(ippsSortAscend_64f_I(v, len));
     const auto div_r = std::ldiv(len, 2);
     if (div_r.rem) return (v[div_r.quot] + v[div_r.quot + 1]) / 2.;
     else return v[div_r.quot];
@@ -525,8 +526,8 @@ inline double *const abssort(const double *const v, const size_t len)
     auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, len * sizeof(double));
 #ifdef USE_IPP
     memcpy(tmp, v, len * sizeof(double));
-    ip_errchk(ippsAbs_64f_I(tmp, len));
-    ip_errchk(ippsSortAscend_64f_I(tmp, len));
+    IPP_ERRCHK(ippsAbs_64f_I(tmp, len));
+    IPP_ERRCHK(ippsSortAscend_64f_I(tmp, len));
 #else
     arma::vec vv(tmp, len, false, true);
     vv = arma::sort(arma::abs(arma::vec((double *)v, len, false, true)));
@@ -541,7 +542,7 @@ double meanabs_hiquant(const double *const v, const size_t len, const double q)
 #ifdef USE_IPP
     const auto tmp = common::abssort(v, len);
     double r;
-    ip_errchk(ippsMean_64f(tmp + start, end, &r));
+    IPP_ERRCHK(ippsMean_64f(tmp + start, end, &r));
     ALIGNED_FREE_(tmp);
     return r;
 #else
@@ -555,13 +556,28 @@ double meanabs_loquant(const double *const v, const size_t len, const double q)
 #ifdef USE_IPP
     const auto tmp = common::abssort(v, len);
     double r;
-    ip_errchk(ippsMean_64f(tmp, len * q, &r));
+    IPP_ERRCHK(ippsMean_64f(tmp, len * q, &r));
     ALIGNED_FREE_(tmp);
     return r;
 #else
     return arma::mean(arma::vec(arma::sort(arma::abs(arma::vec((double *)v, len, false, true)))).head((len - 1) * q));
 #endif
 }
+
+double meanabs_quant(const double *const v, const size_t len, const double q)
+{
+#ifdef USE_IPP
+    const auto tmp = common::abssort(v, len);
+    double r;
+    IPP_ERRCHK(ippsMean_64f(tmp + ptrdiff_t((1. - q) * len / 2.), len * q, &r));
+    ALIGNED_FREE_(tmp);
+    return r;
+#else
+    LOG4_THROW("Not implemented!");
+    return 0;
+#endif
+}
+
 
 inline double *const sort(const double *const v, const size_t len)
 {
@@ -570,8 +586,8 @@ inline double *const sort(const double *const v, const size_t len)
     auto tmp = (double *const) ALIGNED_ALLOC_(MEM_ALIGN, len * sizeof(double));
 #ifdef USE_IPP
     memcpy(tmp, v, len * sizeof(double));
-    ip_errchk(ippsAbs_64f_I(tmp, len));
-    ip_errchk(ippsSortAscend_64f_I(tmp, len));
+    IPP_ERRCHK(ippsAbs_64f_I(tmp, len));
+    IPP_ERRCHK(ippsSortAscend_64f_I(tmp, len));
     return tmp;
 #else
     const arma::vec vv = arma::sort(arma::vec((double *)v, len, false, true));
@@ -582,15 +598,15 @@ inline double *const sort(const double *const v, const size_t len)
 
 double mean_hiquant(const double *const v, const size_t len, const double q)
 {
-    const ptrdiff_t start = len * (1 - q);
-    const ptrdiff_t end = len * q;
 #ifdef USE_IPP
     const auto tmp = common::sort(v, len);
     double r;
-    ip_errchk(ippsMean_64f(tmp + start, , &r));
+    IPP_ERRCHK(ippsMean_64f(tmp + ptrdiff_t(len * (1 - q)), len * q, &r));
     ALIGNED_FREE_(tmp);
     return r;
 #else
+    const ptrdiff_t start = len * (1 - q);
+    const ptrdiff_t end = len * q;
     return arma::mean(arma::vec(arma::sort(arma::vec((double *)v, len, false, true))).rows(arma::span(start, end - 1)));
 #endif
 }
@@ -600,7 +616,7 @@ double mean_loquant(const double *const v, const size_t len, const double q)
 #ifdef USE_IPP
     const auto tmp = common::sort(v, len);
     double r;
-    ip_errchk(ippsMean_64f(tmp, len * q, &r));
+    IPP_ERRCHK(ippsMean_64f(tmp, len * q, &r));
     ALIGNED_FREE_(tmp);
     return r;
 #else
@@ -631,7 +647,7 @@ arma::mat scale(const arma::mat &m, const double sf, const double dc)
 {
     arma::mat r(arma::size(m), ARMA_DEFAULT_FILL);
 #ifdef USE_IPP
-    ip_errchk(ippsNormalize_64f(m.mem, r.memptr(), m.n_elem, dc, sf));
+    IPP_ERRCHK(ippsNormalize_64f(m.mem, r.memptr(), m.n_elem, dc, sf));
 #else
     vdLinearFrac(m.n_elem, m.mem, m.mem, 1., -dc, 0, sf, r.memptr()); // MKL is required
 #endif
@@ -642,7 +658,7 @@ template<>
 arma::mat &scale_I(arma::mat &m, const double sf, const double dc)
 {
 #ifdef USE_IPP
-    ip_errchk(ippsNormalize_64f_I(m.memptr(), m.n_elem, dc, sf));
+    IPP_ERRCHK(ippsNormalize_64f_I(m.memptr(), m.n_elem, dc, sf));
 #else
     vdLinearFrac(m.n_elem, m.mem, m.mem, 1., -dc, 0, sf, m.memptr()); // MKL is a required dependency
 #endif
@@ -733,7 +749,7 @@ void equispaced(arma::mat &x0, const arma::mat &bounds, const arma::vec &pows, u
 #ifndef NDEBUG
             LOG4_TRACE("Particle " << i << ", parameter " << j << ", value " << x0(j, i) << ", ub " << bounds(j, 1) << ", lb " << bounds(j, 0) << ", pow " << pow_j);
 #endif
-            x0(j, i) = std::pow(range[j], pow_j) * x0(j, i) + bounds(j, 0);
+            x0(j, i) = std::pow(x0(j, i), pow_j) * range[j] + bounds(j, 0);
         }
     }
     if (x0.has_nonfinite())
@@ -762,6 +778,11 @@ bool safe_double_less::operator()(const double left, const double right) const
     const auto leftNaN = std::isnan(left);
     const auto rightNaN = std::isnan(right);
     return leftNaN != rightNaN ? leftNaN < rightNaN : left < right;
+}
+
+uint32_t iter_depth(const uint32_t iter)
+{
+    return std::min<uint32_t>(PROPS.get_opt_depth(), CDIVI(iter, 2));
 }
 } //namespace common
 } //namespace svr

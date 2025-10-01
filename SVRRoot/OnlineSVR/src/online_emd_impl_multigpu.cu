@@ -103,14 +103,14 @@ void transform(
         const double stretch_coef,
         const size_t levels)
 {
-    //for (const auto gpu_id: gpu_ids) if (gpu_id != gpu_ids[0]) cu_errchk(cudaDeviceEnablePeerAccess(gpu_id, 0));
+    //for (const auto gpu_id: gpu_ids) if (gpu_id != gpu_ids[0]) CU_ERRCHK(cudaDeviceEnablePeerAccess(gpu_id, 0));
     const auto run_gpus = [&](const std::function<void(const size_t)> &gpu_fun) {
         std::vector<std::thread> gpu_threads;
         for (size_t gpu_ix = 0; gpu_ix < gpu_ids.size(); ++gpu_ix) {
             gpu_threads.emplace_back([gpu_fun, gpu_ix, &gpu_ids]() {
-                cu_errchk(cudaSetDevice(gpu_ids[gpu_ix]));
+                CU_ERRCHK(cudaSetDevice(gpu_ids[gpu_ix]));
                 gpu_fun(gpu_ix);
-                cu_errchk(cudaDeviceSynchronize());
+                CU_ERRCHK(cudaDeviceSynchronize());
             });
         }
         for (auto &thr: gpu_threads) thr.join();
@@ -122,15 +122,15 @@ void transform(
     std::vector<double *> p_rx(gpu_ids.size());
     std::vector<double *> p_rx2(gpu_ids.size());
     run_gpus([&](const size_t gpu_ix) {
-        cu_errchk(cudaMalloc(&(p_remainder.data()[gpu_ix]), gpu_chunk_ct * sizeof(double)));
-        cu_errchk(cudaMemcpy(p_remainder[gpu_ix], input.data() + gpu_ix * gpu_chunk_ct, gpu_chunk_ct * sizeof(double), cudaMemcpyHostToDevice));
+        CU_ERRCHK(cudaMalloc(&(p_remainder.data()[gpu_ix]), gpu_chunk_ct * sizeof(double)));
+        CU_ERRCHK(cudaMemcpy(p_remainder[gpu_ix], input.data() + gpu_ix * gpu_chunk_ct, gpu_chunk_ct * sizeof(double), cudaMemcpyHostToDevice));
 
         const auto this_dev_sz = (gpu_ix + 1) * gpu_chunk_ct * sizeof(double);
-        cu_errchk(cudaMalloc(&(p_rx.data()[gpu_ix]), this_dev_sz));
-        cu_errchk(cudaMemcpy(p_rx[gpu_ix], input.data(), this_dev_sz, cudaMemcpyHostToDevice));
+        CU_ERRCHK(cudaMalloc(&(p_rx.data()[gpu_ix]), this_dev_sz));
+        CU_ERRCHK(cudaMemcpy(p_rx[gpu_ix], input.data(), this_dev_sz, cudaMemcpyHostToDevice));
 
-        cu_errchk(cudaMalloc(&(p_rx2.data()[gpu_ix]), gpu_chunk_ct * sizeof(double)));
-        cu_errchk(cudaMemset(p_rx2[gpu_ix], 0, gpu_chunk_ct * sizeof(double)));
+        CU_ERRCHK(cudaMalloc(&(p_rx2.data()[gpu_ix]), gpu_chunk_ct * sizeof(double)));
+        CU_ERRCHK(cudaMemset(p_rx2[gpu_ix], 0, gpu_chunk_ct * sizeof(double)));
     });
 
     if (decon.size() != input.size()) decon.resize(input.size());
@@ -150,8 +150,8 @@ void transform(
 
         auto host_rx = (double *) malloc(input.size() * sizeof(double));
         run_gpus([&](const size_t gpu_ix) {
-            cu_errchk(cudaFree(dev_mask[gpu_ix]));
-            cu_errchk(cudaMemcpy(host_rx + gpu_ix * gpu_chunk_ct, p_rx[gpu_ix] + gpu_ix * gpu_chunk_ct, gpu_chunk_ct * sizeof(double), cudaMemcpyDeviceToHost))
+            CU_ERRCHK(cudaFree(dev_mask[gpu_ix]));
+            CU_ERRCHK(cudaMemcpy(host_rx + gpu_ix * gpu_chunk_ct, p_rx[gpu_ix] + gpu_ix * gpu_chunk_ct, gpu_chunk_ct * sizeof(double), cudaMemcpyDeviceToHost))
         });
 
         // TODO Parallelize
@@ -162,26 +162,26 @@ void transform(
 
         run_gpus([&](const size_t gpu_ix) {
             const auto this_dev_sz = (gpu_ix + 1) * gpu_chunk_ct * sizeof(double);
-            cu_errchk(cudaMemcpy(p_rx[gpu_ix], host_rx, this_dev_sz, cudaMemcpyHostToDevice));
+            CU_ERRCHK(cudaMemcpy(p_rx[gpu_ix], host_rx, this_dev_sz, cudaMemcpyHostToDevice));
 
             vec_subtract_inplace<<<CUDA_THREADS_BLOCKS(gpu_chunk_ct)>>>(p_remainder[gpu_ix], p_rx[gpu_ix], gpu_chunk_ct, 0, gpu_ix * gpu_chunk_ct, input.size());
-            cu_errchk(cudaMemcpy(p_rx[gpu_ix] + gpu_ix * gpu_chunk_ct, p_remainder[gpu_ix], gpu_chunk_ct * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
+            CU_ERRCHK(cudaMemcpy(p_rx[gpu_ix] + gpu_ix * gpu_chunk_ct, p_remainder[gpu_ix], gpu_chunk_ct * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToDevice));
         });
         free(host_rx);
     }
     {
         double *p_host_rx = (double *) malloc(input.size() * sizeof(double));
         run_gpus([&](const size_t gpu_ix) {
-            cu_errchk(cudaMemcpy(p_host_rx + gpu_ix * gpu_chunk_ct, p_rx[gpu_ix], gpu_chunk_ct * sizeof(double), cudaMemcpyDeviceToHost));
+            CU_ERRCHK(cudaMemcpy(p_host_rx + gpu_ix * gpu_chunk_ct, p_rx[gpu_ix], gpu_chunk_ct * sizeof(double), cudaMemcpyDeviceToHost));
         });
 
         for (size_t t = 0; t < input.size(); ++t) decon[t][0] = p_host_rx[t];
         free(p_host_rx);
     }
     run_gpus([&](const size_t gpu_ix) {
-        cu_errchk(cudaFree(p_rx2[gpu_ix]));
-        cu_errchk(cudaFree(p_rx[gpu_ix]));
-        cu_errchk(cudaFree(p_remainder[gpu_ix]));
+        CU_ERRCHK(cudaFree(p_rx2[gpu_ix]));
+        CU_ERRCHK(cudaFree(p_rx[gpu_ix]));
+        CU_ERRCHK(cudaFree(p_remainder[gpu_ix]));
     });
 }
 

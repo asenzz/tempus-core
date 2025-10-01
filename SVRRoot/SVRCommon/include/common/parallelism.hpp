@@ -37,12 +37,20 @@
 #endif
 
 #ifdef NO_PARALLEL
+#define OMP_PAR(__n)
 #define OMP_TASKLOOP(__n)
 #define OMP_TASKLOOP_1(__x)
 #define OMP_TASKLOOP_(__n, __x)
+#define OMP_FOR_ITERS_(_n)
 #define OMP_FOR_(__n, __x)
-#define OMP_FOR_i_(__n, __x)
+#define OMP_FOR_i_(__n, __x) for (DTYPE(__n) i = 0; i < __n; ++i)
+#define OMP_FOR_i(__n) for (DTYPE(__n) i = 0; i < __n; ++i)
+#define OMP_FOR(__n)
+#define NGRAIN(N)
 #else
+#define OMP_PAR(__n) PRAGMASTR(omp parallel default(shared) ADJ_THREADS(__n)) \
+    PRAGMASTR(omp single nowait)
+
 #define OMP_TASKLOOP(__n) PRAGMASTR(omp taskloop SSIMD NGRAIN(__n) default(shared) mergeable)
 #define OMP_TASKLOOP_1(__x) PRAGMASTR(omp taskloop grainsize(1) default(shared) mergeable __x)
 #define OMP_TASKLOOP_(__n, __x) PRAGMASTR(omp taskloop NGRAIN(__n) default(shared) mergeable __x)
@@ -54,19 +62,13 @@
     const unsigned ITERS_CTR = (__n);                    \
     const unsigned ADJ_ITERS_CTR = OMP_FOR_ITERS_(ITERS_CTR);  \
     PRAGMASTR(omp parallel for __x schedule(static, ADJ_ITERS_CTR) num_threads((unsigned) CDIV(ITERS_CTR, ADJ_ITERS_CTR)) default(shared))
-#endif
 #define OMP_FOR_i_(__n, __x) \
     OMP_FOR_(__n, __x)      \
     for (DTYPE(__n) i = 0; i < __n; ++i)
-#if defined(__GNUC__)
-#define OMP_FOR_i(__n) OMP_FOR_i_(__n, )
-#define OMP_FOR(__n) OMP_FOR_(__n, )
-#else
-#define OMP_FOR_i(__n) OMP_FOR_i_(__n, simd)
-#define OMP_FOR(__n) OMP_FOR_(__n, simd)
-#endif
-
+#define OMP_FOR_i(__n) OMP_FOR_i_(__n, SSIMD)
+#define OMP_FOR(__n) OMP_FOR_(__n, SSIMD)
 #define NGRAIN(N) grainsize((unsigned) cdiv((N), C_n_cpu))
+#endif
 
 constexpr auto C_yield_usleep = std::chrono::milliseconds(10);
 #define thread_yield_wait__ { std::this_thread::yield(); std::this_thread::sleep_for(C_yield_usleep); }
@@ -183,8 +185,13 @@ template<typename T> inline uint32_t adj_threads(const T iterations)
     return static_cast<uint32_t>(iterations);
 }
 
+#ifdef NO_PARALLEL
+#define ADJ_THREADS(T)
+#define ADJ_THREADS_MIN(T1, T2)
+#else
 #define ADJ_THREADS(T) num_threads(adj_threads(T))
 #define ADJ_THREADS_MIN(T1, T2) num_threads(adj_threads(std::min<DTYPE(T1)>(T1, T2)))
+#endif
 
 class t_omp_lock {
     omp_lock_t l;

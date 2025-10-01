@@ -23,10 +23,11 @@
 namespace svr {
 namespace solvers {
 antisymmetric_solver::antisymmetric_solver(
-    const Ti m, const Ti n, const Ti iter, const Tv *const x0_, const Tv *const A_, const Tv *const b_, const bool direct_solve,
-    const uint16_t irwls_iter) : direct_solve(direct_solve), x0_(x0_), A_(A_), b_(b_), iter(iter), irwls_iter(irwls_iter), m(m), n(n), indices(m)
+    const Ti m, const Ti n, const Ti k, const Ti iter, const Tv *const x0_, const Tv *const A_, const Tv *const b_, const bool direct_solve,
+    const uint16_t irwls_iter) : direct_solve(direct_solve), x0_(x0_), A_(A_), b_(b_), iter(iter), irwls_iter(irwls_iter), m(m), n(n), k(k), indices_k(k)
 {
-    std::iota(indices.begin(), indices.end(), 0);
+
+    std::iota(indices_k.begin(), indices_k.end(), 0);
 }
 
 antisymmetric_solver::~antisymmetric_solver()
@@ -41,9 +42,9 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 
     double *x0;
     arma::vec x0_vec;
-    if (direct_solve) {
+    if (direct_solve && m == k) {
         const arma::Mat<Tv> b_vec((double *) b_, m, n, false, true);
-        const arma::Mat<Tv> K((double *) A_, m, m, false, true);
+        const arma::Mat<Tv> K((double *) A_, m, k, false, true);
         solvers::solve_irwls(K, b_vec, x0_vec, irwls_iter, PROPS.get_weight_layers());
         x0 = x0_vec.memptr();
         // LOG4_TRACE("Direct solve " << common::present(x0_vec) << ", labels " << common::present(b_vec) << ", K " << common::present(K));
@@ -65,8 +66,9 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 
     // Initialize PETSc objects
     PetscCallCXXAbort(PETSC_COMM_SELF, MatCreate(PETSC_COMM_WORLD, &A));
-    PetscCallCXXAbort(PETSC_COMM_SELF, MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, m, m));
-    // PetscCallCXXAbort(PETSC_COMM_SELF, MatSetType(A, MATSEQAIJ));
+    PetscCallCXXAbort(PETSC_COMM_SELF, MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, m, k));
+    // PetscCallCXXAbort(PETSC_COMM_SELF, MatSetType(A, MATSEQBAIJ));
+    // PetscCallCXXAbort(PETSC_COMM_SELF, MatSetBlockSize(A, C_block_size));
     PetscCallCXXAbort(PETSC_COMM_SELF, MatSetFromOptions(A));
     PetscCallCXXAbort(PETSC_COMM_SELF, MatSetUp(A));
 
@@ -75,25 +77,29 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
     PetscCallCXXAbort(PETSC_COMM_SELF, VecSetSizes(b, PETSC_DECIDE, m));
     PetscCallCXXAbort(PETSC_COMM_SELF, VecSetFromOptions(b));
     PetscCallCXXAbort(PETSC_COMM_SELF, VecSetUp(b));
+    PetscCallCXXAbort(PETSC_COMM_SELF, VecSetValues(b, m, indices_k.data(), b_, INSERT_VALUES));
 
-    PetscCallCXXAbort(PETSC_COMM_SELF, VecDuplicate(b, &x));
-    PetscCallCXXAbort(PETSC_COMM_SELF, VecSetValues(b, m, indices.data(), b_, INSERT_VALUES));
-
+    PetscCallCXXAbort(PETSC_COMM_SELF, VecCreate(PETSC_COMM_WORLD, &x));
+    // PetscCallCXXAbort(PETSC_COMM_SELF, VecSetType(b, VECSEQ));
+    PetscCallCXXAbort(PETSC_COMM_SELF, VecSetSizes(x, PETSC_DECIDE, k));
+    PetscCallCXXAbort(PETSC_COMM_SELF, VecSetFromOptions(x));
     PetscCallCXXAbort(PETSC_COMM_SELF, VecSetUp(x));
     if (x0)
-        PetscCallCXXAbort(PETSC_COMM_SELF, VecSetValuesBlocked(x, m, indices.data(), x0, INSERT_VALUES));
+        PetscCallCXXAbort(PETSC_COMM_SELF, VecSetValues(x, k, indices_k.data(), x0, INSERT_VALUES));
     else
         PetscCallCXXAbort(PETSC_COMM_SELF, VecSet(x, 0.));
 
-#if 1
+#if 0
     for (Ti i = 0; i < m; ++i)
-        for (Ti j = 0; j < m; ++j)
+        for (Ti j = 0; j < k; ++j)
             PetscCallCXXAbort(PETSC_COMM_SELF, MatSetValue(A, i, j, A_[i + j * m], INSERT_VALUES));
 #else
-    std::vector<Ti> col(m);
-    for (DTYPE(m) i = 0; i < m; ++i) {
-        std::ranges::fill(col, i);
-        PetscCallCXXAbort(PETSC_COMM_SELF, MatSetValuesBlocked(A, m, indices.data(), m, col.data(), A_ + i * m, INSERT_VALUES));
+    std::vector<Ti> indices_m(m);
+    std::iota(indices_m.begin(), indices_m.end(), 0);
+    for (DTYPE(m) i = 0; i < k; ++i) {
+        Ti k_i[1];
+        k_i[0] = i;
+        PetscCallCXXAbort(PETSC_COMM_SELF, MatSetValues(A, m, indices_m.data(), 1, k_i, A_ + i * m, INSERT_VALUES));
     }
 #endif
 
@@ -103,12 +109,13 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
     PetscCallCXXAbort(PETSC_COMM_SELF, VecAssemblyEnd(b));
     PetscCallCXXAbort(PETSC_COMM_SELF, VecAssemblyBegin(x));
     PetscCallCXXAbort(PETSC_COMM_SELF, VecAssemblyEnd(x));
+    PetscCallCXXAbort(PETSC_COMM_SELF, VecAssemblyEnd(x));
 
     // Create the linear solver context
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPCreate(PETSC_COMM_WORLD, &ksp));
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPGMRESSetRestart(ksp, std::min<PetscInt>(1e4, iter - 1)));
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPGMRESSetOrthogonalization(ksp, KSPGMRESModifiedGramSchmidtOrthogonalization));
-    PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetType(ksp, KSPGMRES));
+    PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetType(ksp, m == k ? KSPGMRES : KSPLSQR));
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPGMRESSetCGSRefinementType(ksp, KSP_GMRES_CGS_REFINE_ALWAYS));
     // PetscCallCXXAbort(PETSC_COMM_SELF, KSPSetInitialGuessNonzero(ksp, PETSC_TRUE));
 
@@ -152,7 +159,7 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPGetIterationNumber(ksp, &iterations));
     // Vec vsol;
     // PetscCallCXXAbort(PETSC_COMM_SELF, KSPGetSolution(ksp, &vsol));
-    PetscCallCXXAbort(PETSC_COMM_SELF, VecGetValues(x, m, indices.data(), sol));
+    PetscCallCXXAbort(PETSC_COMM_SELF, VecGetValues(x, k, indices_k.data(), sol));
 
     // Cleanup
     PetscCallCXXAbort(PETSC_COMM_SELF, KSPDestroy(&ksp));
@@ -223,7 +230,7 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 
     const auto tmp = (double *) ALIGNED_ALLOC_(MEM_ALIGN, m * sizeof(double));
     const auto L_mean_mask = common::mean_mask(arma::mat((double *)b, m * n, false, true), PROPS.get_solve_radius() * m);
-    const auto score = datamodel::OnlineSVR::score_weights(m, n, PROPS.get_weight_layers(), L_mean_mask.mem, A_, sol, tmp);
+    const auto score = datamodel::OnlineSVR::score_weights(m, 0, n, PROPS.get_weight_layers(), L_mean_mask.mem, A_, sol, tmp);
     ALIGNED_FREE_(tmp);
     return score;
 }

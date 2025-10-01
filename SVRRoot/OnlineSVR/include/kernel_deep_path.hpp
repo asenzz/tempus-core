@@ -26,6 +26,7 @@ public:
 
     explicit kernel_deep_path(kernel_base<T> &k);
 
+    void update(datamodel::OnlineSVR &model, uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y) override;
     void init(datamodel::OnlineSVR &model, uint32_t chunk_ix) override;
 
     arma::Mat<T> distances(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const override;

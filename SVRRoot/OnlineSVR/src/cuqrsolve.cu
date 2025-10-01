@@ -93,7 +93,7 @@ __global__ void G_calc_epsco(CRPTRd K, CRPTRd L, RPTR(double) epsco, const uint3
 double *cu_calc_epscos(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, const cudaStream_t custream)
 {
     double *d_epsco;
-    cu_errchk(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
     if (n == 1) G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, m, 0.);
     else G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, n, m, 0);
     return d_epsco;
@@ -102,19 +102,20 @@ double *cu_calc_epscos(CPTRd K, CPTRd L, const uint32_t m, const uint32_t n, con
 double cu_calc_epsco(const double *const K, const double *const L, const uint32_t m, const uint32_t n, const uint32_t ld, const double sum_L, const cudaStream_t custream)
 {
     double *d_epsco;
-    cu_errchk(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_epsco, m * sizeof(double), custream));
     if (n == 1) G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, ld, sum_L);
     else
         LOG4_THROW("Not implemented."); // G_calc_epsco<<<CU_BLOCKS_THREADS(m), 0, custream>>>(K, L, d_epsco, m, n, ld);
     const auto mean_epsco = solvers::mean(d_epsco, m, custream);
-    cu_errchk(cudaFreeAsync(d_epsco, custream));
+    CU_ERRCHK(cudaFreeAsync(d_epsco, custream));
     LOG4_TRACE("Mean epsco " << mean_epsco << " m " << m << " n " << n);
     return mean_epsco;
 }
 
 score_weights::score_weights(
-    const arma::mat &K, const arma::mat &L_mean_mask, const uint32_t m, const uint32_t n, const uint32_t mn, const uint16_t layers) :
-    n_gpus(common::gpu_handler_1::get().get_gpu_devices_count()), m(m), n(n), mn(mn), layers(layers), L_size(mn * sizeof(DTYPE(K)::elem_type)), W_size(layers * L_size)
+    const arma::mat &K, const arma::mat &L_mean_mask, const uint32_t m, const uint32_t n, const uint32_t k, const uint32_t mn, const uint16_t layers) :
+    n_gpus(common::gpu_handler_1::get().get_gpu_devices_count()), m(m), n(n), k(k), mn(mn), nk(n * k), layers(layers), L_size(mn * sizeof(DTYPE(K)::elem_type)),
+    W_size(layers * nk * sizeof(double))
 {
     assert(layers);
     K_rhs_dev.resize(n_gpus);
@@ -127,14 +128,14 @@ score_weights::score_weights(
         UNROLL(streams_gpu)
         for (DTYPE(streams_gpu) j = 0; j < streams_gpu; ++j) {
             cudaStream_t custream_j;
-            cu_errchk(cudaStreamCreateWithFlags(&custream_j, C_cu_default_stream_flags));
+            CU_ERRCHK(cudaStreamCreateWithFlags(&custream_j, C_cu_default_stream_flags));
             cublasHandle_t cublas_H;
-            cb_errchk(cublasCreate(&cublas_H));
-            cb_errchk(cublasSetStream(cublas_H, custream_j));
-            cb_errchk(cublasSetPointerMode(cublas_H, CUBLAS_POINTER_MODE_HOST));
+            CB_ERRCHK(cublasCreate(&cublas_H));
+            CB_ERRCHK(cublasSetStream(cublas_H, custream_j));
+            CB_ERRCHK(cublasSetPointerMode(cublas_H, CUBLAS_POINTER_MODE_HOST));
             double *tmp_L, *weights;
-            cu_errchk(cudaMallocAsync((void **) &tmp_L, L_size, custream_j));
-            cu_errchk(cudaMallocAsync((void **) &weights, W_size, custream_j));
+            CU_ERRCHK(cudaMallocAsync((void **) &tmp_L, L_size, custream_j));
+            CU_ERRCHK(cudaMallocAsync((void **) &weights, W_size, custream_j));
             K_rhs_dev[i].stream_cublas.emplace_back(dev_ctx::stream_ctx{custream_j, cublas_H, tmp_L, weights});
         }
     }
@@ -145,14 +146,14 @@ score_weights::~score_weights()
     OMP_FOR_i(n_gpus) {
         UNROLL(streams_gpu)
         for (auto &stream_cubla: K_rhs_dev[i].stream_cublas) {
-            cu_errchk(cudaFreeAsync((void *) stream_cubla.weights, stream_cubla.custream));
-            cu_errchk(cudaFreeAsync((void *) stream_cubla.tmp_L, stream_cubla.custream));
-            cb_errchk(cublasDestroy(stream_cubla.cublas_H));
+            CU_ERRCHK(cudaFreeAsync((void *) stream_cubla.weights, stream_cubla.custream));
+            CU_ERRCHK(cudaFreeAsync((void *) stream_cubla.tmp_L, stream_cubla.custream));
+            CB_ERRCHK(cublasDestroy(stream_cubla.cublas_H));
             cusyndestroy(stream_cubla.custream);
         }
         DEV_CUSTREAM(i);
-        cu_errchk(cudaFreeAsync((void *) K_rhs_dev[i].K, custream));
-        cu_errchk(cudaFreeAsync((void *) K_rhs_dev[i].L_mask, custream));
+        CU_ERRCHK(cudaFreeAsync((void *) K_rhs_dev[i].K, custream));
+        CU_ERRCHK(cudaFreeAsync((void *) K_rhs_dev[i].L_mask, custream));
         cusyndestroy(custream);
     }
 }
@@ -171,17 +172,17 @@ double score_weights::operator()(CPTRd weights) const
     const auto dev_phy_id = ctx.phy_id();
     const auto &ctx_dev = K_rhs_dev[dev_phy_id];
     const auto &ctx_stream = ctx_dev.stream_cublas[ctx.stream_id()];
-    cu_errchk(cudaSetDevice(dev_phy_id));
-    cu_errchk(cudaMemcpyAsync(ctx_stream.weights, weights, W_size, cudaMemcpyHostToDevice, ctx_stream.custream));
-    cu_errchk(cudaMemcpyAsync(ctx_stream.tmp_L, ctx_dev.L_mask, L_size, cudaMemcpyDeviceToDevice, ctx_stream.custream));
-    // cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
+    CU_ERRCHK(cudaSetDevice(dev_phy_id));
+    CU_ERRCHK(cudaMemcpyAsync(ctx_stream.weights, weights, W_size, cudaMemcpyHostToDevice, ctx_stream.custream));
+    CU_ERRCHK(cudaMemcpyAsync(ctx_stream.tmp_L, ctx_dev.L_mask, L_size, cudaMemcpyDeviceToDevice, ctx_stream.custream));
+    // CU_ERRCHK(cudaStreamSynchronize(ctx_stream.custream));
     for (DTYPE(layers) i = 0; i < layers; ++i) {
-        cb_errchk(cublasDgemm(ctx_stream.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, ctx_dev.K, m, ctx_stream.weights + i * mn, m, &oneminus, ctx_stream.tmp_L, m));
-        if (i < layers - 1) cb_errchk(cublasDscal(ctx_stream.cublas_H, mn, &oneminus, ctx_stream.tmp_L, 1));
+        CB_ERRCHK(cublasDgemm(ctx_stream.cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &one, ctx_dev.K, m, ctx_stream.weights + i * nk, k, &oneminus, ctx_stream.tmp_L, m));
+        if (i < layers - 1) CB_ERRCHK(cublasDscal(ctx_stream.cublas_H, mn, &oneminus, ctx_stream.tmp_L, 1));
     }
     double total;
-    cb_errchk(cublasDasum(ctx_stream.cublas_H, mn, ctx_stream.tmp_L, 1, &total));
-    cu_errchk(cudaStreamSynchronize(ctx_stream.custream));
+    CB_ERRCHK(cublasDasum(ctx_stream.cublas_H, mn, ctx_stream.tmp_L, 1, &total));
+    CU_ERRCHK(cudaStreamSynchronize(ctx_stream.custream));
     LOG4_TRACE("Score " << total << " for weights " << common::to_string(weights, std::min<uint32_t>(4, mn)) << " on device " << dev_phy_id);
     return total;
 }
@@ -269,7 +270,7 @@ double *cu_calc_gammas(CPTRd Z, CPTRd L, const uint32_t m, const uint32_t n, con
 {
     const auto mm = m * m;
     double *d_gammas;
-    cu_errchk(cudaMallocAsync((void **) &d_gammas, m * sizeof(double), stm));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_gammas, m * sizeof(double), stm));
     if (n == 1) G_calc_gamma<<<CU_BLOCKS_THREADS(m), 0, stm>>>(Z, L, m, mm, bias, d_gammas);
     else {
         const auto mn = m * n;
@@ -281,7 +282,7 @@ double *cu_calc_gammas(CPTRd Z, CPTRd L, const uint32_t m, const uint32_t n, con
 double *cu_calc_gammas(const double *const Z, const uint32_t lda, const double *const L, const uint32_t m, const uint32_t n, const double sum_L, const cudaStream_t stm)
 {
     double *d_gammas;
-    cu_errchk(cudaMallocAsync((void **) &d_gammas, m * sizeof(double), stm));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_gammas, m * sizeof(double), stm));
     if (n == 1) G_calc_gammas<<<CU_BLOCKS_THREADS(m), 0, stm>>>(Z, lda, L, m, m * lda, sum_L, d_gammas);
     else {
         LOG4_THROW("Not implemented.");
@@ -295,7 +296,7 @@ double cu_calc_gamma(const double *const Z, const uint32_t lda, const double *co
 {
     const auto d_gammas = cu_calc_gammas(Z, lda, L, m, n, 0, stm);
     const auto res = mean(d_gammas, m, stm);
-    cu_errchk(cudaFreeAsync(d_gammas, stm));
+    CU_ERRCHK(cudaFreeAsync(d_gammas, stm));
     return res;
 }
 
@@ -303,7 +304,7 @@ double cu_calc_gamma(CPTRd Z, CPTRd L, const uint32_t m, const uint32_t n, const
 {
     const auto d_gamma = cu_calc_gammas(Z, L, m, n, bias, stm);
     const auto res = mean(d_gamma, m, stm);
-    cu_errchk(cudaFree(d_gamma));
+    CU_ERRCHK(cudaFree(d_gamma));
     return res;
 }
 
@@ -323,28 +324,28 @@ double score_kernel(CPTRd ref_kernel /* colmaj order */, const double norm_ref, 
     const auto mat_size = mm * sizeof(double);
 
     const common::gpu_context ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
-    cu_errchk(cudaMalloc(&d_K, mat_size));
-    cu_errchk(cudaMalloc(&d_Z, mat_size));
-    cu_errchk(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
+    CU_ERRCHK(cudaSetDevice(ctx.phy_id()));
+    CU_ERRCHK(cudaMalloc(&d_K, mat_size));
+    CU_ERRCHK(cudaMalloc(&d_Z, mat_size));
+    CU_ERRCHK(cudaMemcpy(d_Z, Z, mat_size, cudaMemcpyHostToDevice));
     G_kernel_from_distances_symm<CUDA_THREADS(mm)><<<CUDA_THREADS_BLOCKS(mm)>>>(d_K, d_Z, mm, m, 2. * gamma * gamma);
-    cu_errchk(cudaFree(d_Z));
-    cu_errchk(cudaDeviceSynchronize());
+    CU_ERRCHK(cudaFree(d_Z));
+    CU_ERRCHK(cudaDeviceSynchronize());
     cublasHandle_t cublasH;
     cublas_safe_call(cublasCreate(&cublasH));
     double norm_K;
     cublas_safe_call(cublasDnrm2(cublasH, mm, d_K, m, &norm_K));
-    cu_errchk(cudaDeviceSynchronize());
+    CU_ERRCHK(cudaDeviceSynchronize());
     double *d_score;
-    cu_errchk(cudaMalloc(&d_score, sizeof(double)));
-    cu_errchk(cudaMalloc(&d_ref, mat_size));
-    cu_errchk(cudaMemcpy(d_ref, ref_kernel, mat_size, cudaMemcpyHostToDevice));
+    CU_ERRCHK(cudaMalloc(&d_score, sizeof(double)));
+    CU_ERRCHK(cudaMalloc(&d_ref, mat_size));
+    CU_ERRCHK(cudaMemcpy(d_ref, ref_kernel, mat_size, cudaMemcpyHostToDevice));
     G_score_kernel<<<CUDA_THREADS_BLOCKS(m)>>>(d_score, d_K, d_ref, mm, norm_K, norm_ref);
     double score;
-    cu_errchk(cudaMemcpy(&score, d_score, sizeof(double), cudaMemcpyDeviceToHost));
-    cu_errchk(cudaFree(d_score));
-    cu_errchk(cudaFree(d_ref));
-    cu_errchk(cudaFree(d_K));
+    CU_ERRCHK(cudaMemcpy(&score, d_score, sizeof(double), cudaMemcpyDeviceToHost));
+    CU_ERRCHK(cudaFree(d_score));
+    CU_ERRCHK(cudaFree(d_ref));
+    CU_ERRCHK(cudaFree(d_K));
     cublas_safe_call(cublasDestroy(cublasH));
     return 2. - score;
 #endif
@@ -368,7 +369,7 @@ gpu_copy_upper_submatrix(
 std::tuple<cusolverDnHandle_t, double *, double *, double *, int32_t *, int32_t *>
 init_cusolver(const uint32_t gpu_id, const uint32_t m, const uint32_t n)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
 
     cusolverDnHandle_t cusolverH;
     cublasHandle_t cublasH;
@@ -376,14 +377,14 @@ init_cusolver(const uint32_t gpu_id, const uint32_t m, const uint32_t n)
     double *d_Ainput, *d_B, *d_work;
     int32_t *d_Ipiv, *d_devInfo;
 
-    cs_errchk(cusolverDnCreate(&cusolverH));
-    cb_errchk(cublasCreate(&cublasH));
-    cu_errchk(cudaMalloc((void **) &d_Ainput, m * m * sizeof(double)));
-    cu_errchk(cudaMalloc((void **) &d_B, m * n * sizeof(double)));
-    cs_errchk(cusolverDnDgetrf_bufferSize(cusolverH, m, m, d_Ainput, m /* lda */, &lwork));
-    cu_errchk(cudaMalloc((void **) &d_work, sizeof(double) * lwork));
-    cu_errchk(cudaMalloc((void **) &d_Ipiv, m * sizeof(int32_t)));
-    cu_errchk(cudaMalloc((void **) &d_devInfo, sizeof(int32_t)));
+    CS_ERRCHK(cusolverDnCreate(&cusolverH));
+    CB_ERRCHK(cublasCreate(&cublasH));
+    CU_ERRCHK(cudaMalloc((void **) &d_Ainput, m * m * sizeof(double)));
+    CU_ERRCHK(cudaMalloc((void **) &d_B, m * n * sizeof(double)));
+    CS_ERRCHK(cusolverDnDgetrf_bufferSize(cusolverH, m, m, d_Ainput, m /* lda */, &lwork));
+    CU_ERRCHK(cudaMalloc((void **) &d_work, sizeof(double) * lwork));
+    CU_ERRCHK(cudaMalloc((void **) &d_Ipiv, m * sizeof(int32_t)));
+    CU_ERRCHK(cudaMalloc((void **) &d_devInfo, sizeof(int32_t)));
 
     return {cusolverH, d_Ainput, d_B, d_work, d_Ipiv, d_devInfo};
 }
@@ -391,39 +392,39 @@ init_cusolver(const uint32_t gpu_id, const uint32_t m, const uint32_t n)
 
 void uninit_cusolver(const uint32_t gpu_id, const cusolverDnHandle_t cusolverH, double *d_Ainput, double *d_B, double *d_work, int32_t *d_Ipiv, int32_t *d_devInfo)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
 
-    if (d_Ainput) cu_errchk(cudaFree(d_Ainput));
-    if (d_B) cu_errchk(cudaFree(d_B));
-    if (d_work) cu_errchk(cudaFree(d_work));
-    if (d_Ipiv) cu_errchk(cudaFree(d_Ipiv));
-    if (d_devInfo) cu_errchk(cudaFree(d_devInfo));
+    if (d_Ainput) CU_ERRCHK(cudaFree(d_Ainput));
+    if (d_B) CU_ERRCHK(cudaFree(d_B));
+    if (d_work) CU_ERRCHK(cudaFree(d_work));
+    if (d_Ipiv) CU_ERRCHK(cudaFree(d_Ipiv));
+    if (d_devInfo) CU_ERRCHK(cudaFree(d_devInfo));
 
-    if (cusolverH) cs_errchk(cusolverDnDestroy(cusolverH));
+    if (cusolverH) CS_ERRCHK(cusolverDnDestroy(cusolverH));
 }
 
 void dyn_gpu_solve(const cusolverDnHandle_t cusolver_H, const uint32_t m, const uint32_t n, CPTRd d_a, double *d_b, double *d_work, int32_t *d_piv, int32_t *d_info)
 {
-    cs_errchk(cusolverDnDgetrf(cusolver_H, m, m, (double *) d_a, m, d_work, d_piv, d_info));
-    cs_errchk(cusolverDnDgetrs(cusolver_H, CUBLAS_OP_N, m, n, d_a, m, d_piv, d_b, m, d_info));
+    CS_ERRCHK(cusolverDnDgetrf(cusolver_H, m, m, (double *) d_a, m, d_work, d_piv, d_info));
+    CS_ERRCHK(cusolverDnDgetrs(cusolver_H, CUBLAS_OP_N, m, n, d_a, m, d_piv, d_b, m, d_info));
 }
 
 void h_dyn_gpu_solve(
     const uint32_t gpu_id, const uint32_t m, const uint32_t n, CPTRd h_K, CPTRd h_L, double *h_weights, cusolverDnHandle_t cusolver_H,
     double *d_a, double *d_b, double *d_work, int32_t *d_piv, int32_t *d_info)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
-    cu_errchk(cudaMemcpy(d_a, h_K, sizeof(double) * m * m, cudaMemcpyHostToDevice));
-    cu_errchk(cudaMemcpy(d_b, h_L, sizeof(double) * m * n, cudaMemcpyHostToDevice));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaMemcpy(d_a, h_K, sizeof(double) * m * m, cudaMemcpyHostToDevice));
+    CU_ERRCHK(cudaMemcpy(d_b, h_L, sizeof(double) * m * n, cudaMemcpyHostToDevice));
     dyn_gpu_solve(cusolver_H, m, n, d_a, d_b, d_work, d_piv, d_info);
-    cu_errchk(cudaMemcpy(h_weights, d_b, sizeof(double) * m * n, cudaMemcpyDeviceToHost));
+    CU_ERRCHK(cudaMemcpy(h_weights, d_b, sizeof(double) * m * n, cudaMemcpyDeviceToHost));
 }
 
 
 std::tuple<magma_queue_t, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaDouble_ptr, magmaFloat_ptr, magmaInt_ptr>
 init_magma_solver(const uint32_t m, const uint32_t b_n, const bool psd, const uint32_t gpu_id)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     magma_queue_t magma_queue;
     magma_queue_create(gpu_id, &magma_queue);
     if (!magma_queue)
@@ -432,12 +433,12 @@ init_magma_solver(const uint32_t m, const uint32_t b_n, const bool psd, const ui
     magmaDouble_ptr d_a, d_b, d_x, d_wd;
     magmaFloat_ptr d_ws;
     auto piv = (magmaInt_ptr) malloc(m * sizeof(magma_int_t)); // host mem.
-    ma_errchk(magma_dmalloc(&d_a, m * m));
-    ma_errchk(magma_dmalloc(&d_b, m * b_n));
+    MAG_ERRCHK(magma_dmalloc(&d_a, m * m));
+    MAG_ERRCHK(magma_dmalloc(&d_b, m * b_n));
     if (psd) {
-        ma_errchk(magma_dmalloc(&d_x, m * b_n));
-        ma_errchk(magma_dmalloc(&d_wd, m * (m + b_n) + m));
-        ma_errchk(magma_smalloc(&d_ws, m * (m + b_n) + m));
+        MAG_ERRCHK(magma_dmalloc(&d_x, m * b_n));
+        MAG_ERRCHK(magma_dmalloc(&d_wd, m * (m + b_n) + m));
+        MAG_ERRCHK(magma_smalloc(&d_ws, m * (m + b_n) + m));
     } else {
         d_x = nullptr;
         d_wd = nullptr;
@@ -452,8 +453,8 @@ init_magma_batch_solver(const uint32_t batch_size, const uint32_t m, const uint3
     std::vector<magmaDouble_ptr> d_a(batch_size, nullptr), d_b(batch_size, nullptr);
     UNROLL()
     for (uint32_t i = 0; i < batch_size; ++i) {
-        ma_errchk(magma_dmalloc(&d_a[i], m * m));
-        ma_errchk(magma_dmalloc(&d_b[i], m * n));
+        MAG_ERRCHK(magma_dmalloc(&d_a[i], m * m));
+        MAG_ERRCHK(magma_dmalloc(&d_b[i], m * n));
     }
     return {d_a, d_b};
 }
@@ -464,12 +465,12 @@ void uninit_magma_solver(
     const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_wd, const magmaFloat_ptr d_ws, const magmaInt_ptr piv,
     const uint32_t gpu_id)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
-    if (d_a) ma_errchk(magma_free(d_a));
-    if (d_b) ma_errchk(magma_free(d_b));
-    if (d_x) ma_errchk(magma_free(d_x));
-    if (d_wd) ma_errchk(magma_free(d_wd));
-    if (d_ws) ma_errchk(magma_free(d_ws));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
+    if (d_a) MAG_ERRCHK(magma_free(d_a));
+    if (d_b) MAG_ERRCHK(magma_free(d_b));
+    if (d_x) MAG_ERRCHK(magma_free(d_x));
+    if (d_wd) MAG_ERRCHK(magma_free(d_wd));
+    if (d_ws) MAG_ERRCHK(magma_free(d_ws));
     if (piv) free(piv);
 
     if (magma_queue)
@@ -481,8 +482,8 @@ void uninit_magma_batch_solver(std::vector<magmaDouble_ptr> &d_a, std::vector<ma
 {
     UNROLL()
     for (uint32_t i = 0; i < d_a.size(); ++i) {
-        if (d_a[i]) ma_errchk(magma_free(d_a[i]));
-        if (d_b[i]) ma_errchk(magma_free(d_b[i]));
+        if (d_a[i]) MAG_ERRCHK(magma_free(d_a[i]));
+        if (d_b[i]) MAG_ERRCHK(magma_free(d_b[i]));
     }
 }
 
@@ -492,7 +493,7 @@ void iter_magma_solve(
     const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const magmaDouble_ptr d_x, const magmaDouble_ptr d_workd,
     const magmaFloat_ptr d_works, const bool psd, const uint32_t gpu_id)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     magma_int_t err, iter, info;
 
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue); // copy a -> d_a
@@ -529,7 +530,7 @@ void iter_magma_solve(
     }
 
 __solve_dgesv:
-    ma_errchk(magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info));
+    MAG_ERRCHK(magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, b_n, d_a, m, d_b, m, &info));
     if (psd)
         LOG4_DEBUG("Call to magma_dgesv_rbt triunfo.");
     magma_dgetmatrix(m, b_n, d_b, m, output, m, magma_queue); // copy solution d_b -> output
@@ -542,11 +543,11 @@ void iter_magma_solve(
     magma_int_t info;
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue);
     magma_dsetmatrix(m, n, b, m, d_b, m, magma_queue);
-    cu_errchk(cudaDeviceSynchronize());
-    ma_errchk(magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, n, d_a, m, d_b, m, &info));
-    cu_errchk(cudaDeviceSynchronize());
+    CU_ERRCHK(cudaDeviceSynchronize());
+    MAG_ERRCHK(magma_dgesv_rbt(magma_bool_t::MagmaTrue, m, n, d_a, m, d_b, m, &info));
+    CU_ERRCHK(cudaDeviceSynchronize());
     magma_dgetmatrix(m, n, d_b, m, output, m, magma_queue);
-    cu_errchk(cudaDeviceSynchronize());
+    CU_ERRCHK(cudaDeviceSynchronize());
 }
 
 void iter_magma_batch_solve(
@@ -556,21 +557,21 @@ void iter_magma_batch_solve(
     const auto batch_size = a.size();
     LOG4_DEBUG("m " << magma_int_t(m) << ", n " << magma_int_t(n) << ", batch size " << batch_size);
     // #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(batch_size))
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     UNROLL()
     for (uint32_t i = 0; i < batch_size; ++i) {
         magma_dsetmatrix(m, m, a[i].mem, m, d_a[i], m, magma_queue);
         magma_dsetmatrix(m, n, b[i].mem, m, d_b[i], m, magma_queue);
     }
     std::vector<magma_int_t> info(batch_size);
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     auto da_data = &d_a[0];
     auto db_data = &d_b[0];
-    ma_errchk(magma_dgesv_rbt_batched(magma_int_t(m), magma_int_t(n), da_data, m, db_data, m, info.data(), magma_int_t(batch_size), magma_queue));
+    MAG_ERRCHK(magma_dgesv_rbt_batched(magma_int_t(m), magma_int_t(n), da_data, m, db_data, m, info.data(), magma_int_t(batch_size), magma_queue));
 
 #pragma omp parallel for schedule(static, 1) num_threads(adj_threads(batch_size))
     for (uint32_t i = 0; i < batch_size; ++i) {
-        cu_errchk(cudaSetDevice(gpu_id));
+        CU_ERRCHK(cudaSetDevice(gpu_id));
         magma_dgetmatrix(m, n, d_b[i], m, output[i].memptr(), m, magma_queue); // copy solution d_b -> output
     }
 }
@@ -579,7 +580,7 @@ void iter_magma_batch_solve(
 void dyn_magma_solve(const int32_t m, const int32_t b_n, CPTRd a, CPTRd b, double *output, magma_queue_t magma_queue,
                      const magmaInt_ptr piv, const magmaDouble_ptr d_a, const magmaDouble_ptr d_b, const uint32_t gpu_id)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     magma_int_t info, err;
     magma_dsetmatrix(m, m, a, m, d_a, m, magma_queue);
 
@@ -609,19 +610,19 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
     const auto N = Ncols;
     const auto K = Nrhs;
 
-    cs_errchk(cusolverDnCreate(&cusolverH));
-    cb_errchk(cublasCreate(&cublasH));
+    CS_ERRCHK(cusolverDnCreate(&cusolverH));
+    CB_ERRCHK(cublasCreate(&cublasH));
 
     int32_t *d_devInfo;
     double *d_tau;
     double *d_work;
     double *d_work2;
-    cu_errchk(cudaMalloc(&d_tau, sizeof(double) * M));
-    cu_errchk(cudaMalloc(&d_devInfo, sizeof(int32_t)));
+    CU_ERRCHK(cudaMalloc(&d_tau, sizeof(double) * M));
+    CU_ERRCHK(cudaMalloc(&d_devInfo, sizeof(int32_t)));
     int32_t bufSize, bufSize2;
 
     // in-place A = QR
-    cs_errchk(
+    CS_ERRCHK(
         cusolverDnDgeqrf_bufferSize(
             cusolverH,
             M,
@@ -631,8 +632,8 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
             &bufSize
         )
     );
-    cu_errchk(cudaMalloc(&d_work, sizeof(double) * bufSize));
-    cs_errchk(
+    CU_ERRCHK(cudaMalloc(&d_work, sizeof(double) * bufSize));
+    CS_ERRCHK(
         cusolverDnDgeqrf(
             cusolverH,
             M,
@@ -647,7 +648,7 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
     );
 
     // Q^T*b
-    cs_errchk(
+    CS_ERRCHK(
         cusolverDnDormqr_bufferSize(
             cusolverH,
             CUBLAS_SIDE_LEFT,
@@ -664,8 +665,8 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
         )
     );
 
-    cu_errchk(cudaMalloc(&d_work2, sizeof(double) * bufSize2));
-    cs_errchk(
+    CU_ERRCHK(cudaMalloc(&d_work2, sizeof(double) * bufSize2));
+    CS_ERRCHK(
         cusolverDnDormqr(
             cusolverH,
             CUBLAS_SIDE_LEFT,
@@ -686,7 +687,7 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
 
     // need to explicitly copy submatrix for the triangular solve
     double *d_R;
-    cu_errchk(cudaMalloc(&d_R, sizeof(double) * N * N));
+    CU_ERRCHK(cudaMalloc(&d_R, sizeof(double) * N * N));
     dim3 blk_size((N + C_cu_tile_dim.x - 1) / C_cu_tile_dim.x, (N + C_cu_tile_dim.y - 1) / C_cu_tile_dim.y);
     gpu_copy_upper_submatrix<<<blk_size, C_cu_tile_dim>>>(d_Ainput, d_R, M, N, N);
     blk_size = dim3((N + C_cu_tile_dim.x - 1) / C_cu_tile_dim.x, (K + C_cu_tile_dim.y - 1) / C_cu_tile_dim.y);
@@ -694,7 +695,7 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
 
     // solve x = R \ (Q^T*B)
     const double one = 1;
-    cb_errchk(
+    CB_ERRCHK(
         cublasDtrsm(
             cublasH,
             CUBLAS_SIDE_LEFT,
@@ -711,12 +712,12 @@ qrsolve_over(const uint32_t Nrows, const uint32_t Ncols, const uint32_t Nrhs, do
         )
     );
 
-    cu_errchk(cudaFree(d_R));
-    cu_errchk(cudaFree(d_work));
-    cu_errchk(cudaFree(d_work2));
-    cu_errchk(cudaFree(d_tau));
-    cb_errchk(cublasDestroy(cublasH));
-    cs_errchk(cusolverDnDestroy(cusolverH));
+    CU_ERRCHK(cudaFree(d_R));
+    CU_ERRCHK(cudaFree(d_work));
+    CU_ERRCHK(cudaFree(d_work2));
+    CU_ERRCHK(cudaFree(d_tau));
+    CB_ERRCHK(cublasDestroy(cublasH));
+    CS_ERRCHK(cusolverDnDestroy(cusolverH));
 }
 
 
@@ -731,13 +732,13 @@ call_gpu_overdetermined(
     thrust::device_vector<double> gpu_matrix(Nrows * Ncols);
     thrust::device_vector<double> gpu_rhs(Nrows * Nrhs);
     thrust::device_vector<double> gpu_output(Ncols * Nrhs);
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(gpu_matrix.data()), cpu_matrix, sizeof(double) * Nrows * Ncols,
+    CU_ERRCHK(cudaMemcpy(thrust::raw_pointer_cast(gpu_matrix.data()), cpu_matrix, sizeof(double) * Nrows * Ncols,
         cudaMemcpyHostToDevice));
-    cu_errchk(cudaMemcpy(thrust::raw_pointer_cast(gpu_rhs.data()), cpu_rhs, sizeof(double) * Nrows * Nrhs,
+    CU_ERRCHK(cudaMemcpy(thrust::raw_pointer_cast(gpu_rhs.data()), cpu_rhs, sizeof(double) * Nrows * Nrhs,
         cudaMemcpyHostToDevice));
     qrsolve_over(Nrows, Ncols, Nrhs, thrust::raw_pointer_cast(gpu_matrix.data()),
                  thrust::raw_pointer_cast(gpu_rhs.data()), thrust::raw_pointer_cast(gpu_output.data()));
-    cu_errchk(cudaMemcpy(cpu_output, thrust::raw_pointer_cast(gpu_output.data()), sizeof(double) * Ncols * Nrhs,
+    CU_ERRCHK(cudaMemcpy(cpu_output, thrust::raw_pointer_cast(gpu_output.data()), sizeof(double) * Ncols * Nrhs,
         cudaMemcpyDeviceToHost));
 }
 
@@ -816,7 +817,7 @@ double cu_mae(CRPTRd d_in1, CRPTRd d_in2, const size_t n, const cudaStream_t cus
     G_sumabsdif<<<CU_BLOCKS_THREADS(n), 0, custream>>>(d_in1, d_in2, d_result_sum, n);
     double r;
     cufreecopy(&r, d_result_sum, custream);
-    cu_errchk(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
     return r / n;
 }
 
@@ -867,7 +868,7 @@ double sumabs(CPTRd d_in, const size_t n, const cudaStream_t stm)
 #else
     sum = thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, double(0), [] __host__ __device__ (const double a, const double b) { return abs(a + b); });
 #endif
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return sum;
 }
 
@@ -920,7 +921,7 @@ double sumabs(CPTRd d_in, const uint32_t n, const cudaStream_t stm)
     const auto [blocks, threads] = CU_BLOCKS_THREADS_t(n);
     G_sumabs<<<blocks, threads, threads * sizeof(double), stm>>>(d_in, d_sum, n);
     cufreecopy(&sum, d_sum, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return sum;
 }
 
@@ -931,9 +932,9 @@ double median_(const size_t n, cudaStream_t const stm, double *d_tmp)
     thrust::sort(thrust::cuda::par.on(stm), d_tmp, d_tmp + n);
     const auto n_size = n * sizeof(double);
     double *tmp = static_cast<double *>(malloc(n_size));
-    cu_errchk(cudaMemcpyAsync(tmp, d_tmp, n_size, cudaMemcpyDeviceToHost, stm));
-    cu_errchk(cudaFreeAsync(d_tmp, stm));
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaMemcpyAsync(tmp, d_tmp, n_size, cudaMemcpyDeviceToHost, stm));
+    CU_ERRCHK(cudaFreeAsync(d_tmp, stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return n % 2 ? tmp[n / 2] : (tmp[n / 2 - 1] + tmp[n / 2]) / 2;
 }
 
@@ -971,9 +972,9 @@ double swscore(CPTRd d_in, const uint32_t ld_in, CPTRd d_ref, const uint32_t ld_
 {
     double score, *d_score = cucalloc<double>(custream);
     G_score_diff_dir<<<CU_BLOCKS_THREADS_2D2(m, n), 0, custream>>>(d_score, d_in, d_ref, ld_in, ld_ref, m, n);
-    cu_errchk(cudaMemcpyAsync(&score, d_score, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_score, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaMemcpyAsync(&score, d_score, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_score, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
     return score;
 }
 
@@ -1024,12 +1025,12 @@ G_irwls_op1(RPTR(double) d_input, RPTR(double) d_result_sum, const uint32_t n)
 std::pair<double, double> irwls_op1w(double *d_in, const uint32_t n, const cudaStream_t stm)
 {
     double sumabs, *d_sumabs = cucalloc<double>(stm), minabs = common::C_bad_validation, *d_minabs;
-    cu_errchk(cudaMallocAsync(&d_minabs, sizeof(double), stm));
-    cu_errchk(cudaMemcpyAsync(d_minabs, &minabs, sizeof(double), cudaMemcpyHostToDevice, stm));
+    CU_ERRCHK(cudaMallocAsync(&d_minabs, sizeof(double), stm));
+    CU_ERRCHK(cudaMemcpyAsync(d_minabs, &minabs, sizeof(double), cudaMemcpyHostToDevice, stm));
     G_irwls_op1<common::C_cu_block_size><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_sumabs, d_minabs, n);
     cufreecopy(&sumabs, d_sumabs, stm);
     cufreecopy(&minabs, d_minabs, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return {sumabs / n, minabs};
 }
 
@@ -1040,7 +1041,7 @@ double irwls_op1(double *const d_in, const uint32_t n, const cudaStream_t stm)
     double sumabs, *d_sumabs = cucalloc<double>(stm);
     G_irwls_op1<common::C_cu_block_size><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_sumabs, n);
     cufreecopy(&sumabs, d_sumabs, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return sumabs;
 }
 
@@ -1085,7 +1086,7 @@ double irwls_op1(double *d_in, const uint32_t n, const cudaStream_t stm)
     const auto [blocks, threads] = CU_BLOCKS_THREADS_t(n);
     G_irwls_op1<<<blocks, threads, threads * sizeof(double), stm>>>(d_in, d_sum, n);
     cufreecopy(&sum, d_sum, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return sum / n; // Return mean
 }
 
@@ -1159,15 +1160,15 @@ std::tuple<double, double, double> suminmax(CPTRd d_in, const uint32_t n, const 
 {
     double sum, min = std::numeric_limits<double>::max(), max = std::numeric_limits<double>::min();
     double *d_min, *d_max, *d_sum = cucalloc<double>(stm);
-    cu_errchk(cudaMallocAsync((void **) &d_min, sizeof(double), stm));
-    cu_errchk(cudaMemcpyAsync(d_min, &min, sizeof(double), cudaMemcpyHostToDevice, stm));
-    cu_errchk(cudaMallocAsync((void **) &d_max, sizeof(double), stm));
-    cu_errchk(cudaMemcpyAsync(d_max, &max, sizeof(double), cudaMemcpyHostToDevice, stm));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_min, sizeof(double), stm));
+    CU_ERRCHK(cudaMemcpyAsync(d_min, &min, sizeof(double), cudaMemcpyHostToDevice, stm));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_max, sizeof(double), stm));
+    CU_ERRCHK(cudaMemcpyAsync(d_max, &max, sizeof(double), cudaMemcpyHostToDevice, stm));
     G_suminmax<common::C_cu_block_size><<<CU_BLOCKS_THREADS(n), 0, stm>>>(d_in, d_sum, d_min, d_max, n);
     cufreecopy(&sum, d_sum, stm);
     cufreecopy(&min, d_min, stm);
     cufreecopy(&max, d_max, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return {sum, min, max};
 }
 
@@ -1242,7 +1243,7 @@ std::tuple<double, double, double> suminmax(CPTRd d_in, const uint32_t n, const 
     cufreecopy(&sum, d_sum, stm);
     cufreecopy(&min, d_min, stm);
     cufreecopy(&max, d_max, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return {sum, min, max};
 }
 
@@ -1324,7 +1325,7 @@ double unscaled_distance(CPTRd d_labels, CPTRd d_predictions, const double scale
     else
         G_dist_unscaled<common::C_cu_block_size><<<CU_BLOCKS_THREADS(mn), 0, stm>>>(d_sum, d_labels, d_predictions, m, mn, ldl);
     cufreecopy(&sum, d_sum, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return scale * sum / mn;
 }
 
@@ -1389,7 +1390,7 @@ unscaled_distance(CPTRd d_labels, CPTRd d_predictions, const double scale, const
     else
         G_dist_unscaled<<<blocks, threads, threads * sizeof(double), stm>>>(d_sum, d_labels, d_predictions, m, mn, ldl);
     cufreecopy(&sum, d_sum, stm);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return scale * sum / mn;
 }
 
@@ -1398,14 +1399,14 @@ unscaled_distance(CPTRd d_labels, CPTRd d_predictions, const double scale, const
 double max(CPTRd d_in, const size_t n, const cudaStream_t stm)
 {
     const auto r = thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, std::numeric_limits<double>::min(), thrust::maximum<double>());
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return r;
 }
 
 double min(CPTRd d_in, const size_t n, const cudaStream_t stm)
 {
     const auto r = thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n, std::numeric_limits<double>::max(), thrust::minimum<double>());
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return r;
 }
 
@@ -1417,26 +1418,26 @@ double mean(CPTRd d_in, const size_t n, const cudaStream_t stm)
 double sum(CPTRd d_in, const size_t n, const cudaStream_t stm)
 {
     const auto r = thrust::reduce(thrust::cuda::par.on(stm), d_in, d_in + n);
-    cu_errchk(cudaStreamSynchronize(stm));
+    CU_ERRCHK(cudaStreamSynchronize(stm));
     return r;
 }
 
 double sum(CPTRd d_in, const size_t n, const NppStreamContext &npp_ctx)
 {
     size_t npp_buffer_size;
-    np_errchk(nppsSumGetBufferSize_64f_Ctx(n, &npp_buffer_size, npp_ctx));
+    NPP_ERRCHK(nppsSumGetBufferSize_64f_Ctx(n, &npp_buffer_size, npp_ctx));
 
     Npp8u *npp_sum_buf;
     Npp64f *dres;
-    cu_errchk(cudaMallocAsync((void **) &npp_sum_buf, npp_buffer_size, npp_ctx.hStream));
-    cu_errchk(cudaMallocAsync((void **) &dres, sizeof(*dres), npp_ctx.hStream));
-    np_errchk(nppsMean_64f_Ctx(d_in, n, dres, npp_sum_buf, npp_ctx));
+    CU_ERRCHK(cudaMallocAsync((void **) &npp_sum_buf, npp_buffer_size, npp_ctx.hStream));
+    CU_ERRCHK(cudaMallocAsync((void **) &dres, sizeof(*dres), npp_ctx.hStream));
+    NPP_ERRCHK(nppsMean_64f_Ctx(d_in, n, dres, npp_sum_buf, npp_ctx));
 
     double res;
-    cu_errchk(cudaMemcpyAsync(&res, dres, sizeof(*dres), cudaMemcpyDeviceToHost, npp_ctx.hStream));
-    cu_errchk(cudaFreeAsync(npp_sum_buf, npp_ctx.hStream));
-    cu_errchk(cudaFreeAsync(dres, npp_ctx.hStream));
-    cu_errchk(cudaStreamSynchronize(npp_ctx.hStream));
+    CU_ERRCHK(cudaMemcpyAsync(&res, dres, sizeof(*dres), cudaMemcpyDeviceToHost, npp_ctx.hStream));
+    CU_ERRCHK(cudaFreeAsync(npp_sum_buf, npp_ctx.hStream));
+    CU_ERRCHK(cudaFreeAsync(dres, npp_ctx.hStream));
+    CU_ERRCHK(cudaStreamSynchronize(npp_ctx.hStream));
 
     return res;
 }
@@ -1520,66 +1521,67 @@ void solve_irwls(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, co
     LOG4_BEGIN();
 
     assert(K.n_cols == rhs.n_rows);
-
+    assert(K.n_rows == K.n_cols);
     double *d_solved, *d_best_solution, *d_rwork, *d_Kwork;
     const auto K_size = K.n_elem * sizeof(double);
     const auto mn = rhs.n_elem;
     const auto rhs_size = mn * sizeof(double);
+    const auto W_n = K.n_cols * rhs.n_cols;
+    const auto w_size = W_n * sizeof(double);
     common::gpu_context_<1> ctx;
-    cu_errchk(cudaSetDevice(ctx.phy_id()));
+    CU_ERRCHK(cudaSetDevice(ctx.phy_id()));
     magma_queue_t maqueue;
     magma_queue_create(ctx.phy_id(), &maqueue);
     const cudaStream_t custream = magma_queue_get_cuda_stream(maqueue);
     const cublasHandle_t cublas_H = magma_queue_get_cublas_handle(maqueue);
-    cu_errchk(cudaMallocAsync(&d_solved, rhs_size, custream));
-    cu_errchk(cudaMallocAsync(&d_best_solution, rhs_size * layers, custream));
-    if (solved.n_rows == rhs.n_rows && solved.n_cols >= rhs.n_cols) {
-        //        cu_errchk(cudaHostRegister((void *) solved.memptr(), rhs_size, cudaHostRegisterDefault)); // Seems to cause contention
-        cu_errchk(cudaMemcpyAsync(d_solved, solved.memptr(), rhs_size, cudaMemcpyHostToDevice, custream));
+    CU_ERRCHK(cudaMallocAsync(&d_solved, w_size, custream));
+    CU_ERRCHK(cudaMallocAsync(&d_best_solution, w_size * layers, custream));
+    if (solved.n_rows == K.n_cols && solved.n_cols >= rhs.n_cols) {
+        //        CU_ERRCHK(cudaHostRegister((void *) solved.memptr(), rhs_size, cudaHostRegisterDefault)); // Seems to cause contention
+        CU_ERRCHK(cudaMemcpyAsync(d_solved, solved.memptr(), w_size, cudaMemcpyHostToDevice, custream));
     } else {
-        solved.set_size(rhs.n_rows, rhs.n_cols * layers);
-        cu_errchk(cudaMemsetAsync(d_solved, 0, rhs_size, custream));
-        //        cu_errchk(cudaHostRegister((void *) solved.memptr(), rhs_size, cudaHostRegisterDefault));
+        solved.set_size(K.n_cols, rhs.n_cols * layers);
+        CU_ERRCHK(cudaMemsetAsync(d_solved, 0, w_size, custream));
+        //        CU_ERRCHK(cudaHostRegister((void *) solved.memptr(), rhs_size, cudaHostRegisterDefault));
     }
 
     /* CUDA bug disabled, hostRegister() introduces contention among threads working on different GPUs (why?)
-    cu_errchk(cudaHostRegister((void *) K_epsco.memptr(), K_size, cudaHostRegisterReadOnly));
-    cu_errchk(cudaHostRegister((void *) K.memptr(), K_size, cudaHostRegisterReadOnly));
-    cu_errchk(cudaHostRegister((void *) rhs.memptr(), rhs_size, cudaHostRegisterReadOnly));
+    CU_ERRCHK(cudaHostRegister((void *) K_epsco.memptr(), K_size, cudaHostRegisterReadOnly));
+    CU_ERRCHK(cudaHostRegister((void *) K.memptr(), K_size, cudaHostRegisterReadOnly));
+    CU_ERRCHK(cudaHostRegister((void *) rhs.memptr(), rhs_size, cudaHostRegisterReadOnly));
     */
 
     const auto d_K = cumallocopy(K, custream);
     auto d_labels = cumallocopy(rhs, custream);
-    cu_errchk(cudaMallocAsync(&d_rwork, rhs_size, custream));
-    cu_errchk(cudaMallocAsync(&d_Kwork, K_size, custream));
+    CU_ERRCHK(cudaMallocAsync(&d_rwork, rhs_size, custream));
+    CU_ERRCHK(cudaMallocAsync(&d_Kwork, K_size, custream));
 
     const auto iters_mul = common::C_itersolve_range / iters;
     constexpr double one = 1, oneminus = -1;
     for (DTYPE(layers) i = 0; i < layers; ++i) {
-        cu_errchk(cudaStreamSynchronize(custream));
-        const auto d_best_solution_i = d_best_solution + i * rhs_size;
+        CU_ERRCHK(cudaStreamSynchronize(custream));
+        const auto d_best_solution_i = d_best_solution + i * W_n;
         (void) solvers::solve_hybrid(
-            d_K, rhs.n_cols, K.n_rows, d_solved, maqueue, iters, d_labels, rhs_size, d_rwork, custream, cublas_H, d_K, 1,
-            mn, d_best_solution_i, K.n_elem, d_Kwork, iters_mul);
+            d_K, rhs.n_cols, K.n_rows, d_solved, maqueue, iters, d_labels, rhs_size, d_rwork, custream, cublas_H, d_K, 1, mn, d_best_solution_i, K.n_elem, d_Kwork, iters_mul);
         if (i < layers - 1) {
-            cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, K.n_rows, rhs.n_cols, K.n_cols, &one, d_K, K.n_rows, d_best_solution_i, K.n_rows, &one, d_labels, K.n_rows));
-            cb_errchk(cublasDscal(cublas_H, mn, &oneminus, d_labels, 1));
+            CB_ERRCHK(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, K.n_rows, rhs.n_cols, K.n_cols, &one, d_K, K.n_rows, d_best_solution_i, K.n_cols, &one, d_labels, rhs.n_rows));
+            CB_ERRCHK(cublasDscal(cublas_H, mn, &oneminus, d_labels, 1));
         }
     }
-    cu_errchk(cudaFreeAsync(d_K, custream));
-    cu_errchk(cudaFreeAsync(d_labels, custream));
-    cu_errchk(cudaFreeAsync(d_rwork, custream));
-    cu_errchk(cudaFreeAsync(d_Kwork, custream));
-    cu_errchk(cudaFreeAsync(d_solved, custream));
-    cu_errchk(cudaMemcpyAsync(solved.memptr(), d_best_solution, rhs_size * layers, cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_best_solution, custream));
+    CU_ERRCHK(cudaFreeAsync(d_K, custream));
+    CU_ERRCHK(cudaFreeAsync(d_labels, custream));
+    CU_ERRCHK(cudaFreeAsync(d_rwork, custream));
+    CU_ERRCHK(cudaFreeAsync(d_Kwork, custream));
+    CU_ERRCHK(cudaFreeAsync(d_solved, custream));
+    CU_ERRCHK(cudaMemcpyAsync(solved.memptr(), d_best_solution, w_size * layers, cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_best_solution, custream));
     /*
-    cu_errchk(cudaHostUnregister((void *) K_epsco.memptr()));
-    cu_errchk(cudaHostUnregister((void *) K.memptr()));
-    cu_errchk(cudaHostUnregister((void *) rhs.memptr()));
-    cu_errchk(cudaHostUnregister((void *) solved.memptr()));
+    CU_ERRCHK(cudaHostUnregister((void *) K_epsco.memptr()));
+    CU_ERRCHK(cudaHostUnregister((void *) K.memptr()));
+    CU_ERRCHK(cudaHostUnregister((void *) rhs.memptr()));
+    CU_ERRCHK(cudaHostUnregister((void *) solved.memptr()));
     */
-    cu_errchk(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
     magma_queue_destroy(maqueue);
 
     LOG4_END();
@@ -1636,53 +1638,47 @@ UNROLL()
 }
 #endif
 
-double solve_hybrid(
-    const double *const j_K_epsco, const uint32_t n, const uint32_t train_len, double *const j_solved, const magma_queue_t ma_queue,
-    const uint16_t irwls_iters, const double *const j_train_labels, const size_t train_n_size, double *const j_work, const cudaStream_t custream,
-    const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t train_len_n, double *const d_best_weights,
-    const uint32_t K_train_len, double *j_K_work, const double iters_mul)
+double solve_hybrid( // Only symmetric matrix is supported where m = k
+        const double *const j_K_epsco, const uint32_t n, const uint32_t m, double *const j_solved, const magma_queue_t ma_queue,
+        const uint16_t irwls_iters, const double *const j_train_labels, const size_t mn_size, double *const j_work, const cudaStream_t custream,
+        const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t mn, double *const d_best_weights,
+        const uint32_t mk, double *j_K_work, const double iters_mul)
 {
     LOG4_BEGIN();
     magma_int_t info;
     constexpr double one = 1, oneneg = -1;
     const auto delta_iter_mul = common::C_itersolve_delta / iters_mul;
     auto best_score = std::numeric_limits<double>::max();
-    copy_submat(j_train_labels, j_solved, train_len, 0, 0, train_len, n, train_len, cudaMemcpyDeviceToDevice, custream);
-    cu_errchk(cudaStreamSynchronize(custream));
-    ma_errchki(magma_dgesv_rbt(MagmaTrue, train_len, n, (double *) j_K_epsco, train_len, j_solved, train_len, &info), info);
+    copy_submat(j_train_labels, j_solved, m, 0, 0, m, n, m, cudaMemcpyDeviceToDevice, custream);
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    MAG_ERRCHKI(magma_dgesv_rbt(MagmaTrue, m, n, (double *) j_K_epsco, m, j_solved, m, &info), info);
     UNROLL()
     for (uint32_t i = 1; i < irwls_iters + 1; ++i) {
-        cu_errchk(cudaStreamSynchronize(custream));
-        copy_submat(j_train_labels, j_work, train_len, 0, 0, train_len, n, train_len, cudaMemcpyDeviceToDevice, custream);
-        cu_errchk(cudaStreamSynchronize(custream));
-        cb_errchk(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, train_len, n, train_len, &one, (double *) j_K_tune, train_len, j_solved, train_len, &oneneg, j_work, train_len));
-        cu_errchk(cudaStreamSynchronize(custream));
-#ifdef INSTANCE_WEIGHTS
-        auto [score, minabs] = irwls_op1w(j_work, train_len_n, custream); // TODO Test
-        score *= labels_factor;
-#else
-        const auto score = irwls_op1(j_work, train_len_n, custream) * labels_factor;
-#endif
+        CU_ERRCHK(cudaStreamSynchronize(custream));
+        copy_submat(j_train_labels, j_work, m, 0, 0, m, n, m, cudaMemcpyDeviceToDevice, custream);
+        CU_ERRCHK(cudaStreamSynchronize(custream));
+        CB_ERRCHK(cublasDgemm(cublas_H, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &one, (double *) j_K_tune, m, j_solved, m, &oneneg, j_work, m));
+        CU_ERRCHK(cudaStreamSynchronize(custream));
+        const auto score = irwls_op1(j_work, mn, custream) * labels_factor;
         if (!std::isnormal(score)) {
-            LOG4_WARN("Bailing, score not normal " << score << ", iteration " << i << ", train len " << train_len << ", best score " << best_score);
-            if (i == 1) cu_errchk(cudaMemsetAsync(d_best_weights, 0, train_len * sizeof(double), custream));
-            // thrust::fill(thrust::cuda::par.on(custream), d_best_weights, d_best_weights + train_len_n, 0.);
+            LOG4_WARN("Bailing, score not normal " << score << ", iteration " << i << ", train len " << m << ", best score " << best_score);
+            if (i <= 1) CU_ERRCHK(cudaMemsetAsync(d_best_weights, 0, m * sizeof(double), custream));
             goto __bail;
         } else if (score < best_score) {
-            LOG4_TRACE("IRWLS iteration " << i << ", kernel dimensions " << train_len << "x" << train_len << ", former best score " << best_score <<
-                ", new best score " << score << ", improvement " << 100. * (1. - score / best_score) << " pct.");
+            LOG4_TRACE("IRWLS iteration " << i << ", kernel dimensions " << m << "x" << m << ", former best score " << best_score <<
+                                          ", new best score " << score << ", improvement " << 100. * (1. - score / best_score) << " pct.");
             best_score = score;
-            cu_errchk(cudaMemcpyAsync(d_best_weights, j_solved, train_n_size, cudaMemcpyDeviceToDevice, custream));
-            cu_errchk(cudaStreamSynchronize(custream));
+            CU_ERRCHK(cudaMemcpyAsync(d_best_weights, j_solved, mn_size, cudaMemcpyDeviceToDevice, custream));
+            CU_ERRCHK(cudaStreamSynchronize(custream));
         }
         if (i == irwls_iters) break;
-        G_irwls_op2<<<CU_BLOCKS_THREADS(K_train_len), 0, custream>>>(
-            j_work, j_K_epsco, train_len, j_train_labels, j_K_work, j_solved, delta_iter_mul / i, train_len, train_len_n, K_train_len);
-        cu_errchk(cudaStreamSynchronize(custream));
-        ma_errchki(magma_dgesv_rbt(MagmaTrue, train_len, n, j_K_work, train_len, j_solved, train_len, &info), info);
+        G_irwls_op2<<<CU_BLOCKS_THREADS(mk), 0, custream>>>(
+                j_work, j_K_epsco, m, j_train_labels, j_K_work, j_solved, delta_iter_mul / i, m, mn, mk);
+        CU_ERRCHK(cudaStreamSynchronize(custream));
+        MAG_ERRCHKI(magma_dgesv_rbt(MagmaTrue, m, n, j_K_work, m, j_solved, m, &info), info);
     }
 __bail:
-    cu_errchk(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
     LOG4_END();
     return best_score;
 }
@@ -1697,46 +1693,46 @@ void cs_gels_iter(CPTR(double) A, double *const x, CPTR(double) b, const uint32_
     assert(n == 1);
     CTX4_CUSTREAM;
     cusolverDnHandle_t cusolverH;
-    cs_errchk(cusolverDnCreate(&cusolverH));
-    cs_errchk(cusolverDnSetStream(cusolverH, custream));
+    CS_ERRCHK(cusolverDnCreate(&cusolverH));
+    CS_ERRCHK(cusolverDnSetStream(cusolverH, custream));
     const auto d_A = cumallocopy(A, custream, m * m);
     const auto d_b = cumallocopy(b, custream, m * n);
     double *d_x, *d_W;
-    cu_errchk(cudaMallocAsync(&d_x, m * n * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_x, m * n * sizeof(double), custream));
     cusolverDnIRSParams_t irs_params;
-    cs_errchk(cusolverDnIRSParamsCreate(&irs_params));
-    cs_errchk(cusolverDnIRSParamsSetSolverPrecisions(irs_params, CUSOLVER_R_64F, C_lower_precision_type));
-    cs_errchk(cusolverDnIRSParamsSetRefinementSolver(irs_params, C_refine_type));
-    cs_errchk(cusolverDnIRSParamsSetTol(irs_params, C_ge_tol));
-    cs_errchk(cusolverDnIRSParamsSetTolInner(irs_params, C_ge_tol));
-    cs_errchk(cusolverDnIRSParamsSetMaxIters(irs_params, iter));
-    cs_errchk(cusolverDnIRSParamsSetMaxItersInner(irs_params, C_inner_iter));
+    CS_ERRCHK(cusolverDnIRSParamsCreate(&irs_params));
+    CS_ERRCHK(cusolverDnIRSParamsSetSolverPrecisions(irs_params, CUSOLVER_R_64F, C_lower_precision_type));
+    CS_ERRCHK(cusolverDnIRSParamsSetRefinementSolver(irs_params, C_refine_type));
+    CS_ERRCHK(cusolverDnIRSParamsSetTol(irs_params, C_ge_tol));
+    CS_ERRCHK(cusolverDnIRSParamsSetTolInner(irs_params, C_ge_tol));
+    CS_ERRCHK(cusolverDnIRSParamsSetMaxIters(irs_params, iter));
+    CS_ERRCHK(cusolverDnIRSParamsSetMaxItersInner(irs_params, C_inner_iter));
     cusolverDnIRSInfos_t irs_info;
-    cs_errchk(cusolverDnIRSInfosCreate(&irs_info));
+    CS_ERRCHK(cusolverDnIRSInfosCreate(&irs_info));
     cusolver_int_t niters;
     cusolver_int_t *d_info;
-    cu_errchk(cudaMallocAsync(&d_info, sizeof(cusolver_int_t), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_info, sizeof(cusolver_int_t), custream));
     size_t worksize;
-    cs_errchk(cusolverDnIRSXgels_bufferSize(cusolverH, irs_params, m, m, n, &worksize));
-    cu_errchk(cudaMallocAsync(&d_W, worksize, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cs_errchk(cusolverDnIRSXgels(cusolverH, irs_params, irs_info, m, m, n, d_A, m, d_b, m, d_x, m, d_W, worksize, &niters, d_info));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaFreeAsync(d_W, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaFreeAsync(d_A, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaFreeAsync(d_b, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaFreeAsync(d_info, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaMemcpyAsync(x, d_x, m * n * sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaFreeAsync(d_x, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cs_errchk(cusolverDnIRSParamsDestroy(irs_params));
-    cs_errchk(cusolverDnIRSInfosDestroy(irs_info));
-    cs_errchk(cusolverDnDestroy(cusolverH));
+    CS_ERRCHK(cusolverDnIRSXgels_bufferSize(cusolverH, irs_params, m, m, n, &worksize));
+    CU_ERRCHK(cudaMallocAsync(&d_W, worksize, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CS_ERRCHK(cusolverDnIRSXgels(cusolverH, irs_params, irs_info, m, m, n, d_A, m, d_b, m, d_x, m, d_W, worksize, &niters, d_info));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync(d_W, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync(d_A, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync(d_b, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync(d_info, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaMemcpyAsync(x, d_x, m * n * sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync(d_x, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CS_ERRCHK(cusolverDnIRSParamsDestroy(irs_params));
+    CS_ERRCHK(cusolverDnIRSInfosDestroy(irs_info));
+    CS_ERRCHK(cusolverDnDestroy(cusolverH));
     cusyndestroy(custream);
     LOG4_DEBUG("Solved " << m << "x" << n << ", iterations " << niters << ", worksize " << worksize);
 }
@@ -1746,38 +1742,38 @@ void cs_gesv_iter(CPTR(double) A, double *const x, CPTR(double) b, const uint32_
     assert(n == 1);
     CTX4_CUSTREAM;
     cusolverDnHandle_t cusolverH;
-    cs_errchk(cusolverDnCreate(&cusolverH));
-    cs_errchk(cusolverDnSetStream(cusolverH, custream));
+    CS_ERRCHK(cusolverDnCreate(&cusolverH));
+    CS_ERRCHK(cusolverDnSetStream(cusolverH, custream));
     const auto d_A = cumallocopy(A, custream, m * m);
     const auto d_b = cumallocopy(b, custream, m * n);
     double *d_x, *d_W;
-    cu_errchk(cudaMallocAsync(&d_x, m * n * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_x, m * n * sizeof(double), custream));
     cusolverDnIRSParams_t irs_params;
-    cs_errchk(cusolverDnIRSParamsCreate(&irs_params));
-    cs_errchk(cusolverDnIRSParamsSetSolverPrecisions(irs_params, CUSOLVER_R_64F, C_lower_precision_type));
-    cs_errchk(cusolverDnIRSParamsSetRefinementSolver(irs_params, C_refine_type));
-    cs_errchk(cusolverDnIRSParamsSetTol(irs_params, C_ge_tol));
-    cs_errchk(cusolverDnIRSParamsSetTolInner(irs_params, C_ge_tol));
-    cs_errchk(cusolverDnIRSParamsSetMaxIters(irs_params, iter));
-    cs_errchk(cusolverDnIRSParamsSetMaxItersInner(irs_params, C_inner_iter));
+    CS_ERRCHK(cusolverDnIRSParamsCreate(&irs_params));
+    CS_ERRCHK(cusolverDnIRSParamsSetSolverPrecisions(irs_params, CUSOLVER_R_64F, C_lower_precision_type));
+    CS_ERRCHK(cusolverDnIRSParamsSetRefinementSolver(irs_params, C_refine_type));
+    CS_ERRCHK(cusolverDnIRSParamsSetTol(irs_params, C_ge_tol));
+    CS_ERRCHK(cusolverDnIRSParamsSetTolInner(irs_params, C_ge_tol));
+    CS_ERRCHK(cusolverDnIRSParamsSetMaxIters(irs_params, iter));
+    CS_ERRCHK(cusolverDnIRSParamsSetMaxItersInner(irs_params, C_inner_iter));
     cusolverDnIRSInfos_t irs_info;
-    cs_errchk(cusolverDnIRSInfosCreate(&irs_info));
+    CS_ERRCHK(cusolverDnIRSInfosCreate(&irs_info));
     cusolver_int_t niters;
     cusolver_int_t *d_info;
-    cu_errchk(cudaMallocAsync(&d_info, sizeof(cusolver_int_t), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_info, sizeof(cusolver_int_t), custream));
     size_t worksize;
-    cs_errchk(cusolverDnIRSXgesv_bufferSize(cusolverH, irs_params, m, n, &worksize));
-    cu_errchk(cudaMallocAsync(&d_W, worksize, custream));
-    cs_errchk(cusolverDnIRSXgesv(cusolverH, irs_params, irs_info, m, n, d_A, m, d_b, m, d_x, m, d_W, worksize, &niters, d_info));
-    cu_errchk(cudaFreeAsync(d_W, custream));
-    cu_errchk(cudaFreeAsync(d_A, custream));
-    cu_errchk(cudaFreeAsync(d_b, custream));
-    cu_errchk(cudaFreeAsync(d_info, custream));
-    cu_errchk(cudaMemcpyAsync(x, d_x, m * n * sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_x, custream));
-    cs_errchk(cusolverDnIRSParamsDestroy(irs_params));
-    cs_errchk(cusolverDnIRSInfosDestroy(irs_info));
-    cs_errchk(cusolverDnDestroy(cusolverH));
+    CS_ERRCHK(cusolverDnIRSXgesv_bufferSize(cusolverH, irs_params, m, n, &worksize));
+    CU_ERRCHK(cudaMallocAsync(&d_W, worksize, custream));
+    CS_ERRCHK(cusolverDnIRSXgesv(cusolverH, irs_params, irs_info, m, n, d_A, m, d_b, m, d_x, m, d_W, worksize, &niters, d_info));
+    CU_ERRCHK(cudaFreeAsync(d_W, custream));
+    CU_ERRCHK(cudaFreeAsync(d_A, custream));
+    CU_ERRCHK(cudaFreeAsync(d_b, custream));
+    CU_ERRCHK(cudaFreeAsync(d_info, custream));
+    CU_ERRCHK(cudaMemcpyAsync(x, d_x, m * n * sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_x, custream));
+    CS_ERRCHK(cusolverDnIRSParamsDestroy(irs_params));
+    CS_ERRCHK(cusolverDnIRSInfosDestroy(irs_info));
+    CS_ERRCHK(cusolverDnDestroy(cusolverH));
     cusyndestroy(custream);
     LOG4_DEBUG("Solved " << m << "x" << n << ", iterations " << niters << ", worksize " << worksize);
 }

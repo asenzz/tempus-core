@@ -80,6 +80,19 @@ public:
 
 class AppConfig final : public PropertiesReader
 {
+    CONFPROP(float, instance_inert, 0)
+
+    CONFPROP(float, min_step, .1)
+
+    CONFPROP(float, max_step, .9)
+
+    CONFPROP(uint32_t, min_quant, 5)
+
+    CONFPROP(uint32_t, max_quant, 100)
+
+    CONFPROP(uint32_t, tune_data_iter, 10)
+
+    CONFPROP(uint32_t, tune_data_pop, 16)
 
     CONFPROP(uint32_t, gpu_chunk, 18000)
 
@@ -129,6 +142,10 @@ class AppConfig final : public PropertiesReader
 
     CONFPROP(uint32_t, shift_limit, 100)
 
+    CONFPROP(uint32_t, shift_multi, 0) // Shift increment multiplier for align_features()
+
+    CONFPROP(uint32_t, weight_ileave, 10)
+
     CONFPROP(uint32_t, outlier_slack, 0)
 
     CONFPROP(uint32_t, kernel_length, 10000)
@@ -167,8 +184,6 @@ class AppConfig final : public PropertiesReader
 
     CONFPROP(float, chunk_overlap, .0) // 0..1, higher means more chunks
 
-    CONFPROP(float, oemd_descent, 3) // (1..inf) How much an OEMD output component RMS level should be lower than the previous level beneath it
-
     CONFPROP(float, oemd_skipdiv, 1) // (0..num quantisations], higher means more refined
 
     CONFPROP(float, oemd_xcor_weig, 1) // OEMD tuning labels to features correlation weight in validation score
@@ -182,6 +197,8 @@ class AppConfig final : public PropertiesReader
     CONFPROP(float, oemd_freq_ceil, .25) // OEMD tuning frequency ceiling, [0..0.5]
 
     CONFPROP(float, label_drift, .5)
+
+    CONFPROP(uint32_t, online_irwls, 8)
 
 private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOOP_INTERVAL[] = "LOOP_INTERVAL_MS";

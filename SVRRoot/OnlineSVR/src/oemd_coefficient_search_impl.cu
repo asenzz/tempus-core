@@ -137,13 +137,13 @@ double autocorrelation_n(CPTRd d_in, const uint32_t n, const std::vector<uint32_
     const auto d_offsets = cumallocopy(offsets, stm);
     const uint32_t n_offsets = offsets.size();
     double *d_res;
-    cu_errchk(cudaMallocAsync((void **) &d_res, n_offsets * sizeof(*d_res), stm));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_res, n_offsets * sizeof(*d_res), stm));
     G_autocorr_driver<<<CU_BLOCKS_THREADS(n_offsets), 0, stm>>>(d_in, d_in + n, d_offsets, d_res, n_offsets, PROPS.get_stretch_coef(), PROPS.get_stretch_limit());
-    cu_errchk(cudaFreeAsync(d_offsets, stm));
+    CU_ERRCHK(cudaFreeAsync(d_offsets, stm));
     thrust::sort(thrust::cuda::par.on(stm), d_res, d_res + n_offsets);
     const auto n_offsets_2 = n_offsets;
     const auto res = solvers::sum(d_res, n_offsets_2, stm);
-    cu_errchk(cudaFreeAsync(d_res, stm));
+    CU_ERRCHK(cudaFreeAsync(d_res, stm));
     return res / n_offsets_2;
 }
 
@@ -295,7 +295,7 @@ void oemd_coefficients_search::transform(
     auto d_imf = cumallocopy(d_values, custream, input_len, cudaMemcpyDeviceToDevice);
     sift(siftings, input_len, mask_len, custream, d_mask, d_imf, d_temp);
     oemd::G_subtract_I<<<CU_BLOCKS_THREADS(input_len), 0, custream>>>(d_values, d_imf, input_len);
-    cu_errchk(cudaFreeAsync(d_imf, custream));
+    CU_ERRCHK(cudaFreeAsync(d_imf, custream));
 }
 
 
@@ -311,9 +311,9 @@ oemd_coefficients_search::sift_the_mask(
     CPTRd d_global_sift_matrix_ptr,
     const uint16_t gpu_id)
 {
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     cudaStream_t custream;
-    cu_errchk(cudaStreamCreate(&custream));
+    CU_ERRCHK(cudaStreamCreate(&custream));
     double sum_full, sum_imf, sum_rem, sum_corr;
     const uint32_t expand_size = siftings * mask_size;
     thrust::device_vector<double> d_zm_mask(expand_size);
@@ -328,30 +328,30 @@ oemd_coefficients_search::sift_the_mask(
     thrust::device_vector<cufftDoubleComplex> d_mask_imf_fft(fft_size);
     thrust::device_vector<cufftDoubleComplex> d_mask_rem_fft(fft_size);
     // cufftDoubleComplex *d_expanded_mask_fft = thrust::raw_pointer_cast(d_fzm_mask.data());
-    // cf_errchk(cufftSetStream(plan_sift_forward, custream));
-    // cufft_errchk(cufftExecD2Z(plan_sift_forward, d_expanded_mask_ptr, d_expanded_mask_fft));
+    // CUFFT_ERRCHK(cufftSetStream(plan_sift_forward, custream));
+    // CUFFT_ERRCHK(cufftExecD2Z(plan_sift_forward, d_expanded_mask_ptr, d_expanded_mask_fft));
     G_vec_sift<<<CU_BLOCKS_THREADS(fft_size), 0, custream>>>(fft_size, siftings, d_expanded_mask_fft, thrust::raw_pointer_cast(d_mask_imf_fft.data()),
                                                              thrust::raw_pointer_cast(d_mask_rem_fft.data()));
-    cf_errchk(cufftSetStream(plan_sift_backward, custream));
-    cf_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_imf_mask.data())));
-    cf_errchk(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_rem_fft.data()), thrust::raw_pointer_cast(d_rem_mask.data())));
+    CUFFT_ERRCHK(cufftSetStream(plan_sift_backward, custream));
+    CUFFT_ERRCHK(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_imf_fft.data()), thrust::raw_pointer_cast(d_imf_mask.data())));
+    CUFFT_ERRCHK(cufftExecZ2D(plan_sift_backward, thrust::raw_pointer_cast(d_mask_rem_fft.data()), thrust::raw_pointer_cast(d_rem_mask.data())));
 
     double *d_sum_imf, *d_sum_rem, *d_sum_corr;
-    cu_errchk(cudaMallocAsync((void **) &d_sum_imf, sizeof(double), custream));
-    cu_errchk(cudaMallocAsync((void **) &d_sum_rem, sizeof(double), custream));
-    cu_errchk(cudaMallocAsync((void **) &d_sum_corr, sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_sum_imf, sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_sum_rem, sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_sum_corr, sizeof(double), custream));
     G_sum_expanded<<<CU_BLOCKS_THREADS(expand_size), 0, custream>>>(
         d_sum_imf, d_sum_rem, d_sum_corr, thrust::raw_pointer_cast(d_imf_mask.data()), thrust::raw_pointer_cast(d_rem_mask.data()),
         expand_size, d_global_sift_matrix_ptr);
-    cu_errchk(cudaMemcpyAsync(&sum_imf, d_sum_imf, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaMemcpyAsync(&sum_rem, d_sum_rem, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaMemcpyAsync(&sum_corr, d_sum_corr, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_sum_imf, custream));
-    cu_errchk(cudaFreeAsync(d_sum_rem, custream));
-    cu_errchk(cudaFreeAsync(d_sum_corr, custream));
-    cu_errchk(cudaMemcpyAsync(&sum_full, d_global_sift_matrix_ptr, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaStreamDestroy(custream));
+    CU_ERRCHK(cudaMemcpyAsync(&sum_imf, d_sum_imf, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaMemcpyAsync(&sum_rem, d_sum_rem, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaMemcpyAsync(&sum_corr, d_sum_corr, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_sum_imf, custream));
+    CU_ERRCHK(cudaFreeAsync(d_sum_rem, custream));
+    CU_ERRCHK(cudaFreeAsync(d_sum_corr, custream));
+    CU_ERRCHK(cudaMemcpyAsync(&sum_full, d_global_sift_matrix_ptr, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaStreamDestroy(custream));
     return {sum_full, sum_imf, sum_rem, sum_corr};
 }
 
@@ -408,9 +408,9 @@ double oemd_coefficients_search::cu_quality(const cufftDoubleComplex *mask_fft, 
     const auto mask_fft_coef = mask_size * 2. * lambda2 / coeff;
     double result, *d_result = cucalloc<double>(custream);
     G_do_quality<<<CU_BLOCKS_THREADS(mask_size), 0, custream>>>(mask_fft, siftings, mask_size, coeff, end_i, mask_fft_coef, d_result);
-    cu_errchk(cudaMemcpyAsync(&result, d_result, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_result, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaMemcpyAsync(&result, d_result, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_result, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
     return result / mask_size;
 }
 
@@ -425,21 +425,21 @@ oemd_coefficients_search::gauss_smoothen_mask(
     const uint16_t gpu_id)
 {
     const auto full_size = 2 * mask_size;
-    cu_errchk(cudaSetDevice(gpu_id));
+    CU_ERRCHK(cudaSetDevice(gpu_id));
     cudaStream_t custream;
-    cu_errchk(cudaStreamCreate(&custream));
+    CU_ERRCHK(cudaStreamCreate(&custream));
     double *d_mask_zm;
-    cu_errchk(cudaMallocAsync((void **) &d_mask_zm, full_size, custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_mask_zm, full_size, custream));
     cufftDoubleComplex *d_mask_zm_fft;
     const auto full_fft = common::fft_len(full_size);
-    cu_errchk(cudaMallocAsync((void **) &d_mask_zm_fft, full_fft, custream));
-    cu_errchk(cudaMemsetAsync(d_mask_zm + mask_size, 0, mask_size * sizeof(double), custream));
-    cu_errchk(cudaMemcpyAsync(d_mask_zm, mask.data(), sizeof(double) * mask_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
-    cf_errchk(cufftSetStream(plan_mask_forward, custream));
-    cf_errchk(cufftExecD2Z(plan_mask_forward, d_mask_zm, d_mask_zm_fft));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_mask_zm_fft, full_fft, custream));
+    CU_ERRCHK(cudaMemsetAsync(d_mask_zm + mask_size, 0, mask_size * sizeof(double), custream));
+    CU_ERRCHK(cudaMemcpyAsync(d_mask_zm, mask.data(), sizeof(double) * mask_size, cudaMemcpyKind::cudaMemcpyHostToDevice, custream));
+    CUFFT_ERRCHK(cufftSetStream(plan_mask_forward, custream));
+    CUFFT_ERRCHK(cufftExecD2Z(plan_mask_forward, d_mask_zm, d_mask_zm_fft));
     G_gpu_multiply_smooth<<<CU_BLOCKS_THREADS(full_fft), 0, custream>>>(full_size, 5. * -log(common::drander(buffer)), d_mask_zm_fft);
-    cf_errchk(cufftSetStream(plan_mask_backward, custream));
-    cf_errchk(cufftExecZ2D(plan_mask_backward, d_mask_zm_fft, d_mask_zm));
+    CUFFT_ERRCHK(cufftSetStream(plan_mask_backward, custream));
+    CUFFT_ERRCHK(cufftExecZ2D(plan_mask_backward, d_mask_zm_fft, d_mask_zm));
     thrust::transform(thrust::cuda::par.on(custream), d_mask_zm, d_mask_zm + mask_size, d_mask_zm,
                       [mask_size]
               __device__(
@@ -447,11 +447,11 @@ oemd_coefficients_search::gauss_smoothen_mask(
                           return iter > 0 ? iter / double(mask_size) : 0;
                       });
     if (mask.size() != full_size) mask.resize(full_size);
-    cu_errchk(cudaMemcpyAsync(mask.data(), d_mask_zm, full_size * sizeof(*d_mask_zm), cudaMemcpyDeviceToHost, custream));
-    cu_errchk(cudaFreeAsync(d_mask_zm, custream));
-    cu_errchk(cudaFreeAsync(d_mask_zm_fft, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaStreamDestroy(custream));
+    CU_ERRCHK(cudaMemcpyAsync(mask.data(), d_mask_zm, full_size * sizeof(*d_mask_zm), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_mask_zm, custream));
+    CU_ERRCHK(cudaFreeAsync(d_mask_zm_fft, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaStreamDestroy(custream));
 }
 
 
@@ -515,24 +515,24 @@ double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal
     const auto N_2_1 = common::fft_len(N);
 
     // Allocate memory on the device
-    cu_errchk(cudaMallocAsync((void **) &d_psd, N_2_1 * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_psd, N_2_1 * sizeof(double), custream));
     auto d_psd_sum = cucalloc<double>(custream);
     auto d_entropy = cucalloc<double>(custream);
 
     // Create a CUFFT plan
     cufftHandle plan;
-    cf_errchk(cufftPlan1d(&plan, N, CUFFT_D2Z, 1));
+    CUFFT_ERRCHK(cufftPlan1d(&plan, N, CUFFT_D2Z, 1));
 
     size_t cufft_bufsiz;
-    cf_errchk(cufftGetSize1d(plan, N, CUFFT_D2Z, 1, &cufft_bufsiz));
+    CUFFT_ERRCHK(cufftGetSize1d(plan, N, CUFFT_D2Z, 1, &cufft_bufsiz));
 
     cufftDoubleComplex *d_freq;
-    cu_errchk(cudaMallocAsync((void **) &d_freq, cufft_bufsiz, custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_freq, cufft_bufsiz, custream));
 
-    cf_errchk(cufftSetStream(plan, custream));
+    CUFFT_ERRCHK(cufftSetStream(plan, custream));
 
     // Execute the FFT
-    cf_errchk(cufftExecD2Z(plan, d_signal, d_freq));
+    CUFFT_ERRCHK(cufftExecD2Z(plan, d_signal, d_freq));
 
     // Compute the Power Spectral Density (PSD)
     compute_power_spectrum<<<CU_BLOCKS_THREADS(N_2_1), 0, custream>>>(d_freq, d_psd, d_psd_sum, N, N_2_1);
@@ -545,13 +545,13 @@ double oemd_coefficients_search::compute_spectral_entropy_cufft(double *d_signal
 
     // Copy the result back to the host
     double entropy;
-    cu_errchk(cudaMemcpyAsync((void **) &entropy, d_entropy, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaMemcpyAsync((void **) &entropy, d_entropy, sizeof(double), cudaMemcpyDeviceToHost, custream));
 
     // Clean up
-    cu_errchk(cudaFreeAsync((void *) d_freq, custream));
-    cu_errchk(cudaFreeAsync((void *) d_psd, custream));
-    cu_errchk(cudaFreeAsync((void *) d_entropy, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync((void *) d_freq, custream));
+    CU_ERRCHK(cudaFreeAsync((void *) d_psd, custream));
+    CU_ERRCHK(cudaFreeAsync((void *) d_entropy, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
     cufftDestroy(plan);
 
     return entropy;
@@ -585,7 +585,7 @@ __global__ void G_generate_fir_mask(RPTR(double) d_mask, const double f, const u
 double *generate_fir_mask(const uint32_t len, const double f, const cudaStream_t custream)
 {
     double *d_mask;
-    cu_errchk(cudaMallocAsync(&d_mask, len * sizeof(*d_mask), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_mask, len * sizeof(*d_mask), custream));
     G_generate_fir_mask<<<CU_BLOCKS_THREADS(len), 0, custream>>>(d_mask, f, len, len * .5, len - 1, 2 * f);
     return d_mask;
 }
@@ -695,24 +695,43 @@ __global__ void G_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_l
     }
 }
 
-
-double autocorrelation(CRPTR(double) d_labels, const uint32_t n, const cudaStream_t custream)
+__global__ void G_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_len, const uint32_t x_len)
 {
-    const auto mean = solvers::mean(d_labels, n, custream);
+    CU_STRIDED_FOR_i(ac_len) {
+        double num = 0, den = 0;
+        for (uint32_t j = 0; j < x_len; ++j) {
+            const auto xjm = x[j];
+            num += xjm * (x[(j + i) % x_len]);
+            den += xjm * xjm;
+        }
+        atomicAdd(ac, abs(num / den));
+    }
+}
+
+
+template<const bool zero_mean = true> double autocorrelation(CRPTR(double) d_labels, const uint32_t n, const cudaStream_t custream)
+{
     const auto n2 = n / 2;
     double *d_autocorrelation;
-    cu_errchk(cudaMallocAsync(&d_autocorrelation, sizeof(double), custream));
-    G_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n, mean);
+    CU_ERRCHK(cudaMallocAsync(&d_autocorrelation, sizeof(double), custream));
+    if (zero_mean) 
+        G_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n);
+    else {
+        const auto mean = solvers::mean(d_labels, n, custream);
+        G_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n, mean);
+    }
     double res;
-    cu_errchk(cudaMemcpyAsync(&res, d_autocorrelation, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    LOG4_TRACE("Labels mean " << mean << ", count " << n << ", res " << res);
-    cu_errchk(cudaFreeAsync(d_autocorrelation, custream));
+    CU_ERRCHK(cudaMemcpyAsync(&res, d_autocorrelation, sizeof(double), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaFreeAsync(d_autocorrelation, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    LOG4_TRACE("Labels count " << n << ", res " << res);
     return res / n2;
 }
 
+
 double
 oemd_coefficients_search::evaluate_mask(
-    const double att, const double fp, const double fs, const std::span<double> &workspace, const uint8_t siftings, const uint32_t prev_masks_len, const double meanabs_input,
+    const double att, const double fp, const double fs, const std::span<double> &workspace, const uint8_t siftings, const uint32_t prev_masks_len, const uint16_t mask_ix,
     const std::vector<uint32_t> &times, const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const
 {
     const auto mask = lbp_fir(att, fp, fs, sample_rate);
@@ -731,29 +750,30 @@ oemd_coefficients_search::evaluate_mask(
     const auto d_mask = cumallocopy(mask, custream);
     const auto d_workspace = cumallocopy(workspace, custream);
     double *d_tmp;
-    cu_errchk(cudaMallocAsync((void **) &d_tmp, workspace.size() * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_tmp, workspace.size() * sizeof(double), custream));
     sift(siftings, workspace.size(), mask_len, custream, d_mask, d_workspace, d_tmp);
-    cu_errchk(cudaFreeAsync(d_tmp, custream));
-    cu_errchk(cudaFreeAsync(d_mask, custream));
+    CU_ERRCHK(cudaFreeAsync(d_tmp, custream));
+    CU_ERRCHK(cudaFreeAsync(d_mask, custream));
 
     const uint32_t mask_offset = siftings * mask_len + prev_masks_len;
     const auto d_imf_len = workspace.size() - mask_offset;
     const auto d_imf = d_workspace + mask_offset;
     double stub_sf, stub_dc;
+#if 0
     // business::ScalingFactorService::cu_scale_calc_I(d_imf, d_imf_len, stub_sf, stub_dc, custream);
     const auto meanabs_imf = rel_pow_w > 0 ? solvers::meanabs(d_imf, d_imf_len, custream) : 1;
     if (!std::isnormal(meanabs_imf)) {
         LOG4_WARN("Bad IMF " << meanabs_imf << ", workspace " << common::present(workspace) << ", siftings " << siftings << ", mask size " << mask_len <<
             ", attenuation " << att << ", pass frequency " << fp << ", stop frequency " << fs << ", prev mask len " << prev_masks_len);
-        cu_errchk(cudaFreeAsync(d_workspace, custream));
-        cu_errchk(cudaStreamDestroy(custream));
+        CU_ERRCHK(cudaFreeAsync(d_workspace, custream));
+        CU_ERRCHK(cudaStreamDestroy(custream));
         return common::C_bad_validation;
     }
-    const auto rel_pow = std::abs(meanabs_input / meanabs_imf - PROPS.get_oemd_descent());
-
-    double xcor, acor;
-    if (xcor_w <= 0 && acor_w <= 0) {
-        xcor = 1, acor = 1;
+    const auto rel_pow = 1 / meanabs_imf;
+#endif
+    double xcor, acor, rel_pow;
+    if (xcor_w <= 0 && acor_w <= 0 && rel_pow_w <= 0) {
+        xcor = 1, acor = 1, rel_pow = 1;
         goto __skip_correlation;
     } else xcor = common::C_bad_validation;
     {
@@ -773,9 +793,10 @@ oemd_coefficients_search::evaluate_mask(
         G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
             d_imf, d_labels, validate_rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
         business::ScalingFactorService::cu_scale_calc_I(d_labels, validate_rows, stub_sf, stub_dc, custream);
+        rel_pow = rel_pow_w <= 0 ? 1 : 1 / stub_sf;
         acor = acor_w > 0 ? autocorrelation(d_labels, validate_rows, custream) : 1;
-        cu_errchk(cudaFreeAsync((void *) d_label_ixs, custream));
-        cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
+        CU_ERRCHK(cudaFreeAsync((void *) d_label_ixs, custream));
+        CU_ERRCHK(cudaFreeAsync(d_ix_end_F, custream));
         if (xcor_w <= 0) {
             xcor = 1;
         } else {
@@ -785,8 +806,8 @@ oemd_coefficients_search::evaluate_mask(
             const uint32_t feat_cols_ileave = full_feat_cols / column_interleave;
             const uint32_t features_len = validate_rows * feat_cols_ileave;
             const auto features_size = features_len * sizeof(double);
-            cu_errchk(cudaMallocAsync((void **) &d_features, features_size, custream));
-            cu_errchk(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(double), custream));
+            CU_ERRCHK(cudaMallocAsync((void **) &d_features, features_size, custream));
+            CU_ERRCHK(cudaMallocAsync((void **) &d_scores, feat_cols_ileave * sizeof(double), custream));
             std::vector<t_feat_params> feat_params_q(feat_params_trimmed.begin(), feat_params_trimmed.end());
             const auto skipdiv = PROPS.get_oemd_skipdiv();
             const auto &quantisations = business::ModelService::get_quantisations();
@@ -804,9 +825,9 @@ oemd_coefficients_search::evaluate_mask(
                 const auto qt = quantisations[q];
                 OMP_FOR_i(validate_rows) feat_params_q[i].ix_start = feat_params_q[i].ix_end - full_feat_cols * qt + 1 - mask_offset;
                 const auto d_feat_params_q = cumallocopy(feat_params_q, custream);
-                cu_errchk(cudaMemsetAsync(d_features, 0, features_size, custream));
+                CU_ERRCHK(cudaMemsetAsync(d_features, 0, features_size, custream));
                 G_quantise_features<<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(d_features, d_imf, d_feat_params_q, validate_rows, feat_cols_ileave, qt, column_interleave * qt);
-                cu_errchk(cudaFreeAsync(d_feat_params_q, custream));
+                CU_ERRCHK(cudaFreeAsync(d_feat_params_q, custream));
                 business::ScalingFactorService::cu_scale_calc_I(d_features, features_len, stub_sf, stub_dc, custream);
                 G_align_features<<<CU_BLOCKS_THREADS(feat_cols_ileave), 0, custream>>>(
                     d_features, d_labels, d_scores, nullptr, nullptr, validate_rows, feat_cols_ileave, 0, stretch_limit,
@@ -826,22 +847,21 @@ oemd_coefficients_search::evaluate_mask(
                 }
                 assert(score != 0);
             }
-            cu_errchk(cudaFreeAsync(d_scores, custream));
-            cu_errchk(cudaFreeAsync(d_features, custream));
+            CU_ERRCHK(cudaFreeAsync(d_scores, custream));
+            CU_ERRCHK(cudaFreeAsync(d_features, custream));
         }
-        cu_errchk(cudaFreeAsync(d_labels, custream));
+        CU_ERRCHK(cudaFreeAsync(d_labels, custream));
     }
 __skip_correlation:
 
     // Spectral entropy
     const auto inv_entropy = inv_entropy_w > 0 ? compute_spectral_entropy_cufft(d_imf, d_imf_len, custream) : 1.;
-    cu_errchk(cudaFreeAsync(d_workspace, custream)); // d_imf is a chunk of d_workspace
-    cu_errchk(cudaStreamDestroy(custream));
+    CU_ERRCHK(cudaFreeAsync(d_workspace, custream)); // d_imf is a chunk of d_workspace
+    CU_ERRCHK(cudaStreamDestroy(custream));
 
     // Weights and final score
     const auto score = std::pow(rel_pow, rel_pow_w) * std::pow(xcor, xcor_w) * std::pow(acor, acor_w) * std::pow(inv_entropy, inv_entropy_w);
-    LOG4_TRACE("Returning cross-correlation " << xcor << ", labels autocorrelation " << acor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy << ", meanabs imf " <<
-        meanabs_imf << ", meanabs input " << meanabs_input);
+    LOG4_TRACE("Returning cross-correlation " << xcor << ", labels autocorrelation " << acor << ", relative power " << rel_pow << ", score " << score << ", inv entropy " << inv_entropy);
     return score;
 }
 
@@ -914,32 +934,32 @@ double oemd_coefficients_search::dominant_frequency(const std::span<double> &inp
     // Allocate device memory
     double *d_signal, *d_magnitudes;
     cufftDoubleComplex *d_freq_domain;
-    cu_errchk(cudaMallocAsync(&d_signal, n * sizeof(*d_signal), custream));
-    cu_errchk(cudaMallocAsync(&d_magnitudes, fft_n * sizeof(*d_magnitudes), custream));
-    cu_errchk(cudaMallocAsync(&d_freq_domain, fft_n * sizeof(*d_freq_domain), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_signal, n * sizeof(*d_signal), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_magnitudes, fft_n * sizeof(*d_magnitudes), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_freq_domain, fft_n * sizeof(*d_freq_domain), custream));
 
     // Copy signal to device
-    cu_errchk(cudaMemcpyAsync(d_signal, input.data(), n * sizeof(*d_signal), cudaMemcpyHostToDevice, custream));
+    CU_ERRCHK(cudaMemcpyAsync(d_signal, input.data(), n * sizeof(*d_signal), cudaMemcpyHostToDevice, custream));
 
     // Create CUFFT plan
     cufftHandle plan;
-    cf_errchk(cufftPlan1d(&plan, n, CUFFT_D2Z, 1));
-    cf_errchk(cufftSetStream(plan, custream));
+    CUFFT_ERRCHK(cufftPlan1d(&plan, n, CUFFT_D2Z, 1));
+    CUFFT_ERRCHK(cufftSetStream(plan, custream));
     // Execute the plan
-    cf_errchk(cufftExecD2Z(plan, d_signal, d_freq_domain));
+    CUFFT_ERRCHK(cufftExecD2Z(plan, d_signal, d_freq_domain));
 
     // Calculate magnitudes of the frequency components
     G_calculate_magnitude<<<CU_BLOCKS_THREADS(fft_n), 0, custream>>>(d_freq_domain, d_magnitudes, fft_n);
 
     // Copy magnitudes back to host
     std::vector<double> magnitudes(fft_n);
-    cu_errchk(cudaMemcpyAsync(magnitudes.data(), d_magnitudes, fft_n * sizeof(*d_magnitudes), cudaMemcpyDeviceToHost, custream));
+    CU_ERRCHK(cudaMemcpyAsync(magnitudes.data(), d_magnitudes, fft_n * sizeof(*d_magnitudes), cudaMemcpyDeviceToHost, custream));
     // Clean up
-    cu_errchk(cudaFreeAsync(d_signal, custream));
-    cu_errchk(cudaFreeAsync(d_freq_domain, custream));
-    cu_errchk(cudaFreeAsync(d_magnitudes, custream));
-    cu_errchk(cudaStreamSynchronize(custream));
-    cf_errchk(cufftDestroy(plan));
+    CU_ERRCHK(cudaFreeAsync(d_signal, custream));
+    CU_ERRCHK(cudaFreeAsync(d_freq_domain, custream));
+    CU_ERRCHK(cudaFreeAsync(d_magnitudes, custream));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CUFFT_ERRCHK(cufftDestroy(plan));
     return .5 * find_nth_peak(magnitudes, percentile_greatest_peak) * sample_rate / n;
 }
 
@@ -1002,7 +1022,7 @@ oemd_coefficients_search::run(
     const uint32_t horizon_len_2 = label_len * PROPS.get_prediction_horizon() * 2;
     const auto max_row_duration = horizon_duration + max_row_len * resolution;
     const auto label_len_1 = label_len + 1;
-    // TODO Unify with ModelService::prepare_labels()
+    // TODO Unify with ModelService::coordinates_knowns()
     OMP_FOR_(label_times.size(), ordered)
     for (const auto &L_start_time: label_times) {
         if (L_start_time - max_row_duration < first_time) continue;
@@ -1013,7 +1033,8 @@ oemd_coefficients_search::run(
             else --L_start_it;
             if (*L_start_it > L_start_time) continue;
         }
-        const auto L_end_it = std::lower_bound(L_start_it, times.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : times.cend(), L_start_time + label_duration);
+        const auto L_end_time = L_start_time + label_duration;
+        const auto L_end_it = std::lower_bound(L_start_it, times.cend() - L_start_it > label_len_1 ? L_start_it + label_len_1 : times.cend(), L_end_time);
         if (L_end_it == L_start_it) continue;
 
         auto F_end_it = lower_bound(L_start_it - times.cbegin() > horizon_len_2 ? L_start_it - horizon_len_2 : times.cbegin(), L_start_it, L_start_time - horizon_duration);
@@ -1047,13 +1068,11 @@ oemd_coefficients_search::run(
             for (uint16_t i = 0; i < m; ++i) prev_masks_len += masks[i].size() * siftings[i];
             assert(workspace.size() > prev_masks_len);
             const auto level = levels - m - 1;
-            const auto meanabs_input = common::meanabs<double>(workspace.cbegin() + prev_masks_len, workspace.cend());
 
             // TODO Move pprune instantiation to a cpp file to combat unithreading bug in KNitro
-            LOG4_DEBUG("Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", meanabs input " << meanabs_input <<
-                ", max quantisation " << business::ModelService::get_max_quantisation() << ", label ixs " << label_ixs.size() << ", latest label last feature ix " <<
-                feat_params.back().ix_end << ", max row len " << max_row_len << ", prev masks len " << prev_masks_len);
-            const auto loss_function = [&, siftings, meanabs_input]
+            LOG4_DEBUG("Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", max quantisation " << business::ModelService::get_max_quantisation()
+			    << ", label ixs " << label_ixs.size() << ", latest label last feature ix " << feat_params.back().ix_end << ", max row len " << max_row_len << ", prev masks len " << prev_masks_len);
+            const auto loss_function = [&, siftings]
 #ifdef USE_FIREFLY
                     (const std::vector<double> &x) {
                 return
@@ -1061,7 +1080,7 @@ oemd_coefficients_search::run(
             (const double *x, double *const f) {
                 *f =
 #endif
-                        evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, meanabs_input, times_i, label_ixs, feat_params);
+                        evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, m, times_i, label_ixs, feat_params);
             };
             /*
             arma::vec x0(3, ARMA_DEFAULT_FILL);
@@ -1083,7 +1102,8 @@ oemd_coefficients_search::run(
                     arma::vec(h_mask.size(), arma::fill::ones), loss_function).operator std::pair<double, std::vector<double>>();
             return score;
 #else
-            const optimizer::pprune opt(optimizer::pprune::C_default_algo, PROPS.get_oemd_tune_particles(), bounds, loss_function, PROPS.get_oemd_tune_iterations() /* , 0, 0, x0*/);
+            const optimizer::pprune opt(optimizer::pprune::C_default_algo, PROPS.get_oemd_tune_particles(), bounds, loss_function, PROPS.get_oemd_tune_iterations() , 0, 0, {}, {},
+                common::iter_depth(PROPS.get_oemd_tune_iterations()));
             const optimizer::t_pprune_res res = opt;
             masks[m] = lbp_fir(res.best_parameters[0], res.best_parameters[1], res.best_parameters[2], sample_rate);
             if (masks[m].empty())
@@ -1093,21 +1113,21 @@ oemd_coefficients_search::run(
             save_mask(masks[m], queue_name, m, masks.size() + 1);
         }
     __prepare_level_below:
-        cu_errchk(cudaSetDevice(ctx.phy_id()));
+        CU_ERRCHK(cudaSetDevice(ctx.phy_id()));
         auto d_level_imf = cumallocopy(workspace, custream);
         const auto d_mask = cumallocopy(masks[m], custream);
         double *d_workspace;
-        cu_errchk(cudaMallocAsync((void **) &d_workspace, window_size, custream));
+        CU_ERRCHK(cudaMallocAsync((void **) &d_workspace, window_size, custream));
         transform(d_level_imf, d_mask, window_len, masks[m].size(), siftings[m], d_workspace, custream);
-        cu_errchk(cudaFreeAsync(d_mask, custream));
-        cu_errchk(cudaMemcpyAsync(d_workspace, workspace.data(), window_size, cudaMemcpyHostToDevice, custream));
+        CU_ERRCHK(cudaFreeAsync(d_mask, custream));
+        CU_ERRCHK(cudaMemcpyAsync(d_workspace, workspace.data(), window_size, cudaMemcpyHostToDevice, custream));
         G_subtract_I<<<CU_BLOCKS_THREADS(window_len), 0, custream>>>(d_workspace, d_level_imf, window_len);
-        cu_errchk(cudaFreeAsync(d_level_imf, custream));
-        cu_errchk(cudaMemcpyAsync(workspace.data(), d_workspace, window_size, cudaMemcpyDeviceToHost, custream));
-        cu_errchk(cudaFreeAsync(d_workspace, custream));
-        cu_errchk(cudaStreamSynchronize(custream));
+        CU_ERRCHK(cudaFreeAsync(d_level_imf, custream));
+        CU_ERRCHK(cudaMemcpyAsync(workspace.data(), d_workspace, window_size, cudaMemcpyDeviceToHost, custream));
+        CU_ERRCHK(cudaFreeAsync(d_workspace, custream));
+        CU_ERRCHK(cudaStreamSynchronize(custream));
     }
-    cu_errchk(cudaStreamDestroy(custream));
+    CU_ERRCHK(cudaStreamDestroy(custream));
 }
 } // oemd_search
 } // svr

@@ -46,7 +46,7 @@ struct t_calfun_data
 
 #ifdef USE_KNITRO
 
-#define kn_errchk(cmd) { const auto __err = (cmd); \
+#define KNI_ERRCHK(cmd) { const auto __err = (cmd); \
     if (__err) LOG4_THROW("KNitro call " #cmd " failed with error " << __err); }
 
 int kn_callback(KN_context_ptr kc,
@@ -62,8 +62,8 @@ int kn_callback(KN_context_ptr kc,
     auto p_cost_cb = (t_pprune_cost_fun_ptr)
             user_params;
     int num_iters, D;
-    kn_errchk(KN_get_number_iters(kc, &num_iters));
-    kn_errchk(KN_get_number_vars(kc, &D));
+    KNI_ERRCHK(KN_get_number_iters(kc, &num_iters));
+    KNI_ERRCHK(KN_get_number_vars(kc, &D));
     PROFILE_INFO((*p_cost_cb)(eval_request->x, eval_result->obj),
                 "Cost, score " << *eval_result->obj << ", index " << eval_request->threadID << ", iterations " << num_iters << ", parameters " <<
                 common::to_string(eval_request->x, std::min<uint32_t>(4, D)));
@@ -189,7 +189,7 @@ pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const ar
         LOG4_WARN("Number of particles is zero, bailing.");
         return;
     }
-    if (x0.n_rows != D) x0.clear();
+    if (x0.n_elem && x0.n_rows != D) x0.clear();
     if (x0.n_elem) {
         result.best_parameters = arma::vectorise(x0.col(0));
         if (x0.n_cols > n) {
@@ -204,6 +204,8 @@ pprune::pprune(const e_algo_type algo_type, const uint32_t n_particles, const ar
     } else {
         result.best_parameters.set_size(D);
         result.best_parameters.zeros();
+        x0.set_size(D, n);
+        common::equispaced(x0, bounds, pows);
     }
 
     if (!std::isnormal(rhobeg)) rhobeg = ranges.front() * C_default_rhobeg;
@@ -261,13 +263,13 @@ void pprune::pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &
 
     /** Create a new Knitro solver instance. */
     KN_context *kc;
-    kn_errchk(KN_new(&kc));
+    KNI_ERRCHK(KN_new(&kc));
     if (kc == NULL)
         LOG4_THROW("Failed to find a valid license.");
 
     /** Illustrate how to override default options by reading from
      *  the knitro.opt file. */
-    kn_errchk(KN_load_param_file(kc, "../config/knitro.opt"));
+    KNI_ERRCHK(KN_load_param_file(kc, "../config/knitro.opt"));
 
     /** Initialize Knitro with the problem definition. */
 
@@ -275,13 +277,13 @@ void pprune::pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &
      *  Note: any unset lower bounds are assumed to be
      *  unbounded below and any unset upper bounds are
      *  assumed to be unbounded above. */
-    kn_errchk(KN_add_vars(kc, D, nullptr));
-    kn_errchk(KN_set_var_lobnds_all(kc, bounds.colptr(0)));
-    kn_errchk(KN_set_var_upbnds_all(kc, bounds.colptr(1)));
-    kn_errchk(KN_set_var_primal_init_values_all(kc, x0.colptr(x0.n_cols - 1)));
+    KNI_ERRCHK(KN_add_vars(kc, D, nullptr));
+    KNI_ERRCHK(KN_set_var_lobnds_all(kc, bounds.colptr(0)));
+    KNI_ERRCHK(KN_set_var_upbnds_all(kc, bounds.colptr(1)));
+    KNI_ERRCHK(KN_set_var_primal_init_values_all(kc, x0.colptr(x0.n_cols - 1)));
 
     const KN_init_userparams init_user_params{x0, D};
-    kn_errchk(KN_set_ms_initpt_callback(kc, KN_ms_initpt_callback, (void *const) &init_user_params));
+    KNI_ERRCHK(KN_set_ms_initpt_callback(kc, KN_ms_initpt_callback, (void *const) &init_user_params));
 
     /** Add a callback function "kn_callback" to evaluate the nonlinear
      *  (non-quadratic) objective.  Note that the linear and
@@ -291,29 +293,29 @@ void pprune::pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &
      *  function through the callback. */
     /** Pointer to structure holding information for callback */
     CB_context *cb;
-    kn_errchk(KN_add_eval_callback(kc, KNTRUE, 0, nullptr, kn_callback, &cb));
+    KNI_ERRCHK(KN_add_eval_callback(kc, KNTRUE, 0, nullptr, kn_callback, &cb));
     // auto calfun_data = new t_calfun_data{no_elect, elect_ready, elect_mx, f_score, cost_f, i, maxfun};
-    kn_errchk(KN_set_cb_user_params(kc, cb, (void *) &cost_f));
+    KNI_ERRCHK(KN_set_cb_user_params(kc, cb, (void *) &cost_f));
 
     /** Set the non-default SQP algorithm, which typically converges in the
      *  fewest number of function evaluations.  This algorithm (or the
      *  active-set algorithm ("KN_ALG_ACT_CG") may be preferable for
      *  derivative-free optimization models with expensive function
      *  evaluations. */
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_ALGORITHM, KN_ALG_ACT_SQP));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_ALGORITHM, KN_ALG_ACT_SQP));
     /** Enable multi-start */
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_MULTISTART, KN_MS_ENABLE_YES));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_MULTISTART, KN_MS_ENABLE_YES));
 
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_MS_MAXSOLVES, n_particles));
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_MAXIT, maxfun));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_MS_MAXSOLVES, n_particles));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_MAXIT, maxfun));
 
     auto gen = common::reproducibly_seeded_64<xso::rng64>();
     std::uniform_real_distribution<double> dis(0., 1.);
     /** Perform multistart in parallel using max number of available threads */
     LOG4_TRACE("Running KNitro multistart in parallel with " << C_n_cpu << " threads.");
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_CONCURRENT_EVALS, KN_CONCURRENT_EVALS_YES));
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_MS_SEED, dis(gen)));
-    kn_errchk(KN_set_int_param(kc, KN_PARAM_HONORBNDS, KN_HONORBNDS_ALWAYS));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_CONCURRENT_EVALS, KN_CONCURRENT_EVALS_YES));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_MS_SEED, dis(gen)));
+    KNI_ERRCHK(KN_set_int_param(kc, KN_PARAM_HONORBNDS, KN_HONORBNDS_ALWAYS));
 
     /** Solve the problem.
      *
@@ -343,14 +345,14 @@ void pprune::pprune_knitro(const uint32_t n_particles, const t_pprune_cost_fun &
     result.total_iterations = total_iterations ? total_iterations : maxfun * n_particles;
 
     /** An example of obtaining solution information. */
-    kn_errchk(KN_get_solution(kc, &n_status, &result.best_score, result.best_parameters.memptr(), lambda));
+    KNI_ERRCHK(KN_get_solution(kc, &n_status, &result.best_score, result.best_parameters.memptr(), lambda));
     LOG4_DEBUG("Optimal objective value " << result.best_score << ", status " << n_status <<
         ", optimal solution (with corresponding multiplier): " << common::present(result.best_parameters) <<
         ", lambda " << common::to_string(lambda + D, std::min<uint32_t>(D, 4)));
     double feas_error, opt_error;
-    kn_errchk(KN_get_abs_feas_error(kc, &feas_error));
+    KNI_ERRCHK(KN_get_abs_feas_error(kc, &feas_error));
     LOG4_DEBUG("Feasibility violation " << feas_error);
-    kn_errchk(KN_get_abs_opt_error(kc, &opt_error));
+    KNI_ERRCHK(KN_get_abs_opt_error(kc, &opt_error));
     LOG4_DEBUG("Optimality violation " << opt_error);
 
     /** Delete the Knitro solver instance. */
@@ -432,7 +434,7 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
         mpi_best_result[1] = result.total_iterations;
         memcpy(mpi_best_result.data() + 2, result.best_parameters.mem, D_size);
         DTYPE(mpi_best_result) mpi_all_results(result_len * world_size);
-        mpi_errchk(MPI_Allgather(mpi_best_result.data(), result_len, MPI_DOUBLE, mpi_all_results.data(), result_len, MPI_DOUBLE, PROPS.get_mpi_comm()));
+        MPI_ERRCHK(MPI_Allgather(mpi_best_result.data(), result_len, MPI_DOUBLE, mpi_all_results.data(), result_len, MPI_DOUBLE, PROPS.get_mpi_comm()));
         result.total_iterations = 0;
         for (DTYPE(world_size) i = 0; i < world_size; ++i) {
             result.total_iterations += mpi_all_results[i * result_len + 1];
@@ -511,12 +513,11 @@ void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &c
 void pprune::pprune_petsc(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
 #ifdef USE_PETSC_SOLVER
-#if 0 // TODO Rewrite using TAO
+#if 0 // TODO Rewrite using TAO or SNES
     auto p_particles = ptr<std::deque<t_calfun_data_ptr>>(n_particles);
 
     tbb::mutex res_l;
-#pragma omp parallel ADJ_THREADS(n_particles)
-#pragma omp single
+OMP_PAR(n_particles)
     {
 #pragma omp taskloop simd mergeable default(shared) grainsize(1) firstprivate(maxfun, no_elect) untied // Untied task is a must if election is used
         for (uint32_t i = 0; i < n_particles; ++i) {

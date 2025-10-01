@@ -50,6 +50,7 @@ struct TemporalFusionTransformerImpl final : torch::nn::Module
 };
 
 TORCH_MODULE(TemporalFusionTransformer);
+using TemporalFusionTransformer_ptr = std::shared_ptr<TemporalFusionTransformer>;
 }
 }
 

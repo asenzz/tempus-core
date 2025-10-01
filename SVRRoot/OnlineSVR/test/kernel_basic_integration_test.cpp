@@ -135,7 +135,7 @@ kernel_basic_integration_test(
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineMIMOSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_multistep_len());
+    svr::OnlineMIMOSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_steps());
 
     const arma::mat x_train = mimo_model->get_learning_matrix();
     const arma::mat y_train = mimo_model->get_reference_matrix();

@@ -123,7 +123,7 @@ TEST(mimo_train_predict, batch_train_tasks)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_multistep_len());
+    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_steps());
 
     arma::mat x_train = mimo_model->get_learning_matrix();
     arma::mat y_train = mimo_model->get_reference_matrix();

@@ -14,10 +14,8 @@
 namespace svr {
 namespace datamodel {
 
-
-bool Ensemble::operator==(const Ensemble &o) const
+Ensemble::Ensemble() : Entity()
 {
-    return dataset_id == o.dataset_id && models == o.models && p_decon_queue == o.p_decon_queue && aux_decon_queues == o.aux_decon_queues;
 }
 
 Ensemble::Ensemble(const bigint id, const bigint dataset_id, const std::deque<datamodel::Model_ptr> &models,
@@ -74,6 +72,12 @@ void Ensemble::init_id()
     }
 }
 
+bool Ensemble::operator==(const Ensemble &o) const
+{
+    return dataset_id == o.dataset_id && models == o.models && p_decon_queue == o.p_decon_queue && aux_decon_queues == o.aux_decon_queues;
+}
+
+
 void Ensemble::set_dataset_id(const bigint dataset_id_)
 {
     dataset_id = dataset_id_;
@@ -99,7 +103,7 @@ void Ensemble::set_dataset_id(const bigint dataset_id_)
     }
 }
 
-datamodel::Model_ptr Ensemble::get_model(const size_t levix, const size_t stepix) const
+datamodel::Model_ptr Ensemble::get_model(const uint16_t levix, const uint16_t stepix) const
 {
     return business::ModelService::find(models, levix, stepix);
 }

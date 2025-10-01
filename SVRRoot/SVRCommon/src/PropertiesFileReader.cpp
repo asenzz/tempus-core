@@ -323,7 +323,7 @@ int AppConfig::get_mpi_rank()
 {
     static const auto rank = [] {
         int r;
-        mpi_errchk(MPI_Comm_rank(MPI_COMM_WORLD, &r));
+        MPI_ERRCHK(MPI_Comm_rank(MPI_COMM_WORLD, &r));
         LOG4_DEBUG("Running on MPI rank " << r);
         return r;
     } ();
@@ -334,7 +334,7 @@ int AppConfig::get_mpi_size()
 {
     static const auto size = [] {
         int s;
-        mpi_errchk(MPI_Comm_size(MPI_COMM_WORLD, &s));
+        MPI_ERRCHK(MPI_Comm_size(MPI_COMM_WORLD, &s));
         LOG4_DEBUG("Running with " << s << " MPI processes.");
         return s;
     } ();

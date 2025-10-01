@@ -1,6 +1,7 @@
 #pragma once
 
 #include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/math/ccmath/ccmath.hpp>
 #include <oneapi/tbb/mutex.h>
 #include <memory>
 #include <set>
@@ -57,10 +58,11 @@ class OnlineSVR final : public Entity
     t_param_set param_set;
     matrices_ptr p_kernel_matrices;
     datamodel::dq_scaling_factor_container_t scaling_factors;
-    std::deque<arma::mat> weight_chunks, train_feature_chunks_t, train_label_chunks;
+    std::deque<arma::mat> weight_chunks, train_feature_chunks_t, train_label_chunks, instance_weights;
     std::deque<arma::uvec> ixs;
-    arma::vec chunks_score;
-    arma::mat all_weights;
+    arma::vec chunks_score, total_weights, active_total_weights;
+    tbb::mutex weight_chunks_mx;
+    arma::uvec active_rows;
     uint16_t multiout = common::C_default_multiout;
     uint32_t max_chunk_size;
     uint16_t gradient = C_default_svrparam_grad_level;
@@ -93,7 +95,7 @@ public:
 
     OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const Dataset_ptr &p_dataset = nullptr);
 
-    OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_iweights,
+    OnlineSVR(const bigint id, const bigint model_id, const t_param_set &param_set, const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_iweight,
               const bpt::ptime &last_value_time, const matrices_ptr &p_kernel_matrices = nullptr, const Dataset_ptr &p_dataset = nullptr);
 
     explicit OnlineSVR(const bigint id, const bigint model_id, std::stringstream &input_stream);
@@ -150,9 +152,9 @@ public:
 
     void clear_kernel_matrix();
 
-    DTYPE(OnlineSVR::param_set) get_param_set() const noexcept;
-
     DTYPE(OnlineSVR::param_set) &get_param_set() noexcept;
+
+    DTYPE(OnlineSVR::param_set) get_param_set() const noexcept;
 
     void set_param_set(const DTYPE(OnlineSVR::param_set) &param_set_);
 
@@ -200,12 +202,11 @@ public:
 
     t_gradient_data produce_residuals();
 
-    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::mat &new_w, const bpt::ptime &last_value_time,
-               const bool temp_learn = false, const std::deque<uint32_t> &forget_ixs = {});
+    void learn(const arma::mat &new_x, const arma::mat &new_y, const arma::mat &new_w, const bpt::ptime &last_time,
+               uint32_t temp_learn_start = std::numeric_limits<uint32_t>::max(), const std::deque<uint32_t> &forget_ixs = {});
 
-    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain,
-                     const mat_ptr &p_input_weights_, const bpt::ptime &time,
-                     const matrices_ptr &precalc_kernel_matrices = {});
+    void batch_train(const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_input_weights_, const bpt::ptime &time,
+                     const matrices_ptr &precalc_kernel_matrices = {}, const uint32_t temp_learn_start_ix = std::numeric_limits<uint32_t>::max());
 
     arma::mat &get_features();
 
@@ -215,23 +216,15 @@ public:
 
     static arma::vec calc_gammas(const arma::mat &Z, const arma::mat &L);
 
-    static double calc_weights(const arma::mat &K, const arma::mat &L, const arma::uvec &chunk_ixs, arma::mat &weights, const uint32_t iter_opt, const uint16_t iter_irwls,
-                               const double limes);
+    static double calc_weights(arma::mat &weights, const arma::mat &K, const arma::mat &L, const uint32_t iter_opt, const uint16_t iter_irwls);
 
     void calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, const uint16_t iter_irwls);
 
     static arma::mat instance_weight_matrix(const arma::uvec &ixs, const arma::mat &weights);
 
-    void update_all_weights();
-
     static arma::mat sst(const arma::mat &m, const t_feature_mechanics &fm, const arma::uvec &ixs);
 
-    static double score_weights(const uint32_t m, const uint32_t n, uint16_t layers, CRPTRd L_mean_mask, CRPTRd K, CRPTRd w,RPTR(double) tmp);
-
-    template<typename T> static inline arma::Mat<T> prepare_labels(const arma::Mat<T> &labels)
-    {
-        return labels * labels.n_elem - arma::sum(arma::vectorise(labels));
-    }
+    static double score_weights(uint32_t m, uint32_t n, uint32_t k, uint16_t layers, CRPTRd L_mean_mask, CRPTRd K, CRPTRd w, RPTR(double) tmp);
 
     void prepare_chunk(uint32_t i);
 

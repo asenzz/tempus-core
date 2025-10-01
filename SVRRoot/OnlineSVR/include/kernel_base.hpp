@@ -24,14 +24,14 @@ template<typename T> void kernel_from_distances(RPTR(T) K, CRPTR(T) Z, uint32_t 
 
 template<typename T> void d_kernel_from_distances(RPTR(T) d_K, CRPTR(T) d_Z, uint32_t m, uint32_t n, T gamma, T mean, T degree, cudaStream_t custream);
 
-template<typename T>
-class kernel_base {
+template<typename T> class kernel_base {
 protected:
     datamodel::SVRParameters &parameters;
 
     void wrapup(datamodel::OnlineSVR &model, uint32_t chunk_ix) const;
 
 public:
+    virtual void update(datamodel::OnlineSVR &model, uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y);
     datamodel::SVRParameters &get_parameters();
 
     datamodel::SVRParameters get_parameters() const;

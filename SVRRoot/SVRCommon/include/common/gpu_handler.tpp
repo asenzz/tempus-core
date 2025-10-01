@@ -154,9 +154,9 @@ void gpu_handler<ctx_per_gpu>::init_devices(const cl_device_type device_type)
 
 inline size_t get_max_allocatable_memory(const int device)
 {
-    cu_errchk(cudaSetDevice(device));
+    CU_ERRCHK(cudaSetDevice(device));
     size_t free_mem = 0, total_mem = 0;
-    cu_errchk(cudaMemGetInfo(&free_mem, &total_mem));
+    CU_ERRCHK(cudaMemGetInfo(&free_mem, &total_mem));
     return total_mem * .8;
 }
 
@@ -176,7 +176,7 @@ void gpu_handler<ctx_per_gpu>::init_devices()
     max_running_gpu_threads_number_ = 0;
     max_gpu_data_chunk_size_ = std::numeric_limits<DTYPE(max_gpu_data_chunk_size_) >::max();
     int gpu_devices_count;
-    cu_errchk(cudaGetDeviceCount(&gpu_devices_count));
+    CU_ERRCHK(cudaGetDeviceCount(&gpu_devices_count));
     for (DTYPE(gpu_devices_count) i = 0; i < gpu_devices_count; ++i) {
         const auto dev_mem = get_max_allocatable_memory(i);
         available_devices_.emplace_back(device_info{.id = (uint16_t) available_devices_.size(), .p_mx = std::make_shared<tbb::mutex>(), .total_mem = dev_mem});
@@ -218,14 +218,14 @@ constexpr auto comp_cuda_dev = [](const device_info &lhs, const device_info &rhs
     if (lhs.running_threads < rhs.running_threads) return true;
     if (lhs.running_threads > rhs.running_threads) return false;
 #if 0
-    cu_errchk(cudaSetDevice(lhs.id));
+    CU_ERRCHK(cudaSetDevice(lhs.id));
     size_t lhs_free_mem, lhs_total_mem;
-    cu_errchk(cudaMemGetInfo(&lhs_free_mem, &lhs_total_mem));
+    CU_ERRCHK(cudaMemGetInfo(&lhs_free_mem, &lhs_total_mem));
     if (!lhs_free_mem) return false;
 
-    cu_errchk(cudaSetDevice(rhs.id));
+    CU_ERRCHK(cudaSetDevice(rhs.id));
     size_t rhs_free_mem, rhs_total_mem;
-    cu_errchk(cudaMemGetInfo(&rhs_free_mem, &rhs_total_mem));
+    CU_ERRCHK(cudaMemGetInfo(&rhs_free_mem, &rhs_total_mem));
     if (!rhs_free_mem) return true;
 
     if (lhs_free_mem > rhs_free_mem) return true;

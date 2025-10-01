@@ -222,17 +222,21 @@ template<typename T> T sumabs(const arma::Mat<T> &m)
     return arma::accu(arma::abs(m));
 }
 
-template<typename T> arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
+// M to N find for Armadillo matrices because Aramdillo doesn't support M to N find - matrices have to be of equal size
+template<typename T> std::pair<arma::uvec, arma::uvec> find(const arma::Mat<T> &m1, const arma::Mat<T> &m2)
 {
-    arma::uvec r;
+    arma::uvec r, not_found;
     OMP_FOR_(m2.n_elem, ordered)
     for (const auto e2: m2) {
         const arma::uvec r_e = arma::find(m1 == e2);
-        if (r_e.empty()) continue;
+        if (r_e.empty()) {
+            not_found.insert_rows(not_found.n_rows, arma::uvec{e2});
+            continue;
+        }
 #pragma omp ordered
         r.insert_rows(r.n_rows, r_e);
     }
-    return r;
+    return std::make_pair(r, not_found);
 }
 
 template<typename T> arma::uvec find_ge(const arma::Mat<T> &m1, const arma::Mat<T> &m2)

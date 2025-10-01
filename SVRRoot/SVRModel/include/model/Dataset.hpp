@@ -150,7 +150,7 @@ public:
 
     uint32_t get_max_chunk_size() const;
 
-    uint16_t get_multistep() const;
+    uint16_t get_steps() const;
 
     void set_spectrum_levels(uint16_t spectrum_levels);
 

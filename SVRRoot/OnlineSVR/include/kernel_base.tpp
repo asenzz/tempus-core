@@ -12,6 +12,7 @@
 #include "calc_cache.hpp"
 #include "pprune.hpp"
 #include "SVRParametersService.hpp"
+#include "model/SVRParameters.hpp"
 #include "util/math_utils.hpp"
 
 namespace svr {
@@ -53,6 +54,10 @@ template<typename T> kernel_base<T>::kernel_base(datamodel::SVRParameters &p) : 
 
 template<typename T> kernel_base<T>::~kernel_base() = default;
 
+template<typename T> void kernel_base<T>::update(datamodel::OnlineSVR &model, const uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y)
+{
+    LOG4_TRACE("Ignoring update kernel " << parameters.get_kernel_type() << " with X " << common::present(x) << " and Y " << common::present(y));
+}
 template<typename T> void kernel_base<T>::d_distances(CRPTR(T) d_X, const uint32_t m, const uint32_t n, RPTR(T) d_Z, const cudaStream_t custream) const
 {
     d_distances(d_X, d_X, m, n, n, d_Z, custream);
@@ -148,14 +153,7 @@ template<typename T> void kernel_base<T>::init(datamodel::OnlineSVR &model, cons
 
     tbb::mutex chunk_preds_l;
     auto best_score = std::numeric_limits<double>::max();
-    arma::mat W_tune, W_train;
-#ifdef INSTANCE_WEIGHTS
-        if (p_input_weights && p_input_weights->n_elem) {
-            W_tune = weight_matrix(chunk_ixs_tune, *p_input_weights);
-            W_train = instance_weight_matrix(ixs[chunk_ix], *p_input_weights);
-        }
-#endif
-    cutuner cv(model.get_X(chunk_ix), model.get_Y(chunk_ix), W_train, parameters);
+    cutuner cv(model.get_X(chunk_ix), model.get_Y(chunk_ix), parameters);
     auto costF = [&](const double x[], double *const f) {
         const auto [score, gamma, min] = cv.phase1(x[0], x[1], x[2], x[3]);
         *f = score;

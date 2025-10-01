@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SVR_SVRPARAMETERS_HPP
+#define SVR_SVRPARAMETERS_HPP
 
 #include <boost/throw_exception.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -9,17 +10,26 @@
 #include "common/logging.hpp"
 #include "common/serialization.hpp"
 #include "model/Entity.hpp"
-#include "model/SVRParameters.hpp"
+
 
 //#define SMO_EPSILON 1e-3
 
 namespace svr {
+namespace kernel {
+class TemporalFusionTransformer;
+
+using TemporalFusionTransformer_ptr = std::shared_ptr<TemporalFusionTransformer>;
+}
+
 namespace datamodel {
+
 class OnlineSVR;
+
 using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
 
-typedef enum class kernel_type : int
-{
+using model_state_t = std::variant<datamodel::OnlineSVR_ptr, kernel::TemporalFusionTransformer_ptr>;
+
+typedef enum class kernel_type : int {
     LINEAR = 0,
     POLYNOMIAL = 1,
     RBF = 2,
@@ -49,8 +59,7 @@ class SVRParameters;
 
 using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
 
-struct less_SVRParameters_ptr
-{
+struct less_SVRParameters_ptr {
     bool operator()(const SVRParameters_ptr &lhs, const SVRParameters_ptr &rhs) const;
 };
 
@@ -79,8 +88,7 @@ constexpr uint32_t C_default_svrparam_lag_count = 80; // All parameters should h
 #endif
 const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);
 
-struct t_feature_mechanics
-{
+struct t_feature_mechanics {
     friend class boost::serialization::access;
 
     arma::u32_vec quantization; // Quantisation is per level - until computational resources allow for different quantisation per feature column
@@ -88,25 +96,17 @@ struct t_feature_mechanics
     std::deque<arma::uvec> trims;
     arma::u32_vec shifts;
 
+    arma::fvec steps; // Steps are same per level
+
     bool needs_tuning() const noexcept;
 
     std::stringstream save() const;
 
     static t_feature_mechanics load(const std::string &bin_data);
 
-    template<typename S> void save(const t_feature_mechanics &feature_mechanics, S &output_stream) const
-    {
-        boost::archive::binary_oarchive oa(output_stream);
-        oa << feature_mechanics;
-    }
+    template<typename S> void save(const t_feature_mechanics &feature_mechanics, S &output_stream) const;
 
-    template<class A> void serialize(A &ar, const unsigned version)
-    {
-        ar & quantization;
-        ar & stretches;
-        ar & trims;
-        ar & shifts;
-    }
+    template<class A> void serialize(A &ar, uint32_t version);
 
     bool operator ==(const t_feature_mechanics &o) const;
 };
@@ -115,16 +115,7 @@ using t_feature_mechanics_ptr = std::shared_ptr<t_feature_mechanics>;
 
 std::ostream &operator <<(std::ostream &s, const t_feature_mechanics &fm);
 
-
-struct t_delannoy1_path
-{
-    std::vector<uint16_t> coordinates;
-    uint32_t path_count = 0;
-    std::vector<double> weights;
-};
-
-class SVRParameters : public Entity
-{
+class SVRParameters : public Entity {
     bigint dataset_id = 0; /* TODO Replace with pointer to dataset id */
 
     std::string input_queue_table_name; // TODO Replace with pointer to Input Queue
@@ -141,33 +132,31 @@ class SVRParameters : public Entity
     double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio;
     std::set<uint16_t> adjacent_levels;
     e_kernel_type kernel_type = C_default_svrparam_kernel_type;
-    uint32_t lag_count = C_default_svrparam_lag_count;
+    uint32_t lag_count = C_default_svrparam_lag_count; // lag, decrement and adjacent levels better be the same across all models in the ensemble for the time being (not tested otherwise)
 
     t_feature_mechanics feature_mechanics; // TODO Save to DB and init properly
 public:
-    explicit SVRParameters() : Entity(0)
-    {
-    }
+    explicit SVRParameters();
 
     SVRParameters(
-        const bigint id,
-        const bigint dataset_id,
+        bigint id,
+        bigint dataset_id,
         const std::string &input_queue_table_name,
         const std::string &input_queue_column_name,
-        const uint16_t level_ct,
-        const uint16_t decon_level,
-        const uint16_t step,
-        const uint16_t chunk_ix = C_default_svrparam_chunk_ix,
-        const uint16_t grad_level = C_default_svrparam_grad_level,
-        const double svr_C = C_default_svrparam_svr_cost,
-        const double svr_epsilon = C_default_svrparam_svr_epsilon,
-        const double svr_kernel_param = C_default_svrparam_kernel_param1,
-        const double svr_kernel_param2 = C_default_svrparam_kernel_param2,
-        const double svr_kernel_param3 = C_default_svrparam_kernel_param_tau,
-        const uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
-        const double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
+        uint16_t level_ct,
+        uint16_t decon_level,
+        uint16_t step,
+        uint16_t chunk_ix = C_default_svrparam_chunk_ix,
+        uint16_t grad_level = C_default_svrparam_grad_level,
+        double svr_C = C_default_svrparam_svr_cost,
+        double svr_epsilon = C_default_svrparam_svr_epsilon,
+        double svr_kernel_param = C_default_svrparam_kernel_param1,
+        double svr_kernel_param2 = C_default_svrparam_kernel_param2,
+        double svr_kernel_param3 = C_default_svrparam_kernel_param_tau,
+        uint32_t svr_decremental_distance = C_default_svrparam_decrement_distance,
+        double svr_adjacent_levels_ratio = C_default_svrparam_adjacent_levels_ratio,
         const e_kernel_type kernel_type = C_default_svrparam_kernel_type,
-        const uint32_t lag_count = C_default_svrparam_lag_count,
+        uint32_t lag_count = C_default_svrparam_lag_count,
         const std::set<uint16_t> &adjacent_levels = {},
         const t_feature_mechanics &feature_mechanics = {});
 
@@ -185,7 +174,7 @@ public:
 
     bigint get_dataset_id() const;
 
-    void set_dataset_id(const bigint &value);
+    void set_dataset_id(bigint value);
 
     std::string get_input_queue_column_name() const;
 
@@ -197,37 +186,37 @@ public:
 
     uint16_t get_level_count() const noexcept;
 
-    void set_level_count(const uint16_t levels) noexcept;
+    void set_level_count(uint16_t levels) noexcept;
 
     uint16_t get_decon_level() const noexcept;
 
-    void set_decon_level(const uint16_t _decon_level) noexcept;
+    void set_decon_level(uint16_t _decon_level) noexcept;
 
     uint16_t get_step() const noexcept;
 
-    void set_step(const uint16_t _step) noexcept;
+    void set_step(uint16_t _step) noexcept;
 
     uint16_t get_chunk_index() const noexcept;
 
-    void set_chunk_index(const uint16_t _chunk_ix) noexcept;
+    void set_chunk_index(uint16_t _chunk_ix) noexcept;
 
     uint16_t get_grad_level() const noexcept;
 
-    void set_grad_level(const uint16_t _grad_level) noexcept;
+    void set_grad_level(uint16_t _grad_level) noexcept;
 
     void decrement_gradient() noexcept;
 
     double get_svr_epsilon() const noexcept;
 
-    void set_svr_epsilon(const double _svr_epsilon) noexcept;
+    void set_svr_epsilon(double _svr_epsilon) noexcept;
 
     double get_svr_kernel_param() const noexcept;
 
-    void set_svr_kernel_param(const double _svr_kernel_param) noexcept;
+    void set_svr_kernel_param(double _svr_kernel_param) noexcept;
 
     double get_svr_kernel_param2() const noexcept;
 
-    void set_svr_kernel_param2(const double _svr_kernel_param2) noexcept;
+    void set_svr_kernel_param2(double _svr_kernel_param2) noexcept;
 
     PROPERTY(double, svr_C, C_default_svrparam_svr_cost);
 
@@ -246,7 +235,7 @@ public:
     // Only head param (chunk 0, grad 0, manifold 0) takes effect
     double get_svr_adjacent_levels_ratio() const noexcept;
 
-    void set_svr_adjacent_levels_ratio(const double _svr_adjacent_levels_ratio) noexcept;
+    void set_svr_adjacent_levels_ratio(double _svr_adjacent_levels_ratio) noexcept;
 
     std::set<uint16_t> &get_adjacent_levels();
 
@@ -258,18 +247,18 @@ public:
 
     void set_kernel_type(const e_kernel_type _kernel_type) noexcept;
 
-    PROPERTY(OnlineSVR_ptr, manifold);
+    PROPERTY(model_state_t, manifold);
 
     // Lag count across all models should be the same with the current infrastructure inplace // Only head param (chunk 0, grad 0, manifold 0) takes effect
     uint32_t get_lag_count() const noexcept;
 
-    void set_lag_count(const uint32_t _lag_count) noexcept;
+    void set_lag_count(uint32_t _lag_count) noexcept;
 
     t_feature_mechanics &get_feature_mechanics();
 
     t_feature_mechanics get_feature_mechanics() const;
 
-    void set_feature_mechanics(const t_feature_mechanics &f);
+    t_feature_mechanics &set_feature_mechanics(const t_feature_mechanics &f);
 
     std::string to_string() const override;
 
@@ -277,7 +266,7 @@ public:
 
     bool from_sql_string(const std::string &sql_string);
 
-    PROPERTY(std::string, tft_model)
+    PROPERTY(std::string, model_blob)
 
     PROPERTY(uint32_t, tft_n_classes, 0)
 };
@@ -285,3 +274,7 @@ public:
 std::ostream &operator<<(std::ostream &os, const SVRParameters &e);
 }
 }
+
+#include "SVRParameters.tpp"
+
+#endif // SVR_SVRPARAMETERS_HPP

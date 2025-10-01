@@ -38,7 +38,6 @@ public:
     {}
 
     bool exists(const datamodel::DQScalingFactor_ptr &dq_scaling_factor) const;
-    // bool exists_by_dataset_id(bigint dataset_id); // TODO Implement as needed!
 
     int save(const datamodel::DQScalingFactor_ptr &p_dq_scaling_factor) const;
 
@@ -59,6 +58,7 @@ public:
 
     template<typename T> static datamodel::dq_scaling_factor_container_t calculate(bigint model_id, const datamodel::SVRParameters &param, const arma::Mat<T> &features_t, const arma::Mat<T> &labels);
     template<typename T> static void scale_features_I(uint16_t chunk_ix, uint16_t grad_level, uint16_t step, uint16_t lag, const datamodel::dq_scaling_factor_container_t &sf, arma::Mat<T> &features_t);
+    template<typename T> static arma::Mat<T> scale_features(uint16_t chunk_ix, uint16_t grad_level, uint16_t step, uint16_t lag, const datamodel::dq_scaling_factor_container_t &sf, arma::Mat<T> features_t);
     static void scale_features_I(uint16_t chunk_ix, const datamodel::OnlineSVR &svr_model, arma::mat &features_t);
     static void scale_labels_I(uint16_t chunk, uint16_t gradient, uint16_t step, uint16_t level, const datamodel::dq_scaling_factor_container_t &sf, arma::mat &labels);
     static double scale_label(const datamodel::DQScalingFactor &sf, double &label);

@@ -22,7 +22,7 @@ void copy_submat(CRPTRd in, RPTR(double) out, const uint32_t ldin, const uint32_
                  const uint32_t in_end_n, const uint32_t ldout, cudaMemcpyKind kind, const cudaStream_t stm)
 {
 #if 1
-    cu_errchk(cudaMemcpy2DAsync(
+    CU_ERRCHK(cudaMemcpy2DAsync(
             out, ldout * sizeof(double), in + in_start_m + in_start_n * ldin, ldin * sizeof(double), (in_end_m - in_start_m) * sizeof(double), in_end_n - in_start_n, kind, stm));
 #else
     const auto out_m = in_end_m - in_start_m;
@@ -35,8 +35,8 @@ void copy_submat(CRPTRd in, RPTR(double) out, const uint32_t ldin, const uint32_
 
 void cusyndestroy(const cudaStream_t strm)
 {
-    cu_errchk(cudaStreamSynchronize(strm));
-    cu_errchk(cudaStreamDestroy(strm));
+    CU_ERRCHK(cudaStreamSynchronize(strm));
+    CU_ERRCHK(cudaStreamDestroy(strm));
 }
 
 NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custream)
@@ -44,7 +44,7 @@ NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custre
     NppStreamContext res;
 #ifdef HETEROGENOUS_GPU_HW
     cudaDeviceProp prop;
-    cu_errchk(cudaGetDeviceProperties(&prop, gpuid));
+    CU_ERRCHK(cudaGetDeviceProperties(&prop, gpuid));
     res.nMultiProcessorCount = prop.multiProcessorCount;
     res.nMaxThreadsPerMultiProcessor = prop.maxThreadsPerMultiProcessor;
     res.nMaxThreadsPerBlock = prop.maxThreadsPerBlock;
@@ -54,7 +54,7 @@ NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custre
 #else
     static auto prop = [gpuid]() {
         cudaDeviceProp prop;
-        cu_errchk(cudaGetDeviceProperties(&prop, gpuid));
+        CU_ERRCHK(cudaGetDeviceProperties(&prop, gpuid));
         return prop;
     } ();
     static const NppStreamContext C_npp_ctx {nullptr /* CUDA stream */, 0 /* GPU device ID */,
@@ -68,7 +68,7 @@ NppStreamContext get_npp_context(const unsigned gpuid, const cudaStream_t custre
 #endif
     res.hStream = custream;
     res.nCudaDeviceId = gpuid;
-    cu_errchk(cudaStreamGetFlags(custream, &res.nStreamFlags));
+    CU_ERRCHK(cudaStreamGetFlags(custream, &res.nStreamFlags));
     return res;
 }
 

@@ -235,7 +235,7 @@ uint16_t Dataset::get_gradient_count() const
 uint32_t Dataset::get_max_chunk_size() const
 { return max_chunk_size_; };
 
-uint16_t Dataset::get_multistep() const
+uint16_t Dataset::get_steps() const
 { return multistep_; };
 
 void Dataset::set_gradients(const uint16_t grads)
@@ -493,8 +493,7 @@ void Dataset::set_ensembles(const std::deque<datamodel::Ensemble_ptr> &new_ensem
 {
     const auto prev_size = ensembles_.size();
 
-#pragma omp parallel ADJ_THREADS(ensembles_.size() + new_ensembles.size())
-#pragma omp single
+OMP_PAR(ensembles_.size() + new_ensembles.size())
     {
     	OMP_TASKLOOP_1(untied)
         for (const auto &e: new_ensembles) {
@@ -545,8 +544,7 @@ datamodel::IQScalingFactor_ptr Dataset::get_iq_scaling_factor(const std::string 
 void Dataset::set_iq_scaling_factors(const std::deque<datamodel::IQScalingFactor_ptr> &new_iq_scaling_factors, const bool overwrite)
 {
     const auto prev_size = iq_scaling_factors_.size();
-#pragma omp parallel ADJ_THREADS(new_iq_scaling_factors.size() * prev_size)
-#pragma omp single
+OMP_PAR(new_iq_scaling_factors.size() * prev_size)
     {
         tbb::mutex iq_scaling_factors_l;
         OMP_TASKLOOP_(new_iq_scaling_factors.size(),)
@@ -623,8 +621,7 @@ uint32_t Dataset::get_max_residuals_length() const
     if (ensembles_.empty()) LOG4_THROW("EVMD needs ensembles initialized to calculate residuals count.");
 
     uint32_t result = 0;
-#pragma omp parallel ADJ_THREADS(2 * ensembles_.size())
-#pragma omp single
+OMP_PAR(2 * ensembles_.size())
     {
         tbb::mutex max_residuals_l;
         OMP_TASKLOOP_(ensembles_.size(), untied)

@@ -103,10 +103,6 @@ template<typename T> std::string to_tsv(const std::vector<T> &v, const char sep 
 
 template<typename T> std::string to_string_with_precision(const T v, const size_t digits_ct = std::numeric_limits<T>::max_digits10);
 
-template<typename T> std::string to_utf8(const std::basic_string<T, std::char_traits<T>, std::allocator<T> > &source);
-
-template<typename T> void from_utf8(const std::string &source, std::basic_string<T, std::char_traits<T>, std::allocator<T> > &result);
-
 template<typename T, typename L> inline std::string to_string(const std::set<std::shared_ptr<T>, L> &v);
 
 template<typename T, typename L> inline std::string to_string(const std::set<T, L> &v);

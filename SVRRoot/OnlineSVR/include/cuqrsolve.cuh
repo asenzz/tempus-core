@@ -15,7 +15,7 @@ class score_weights
 {
     static constexpr uint16_t streams_gpu = 4;
     const uint16_t n_gpus, layers;
-    const uint32_t m, n, mn;
+    const uint32_t m, n, k, mn, nk;
     const uint64_t L_size, W_size;
 
     struct dev_ctx
@@ -34,7 +34,7 @@ class score_weights
     std::deque<dev_ctx> K_rhs_dev;
 
 public:
-    score_weights(const arma::mat &K, const arma::mat &mean_L, uint32_t m, uint32_t n, uint32_t mn, uint16_t layers);
+    score_weights(const arma::mat &K, const arma::mat &mean_L, uint32_t m, uint32_t n, uint32_t k, uint32_t mn, uint16_t layers);
 
     ~score_weights();
 
@@ -138,10 +138,10 @@ __global__ void G_prepare_labels(RPTR(double) d_labels, const double L_sum, cons
 void solve_irwls(const arma::mat &K, const arma::mat &rhs, arma::mat &solved, const uint16_t iters, uint16_t layers);
 
 double solve_hybrid(
-    const double *const j_K_epsco, const uint32_t n, const uint32_t train_len, double *const j_solved, const magma_queue_t ma_queue,
-    const uint16_t irwls_iters, const double *const j_train_labels, const size_t train_n_size, double *const j_work, const cudaStream_t custream,
-    const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t train_len_n, double *const d_best_weights,
-    const uint32_t K_train_len, double *j_K_epsco_reweighted, const double iters_mul);
+        const double *const j_K_epsco, const uint32_t n, const uint32_t m, double *const j_solved, const magma_queue_t ma_queue,
+        const uint16_t irwls_iters, const double *const j_train_labels, const size_t mn_size, double *const j_work, const cudaStream_t custream,
+        const cublasHandle_t cublas_H, const double *const j_K_tune, const double labels_factor, const uint32_t mn, double *const d_best_weights,
+        const uint32_t mk, double *j_K_epsco_reweighted, const double iters_mul);
 
 /* CuSolver */
 

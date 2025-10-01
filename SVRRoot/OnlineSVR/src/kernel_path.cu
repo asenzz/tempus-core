@@ -105,11 +105,11 @@ template<typename PATH_KERNEL_WRAPPER> void cu_path_caller(
     LOG4_BEGIN();
     float *powbuf;
     const auto lag2 = lag * 2;
-    cu_errchk(cudaMallocAsync(&powbuf, lag2 * sizeof(float), custream));
+    CU_ERRCHK(cudaMallocAsync(&powbuf, lag2 * sizeof(float), custream));
 #if 1
     size_t free_mem, total_mem;
-    cu_errchk(cudaStreamSynchronize(custream));
-    cu_errchk(cudaMemGetInfo(&free_mem, &total_mem));
+    CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaMemGetInfo(&free_mem, &total_mem));
     free_mem /= C_free_mem_divisor;
 #else // faster
     const auto free_mem = common::gpu_handler<4>::get().get_max_gpu_data_chunk_size() / C_free_mem_divisor;
@@ -125,16 +125,16 @@ template<typename PATH_KERNEL_WRAPPER> void cu_path_caller(
         << ", chunk size " << chunk_size << ", lag2 " << lag2 << ", X cols " << X_cols << ", Xy cols " << Xy_cols << ", dim " << dim << ", num memory chunks " << num_mem_chunks <<
         ", tau " << tau);
     double *dpbuf;
-    cu_errchk(cudaMallocAsync(&dpbuf, chunk_size, custream));
-    cu_errchk(cudaMemsetAsync(Kz, 0, X_cols * Xy_cols * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync(&dpbuf, chunk_size, custream));
+    CU_ERRCHK(cudaMemsetAsync(Kz, 0, X_cols * Xy_cols * sizeof(double), custream));
     for (DTYPE(num_chunks) i = 0; i < num_chunks; ++i) {
         const auto starty = i * max_chunky_len;
         const auto endy = std::min<uint32_t>(starty + max_chunky_len, Xy_cols);
         const auto this_chunky_len = endy - starty;
         path_fun(this_chunky_len, starty, dpbuf, powbuf);
     }
-    cu_errchk(cudaFreeAsync(dpbuf, custream));
-    cu_errchk(cudaFreeAsync(powbuf, custream));
+    CU_ERRCHK(cudaFreeAsync(dpbuf, custream));
+    CU_ERRCHK(cudaFreeAsync(powbuf, custream));
     LOG4_END();
 }
 
@@ -173,10 +173,10 @@ template<> void kernel_path<T>::distances_xy(
     const auto d_X = cumallocopy(X, custream, X_cols * rows);
     const auto d_Xy = X == Xy ? d_X : cumallocopy(Xy, custream, Xy_cols * rows);
     double *d_Z;
-    cu_errchk(cudaMallocAsync(&d_Z, Z_len * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_Z, Z_len * sizeof(double), custream));
     cu_distances_xy(X_cols, Xy_cols, lag, rows / lag, tau, H, D, V, d_X, d_Xy, d_Z, custream);
-    cu_errchk(cudaFreeAsync(d_X, custream));
-    if (X != Xy) cu_errchk(cudaFreeAsync(d_Xy, custream));
+    CU_ERRCHK(cudaFreeAsync(d_X, custream));
+    if (X != Xy) CU_ERRCHK(cudaFreeAsync(d_Xy, custream));
     cufreecopy(Z, d_Z, custream, Z_len);
     cusyndestroy(custream);
 }
@@ -190,10 +190,10 @@ template<> void kernel_path<T>::kernel_xy(
     const auto d_X = cumallocopy(X, custream, X_cols * rows);
     const auto d_Xy = X == Xy ? d_X : cumallocopy(Xy, custream, Xy_cols * rows);
     double *d_K;
-    cu_errchk(cudaMallocAsync(&d_K, K_len * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync(&d_K, K_len * sizeof(double), custream));
     cu_kernel_xy(X_cols, Xy_cols, lag, rows / lag, gamma, mean, lambda, tau, H, D, V, d_X, d_Xy, d_K, custream);
-    cu_errchk(cudaFreeAsync(d_X, custream));
-    if (X != Xy) cu_errchk(cudaFreeAsync(d_Xy, custream));
+    CU_ERRCHK(cudaFreeAsync(d_X, custream));
+    if (X != Xy) CU_ERRCHK(cudaFreeAsync(d_Xy, custream));
     cufreecopy(K, d_K, custream, K_len);
     cusyndestroy(custream);
 }

@@ -36,7 +36,7 @@ std::string get_lgbm_core_parameters(const uint16_t gpu_id)
     /* device_type=cuda is buggy and crashes LightGBM, test and enable the following line when LGBM is fixed
     s << "deterministic=true lambda_l1=0.1 lambda_l2=1.0 gpu_device_id=" << gpu_id << " device_type=cuda num_gpu=" << common::gpu_handler_1::get().get_gpu_devices_count();
     */
-#ifdef INSTANCE_WEIGHTS
+#if 0
     s << "weight_column=0"
 #endif
     return s.str();
@@ -56,14 +56,14 @@ template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X /* predict f
     BoosterHandle booster;
     int num_iterations;
     {
-        std::stringstream s(parameters.get_tft_model());
+        std::stringstream s(parameters.get_model_blob());
         std::stringstream decompressed_stream;
         boost::iostreams::filtering_istream in;
         in.push(boost::iostreams::bzip2_decompressor());
         in.push(s);
         decompressed_stream << in.rdbuf();
         decompressed_stream.flush();
-        lg_errchk(LGBM_BoosterLoadModelFromString(decompressed_stream.str().data(), &num_iterations, &booster))
+        LGBM_ERRCHK(LGBM_BoosterLoadModelFromString(decompressed_stream.str().data(), &num_iterations, &booster))
     }
     arma::fmat manifold_features_t(n_manifold_features, n_samples, ARMA_DEFAULT_FILL);
     OMP_FOR_(n_samples, collapse(2) SSIMD)
@@ -75,7 +75,7 @@ template<> arma::Mat<T> kernel_gbm<T>::kernel(const arma::Mat<T> &X /* predict f
     int64_t out_len;
     common::gpu_context ctx;
     const auto gbm_parameters = get_lgbm_core_parameters(ctx.phy_id());
-    lg_errchk(LGBM_BoosterPredictForMat(booster, manifold_features_t.mem, C_API_DTYPE_FLOAT32, n_samples, n_manifold_features, 1, C_API_PREDICT_NORMAL, 0, 0, gbm_parameters.c_str(), &out_len, res.memptr()));
+    LGBM_ERRCHK(LGBM_BoosterPredictForMat(booster, manifold_features_t.mem, C_API_DTYPE_FLOAT32, n_samples, n_manifold_features, 1, C_API_PREDICT_NORMAL, 0, 0, gbm_parameters.c_str(), &out_len, res.memptr()));
     LOG4_TRACE("Predicted " << out_len << ", labels " << common::present(res));
     LGBM_BoosterFree(booster);
     assert(parameters.get_svr_kernel_param() != 0);
@@ -113,33 +113,33 @@ template<> void kernel_gbm<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t
     parameters.set_svr_kernel_param(sf);
     parameters.set_min_Z(dc);
 
-    lg_errchk(LGBM_SetMaxThreads(C_n_cpu));
+    LGBM_ERRCHK(LGBM_SetMaxThreads(C_n_cpu));
     DatasetHandle train_dataset;
     {
         const auto gbm_dataset_parameters = get_lgbm_dataset_parameters();
-        lg_errchk(LGBM_DatasetCreateFromMat(manifold_features_t.mem, C_API_DTYPE_FLOAT32,n_samples_2, n_manifold_features, 1, // is_row_major = 1 (row-major order)
+        LGBM_ERRCHK(LGBM_DatasetCreateFromMat(manifold_features_t.mem, C_API_DTYPE_FLOAT32,n_samples_2, n_manifold_features, 1, // is_row_major = 1 (row-major order)
             gbm_dataset_parameters.c_str(), nullptr, &train_dataset));
     }
 
-    lg_errchk(LGBM_DatasetSetField(train_dataset, "label", manifold_labels.mem, n_samples_2, C_API_DTYPE_FLOAT32));
+    LGBM_ERRCHK(LGBM_DatasetSetField(train_dataset, "label", manifold_labels.mem, n_samples_2, C_API_DTYPE_FLOAT32));
 
-    lg_errchk(LGBM_RegisterLogCallback(lgbm_log));
+    LGBM_ERRCHK(LGBM_RegisterLogCallback(lgbm_log));
 
     BoosterHandle booster;
     common::gpu_context ctx;
     const auto gbm_parameters = get_lgbm_core_parameters(ctx.phy_id());
-    lg_errchk(LGBM_BoosterCreate(train_dataset, gbm_parameters.c_str(), &booster));
+    LGBM_ERRCHK(LGBM_BoosterCreate(train_dataset, gbm_parameters.c_str(), &booster));
     int train_finished = 0;
     auto iter = PROPS.get_k_epochs() + 1;
     assert(iter);
-    while (train_finished != 1 && --iter) lg_errchk(LGBM_BoosterUpdateOneIter(booster, &train_finished));
+    while (train_finished != 1 && --iter) LGBM_ERRCHK(LGBM_BoosterUpdateOneIter(booster, &train_finished));
 
     int64_t model_size = 0;
     LGBM_BoosterSaveModelToString(booster, 0, 0, C_API_FEATURE_IMPORTANCE_SPLIT, 0, &model_size, nullptr);
     std::vector<char> model_str(model_size);
-    lg_errchk(LGBM_BoosterSaveModelToString(booster, 0, 0, C_API_FEATURE_IMPORTANCE_SPLIT, model_size, &model_size, model_str.data()));
-    lg_errchk(LGBM_BoosterFree(booster));
-    lg_errchk(LGBM_DatasetFree(train_dataset));
+    LGBM_ERRCHK(LGBM_BoosterSaveModelToString(booster, 0, 0, C_API_FEATURE_IMPORTANCE_SPLIT, model_size, &model_size, model_str.data()));
+    LGBM_ERRCHK(LGBM_BoosterFree(booster));
+    LGBM_ERRCHK(LGBM_DatasetFree(train_dataset));
 
     std::ostringstream compressed_stream;
     boost::iostreams::filtering_ostream out;
@@ -148,7 +148,7 @@ template<> void kernel_gbm<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t
     out.write(model_str.data(), model_size);
     boost::iostreams::close(out);
     compressed_stream.flush();
-    parameters.set_tft_model(compressed_stream.str());
+    parameters.set_model_blob(compressed_stream.str());
     parameters.set_svr_kernel_param(1); // Setting SVR Kernel param to 1 to indicate that the kernel parameters are initialized
     LOG4_DEBUG("Saved LighGBM model with size " << model_size << " bytes to parameters " << parameters);
     kernel_base::wrapup(svrmod, chunk_ix);
@@ -169,6 +169,10 @@ template<> void kernel_gbm<T>::d_kernel(CRPTR(T) d_Z, const uint32_t m, RPTR(T) 
 template<> void kernel_gbm<T>::d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const uint32_t m, const uint32_t n_X, const uint32_t n_Xy, RPTR(T) d_Z, const cudaStream_t custream) const
 {
     LOG4_THROW("Not implemented.");
+}
+template<> void kernel_gbm<T>::update(datamodel::OnlineSVR &svrmod, const uint32_t chunk_ix, const arma::Mat<T> &new_x, const arma::Mat<T> &new_y)
+{
+    LOG4_DEBUG("Not implemented. This kernel does not support update.");
 }
 } // kernel
 } // svr

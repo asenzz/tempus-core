@@ -25,6 +25,10 @@ template<> kernel_deep_path<T>::kernel_deep_path(kernel_base<T> &k) : kernel_bas
 {
 }
 
+template<> void kernel_deep_path<T>::update(datamodel::OnlineSVR &model, const uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y)
+{
+    std::get<datamodel::OnlineSVR_ptr>(parameters.get_manifold())->learn(x, y, arma::ones(arma::size(y)), bpt::second_clock::local_time(), std::numeric_limits<uint32_t>::max());
+}
 
 /* L diff matrix format:
  * L0 - L0, L0 - L1, L0 - L2, ..., L0 - Lm
@@ -41,7 +45,7 @@ template<> void kernel_deep_path<T>::init(datamodel::OnlineSVR &model, const uin
     const auto &labels = model.get_Y(chunk_ix);
     const auto last_time = model.get_last_trained_time();
 
-    if (parameters.get_manifold()) LOG4_WARN("Manifold already initialized!");
+    if (std::get<datamodel::OnlineSVR_ptr>(parameters.get_manifold())) LOG4_WARN("Manifold already initialized!");
 
     const auto n_samples = features_t.n_cols;
     const auto n_samples_2 = n_samples * n_samples;
@@ -94,7 +98,7 @@ template<> void kernel_deep_path<T>::init(datamodel::OnlineSVR &model, const uin
 
 template<> arma::Mat<T> kernel_deep_path<T>::kernel(const arma::Mat<T> &X, const arma::Mat<T> &Xy) const
 {
-    auto p_manifold = parameters.get_manifold();
+    auto p_manifold = std::get<datamodel::OnlineSVR_ptr>(parameters.get_manifold());
     assert(p_manifold);
     // X and Xy are transposed therefore the acrobatics below
     arma::mat Ky(X.n_cols, Xy.n_cols);
@@ -147,8 +151,7 @@ arma::mat OnlineMIMOSVR::manifold_predict(arma::mat x_predict_t, const boost::po
 #endif
     const auto predict_labels = train_label_chunks.front().rows(predict_ixs);
     const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
-#pragma omp parallel ADJ_THREADS(std::max<int32_t>(1, common::gpu_handler<4>::get().get_max_gpu_threads() - int32_t(p_manifold->get_num_chunks())))
-#pragma omp single
+OMP_PAR(std::max<int32_t>(1, common::gpu_handler<4>::get().get_max_gpu_threads() - int32_t(p_manifold->get_num_chunks())))
     {
         OMP_TASKLOOP_(x_predict_t.n_cols,)
         for (uint32_t i_p = 0; i_p < x_predict_t.n_cols; ++i_p) {

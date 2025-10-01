@@ -13,7 +13,6 @@
 #endif
 // #define LAST_KNOWN_LABEL
 #define EMO_DIFF
-// #define INSTANCE_WEIGHTS // TODO Test should it multiply labels too?
 
 // #define VMD_ONLY
 #define EMD_ONLY

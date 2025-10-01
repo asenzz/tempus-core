@@ -145,30 +145,30 @@ arma::mat aux_train_predict(const datamodel::SVRParameters &param, const arma::m
     business::DQScalingFactorService::scale_labels_I(*p_labels_sf, train_labels);
     business::DQScalingFactorService::scale_features_I(param.get_chunk_index(), param.get_grad_level(), param.get_step(), param.get_lag_count(), features_sf, predict_features_t);
 #endif
-    lg_errchk(LGBM_SetMaxThreads(C_n_cpu));
+    LGBM_ERRCHK(LGBM_SetMaxThreads(C_n_cpu));
     DatasetHandle train_dataset;
     const auto lgbm_dataset_parameters = kernel::get_lgbm_dataset_parameters();
-    lg_errchk(LGBM_DatasetCreateFromMat(train_features_t.mem, C_API_DTYPE_FLOAT32, train_features_t.n_cols, train_features_t.n_rows, 1, // is_row_major = 1 (row-major order)
+    LGBM_ERRCHK(LGBM_DatasetCreateFromMat(train_features_t.mem, C_API_DTYPE_FLOAT32, train_features_t.n_cols, train_features_t.n_rows, 1, // is_row_major = 1 (row-major order)
         lgbm_dataset_parameters.c_str(), nullptr, &train_dataset));
 
-    lg_errchk(LGBM_DatasetSetField(train_dataset, "label", train_labels.mem, train_labels.n_rows, C_API_DTYPE_FLOAT32));
+    LGBM_ERRCHK(LGBM_DatasetSetField(train_dataset, "label", train_labels.mem, train_labels.n_rows, C_API_DTYPE_FLOAT32));
 
     BoosterHandle booster;
     const std::string lgbm_core_parameters = common::formatter() << "objective=regression tree_learner=data seed=123 learning_rate=" << PROPS.get_k_learn_rate() << " num_iterations=" <<
                                              PROPS.get_k_epochs() << " early_stopping_round=200 metric=l2 force_col_wise=true num_threads=" << C_n_cpu << " device_type=gpu " <<
                                              lgbm_dataset_parameters;
-    lg_errchk(LGBM_BoosterCreate(train_dataset, lgbm_core_parameters.c_str(), &booster));
+    LGBM_ERRCHK(LGBM_BoosterCreate(train_dataset, lgbm_core_parameters.c_str(), &booster));
     int train_complete = 0;
     auto iter = PROPS.get_k_epochs() + 1;
     assert(iter);
-    while (train_complete != 1 && --iter) lg_errchk(LGBM_BoosterUpdateOneIter(booster, &train_complete));
+    while (train_complete != 1 && --iter) LGBM_ERRCHK(LGBM_BoosterUpdateOneIter(booster, &train_complete));
     arma::vec res(predict_features_t.n_cols, ARMA_DEFAULT_FILL);
     int64_t out_len;
-    lg_errchk(
+    LGBM_ERRCHK(
         LGBM_BoosterPredictForMat(booster, predict_features_t.mem, C_API_DTYPE_FLOAT32, predict_features_t.n_cols, predict_features_t.n_rows, 1, C_API_PREDICT_NORMAL, 0, 0,
             lgbm_core_parameters.c_str(), &out_len, res.memptr()));
-    lg_errchk(LGBM_BoosterFree(booster));
-    lg_errchk(LGBM_DatasetFree(train_dataset));
+    LGBM_ERRCHK(LGBM_BoosterFree(booster));
+    LGBM_ERRCHK(LGBM_DatasetFree(train_dataset));
 #ifdef SCALE_REF
     business::DQScalingFactorService::unscale_labels_I(*p_labels_sf, res);
 #endif
@@ -205,7 +205,7 @@ ModelService::validate(const uint32_t start_ix, const datamodel::Dataset &datase
     predict_lgbm += last_knowns.rows(start_ix, ix_fini);
 
     LOG4_DEBUG("Batch predicted " << batch_predicted.size() << " values, parameters " << *param_pair.first);
-    const auto stepping = model.get_gradient()->get_dataset()->get_multistep();
+    const auto stepping = model.get_gradient()->get_dataset()->get_steps();
     arma::vec predicted_batch(num_preds), predicted_online(num_preds), actual = arma::mean(labels.rows(start_ix, ix_fini), 1), lastknown = last_knowns.rows(start_ix, ix_fini);
 #ifdef EMO_DIFF
     OMP_FOR_i(actual.n_cols) actual.col(i) += lastknown; // common::sexp<double>(actual.col(i)) + lastknown;
@@ -514,20 +514,14 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     };
 
     const auto [p_labels, p_last_knowns, p_label_times] = dataset.get_calc_cache().get_labels(
-        p_params->get_input_queue_column_name(), model.get_step(), labels_range, labels_aux, dataset.get_max_lookback_time_gap(), level, dataset.get_multistep(),
+        p_params->get_input_queue_column_name(), model.get_step(), labels_range, labels_aux, dataset.get_max_lookback_time_gap(), level, dataset.get_steps(),
         aux_resolution, model.get_last_modeled_value_time(), main_resolution, p_params->get_lag_count());
 
     auto p_features = dataset.get_calc_cache().get_features(
         *p_labels, ensemble.get_aux_decon_queues(), *p_params, aux_resolution, main_resolution, dataset.get_max_lookback_time_gap(), *p_label_times);
     model.get_gradient()->set_param_set({p_params}); // Reset parameters after tuning of feature mechanics
     assert(p_labels->n_rows == p_features->n_rows);
-    const auto p_weights =
-#ifdef INSTANCE_WEIGHTS
-            dataset.get_calc_cache().get_weights(dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), model.get_step(), dataset.get_multistep(), main_resolution);
-            assert(p_labels->n_rows == p_weights->n_rows);
-#else
-            ptr<arma::mat>();
-#endif
+    const auto p_weights = ptr<arma::mat>(p_labels->n_rows, 1, arma::fill::ones);
 
     return {p_features, p_labels, p_last_knowns, p_weights, p_label_times};
 }
@@ -1052,7 +1046,7 @@ void ModelService::predict(
     const auto lk = get_last_knowns(ensemble, model.get_decon_level(), predict_features.times, resolution);
     OMP_FOR_i(prediction.n_cols) prediction.col(i) += lk; // common::sexp<double>(prediction.col(i)) + lk;
 #endif
-    const auto multistep = model.get_gradients().front()->get_dataset()->get_multistep();
+    const auto multistep = model.get_gradients().front()->get_dataset()->get_steps();
     if (multistep > 1) prediction /= multistep;
     const tbb::mutex::scoped_lock lck(insemx);
     datamodel::DataRow::insert_rows(out, prediction, predict_features.times, model.get_decon_level(), ensemble.get_level_ct(), true);
@@ -1083,7 +1077,7 @@ void ModelService::predict(
     const auto lk = get_last_knowns(ensemble, model.get_decon_level(), predict_features.times, resolution);
     OMP_FOR_i(prediction.n_cols) prediction.col(i) += lk; // common::sexp<double>(prediction.col(i)) + lk;
 #endif
-    const auto multistep = model.get_gradients().front()->get_dataset()->get_multistep();
+    const auto multistep = model.get_gradients().front()->get_dataset()->get_steps();
     if (multistep > 1) prediction /= multistep;
     const tbb::mutex::scoped_lock lck(insemx);
     datamodel::DataRow::insert_rows(out, prediction, predict_features.times, model.get_decon_level(), ensemble.get_level_ct(), true);
@@ -1127,9 +1121,9 @@ void ModelService::init_models(const datamodel::Dataset_ptr &p_dataset, datamode
     if (!check(ensemble.get_models(), p_dataset->get_model_count()) && ensemble.get_id())
         ensemble.set_models(model_dao.get_all_ensemble_models(ensemble.get_id()), false);
     tbb::mutex init_models_l;
-    OMP_FOR_(p_dataset->get_model_count() * p_dataset->get_multistep(), SSIMD collapse(2))
+    OMP_FOR_(p_dataset->get_model_count() * p_dataset->get_steps(), SSIMD collapse(2))
     for (uint16_t levix = 0; levix < p_dataset->get_spectral_levels(); levix += LEVEL_STEP)
-        for (uint16_t stepix = 0; stepix < p_dataset->get_multistep(); ++stepix)
+        for (uint16_t stepix = 0; stepix < p_dataset->get_steps(); ++stepix)
             if (levix != p_dataset->get_trans_levix()) {
                 tbb::mutex::scoped_lock lk(init_models_l);
                 auto p_model = ensemble.get_model(levix, stepix);

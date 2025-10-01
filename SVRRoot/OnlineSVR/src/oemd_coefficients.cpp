@@ -20,29 +20,30 @@ oemd_coefficients::oemd_coefficients() : siftings({}), masks({})
 oemd_coefficients::oemd_coefficients(const std::deque<uint16_t> &siftings_, const std::deque <std::vector<double>> &mask_) : siftings(siftings_), masks(mask_)
 {}
 
-std::string oemd_coefficients::get_mask_file_name(const uint16_t ctr, const uint16_t level, const uint16_t level_count, const std::string &queue_name)
+std::string oemd_coefficients::get_mask_file_name(const uint16_t ctr, const uint16_t level, const uint16_t level_ct, const std::string &queue_name)
 {
     std::stringstream s;
-    s << PROPS.get_oemd_masks_dir() << "mask_v" << ctr << "_level_" << level << "_of_" << level_count << "_" << queue_name << ".csv";
+    s << PROPS.get_oemd_masks_dir() << "mask_v" << ctr << "_level_" << level << "_of_" << level_ct << "_" << queue_name << ".csv";
     return s.str();
 }
 
-t_oemd_coefficients_ptr oemd_coefficients::load(const uint16_t level_count, const std::string &queue_name)
+t_oemd_coefficients_ptr oemd_coefficients::load(const uint16_t level_ct, const std::string &queue_name)
 {
-    const std::deque<uint16_t> siftings(level_count - 1, C_default_siftings);
-    std::deque <std::vector<double>> masks(level_count - 1);
+    assert(level_ct > 0);
+    const auto mask_ct = level_ct - 1;
+    const std::deque<uint16_t> siftings(mask_ct, C_default_siftings);
+    std::deque <std::vector<double>> masks(mask_ct);
     std::atomic<bool> except = false;
-    OMP_FOR(level_count - 1)
-    for (DTYPE(level_count) l = 0; l < level_count - 1; ++l)
+    OMP_FOR(mask_ct)
+    for (DTYPE(level_ct) m = 0; m < mask_ct; ++m)
         if (!except) {
             ssize_t ver = C_mask_file_max_ver;
             std::string mask_full_path;
             std::ifstream ifs;
-            do
-                mask_full_path = get_mask_file_name(--ver, l, level_count, queue_name); // Find latest version of FIR coefficients
+            do mask_full_path = get_mask_file_name(--ver, m, level_ct, queue_name); // Find latest version of FIR coefficients
             while (!(ifs = std::ifstream(mask_full_path)) && ver > 0);
             if (!ifs || ver < 0) {
-                LOG4_ERROR("Couldn't find file " << mask_full_path << " for level " << l << " in " << PROPS.get_oemd_masks_dir());
+                LOG4_ERROR("Couldn't find file " << mask_full_path << " for mask " << m << " in " << PROPS.get_oemd_masks_dir());
                 except = true;
                 continue;
             }
@@ -55,9 +56,9 @@ t_oemd_coefficients_ptr oemd_coefficients::load(const uint16_t level_count, cons
                     except = true;
                     continue;
                 }
-                masks[l].emplace_back(val);
+                masks[m].emplace_back(val);
             }
-            LOG4_DEBUG("Read " << masks[l].size() << " coefficients for level " << l << " of " << level_count << " levels from " << mask_full_path);
+            LOG4_DEBUG("Read " << masks[m].size() << " coefficients for mask " << m << " of " << level_ct << " levels from " << mask_full_path);
         }
     if (except) masks.clear();
 

@@ -232,6 +232,12 @@ before_bound(const I &begin, const I &end, const T val)
     return rI;
 }
 
+// Takes a floating point index [0..1], translates it to an integer index in the range [0..size-1] and returns the element.
+template<typename T, typename F> inline const T &operator^(const std::deque<T> &d, const F i) requires std::is_floating_point_v<F>
+{
+    return d[i * (d.size() - 1)];
+}
+
 template<typename T> inline const T &operator^(const std::set<T> &s, const size_t i)
 {
     return *std::next(s.cbegin(), i);

@@ -100,21 +100,21 @@ void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, floa
 #endif
     CTX4_CUSTREAM;
     double *d_features;
-    cu_errchk(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
     copy_submat(p_features, d_features, n_rows, 0, 0, n_rows_integration, n_cols, n_rows_integration, cudaMemcpyHostToDevice, custream);
     const auto d_labels = cumallocopy(labels, custream, n_rows_integration);
     double *d_scores;
-    cu_errchk(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
     float *d_stretches;
     const auto cols_size_float = n_cols * sizeof(float);
-    cu_errchk(cudaMallocAsync((void **) &d_stretches, cols_size_float, custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_stretches, cols_size_float, custream));
     uint32_t *d_shifts;
-    cu_errchk(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
+    CU_ERRCHK(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
     G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(
         d_features, d_labels, d_scores, d_stretches, d_shifts, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(), align_window, PROPS.get_shift_limit(),
         PROPS.get_stretch_coef());
-    cu_errchk(cudaFreeAsync(d_features, custream));
-    cu_errchk(cudaFreeAsync(d_labels, custream));
+    CU_ERRCHK(cudaFreeAsync(d_features, custream));
+    CU_ERRCHK(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
     cufreecopy(p_stretches, d_stretches, custream, n_cols);
     cufreecopy(p_shifts, d_shifts, custream, n_cols);
@@ -199,14 +199,14 @@ void quantise_features(
             d_decon_F, d_feat_params, n_rows_chunk, quantise, start_row, n_cols_coef_, d_features);
     double stub_sf, stub_dc;
     business::ScalingFactorService::cu_scale_calc_I(d_features, n_rows_chunk * n_cols_coef_, stub_sf, stub_dc, custream);
-    cu_errchk(cudaFreeAsync(d_decon_F, custream));
-    cu_errchk(cudaFreeAsync(d_feat_params, custream));
+    CU_ERRCHK(cudaFreeAsync(d_decon_F, custream));
+    CU_ERRCHK(cudaFreeAsync(d_feat_params, custream));
 #ifdef EMO_DIFF
-    cb_errchk(cublasGetMatrixAsync(n_rows_chunk, n_cols_coef, sizeof(double), d_features + n_rows_chunk, n_rows_chunk, p_features + start_row, n_rows, custream));
+    CB_ERRCHK(cublasGetMatrixAsync(n_rows_chunk, n_cols_coef, sizeof(double), d_features + n_rows_chunk, n_rows_chunk, p_features + start_row, n_rows, custream));
 #else
-    cb_errchk(cublasGetMatrixAsync(n_rows_chunk, n_cols_coef, sizeof(double), d_features, n_rows_chunk, p_features + start_row, n_rows, custream));
+    CB_ERRCHK(cublasGetMatrixAsync(n_rows_chunk, n_cols_coef, sizeof(double), d_features, n_rows_chunk, p_features + start_row, n_rows, custream));
 #endif
-    cu_errchk(cudaFreeAsync(d_features, custream));
+    CU_ERRCHK(cudaFreeAsync(d_features, custream));
     cusyndestroy(custream);
 }
 
@@ -224,12 +224,12 @@ void quantise_labels(const uint32_t label_len, const std::vector<double> &in, co
     G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>(
         d_in, d_labels, rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
 #ifndef NDEBUG
-    cu_errchk(cudaDeviceSynchronize());
-    cu_errchk(cudaPeekAtLastError());
+    CU_ERRCHK(cudaDeviceSynchronize());
+    CU_ERRCHK(cudaPeekAtLastError());
 #endif
-    cu_errchk(cudaFreeAsync(d_in, custream));
-    cu_errchk(cudaFreeAsync(d_label_ixs, custream));
-    cu_errchk(cudaFreeAsync(d_ix_end_F, custream));
+    CU_ERRCHK(cudaFreeAsync(d_in, custream));
+    CU_ERRCHK(cudaFreeAsync(d_label_ixs, custream));
+    CU_ERRCHK(cudaFreeAsync(d_ix_end_F, custream));
     cufreecopy(p_labels, d_labels, custream, n);
     cusyndestroy(custream);
 }

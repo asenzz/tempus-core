@@ -170,7 +170,7 @@ template<> double sumabs(const arma::Mat<double> &m);
 
 template<> float sumabs(const arma::Mat<float> &m);
 
-template<typename T> arma::uvec find(const arma::Mat<T> &m1, const arma::Mat<T> &m2);
+template<typename T> std::pair<arma::uvec, arma::uvec> find(const arma::Mat<T> &m1, const arma::Mat<T> &m2);
 
 template<typename T> arma::uvec find_ge(const arma::Mat<T> &m1, const arma::Mat<T> &m2);
 
@@ -220,6 +220,8 @@ double stdscore(double *const v, size_t len);
 double meanabs_hiquant(double *const v, size_t len, double q);
 
 double meanabs_loquant(double *const v, size_t len, double q);
+
+double meanabs_quant(double *const v, size_t len, double q);
 
 double mean_hiquant(double *const v, size_t len, double q);
 
@@ -361,6 +363,8 @@ arma::uvec fixed_shuffle(const arma::uvec &to_shuffle);
 arma::uvec complement_vectors(std::set<size_t> svi, arma::uvec new_ixs);
 
 arma::uvec subview_indexes(arma::uvec batch_ixs, arma::uvec ix_tracker);
+
+uint32_t iter_depth(uint32_t iter);
 
 struct safe_double_less
 {

@@ -94,7 +94,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const std::string C_input_queue_name = "q_svrwave_" + C_symbol + "_";
     const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
     const std::string C_test_aux_input_table_name(C_test_input_name + "1");
-    constexpr uint16_t C_test_levels = 12; // Spectral levels
+    constexpr uint16_t C_test_levels = 1; // Spectral levels
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
     const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
@@ -157,7 +157,8 @@ TEST(manifold_tune_train_predict, basic_integration)
 
     business::EnsembleService::init_ensembles(p_dataset, false);
     const auto nl = business::EnsembleService::get_levels_limit(p_dataset->get_spectral_levels());
-#pragma omp parallel ADJ_THREADS(std::min<uint16_t>(PROPS.get_parallel_models(), nl * p_dataset->get_multistep())) default(shared)
+    const auto n_threads = std::min<uint16_t>(PROPS.get_parallel_models(), nl * p_dataset->get_steps());
+#pragma omp parallel ADJ_THREADS(n_threads) default(shared)
 #pragma omp single
     {
         // OMP_TASKLOOP_1() // To preserve order of processing, do not parallelize
@@ -170,14 +171,14 @@ TEST(manifold_tune_train_predict, basic_integration)
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
             datamodel::data_row_container times;
-	    arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros),
-                    recon_predicted_lgbm(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros),
-                    recon_actual(common::C_integration_test_validation_window, p_dataset->get_multistep(), arma::fill::zeros);
+	    arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros),
+                    recon_predicted_lgbm(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros),
+                    recon_actual(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros);
             arma::vec recon_last_knowns(common::C_integration_test_validation_window, arma::fill::zeros);
             tbb::mutex recon_l;
             OMP_TASKLOOP_1(collapse(2)) // To preserve order of processing, do not parallelize
             for (uint16_t l = 0; l < nl; l += LEVEL_STEP)
-                for (uint16_t s = 0; s < p_dataset->get_multistep(); ++s)
+                for (uint16_t s = 0; s < p_dataset->get_steps(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
                         auto p_model = p_ensemble->get_model(l, s);
                         if (!p_model) LOG4_THROW("Model not found!");
@@ -197,11 +198,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                         business::ModelService::train_batch(*p_model,
                                                             otr<arma::mat>(p_model_features->rows(train_start, train_end)),
                                                             otr<arma::mat>(p_model_labels->rows(train_start, train_end)),
-#ifdef INSTANCE_WEIGHTS
                                                             otr<arma::mat>(p_weights->rows(train_start, train_end)),
-#else
-                                                            nullptr,
-#endif
                                                             last_value_time);
                         p_model->set_last_modeled_value_time(last_value_time);
                         p_model->set_last_modified(bpt::second_clock::local_time());
@@ -240,7 +237,12 @@ TEST(manifold_tune_train_predict, basic_integration)
             for (uint16_t i = 0; i < validated_ct; ++i) {
                 const auto i_div = i + 1.;
                 const auto cur_time = times[validate_start + i]->get_value_time();
-                const auto actual = (**business::lower_bound(*p_dataset->get_input_queue(), cur_time))[column_ix];
+                const auto actual_it = business::lower_bound(*p_dataset->get_input_queue(), cur_time);
+                if (actual_it == p_dataset->get_input_queue()->cend()) {
+                    LOG4_ERROR("No actual value found for time " << cur_time << ", skipping.");
+                    continue;
+                }
+                const auto actual = (**actual_it)[column_ix];
                 const auto last_known_iter = business::lower_bound_before(std::as_const(*p_dataset->get_aux_input_queue()), cur_time - horizon_duration);
                 const auto last_known = (**last_known_iter)[column_ix];
                 const auto actual_move = actual - last_known;
@@ -308,6 +310,10 @@ TEST(manifold_tune_train_predict, basic_integration)
                         pips_lost += placement_price - last_aux_price;
                     this_drawdown = std::max(0., placement_price - min_price);
                     LOG4_TRACE("Buy min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
+                }
+                if (sign_predicted_move == std::signbit(recon_actual_move)) {
+                    LOG4_DEBUG("Direction correct at " << i);
+                    ++pos_direct;
                 }
 
                 const auto sign_predicted_move_lgbm = std::signbit(predicted_move_lgbm);

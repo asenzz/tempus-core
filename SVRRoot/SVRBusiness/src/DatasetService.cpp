@@ -257,8 +257,7 @@ void DatasetService::process_requests(
     tbb::mutex stream_results_mx;
     const auto timenow = bpt::second_clock::local_time();
 
-#pragma omp parallel ADJ_THREADS(2 * requests.size())
-#pragma omp single
+OMP_PAR(2 * requests.size())
     {
         OMP_TASKLOOP_(requests.size(),)
         for (const auto &p_request: requests) {

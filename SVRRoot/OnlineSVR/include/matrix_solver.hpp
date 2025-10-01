@@ -41,13 +41,13 @@ private:
 
     const Ti iter;
     const uint16_t irwls_iter;
-    Ti m, n;
-    std::vector<Ti> indices;
+    Ti m, n, k;
+    std::vector<Ti> indices_k;
 
 
 public:
 
-    antisymmetric_solver(const Ti m, const Ti n, const Ti iter, const Tv *const x0_, const Tv *const A_, const Tv *const b_, const bool direct_solve, const uint16_t irwls_iter);
+    antisymmetric_solver(const Ti m, const Ti n, const Ti k, const Ti iter, const Tv *const x0_, const Tv *const A_, const Tv *const b_, const bool direct_solve, const uint16_t irwls_iter);
 
     ~antisymmetric_solver();
 

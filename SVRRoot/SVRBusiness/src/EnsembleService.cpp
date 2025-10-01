@@ -34,6 +34,8 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
     }
 
+    LOG4_END();
+
     return res;
 }
 
@@ -49,8 +51,7 @@ EnsembleService::EnsembleService(
 
 void EnsembleService::load_decon(const datamodel::Ensemble &ensemble)
 {
-#pragma omp parallel ADJ_THREADS(1 + ensemble.get_aux_decon_queues().size())
-#pragma omp single
+    OMP_PAR(1 + ensemble.get_aux_decon_queues().size())
     {
 #pragma omp task
         if (ensemble.get_decon_queue())
@@ -336,9 +337,9 @@ EnsembleService::update_ensemble_decon_queues(
 {
     LOG4_BEGIN();
 
-    if (ensembles.size() != new_decon_queues.size()) LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
-#pragma omp parallel ADJ_THREADS(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
-#pragma omp single
+    if (ensembles.size() != new_decon_queues.size())
+        LOG4_WARN("Number of ensembles " << ensembles.size() << " and new decon queues " << new_decon_queues.size() << " differ.");
+OMP_PAR(ensembles.size() * ensembles.front()->get_aux_decon_queues().size())
     {
         OMP_TASKLOOP(ensembles.size())
         for (auto p_ensemble: ensembles) {

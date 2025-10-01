@@ -47,16 +47,16 @@ arma::uvec outlier_bacon(const arma::mat &features_t)
     constexpr double BaconParams[VSL_SS_BACON_PARAMS_N] = {VSL_SS_METHOD_BACON_MEDIAN_INIT, .01, .01};
     arma::vec BaconWeights(N, ARMA_DEFAULT_FILL);
     /* Create a task */
-    vs_errchk(vsldSSNewTask(&task, &DIM, &N, &xstorage, x.mem, nullptr, nullptr));
+    VSL_ERRCHK(vsldSSNewTask(&task, &DIM, &N, &xstorage, x.mem, nullptr, nullptr));
 
     /* Initialize the task parameters */
-    vs_errchk(vsldSSEditOutliersDetection(task, &NParams, BaconParams, BaconWeights.memptr()));
+    VSL_ERRCHK(vsldSSEditOutliersDetection(task, &NParams, BaconParams, BaconWeights.memptr()));
 
     /* Detect the outliers in the observations */
-    vs_errchk(vsldSSCompute(task, VSL_SS_OUTLIERS, VSL_SS_METHOD_BACON));
+    VSL_ERRCHK(vsldSSCompute(task, VSL_SS_OUTLIERS, VSL_SS_METHOD_BACON));
 
     /* BaconWeights will hold zeros or/and ones */ /* Deallocate the task resources */
-    vs_errchk(vslSSDeleteTask(&task));
+    VSL_ERRCHK(vslSSDeleteTask(&task));
 
     return arma::find(BaconWeights == 0);
 }

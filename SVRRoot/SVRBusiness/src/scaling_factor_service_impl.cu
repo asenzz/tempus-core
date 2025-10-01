@@ -16,7 +16,7 @@ void ScalingFactorService::cu_scale_calc_I(RPTR(double) v, const size_t n, doubl
     thrust::transform(thrust::cuda::par.on(custream), v, v + n, v,[dc] __device__(const double x) { return x - dc; });
     sf = solvers::meanabs(v, n, custream) / common::C_input_obseg_labels;
     thrust::transform(thrust::cuda::par.on(custream), v, v + n, v,[sf] __device__(const double x) { return x / sf; });
-    // cu_errchk(cudaStreamSynchronize(custream));
+    // CU_ERRCHK(cudaStreamSynchronize(custream));
 }
 
 }

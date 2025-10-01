@@ -110,11 +110,11 @@ template<typename I> inline void generate_twap_indexes(
     const I &it_end, // At end time or after
     const bpt::ptime &start_time, // Exact start time
     const bpt::time_duration &duration, // Exact end time
-    const uint32_t n_out, // Count of positions to output
-    uint32_t *const out);
+    uint32_t n_out, // Count of positions to output
+    RPTR(uint32_t) out);
     
 template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
-    uint32_t *out, // Output array
+    RPTR(uint32_t) out, // Output array
     bool maxmin, // Min or max
     const I &cbegin, // Begin of container
     const I &start_it, // At start time or before

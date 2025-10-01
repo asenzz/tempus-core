@@ -139,16 +139,16 @@ AppContext::AppContext(const std::string &config_path, const bool use_threadsafe
 #ifdef USE_MPI
     static int zero = 0;
     int provided = 0;
-    mpi_errchk(MPI_Init_thread(&zero, nullptr, MPI_THREAD_MULTIPLE, &provided));
+    MPI_ERRCHK(MPI_Init_thread(&zero, nullptr, MPI_THREAD_MULTIPLE, &provided));
     if (provided != MPI_THREAD_MULTIPLE)
         LOG4_ERROR("The MPI implementation " << provided << " does not support MPI_THREAD_MULTIPLE.");
 #endif
 
     mlockall(MCL_CURRENT | MCL_FUTURE);
 #ifdef USE_IPP
-    ip_errchk(ippInit());
+    IPP_ERRCHK(ippInit());
 #endif
-    ma_errchk(magma_init());
+    MAG_ERRCHK(magma_init());
 }
 
 AppContext::~AppContext()

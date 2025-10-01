@@ -23,6 +23,7 @@ OnlineSVR::serialize(A &ar, const unsigned version)
     ar & train_label_chunks;
     ar & train_feature_chunks_t;
     ar & weight_chunks;
+    ar & instance_weights;
     ar & chunks_score;
     ar & ixs;
     ar & multiout;

@@ -125,8 +125,7 @@ void firefly::move_ffa_adaptive(const double rate)
     const auto beta0_betamin = beta0 - betamin;
     const arma::vec levy_random_range = common::levy(D) % range;
     const auto m_2_pi = -2. * M_PI;
-#pragma omp parallel num_threads(C_n_cpu)
-#pragma omp single
+    OMP_PAR(C_n_cpu)
     {
 #pragma omp taskloop NGRAIN(n) default(shared) mergeable
         for (unsigned i = 0; i < n; ++i) {

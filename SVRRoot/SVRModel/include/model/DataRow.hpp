@@ -214,7 +214,7 @@ typedef container_range<const DataRow::container, DataRow::container::const_iter
 typedef container_range<DataRow::container, DataRow::container::reverse_iterator> datarow_rrange;
 typedef container_range<DataRow::container, DataRow::container::iterator> datarow_range;
 
-using data_row_container = DataRow::container;
+using data_row_container = DataRow::container; // Is a queue of DataRow objects, sorted by value_time, ascending
 using data_row_container_ptr = std::shared_ptr<data_row_container>;
 
 }

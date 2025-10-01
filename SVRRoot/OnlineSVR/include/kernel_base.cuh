@@ -14,6 +14,11 @@
 #include "model/SVRParameters.hpp"
 
 namespace svr {
+
+namespace datamodel {
+class SVRParameters;
+}
+
 namespace kernel {
 
 template<typename T> __device__ __host__ __forceinline__ T K_from_Z(const T z, const float degree)
@@ -36,7 +41,6 @@ class cutuner
     static constexpr uint16_t streams_per_gpu = 1;
     const uint16_t n_gpus;
     datamodel::SVRParameters template_parameters;
-    const bool weighted;
     const uint32_t n, train_len, calc_start, calc_len, train_F_rows; // calc len of 3000 seems to work best
     const uint64_t K_train_len, K_train_size, K_calc_len, K_off, train_len_n, train_n_size;
     const arma::mat ref_K, train_F;
@@ -53,13 +57,13 @@ public:
             double *d_K_train, *K_train_off;
         };
 
-        double *d_train_F, *d_train_W, *d_ref_K, *d_D_paths;
+        double *d_train_F, *d_ref_K, *d_D_paths;
         std::deque<stream_ctx> sx;
     };
 
     std::deque<dev_ctx> dx;
 
-    cutuner(const arma::mat &train_F, const arma::mat &train_label_chunk, const arma::mat &train_W, const datamodel::SVRParameters &parameters);
+    cutuner(const arma::mat &train_F, const arma::mat &train_label_chunk, const datamodel::SVRParameters &parameters);
 
     ~cutuner();
 

@@ -35,9 +35,7 @@ class Ensemble final : public Entity
 public:
     bool operator==(Ensemble const &o) const;
 
-    Ensemble() : Entity()
-    {
-    }
+    Ensemble();
 
     Ensemble(bigint id, bigint dataset_id, const std::string &decon_queue_table_name, const std::deque<std::string> &aux_decon_queue_table_names, bool load_decon_data = false);
 
@@ -52,7 +50,7 @@ public:
 
     std::string get_column_name() const;
 
-    datamodel::Model_ptr get_model(size_t levix, size_t stepix) const;
+    datamodel::Model_ptr get_model(uint16_t levix, uint16_t stepix) const;
 
     std::deque<datamodel::Model_ptr> &get_models();
 

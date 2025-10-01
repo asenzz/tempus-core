@@ -419,8 +419,7 @@ InputQueueService::prepare_queues(datamodel::Dataset &dataset)
     APP.iq_scaling_factor_service.prepare(dataset, true);
     const bool save_decon = getenv("SVRWAVE_SAVE_DECON_QUEUES") != nullptr;
 
-#pragma omp parallel ADJ_THREADS(C_n_cpu)
-#pragma omp single
+    OMP_PAR(C_n_cpu)
     {
         OMP_TASKLOOP_1()
         for (const auto &p_ensemble: dataset.get_ensembles()) {
@@ -449,8 +448,7 @@ InputQueueService::prepare_queues(datamodel::Dataset &dataset)
 void InputQueueService::prepare_input_data(datamodel::Dataset &dataset)
 {
     LOG4_BEGIN();
-#pragma omp parallel ADJ_THREADS(dataset.get_aux_input_queues().size() + 1)
-#pragma omp single
+    OMP_PAR(dataset.get_aux_input_queues().size() + 1)
     {
 #pragma omp task
         APP.input_queue_service.load(*dataset.get_input_queue());
