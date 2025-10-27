@@ -48,7 +48,7 @@ TEST_F(DaoTestFixture, DatasetWorkflow)
     aci.input_queue_service.save(iq);
 
     const auto ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}
-            , svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
+            , svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds->set_is_active(true);
 
     ds->set_max_lookback_time_gap(svr::common::date_time_string_to_seconds("38,21:22:23"));
@@ -83,7 +83,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
     aci.input_queue_service.save(iq1);
 
     datamodel::Dataset_ptr ds1 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Low", user1Low->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}
-            , svr::datamodel::Priority::Low, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
+            , svr::datamodel::Priority::Low, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds1->set_is_active(true);
 
     aci.dataset_service.save(ds1);
@@ -113,7 +113,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     datamodel::Dataset_ptr ds2 =
             std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-Below", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{},
-                                                      svr::datamodel::Priority::BelowNormal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
+                                                      svr::datamodel::Priority::BelowNormal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds2->set_is_active(true);
 
     aci.dataset_service.save(ds2);
@@ -156,7 +156,7 @@ TEST_F(DaoTestFixture, SelectingActiveDatasets)
 
     ////////////////////////////////////////////////////////////////////////////
 
-    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
+    datamodel::Dataset_ptr ds3 = std::make_shared<svr::datamodel::Dataset>(0, "Dataset2016-07-20-High-3", user2Normal->get_user_name(), iq1, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::High, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds3->set_is_active(true);
 
     aci.dataset_service.save(ds3);

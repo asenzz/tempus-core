@@ -50,7 +50,7 @@ struct Dataset : public Main
     std::string description;
     std::string gradients;
     std::string chunk_size;
-    std::string multiout;
+    std::string steps;
     std::string transformation_levels;
     std::string transformation_wavelet;
     std::string lookback_time;
@@ -96,7 +96,7 @@ struct traits<datamodel::Dataset_ptr>
         dataset->set_description(v.get<std::string>("description"));
         dataset->set_gradients(v.get<size_t>("gradients"));
         dataset->set_chunk_size(v.get<size_t>("max_chunk_size"));
-        dataset->set_multistep(v.get<size_t>("multiout"));
+        dataset->set_steps(v.get<size_t>("steps"));
         dataset->set_spectrum_levels(v.get<size_t>("transformation_levels"));
         dataset->set_transformation_name(v.get<std::string>("transformation_name"));
 
@@ -111,9 +111,9 @@ struct traits<datamodel::Dataset_ptr>
         v.set("user_name", in->get_user_name());
         v.set("priority", svr::datamodel::to_string(in->get_priority()));
         v.set("description", in->get_description());
-        v.set("gradients", in->get_spectral_levels());
-        v.set("max_chunk_size", in->get_spectral_levels());
-        v.set("multiout", in->get_spectral_levels());
+        v.set("gradients", in->get_gradients());
+        v.set("max_chunk_size", in->get_chunk_size());
+        v.set("steps", in->get_steps());
         v.set("transformation_levels", in->get_spectral_levels());
         v.set("transformation_name", in->get_transformation_name());
     }

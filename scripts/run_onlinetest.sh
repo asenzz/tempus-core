@@ -13,8 +13,12 @@ rm -f /dev/shm/sem.svrwave_gpu_sem
 
 echo Test window is ${SVRWAVE_TEST_WINDOW}.
 if [[ $1 == "-d" ]]; then # Debug
-  echo "TBB does exception testing on start, ignore the first exception!"
-	${DBG} --ex 'catch throw' --ex run --directory=${PWD}/../SVRRoot --se ./${BIN} --args ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"
+  # echo "TBB does exception testing on start, ignore the first exception!"
+  if [[ -v $MPIEXEC ]]; then 
+    $MPIEXEC -gdb-args "--ex 'catch throw' --ex run --directory=${PWD}/../SVRRoot --se ./${BIN}" ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"
+  else
+    ${DBG} --ex 'catch throw' --ex run --directory=${PWD}/../SVRRoot --se ./${BIN} --args ./${BIN} --gtest_filter="$2" 2>&1 | tee -a "${ONLINETEST_OUTPUT}"
+  fi
 elif [[ $1 == "-v" ]]; then # Valgrind
   # export MALLOC_CONF="prof:true,prof_active:true,prof_prefix:jeprof.out,lg_prof_interval:30,lg_prof_sample:19" # jemalloc profiling doesn't work?
 
@@ -52,10 +56,10 @@ elif [[ $1 == "-n" ]]; then # Profile NVidia
   # nsys profile -r cuda,nvtx,osrt,cublas,cusolver,cusparse,openmp -o ${BIN} ./${BIN} --gtest_filter="$1" >> "${ONLINETEST_OUTPUT}" 2>&1 & # No support for Volta
   # nsys analyze ${BIN}.nsys-rep
 elif [[ $1 == "-f" ]]; then # Fork
-	$MPIEXEC ./${BIN} --gtest_filter="$2" >> "${ONLINETEST_OUTPUT}" 2>&1 &
-  renice -n ${NICENESS} -p $(pidof ${BIN})
+  $MPIEXEC ./${BIN} --gtest_filter="$2" >> "${ONLINETEST_OUTPUT}" 2>&1 &
+  renice -n ${NICENESS} -p $(pidof ${BIN} )
 elif [[ $1 == "-l" ]]; then # Log file
-	$MPIEXEC ./${BIN} --gtest_filter="$2" >> "${ONLINETEST_OUTPUT}" 2>&1
+  $MPIEXEC ./${BIN} --gtest_filter="$2" >> "${ONLINETEST_OUTPUT}" 2>&1
 else # Vanilla stdout
-	$MPIEXEC ./${BIN} --gtest_filter="$1"
+  $MPIEXEC ./${BIN} --gtest_filter="$1"
 fi

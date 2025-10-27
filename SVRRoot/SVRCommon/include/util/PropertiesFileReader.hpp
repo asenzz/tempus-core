@@ -128,7 +128,7 @@ class AppConfig final : public PropertiesReader
 
     CONFPROP(uint16_t, parallel_chunks, 2)
 
-    CONFPROP(bool, xresidual, false)
+    CONFPROP(bool, xresidual, true)
 
     CONFPROP(uint32_t, oemd_interleave, 2)
 
@@ -211,8 +211,8 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char LOG_LEVEL_KEY[] = "LOG_LEVEL";
     static constexpr char DAO_TYPE_KEY[] = "DAO_TYPE";
     static constexpr char SET_THREAD_AFFINITY[] = "SET_THREAD_AFFINITY";
-    static constexpr char MULTISTEP_LEN[] = "MULTISTEP_LEN";
-    static constexpr char MULTIOUT[] = "MULTIOUT";
+    static constexpr char STEPS[] = "STEPS";
+    static constexpr char OUTPUTS[] = "OUTPUTS";
     static constexpr char ONLINE_LEARN_ITER_LIMIT[] = "ONLINE_LEARN_ITER_LIMIT";
     static constexpr char STABILIZE_ITERATIONS_COUNT[] = "STABILIZE_ITERATIONS_COUNT";
     static constexpr char SCALING_ALPHA[] = "SCALING_ALPHA";
@@ -229,7 +229,7 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char OEMD_MASK_DIR[] = "OEMD_MASK_DIR"; // Directory for OEMD masks
 
     const ConcreteDaoType dao_type;
-    const size_t slide_count_, slide_skip_, tune_run_limit_, feature_quantization_, multistep_len, multiout, online_learn_iter_limit_, stabilize_iterations_count_;
+    const size_t slide_count_, slide_skip_, tune_run_limit_, feature_quantization_, steps, outputs, online_learn_iter_limit_, stabilize_iterations_count_;
     const float prediction_horizon_, scaling_alpha_, solve_iterations_coefficient_;
     const std::string db_connection_string_, oemd_masks_dir_, db_file_;
 #ifdef USE_DUCKDB
@@ -265,9 +265,9 @@ public:
 
     bool get_set_thread_affinity() const noexcept;
 
-    size_t get_multistep_len() const noexcept;
+    size_t get_steps() const noexcept;
 
-    size_t get_multiout() const noexcept;
+    size_t get_outputs() const noexcept;
 
     size_t get_online_learn_iter_limit() const noexcept;
 

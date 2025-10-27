@@ -17,6 +17,15 @@
 
 namespace svr {
 namespace kernel {
+
+
+/* L diff matrix format:
+ * L0 - L0, L0 - L1, L0 - L2, ..., L0 - Lm
+ * L1 - L0, L1 - L1, L1 - L2, ..., L1 - Lm
+ * ...
+ * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
+ */
+
 template<typename T> arma::Mat<T> get_reference_Z(const arma::Mat<T> &y)
 {
     const uint32_t n = y.n_rows;
@@ -56,8 +65,9 @@ template<typename T> kernel_base<T>::~kernel_base() = default;
 
 template<typename T> void kernel_base<T>::update(datamodel::OnlineSVR &model, const uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y)
 {
-    LOG4_TRACE("Ignoring update kernel " << parameters.get_kernel_type() << " with X " << common::present(x) << " and Y " << common::present(y));
+    LOG4_WARN("Ignoring update kernel " << parameters.get_kernel_type() << " with X " << common::present(x) << " and Y " << common::present(y));
 }
+
 template<typename T> void kernel_base<T>::d_distances(CRPTR(T) d_X, const uint32_t m, const uint32_t n, RPTR(T) d_Z, const cudaStream_t custream) const
 {
     d_distances(d_X, d_X, m, n, n, d_Z, custream);

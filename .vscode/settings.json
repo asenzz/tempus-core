@@ -84,15 +84,11 @@
         "variant": "cpp",
         "text_encoding": "cpp"
     },
-    "clangd.arguments": [
-        "--background-index",
-        "--compile-commands-dir=${workspaceFolder}"
-    ],
     "cmake.buildArgs": [
         "-DCMAKE_CUDA_ARCHITECTURES=80 -DCUDA_ARCHITECTURES=80"
     ],
     "editor.wordWrap": "wordWrapColumn",
     "editor.wordWrapColumn": 180,
     "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/compile_commands.json"
 }

@@ -30,13 +30,6 @@ template<> void kernel_deep_path<T>::update(datamodel::OnlineSVR &model, const u
     std::get<datamodel::OnlineSVR_ptr>(parameters.get_manifold())->learn(x, y, arma::ones(arma::size(y)), bpt::second_clock::local_time(), std::numeric_limits<uint32_t>::max());
 }
 
-/* L diff matrix format:
- * L0 - L0, L0 - L1, L0 - L2, ..., L0 - Lm
- * L1 - L0, L1 - L1, L1 - L2, ..., L1 - Lm
- * ...
- * Ln - L0, Ln - L1, Ln - L2, ..., Ln - Lm
- */
-
 template<> void kernel_deep_path<T>::init(datamodel::OnlineSVR &model, const uint32_t chunk_ix)
 {
     const auto parent_projection = model.get_projection();

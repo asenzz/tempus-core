@@ -27,7 +27,7 @@ TEST_F(DaoTestFixture, DeconQueueWorkflow)
 
     datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>
     (0, "DeconQueueTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, datamodel::Priority::Normal, "", 1,
-     common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 4, "sym7");
+     common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
 
@@ -109,7 +109,7 @@ TEST_F(DaoTestFixture, testDeconRecon)
     auto p_inputq = p_all_data_inputqueue->clone_empty();
     datamodel::Dataset_ptr p_dataset = std::make_shared<datamodel::Dataset>(
         bigint(0), "DeconQueueTestDataset", p_user->get_user_name(), p_inputq, std::deque<datamodel::InputQueue_ptr>{p_all_data_inputqueue_1h}, datamodel::Priority::Normal,
-        "dsDescription", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), TEST_DECON_LEVELS, "cvmd");
+        "dsDescription", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), TEST_DECON_LEVELS, "cvmd");
     APP.ensemble_service.init_ensembles(p_dataset);
     p_dataset->set_is_active(true);
     aci.dataset_service.save(p_dataset);
@@ -287,7 +287,7 @@ TEST_F(DaoTestFixture, TestSaveDQIntegrity)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>(0, "SomeTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-                                                                          datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 2,
+                                                                          datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 2,
                                                                           "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);
@@ -335,7 +335,7 @@ TEST_F(DaoTestFixture, TestDQUpdates)
     aci.input_queue_service.save(iq);
 
     datamodel::Dataset_ptr ds = std::make_shared<datamodel::Dataset>(0, "GatesFoundationDS", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-                                                                          datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_multistep_len(), 2,
+                                                                          datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 2,
                                                                           "sym7");
     ds->set_is_active(true);
     aci.dataset_service.save(ds);

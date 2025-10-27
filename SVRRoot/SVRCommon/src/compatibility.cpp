@@ -100,24 +100,22 @@ viennacl::vector<double> tovcl(const arma::colvec &in)
 #endif
 
 ptimes_set_t
-to_multistep_times(
-        const ptimes_set_t &prediction_times,
-        const bpt::time_duration &resolution, const size_t &multistep_len)
+to_steps_times(const ptimes_set_t &prediction_times, const bpt::time_duration &resolution, const uint16_t steps)
 {
     bpt::ptime prev;
-    size_t multistep_counter = 0;
-    ptimes_set_t multistep_subset;
+    size_t step_counter = 0;
+    ptimes_set_t steps_subset;
     for (const auto &prediction_time: prediction_times) {
 
-        if ((prediction_time - resolution != prev) || multistep_counter >= multistep_len) {
-            multistep_counter = 0;
-            multistep_subset.insert(prediction_time);
+        if ((prediction_time - resolution != prev) || step_counter >= steps) {
+            step_counter = 0;
+            steps_subset.insert(prediction_time);
         }
 
         prev = prediction_time;
-        ++multistep_counter;
+        ++step_counter;
     }
-    return multistep_subset;
+    return steps_subset;
 }
 
 ptimes_set_t

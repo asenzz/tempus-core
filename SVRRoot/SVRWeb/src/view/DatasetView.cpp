@@ -145,7 +145,7 @@ void DatasetWithForm::load_form_data()
     object->set_spectrum_levels(form.transformation_levels.value());
     object->set_gradients(form.gradients.value());
     object->set_chunk_size(form.chunk_size.value());
-    object->set_multistep(form.chunk_size.value());
+    object->set_steps(form.chunk_size.value());
 }
 
 bool DatasetForm::validate_lookback_time()

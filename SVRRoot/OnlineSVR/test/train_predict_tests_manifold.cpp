@@ -40,6 +40,7 @@ View definition:
  */
 
 #include "common/defines.h"
+#include <algorithm>
 
 #ifdef INTEGRATION_TEST
 
@@ -94,7 +95,7 @@ TEST(manifold_tune_train_predict, basic_integration)
     const std::string C_input_queue_name = "q_svrwave_" + C_symbol + "_";
     const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
     const std::string C_test_aux_input_table_name(C_test_input_name + "1");
-    constexpr uint16_t C_test_levels = 1; // Spectral levels
+    constexpr uint16_t C_test_levels = 8; // Spectral levels
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
     const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
@@ -139,13 +140,9 @@ TEST(manifold_tune_train_predict, basic_integration)
             const auto trx = ds.open_file();
             auto res = trx->exec(query);
             duckdb_destroy_result(&res);
-        } else {
+        } else
 #endif
-            const auto trx = ds.open_transaction();
-            (void) trx->exec(query);
-#ifdef USE_DUCKDB
-        }
-#endif
+            const auto trx = ds.open_transaction()->exec(query);
     } catch (const std::exception &ex) {
         LOG4_ERROR("Error " << ex.what() << " while preparing test queue.");
         return;
@@ -153,13 +150,13 @@ TEST(manifold_tune_train_predict, basic_integration)
 
     auto p_dataset = ptr<datamodel::Dataset>(
             C_dataset_id, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
-            C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
+            C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_steps(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
     const auto nl = business::EnsembleService::get_levels_limit(p_dataset->get_spectral_levels());
-    const auto n_threads = std::min<uint16_t>(PROPS.get_parallel_models(), nl * p_dataset->get_steps());
-#pragma omp parallel ADJ_THREADS(n_threads) default(shared)
-#pragma omp single
+//    const auto n_threads = std::min<uint16_t>(PROPS.get_parallel_models(), nl * p_dataset->get_steps());
+// #pragma omp parallel ADJ_THREADS(n_threads) default(shared)
+// #pragma omp single
     {
         // OMP_TASKLOOP_1() // To preserve order of processing, do not parallelize
         for (const auto &p_ensemble: p_dataset->get_ensembles()) {
@@ -171,12 +168,12 @@ TEST(manifold_tune_train_predict, basic_integration)
                 prepare_test_queue(*p_dataset, *p_dataset->get_aux_input_queue(p_aux_decon_queue->get_input_queue_table_name()), *p_aux_decon_queue);
 
             datamodel::data_row_container times;
-	    arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros),
+            arma::mat recon_predicted(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros),
                     recon_predicted_lgbm(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros),
                     recon_actual(common::C_integration_test_validation_window, p_dataset->get_steps(), arma::fill::zeros);
             arma::vec recon_last_knowns(common::C_integration_test_validation_window, arma::fill::zeros);
-            tbb::mutex recon_l;
-            OMP_TASKLOOP_1(collapse(2)) // To preserve order of processing, do not parallelize
+            tbb::mutex recon_mx;
+            // OMP_TASKLOOP_1(collapse(2))
             for (uint16_t l = 0; l < nl; l += LEVEL_STEP)
                 for (uint16_t s = 0; s < p_dataset->get_steps(); ++s)
                     if (l != p_dataset->get_trans_levix()) {
@@ -208,7 +205,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                                         p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
                                         *p_model_features, *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
                                         p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
-                        const tbb::mutex::scoped_lock lk(recon_l);
+                        const tbb::mutex::scoped_lock lk(recon_mx);
                         if (times.empty()) times = *p_model_times;
                         recon_predicted.col(s) += predicted;
                         recon_predicted_lgbm.col(s) += predicted_lgbm;
@@ -216,16 +213,18 @@ TEST(manifold_tune_train_predict, basic_integration)
                         if (!s) recon_last_knowns += last_knowns;
                     }
             recon_predicted = arma::mean(recon_predicted, 1);
+            recon_predicted_lgbm = arma::mean(recon_predicted_lgbm, 1);
             recon_actual = arma::mean(recon_actual, 1);
 
             const auto p_iqsf = p_dataset->get_iq_scaling_factor(p_ensemble->get_aux_decon_queue(column)->get_input_queue_table_name(), column);
-            LOG4_TRACE("Got scaling factor " << *p_iqsf);
+            LOG4_TRACE("Input scaling factor " << *p_iqsf);
             business::IQScalingFactorService::unscale_I(*p_iqsf, recon_predicted);
             business::IQScalingFactorService::unscale_I(*p_iqsf, recon_predicted_lgbm);
             business::IQScalingFactorService::unscale_I(*p_iqsf, recon_last_knowns);
             business::IQScalingFactorService::unscale_I(*p_iqsf, recon_actual);
-            LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual - recon_predicted) << ", last known to actual difference " <<
-                                                              common::present<double>(recon_actual - recon_last_knowns));
+            LOG4_INFO("Total predicted to actual difference " << common::present<double>(recon_actual - recon_predicted) <<
+                      ", predicted LGBM to actual difference " << common::present<double>(recon_actual - recon_predicted) <<
+                      ", last known to actual difference " << common::present<double>(recon_actual - recon_last_knowns));
 
             double mae = 0, mae_lgbm = 0, mae_lk = 0, recon_mae = 0, recon_lk_mae = 0, pips_won = 0, pips_lost = 0, drawdown = 0, max_drawdown = 0, pips_won_lgbm = 0, pips_lost_lgbm = 0, drawdown_lgbm = 0, max_drawdown_lgbm = 0;
             uint16_t positive_mae_ct = 0, positive_mae_lgbm_ct = 0, pos_direct = 0, pos_direct_lgbm = 0, price_hits = 0, price_hits_lgbm = 0;
@@ -284,10 +283,10 @@ TEST(manifold_tune_train_predict, basic_integration)
 
                 const auto sign_predicted_move = std::signbit(predicted_move);
                 double this_drawdown;
+                const auto [min_it, max_it] = std::minmax_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
+                const auto min_price = ***min_it;
+                const auto max_price = ***max_it;
                 if (sign_predicted_move /* && !is_ask */ ) { // Sell signal
-                    const auto min_price_it = std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto max_price = ***std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto min_price = ***min_price_it;
                     if (recon_predicted[i] <= placement_price && recon_predicted[i] >= min_price) {
                         ++price_hits;
                         pips_won += placement_price - recon_predicted[i];
@@ -298,9 +297,6 @@ TEST(manifold_tune_train_predict, basic_integration)
                     this_drawdown = std::max(0., max_price - placement_price);
                     LOG4_TRACE("Sell min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
                 } else if (!sign_predicted_move/* && is_ask */) { // Buy signal
-                    const auto max_price_it = std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto min_price = ***std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto max_price = ***max_price_it;
                     if (recon_predicted[i] >= placement_price && recon_predicted[i] <= max_price) {
                         ++price_hits;
                         pips_won += recon_predicted[i] - placement_price;
@@ -318,32 +314,26 @@ TEST(manifold_tune_train_predict, basic_integration)
 
                 const auto sign_predicted_move_lgbm = std::signbit(predicted_move_lgbm);
                 double this_drawdown_lgbm;
-                if (sign_predicted_move /* && !is_ask */ ) { // Sell signal
-                    const auto min_price_it = std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto max_price = ***std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto min_price = ***min_price_it;
+                if (sign_predicted_move_lgbm /* && !is_ask */ ) { // Sell signal
                     if (recon_predicted_lgbm[i] <= placement_price && recon_predicted_lgbm[i] >= min_price) {
                         ++price_hits_lgbm;
-                        pips_won_lgbm += placement_price - recon_predicted[i];
+                        pips_won_lgbm += placement_price - recon_predicted_lgbm[i];
                     } else if (last_aux_price < placement_price) {
                         pips_won_lgbm += placement_price - last_aux_price;
                     } else
                         pips_lost_lgbm += last_aux_price - placement_price;
                     this_drawdown_lgbm = std::max(0., max_price - placement_price);
-                    LOG4_TRACE("Sell min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
-                } else if (!sign_predicted_move/* && is_ask */) { // Buy signal
-                    const auto max_price_it = std::max_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto min_price = ***std::min_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
-                    const auto max_price = ***max_price_it;
+                    LOG4_TRACE("Sell LGBM min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
+                } else if (!sign_predicted_move_lgbm/* && is_ask */) { // Buy signal
                     if (recon_predicted_lgbm[i] >= placement_price && recon_predicted_lgbm[i] <= max_price) {
-                        ++price_hits;
-                        pips_won_lgbm += recon_predicted[i] - placement_price;
+                        ++price_hits_lgbm;
+                        pips_won_lgbm += recon_predicted_lgbm[i] - placement_price;
                     } else if (last_aux_price > placement_price) {
                         pips_won_lgbm += last_aux_price - placement_price;
                     } else
                         pips_lost_lgbm += placement_price - last_aux_price;
                     this_drawdown_lgbm = std::max(0., placement_price - min_price);
-                    LOG4_TRACE("Buy min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
+                    LOG4_TRACE("Buy LGBM min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
                 }
                 if (sign_predicted_move_lgbm == std::signbit(recon_actual_move)) {
                     LOG4_DEBUG("Direction correct at " << i);

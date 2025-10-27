@@ -347,8 +347,8 @@ void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, c
                     F_interlaced.col(out_pos) = train_feature_chunks_t[chunk_ix].col(i);
                     L.row(out_pos) = train_label_chunks[chunk_ix].row(i);
                 } else {
-// #define INTERLACE_OP(X, Y) (X + Y) * .5
-#define INTERLACE_OP(X, Y) X + Y
+#define INTERLACE_OP(X, Y) (X + Y) * .5
+// #define INTERLACE_OP(X, Y) X + Y
                     F_interlaced.col(out_pos) = INTERLACE_OP(train_feature_chunks_t[chunk_ix].col(i), train_feature_chunks_t[chunk_ix].col(j_));
                     L.row(out_pos) = INTERLACE_OP(train_label_chunks[chunk_ix].row(i), train_label_chunks[chunk_ix].row(j_));
                 }
@@ -363,10 +363,8 @@ void OnlineSVR::calc_weights(const uint16_t chunk_ix, const uint32_t iter_opt, c
 
     PROFILE_INFO(chunks_score[chunk_ix] = calc_weights(weight_chunks[chunk_ix], K, L, iter_opt, iter_irwls),
                  "Calculate weights for " << param << ", chunk score " << chunks_score[chunk_ix] << ", chunk " << chunk_ix << ", iterations " << iter_opt << ", iter IRWLS " << iter_irwls);
-    /*
-     * TODO Test if this chunk scoring technique is better
-    chunks_score[chunk_ix] = common::meanabs<double>(kernel::get_reference_Z(train_label_chunks[chunk_ix]) - p_kernel_matrices->at(chunk_ix));
-    */
+    // TODO Test if this chunk scoring technique is better
+    // chunks_score[chunk_ix] = common::meanabs<double>(kernel::get_reference_Z(train_label_chunks[chunk_ix]) - p_kernel_matrices->at(chunk_ix));
     const tbb::mutex::scoped_lock wl(weight_chunks_mx);
     if (total_weights.empty()) {
         total_weights.set_size(p_labels->n_rows, 1);
@@ -386,7 +384,7 @@ void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
     const auto i = p->get_chunk_index();
     train_feature_chunks_t[i] = feature_chunk_t(ixs[i]);
     instance_weights[i] = p_input_weights->rows(ixs[i]);
-    train_label_chunks[i] = p_labels->rows(ixs[i]) % instance_weights[i];
+    train_label_chunks[i] = p_labels->rows(ixs[i]); // % instance_weights[i];
     LOG4_TRACE("Before scaling chunk " << i << ", train labels " << common::present(train_label_chunks[i]) << ", train features " << common::present(train_feature_chunks_t[i]));
     DQScalingFactor_ptr p_labels_sf;
     DTYPE(scaling_factors) features_sf;
@@ -404,15 +402,15 @@ void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
             for (const auto &sf: features_sf) {
                 if (APP.dq_scaling_factor_service.exists(sf)) (void) APP.dq_scaling_factor_service.remove(sf);
                 (void) APP.dq_scaling_factor_service.save(sf);
-    }
+        }
         p_labels_sf = business::DQScalingFactorService::find(features_sf, model_id, i, gradient, step, level, false, true);
         assert(p_labels_sf);
-}
+    }
     assert(train_label_chunks[i].n_rows == train_feature_chunks_t[i].n_rows);
     business::DQScalingFactorService::scale_features_I(i, gradient, step, lag, features_sf, train_feature_chunks_t[i]);
     business::DQScalingFactorService::scale_labels_I(*p_labels_sf, train_label_chunks[i]);
     LOG4_TRACE("After scaling chunk " << i << ", train labels " << common::present(train_label_chunks[i]) << ", train features " <<
-                                      common::present(train_feature_chunks_t[i]) << ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
+                common::present(train_feature_chunks_t[i]) << ", labels scaling factor " << *p_labels_sf << ", features scaling factors " << features_sf);
 }
 
 } // datamodel

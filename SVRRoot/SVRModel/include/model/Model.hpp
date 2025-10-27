@@ -13,7 +13,7 @@ class Model : public Entity
     ensemble_relation ensemble;
     uint16_t decon_level = C_default_svrparam_decon_level; // This model's prediction level
     uint16_t step = C_default_svrparam_step;
-    uint16_t multiout = common::C_default_multiout;
+    uint16_t outputs = common::C_default_outputs;
     uint16_t gradient_ct = common::C_default_gradient_count;
     uint32_t max_chunk_size = common::AppConfig::C_default_kernel_length;
     std::deque<OnlineSVR_ptr> svr_models; // one model per gradient
@@ -30,7 +30,7 @@ class Model : public Entity
 public:
     Model() = default;
 
-    Model(bigint id, bigint ensemble_id, uint16_t decon_level, uint16_t step, uint16_t multiout_, uint16_t gradient_ct, uint32_t chunk_size,
+    Model(bigint id, bigint ensemble_id, uint16_t decon_level, uint16_t step, uint16_t outputs_, uint16_t gradient_ct, uint32_t chunk_size,
           std::deque<OnlineSVR_ptr> svr_models = {}, const bpt::ptime &last_modified = bpt::min_date_time, const bpt::ptime &last_modeled_value_time = bpt::min_date_time);
 
     OnlineSVR_ptr get_gradient(uint16_t i = 0) const;
@@ -49,7 +49,7 @@ public:
 
     void set_max_chunk_size(uint32_t chunk_size);
 
-    uint16_t get_multiout() const;
+    uint16_t get_outputs() const;
 
     std::pair<SVRParameters_ptr, SVRParameters_ptr> &get_head_params();
 

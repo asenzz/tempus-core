@@ -211,18 +211,18 @@ void quantise_features(
 }
 
 void quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs,
-                     const std::vector<uint32_t> &ix_end_F, RPTR(double) p_labels, const uint16_t multistep)
+                     const std::vector<uint32_t> &ix_end_F, RPTR(double) p_labels, const uint16_t steps)
 {
     CTX4_CUSTREAM;
     const auto rows = label_ixs.size();
-    const auto n = rows * multistep;
+    const auto n = rows * steps;
     auto d_labels = cucalloc<double>(custream, n);
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
     const auto d_label_ixs = cumallocopy(label_ixs, custream);
     const auto d_in = cumallocopy(in, custream);
     constexpr bool do_label_bias = C_label_bias > 0;
     G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>(
-        d_in, d_labels, rows, d_label_ixs, d_ix_end_F, multistep, label_ixs.front().n_ixs / multistep);
+        d_in, d_labels, rows, d_label_ixs, d_ix_end_F, steps, label_ixs.front().n_ixs / steps);
 #ifndef NDEBUG
     CU_ERRCHK(cudaDeviceSynchronize());
     CU_ERRCHK(cudaPeekAtLastError());

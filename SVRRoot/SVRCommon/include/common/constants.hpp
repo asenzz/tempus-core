@@ -10,7 +10,7 @@
 
 namespace svr {
 
-constexpr auto C_default_exec_policy = std::execution::par_unseq;
+constexpr auto C_default_exec_policy = std::execution::seq;
 
 const auto C_n_cpu = std::thread::hardware_concurrency();
 const auto C_n_cpu_str = std::to_string(C_n_cpu);
@@ -60,7 +60,7 @@ constexpr uint16_t C_integration_test_validation_window = 0;
 constexpr double C_itersolve_delta = 1e-4;
 constexpr double C_itersolve_range = 1e2;
 
-constexpr double C_bad_validation = 1e9;
+constexpr double C_bad_validation = 1e16;
 
 #ifdef NDEBUG
 constexpr uint16_t C_cu_tile_width = 32;
@@ -88,8 +88,8 @@ constexpr char C_default_slide_skip_str[] = "5";
 constexpr char C_default_tune_run_limit_str[] = "14400";
 constexpr char C_default_scaling_alpha_str[] = "0.01";
 constexpr char C_default_connection_str[] = "dbname=svrwave user=svrwave password=svrwave host=/var/run/postgresql";
-constexpr char C_default_multistep_len_str[] = "1";
-constexpr char C_default_multiout_str[] = "1";
+constexpr char C_default_steps_str[] = "1";
+constexpr char C_default_outputs_str[] = "1";
 constexpr char C_default_loop_count[] = "-1";
 constexpr char C_default_loop_interval_ms[] = "1000";
 constexpr char C_default_stream_loop_interval_ms[] = "10";
@@ -105,8 +105,8 @@ constexpr char C_default_oemd_masks_dir[] = "../lib/oemd_masks/";
 
 constexpr uint16_t C_max_csv_token_size = 0xFF;
 
-const uint16_t C_default_multistep_len = std::stoi(C_default_multistep_len_str);
-const uint16_t C_default_multiout = std::stoi(C_default_multiout_str);
+const uint16_t C_default_steps = std::stoi(C_default_steps_str);
+const uint16_t C_default_outputs = std::stoi(C_default_outputs_str);
 constexpr uint16_t C_default_gradient_count = 1;
 constexpr uint16_t C_default_level_count = 1;
 

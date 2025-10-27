@@ -1,7 +1,6 @@
 #pragma once
 
 #include <boost/date_time/posix_time/ptime.hpp>
-#include <boost/math/ccmath/ccmath.hpp>
 #include <oneapi/tbb/mutex.h>
 #include <memory>
 #include <set>
@@ -63,7 +62,7 @@ class OnlineSVR final : public Entity
     arma::vec chunks_score, total_weights, active_total_weights;
     tbb::mutex weight_chunks_mx;
     arma::uvec active_rows;
-    uint16_t multiout = common::C_default_multiout;
+    uint16_t outputs = common::C_default_outputs;
     uint32_t max_chunk_size;
     uint16_t gradient = C_default_svrparam_grad_level;
     uint16_t level = C_default_svrparam_decon_level;
@@ -146,7 +145,7 @@ public:
 
     DTYPE(OnlineSVR::step) get_step() const noexcept;
 
-    DTYPE(OnlineSVR::multiout) get_multiout() const noexcept;
+    DTYPE(OnlineSVR::outputs) get_outputs() const noexcept;
 
     DTYPE(OnlineSVR::samples_trained) get_samples_trained_number() const noexcept;
 

@@ -35,7 +35,7 @@ Dataset::Dataset() :
         ccache(),
         gradients_(common::C_default_gradient_count),
         max_chunk_size_(common::AppConfig::C_default_kernel_length),
-        multistep_(common::C_default_multistep_len),
+        steps_(common::C_default_steps),
         spectrum_levels_(common::C_default_level_count),
         is_active_(false)
 {
@@ -55,7 +55,7 @@ Dataset::Dataset(
         const std::string &description,
         const uint16_t gradients,
         const uint32_t chunk_size,
-        const uint16_t multistep,
+        const uint16_t steps,
         const uint16_t spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
@@ -71,7 +71,7 @@ Dataset::Dataset(
           description_(description),
           gradients_(gradients),
           max_chunk_size_(chunk_size),
-          multistep_(multistep),
+          steps_(steps),
           spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
@@ -103,7 +103,7 @@ Dataset::Dataset(
         const std::string &description,
         const uint16_t gradients,
         const uint32_t chunk_size,
-        const uint16_t multistep,
+        const uint16_t steps,
         const uint16_t spectrum_levels,
         const std::string &transformation_name,
         const bpt::time_duration &max_lookback_time_gap,
@@ -118,7 +118,7 @@ Dataset::Dataset(
           description_(description),
           gradients_(gradients),
           max_chunk_size_(chunk_size),
-          multistep_(multistep),
+          steps_(steps),
           spectrum_levels_(spectrum_levels),
           transformation_name_(transformation_name),
           max_lookback_time_gap_(max_lookback_time_gap),
@@ -149,7 +149,7 @@ Dataset::Dataset(Dataset const &dataset) :
                 dataset.description_,
                 dataset.gradients_,
                 dataset.max_chunk_size_,
-                dataset.multistep_,
+                dataset.steps_,
                 dataset.spectrum_levels_,
                 dataset.transformation_name_,
                 dataset.max_lookback_time_gap_,
@@ -196,7 +196,7 @@ bool Dataset::operator^=(const Dataset &o) const
                             && priority_ == o.priority_
                             && gradients_ == o.gradients_
                             && max_chunk_size_ == o.max_chunk_size_
-                            && multistep_ == o.multistep_
+                            && steps_ == o.steps_
                             && spectrum_levels_ == o.spectrum_levels_
                             && transformation_name_ == o.transformation_name_
                             && max_lookback_time_gap_ == o.max_lookback_time_gap_
@@ -236,7 +236,7 @@ uint32_t Dataset::get_max_chunk_size() const
 { return max_chunk_size_; };
 
 uint16_t Dataset::get_steps() const
-{ return multistep_; };
+{ return steps_; };
 
 void Dataset::set_gradients(const uint16_t grads)
 { gradients_ = grads; }
@@ -244,8 +244,8 @@ void Dataset::set_gradients(const uint16_t grads)
 void Dataset::set_chunk_size(const uint32_t chunk_size)
 { max_chunk_size_ = chunk_size; }
 
-void Dataset::set_multistep(const uint16_t multistep)
-{ multistep_ = multistep; }
+void Dataset::set_steps(const uint16_t steps)
+{ steps_ = steps; }
 
 const std::string &Dataset::get_dataset_name() const
 { return dataset_name_; }
@@ -690,7 +690,7 @@ std::string Dataset::to_string() const
       << ", transformation name " << transformation_name_
       << ", gradients " << gradients_
       << ", chunk size " << max_chunk_size_
-      << ", multi out " << multistep_
+      << ", steps " << steps_
       << ", max lookback time gap " << get_max_lookback_time_gap()
       << ", is active " << get_is_active();
 

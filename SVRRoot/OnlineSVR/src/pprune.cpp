@@ -571,7 +571,7 @@ OMP_PAR(n_particles)
 
 pprune::operator t_pprune_res() const noexcept
 {
-    if (!std::isnormal(result.best_score) || result.best_parameters.empty() || !common::isnormalz(result.total_iterations))
+    if (!std::isnormal(result.best_score) || result.best_score == common::C_bad_validation || result.best_parameters.empty() || !common::isnormalz(result.total_iterations))
         LOG4_THROW("No valid solution found.");
     return result;
 }

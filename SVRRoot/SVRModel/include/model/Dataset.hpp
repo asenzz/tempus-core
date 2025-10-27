@@ -47,8 +47,8 @@ class Dataset final : public Entity
     uint16_t gradients_ = common::C_default_gradient_count; // Gradients per model, zero gradient is the base model operating on the original input data
     uint32_t max_chunk_size_;
     // Chunks are specific to SVR models, the chunk size specifies if the model training data should be divided in chunks, this value should be less than decrement distance
-    uint16_t multistep_ = common::C_default_multistep_len;
-    // Number of samples to predict for the future time interval as defined by input queue resolution, eg. a multistep of 4 will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
+    uint16_t steps_ = common::C_default_steps;
+    // Number of samples to predict for the future time interval as defined by input queue resolution, eg. 4 steps will predict 4 samples of 15 minutes if the input queue has a resolution of 1 hour
 
     std::unique_ptr<oemd::online_emd> p_oemd_transformer_fat;
     std::unique_ptr<vmd::fast_cvmd> p_cvmd_transformer;
@@ -78,7 +78,7 @@ public:
         const std::string &description = "",
         uint16_t gradients = common::C_default_gradient_count,
         uint32_t chunk_size = common::AppConfig::C_default_kernel_length,
-        uint16_t multistep = common::C_default_multistep_len,
+        uint16_t steps = common::C_default_steps,
         uint16_t transformation_levels = common::C_default_level_count,
         const std::string &transformation_name = "cvmd",
         const bpt::time_duration &max_lookback_time_gap = common::C_default_features_max_time_gap,
@@ -96,7 +96,7 @@ public:
         const std::string &description = "",
         uint16_t gradients = common::C_default_gradient_count,
         uint32_t chunk_size = common::AppConfig::C_default_kernel_length,
-        uint16_t multistep = common::C_default_multistep_len,
+        uint16_t steps = common::C_default_steps,
         uint16_t spectrum_levels = common::C_default_level_count,
         const std::string &transformation_name = "cvmd",
         const bpt::time_duration &max_lookback_time_gap_ = common::C_default_features_max_time_gap,
@@ -158,7 +158,7 @@ public:
 
     void set_chunk_size(uint32_t chunk_size);
 
-    void set_multistep(uint16_t multistep);
+    void set_steps(uint16_t steps);
 
     const std::string &get_transformation_name() const noexcept;
 

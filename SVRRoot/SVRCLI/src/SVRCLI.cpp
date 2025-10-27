@@ -57,7 +57,7 @@ void start_cli(const std::string &training_data_file_path, const std::string &va
 {
     arma::mat training_data;
     training_data.load(training_data_file_path, arma::csv_ascii);
-    const auto n_label_cols = PROPS.get_multiout();
+    const auto n_label_cols = PROPS.get_outputs();
     const auto w = ptr<arma::mat>(training_data.col(0));
     const auto y = ptr<arma::mat>(training_data.cols(1, n_label_cols));
     const auto x = ptr<arma::mat>(training_data.cols(n_label_cols + 1, training_data.n_cols - 1));
@@ -72,7 +72,7 @@ void start_cli(const std::string &training_data_file_path, const std::string &va
     constexpr uint16_t C_test_gradient_count = 1;
     auto p_dataset = ptr<datamodel::Dataset>(
             C_dataset_id, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
-            C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_multistep_len(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
+            C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_steps(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
     datamodel::OnlineSVR model(0, 0, {parameters}, x, y, w, bpt::second_clock::local_time(),  {}, p_dataset);
 
     arma::mat validation_data;

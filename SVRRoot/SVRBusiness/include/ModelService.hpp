@@ -80,7 +80,7 @@ public:
 
     static void prepare_labels(arma::mat &all_labels, arma::vec &all_last_knowns, datamodel::data_row_container &all_times, const datamodel::datarow_crange &main_data,
                                const datamodel::datarow_crange &aux_data, const bpt::time_duration &max_gap, uint16_t level, const bpt::time_duration &resolution_aux,
-                               const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, uint16_t multistep, uint32_t lag);
+                               const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution_main, uint16_t steps, uint32_t lag);
 
     static void tune_features(
         arma::mat &out_features, const arma::mat &labels, datamodel::SVRParameters &params, const datamodel::data_row_container &label_times,

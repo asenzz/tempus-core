@@ -6,7 +6,6 @@
 #include "model/DQScalingFactor.hpp"
 #include "appcontext.hpp"
 #include "DAO/DQScalingFactorDAO.hpp"
-#include "spectral_transform.hpp"
 #include "DQScalingFactorService.hpp"
 
 #ifdef CUDA_SCALING_FACTORS

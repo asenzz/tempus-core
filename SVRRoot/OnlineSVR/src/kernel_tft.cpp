@@ -48,7 +48,7 @@ template<> void kernel_tft<T>::load()
     const auto device = get_cuda_device();
     const auto n_manifold_features = parameters.get_tft_n_classes();
     auto model = std::make_shared<TemporalFusionTransformer>(
-            n_manifold_features, PROPS.get_nn_hide_coef() * n_manifold_features, PROPS.get_multiout(), PROPS.get_nn_head_coef() * n_manifold_features, device);
+            n_manifold_features, PROPS.get_nn_hide_coef() * n_manifold_features, PROPS.get_outputs(), PROPS.get_nn_head_coef() * n_manifold_features, device);
     std::stringstream s(parameters.get_model_blob());
 
 #ifdef COMPRESS_MODEL
@@ -167,7 +167,7 @@ template<> void kernel_tft<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t
     parameters.set_tft_n_classes(n_manifold_features);
     const auto device = get_cuda_device();
     auto p_tftmod = ptr<TemporalFusionTransformer>(
-            n_manifold_features, PROPS.get_nn_hide_coef() * n_manifold_features, PROPS.get_multiout(), PROPS.get_nn_head_coef() * n_manifold_features, device);
+            n_manifold_features, PROPS.get_nn_hide_coef() * n_manifold_features, PROPS.get_outputs(), PROPS.get_nn_head_coef() * n_manifold_features, device);
     auto tftmod = *p_tftmod;
     if (!device.is_cpu()) {
         tftmod->to(device);

@@ -91,14 +91,14 @@ bool AppConfig::get_set_thread_affinity() const noexcept
     return set_thread_affinity_;
 }
 
-size_t AppConfig::get_multistep_len() const noexcept
+size_t AppConfig::get_steps() const noexcept
 {
-    return multistep_len;
+    return steps;
 }
 
-size_t AppConfig::get_multiout() const noexcept
+size_t AppConfig::get_outputs() const noexcept
 {
-    return multiout;
+    return outputs;
 }
 
 size_t AppConfig::get_online_learn_iter_limit() const noexcept
@@ -284,8 +284,8 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
         slide_skip_(get_property<DTYPE(slide_skip_) >(app_config_file, SLIDE_SKIP, C_default_slide_skip_str)),
         tune_run_limit_(get_property<DTYPE(tune_run_limit_) >(app_config_file, TUNE_RUN_LIMIT, C_default_tune_run_limit_str)),
         feature_quantization_(get_property<DTYPE(feature_quantization_) >(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str)),
-        multistep_len(get_property<DTYPE(multistep_len) >(app_config_file, MULTISTEP_LEN, C_default_multistep_len_str)),
-        multiout(get_property<DTYPE(multiout) >(app_config_file, MULTIOUT, C_default_multiout_str)),
+        steps(get_property<DTYPE(steps) >(app_config_file, STEPS, C_default_steps_str)),
+        outputs(get_property<DTYPE(outputs) >(app_config_file, OUTPUTS, C_default_outputs_str)),
         online_learn_iter_limit_(get_property<DTYPE(online_learn_iter_limit_) >(app_config_file, ONLINE_LEARN_ITER_LIMIT, C_default_online_iter_limit_str)),
         stabilize_iterations_count_(get_property<DTYPE(stabilize_iterations_count_) >(app_config_file, STABILIZE_ITERATIONS_COUNT, C_default_stabilize_iterations_count_str)),
         prediction_horizon_(get_property<DTYPE(prediction_horizon_) >(app_config_file, PREDICTION_HORIZON, C_default_prediction_horizon_str)),
@@ -404,13 +404,12 @@ const std::string &PropertiesReader::get_property_value(const std::string &prope
     return default_value;
 }
 
+#ifdef USE_DUCKDB
 
 const std::string &AppConfig::get_db_file() const noexcept
 {
     return db_file_;
 }
-
-#ifdef USE_DUCKDB
 
 bool AppConfig::is_duck() const noexcept
 {

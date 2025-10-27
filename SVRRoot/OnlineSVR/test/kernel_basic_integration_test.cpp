@@ -225,7 +225,7 @@ comb_matrix(
     return res;
 }
 
-#define TEST_MULTISTEP_LEN (5)
+#define TEST_OUTPUTS (5)
 
 void
 kernel_single_run_test(
@@ -238,7 +238,7 @@ kernel_single_run_test(
     LOG4_BEGIN();
 
  datamodel::SVRParameters_ptr param = std::make_shared<SVRParameters>(model_svr_parameters);
-    svr::OnlineMIMOSVR online_svr_(param, svr::MimoType::single, TEST_MULTISTEP_LEN);
+    svr::OnlineMIMOSVR online_svr_(param, svr::MimoType::single, TEST_OUTPUTS);
 
     const vmatrix<double> features_data = svr::datamodel::vmatrix<double>::load(features_data_file);
     const vmatrix<double> labels_data = svr::datamodel::vmatrix<double>::load(labels_data_file);

@@ -488,7 +488,8 @@ double mean(const double *const input, const size_t len)
     LOG4_TRACE("Returning mean " << r << " for " << common::to_string(input, std::min<size_t>(len, 5)));
     return r;
 #else
-    return std::reduce(C_default_exec_policy, input, input + len, double(0), std::plus<double>()) / len;
+//    return std::reduce(C_default_exec_policy, input, input + len, double(0), std::plus<double>()) / len;
+    return std::accumulate(input, input + len, double(0)) / len;
 #endif
 }
 

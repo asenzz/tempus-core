@@ -481,7 +481,8 @@ t_feature_mechanics SVRParameters::get_feature_mechanics() const
 
 t_feature_mechanics &SVRParameters::set_feature_mechanics(const t_feature_mechanics &f)
 {
-    return feature_mechanics = f;
+    feature_mechanics = f;
+    return feature_mechanics;
 }
 
 std::string SVRParameters::to_string() const

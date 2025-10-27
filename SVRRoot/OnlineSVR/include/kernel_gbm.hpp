@@ -24,6 +24,7 @@ public:
     void d_kernel(CRPTR (T) d_Z, uint32_t m, RPTR (T) d_K, cudaStream_t custream) const override;
 
     void d_distances(CRPTR (T) d_X, CRPTR (T) &d_Xy, uint32_t m, uint32_t n_X, uint32_t n_Xy, RPTR (T) d_Z, cudaStream_t custream) const override;
+
     void update(datamodel::OnlineSVR &svrmod, uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y) override;
 };
 

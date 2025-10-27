@@ -32,6 +32,7 @@ protected:
 
 public:
     virtual void update(datamodel::OnlineSVR &model, uint32_t chunk_ix, const arma::Mat<T> &x, const arma::Mat<T> &y);
+
     datamodel::SVRParameters &get_parameters();
 
     datamodel::SVRParameters get_parameters() const;

@@ -121,7 +121,7 @@ template<typename kT, typename fT> cached<kT, fT>::~cached()
 
 std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> calc_cache::get_labels(
     const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
-    const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution,
+    const uint16_t level, const uint16_t steps, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution,
     const uint16_t lag)
 {
     LOG4_TRACE("Getting labels for " << column_name << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " << level << ", step " << step <<
@@ -131,7 +131,7 @@ std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> calc_cache::get_
         auto p_last_knowns = ptr<arma::vec>();
         auto p_label_times = ptr<datamodel::data_row_container>();
         ModelService::prepare_labels(*p_labels, *p_last_knowns, *p_label_times, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
-                                     main_resolution, multistep, lag);
+                                     main_resolution, steps, lag);
         return std::make_tuple(p_labels, p_last_knowns, p_label_times);
     };
     const auto k = std::make_tuple(column_name, (*main_data.cbegin())->get_value_time(), main_data.distance(), level, main_resolution, aux_queue_res);

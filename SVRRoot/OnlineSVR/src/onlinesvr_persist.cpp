@@ -56,7 +56,7 @@ std::string OnlineSVR::to_string() const
       ", labels " << p_labels->rows(0, 10) <<
       ", kernel matrices " << (p_kernel_matrices ? p_kernel_matrices->size() : 0) <<
       ", indexes " << ixs.size() <<
-      ", multiout " << multiout <<
+      ", outputs " << outputs <<
       ", max chunk size " << max_chunk_size <<
       ", gradient level " << gradient <<
       ", decon level " << level;

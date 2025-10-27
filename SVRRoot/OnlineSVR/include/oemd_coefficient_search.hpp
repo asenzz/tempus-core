@@ -25,7 +25,7 @@ class oemd_coefficients_search {
     constexpr static double lambda2 = .33;
     constexpr static double allowed_eps_up = .1;
     constexpr static double norm_thresh = 1. + allowed_eps_up;
-    constexpr static uint8_t multistep = 1; // Leave at 1 for now
+    constexpr static uint8_t steps = 1; // Leave at 1 for now
 
     const bpt::time_duration resolution;
     const double sample_rate;

@@ -235,6 +235,8 @@ before_bound(const I &begin, const I &end, const T val)
 // Takes a floating point index [0..1], translates it to an integer index in the range [0..size-1] and returns the element.
 template<typename T, typename F> inline const T &operator^(const std::deque<T> &d, const F i) requires std::is_floating_point_v<F>
 {
+    assert(i >= 0 && i <= 1);
+    assert(d.size() > 0);
     return d[i * (d.size() - 1)];
 }
 
@@ -529,15 +531,9 @@ std::set<std::shared_ptr<K>, C, A> inline clone_shared_ptr_elements(std::set<std
     return res;
 }
 
-ptimes_set_t
-to_multistep_times(const ptimes_set_t &prediction_times,
-                   const bpt::time_duration &resolution, const size_t &multistep_len);
+ptimes_set_t to_step_times(const ptimes_set_t &prediction_times, const bpt::time_duration &resolution, const uint16_t steps);
 
-
-ptimes_set_t
-to_times(
-    const boost::posix_time::time_period &prediction_range,
-    const boost::posix_time::time_duration &resolution);
+ptimes_set_t to_times(const boost::posix_time::time_period &prediction_range, const boost::posix_time::time_duration &resolution);
 
 ptimes_set_t
 to_times(

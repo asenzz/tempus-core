@@ -31,13 +31,13 @@
         "document_root" : "./resources"
     },
     "security" : {
-        "content_length_limit" : 65536, // KB
+        "content_length_limit" : 65536,
+        "_comment" : "Maximum allowed size of HTTP request content in kilobytes.",
         "display_error_message" : true
     },
     "misc" : {
-            "invalid_url_throws" : false
-            // Set it to true of you want that invalid URL would
-            // trigger an exception
-    },
+            "invalid_url_throws" : false,
+            "_comment" : "Set it to true of you want that invalid URL would trigger an exception."
+    }
 }
 

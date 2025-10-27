@@ -43,7 +43,7 @@ void quantise_features(
 #ifdef __CUDACC__
 
 template<const bool do_label_bias = false> __global__ void G_quantise_labels(
-    CRPTRd d_in, RPTR(double) d_labels, const uint32_t rows, CRPTR(t_label_ix) d_label_ixs, CRPTR(uint32_t) ix_end_F, const uint16_t multistep, const uint32_t step_ixs)
+    CRPTRd d_in, RPTR(double) d_labels, const uint32_t rows, CRPTR(t_label_ix) d_label_ixs, CRPTR(uint32_t) ix_end_F, const uint16_t steps, const uint32_t step_ixs)
 {
     CU_STRIDED_FOR_i(rows) {
         UNROLL(36)
@@ -51,7 +51,7 @@ template<const bool do_label_bias = false> __global__ void G_quantise_labels(
 #ifdef EMO_DIFF
         const auto lk = d_in[ix_end_F[i]];
 #endif
-        for (uint16_t j = 0; j < multistep; ++j) {
+        for (uint16_t j = 0; j < steps; ++j) {
             const auto lix = j * rows + i;
             d_labels[lix] /= step_ixs;
             if constexpr(do_label_bias) {
@@ -68,7 +68,7 @@ template<const bool do_label_bias = false> __global__ void G_quantise_labels(
 #endif
 
 void quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs, const std::vector<uint32_t> &feat_params,
-                RPTR(double) p_labels, const uint16_t multistep);
+                RPTR(double) p_labels, const uint16_t steps);
 
 }
 

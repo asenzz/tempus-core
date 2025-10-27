@@ -34,9 +34,9 @@ namespace svr {
 namespace datamodel {
 
 
-OnlineSVR::OnlineSVR() : Entity(0), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
+OnlineSVR::OnlineSVR() : Entity(0), outputs(PROPS.get_outputs()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
 {
-    LOG4_WARN("Created OnlineMIMOSVR object with default constructor and default multistep_len " << multiout);
+    LOG4_WARN("Created OnlineMIMOSVR object with default constructor and default number of outputs " << outputs);
 #ifdef ENTITY_INIT_ID
     init_id();
 #endif
@@ -47,7 +47,7 @@ OnlineSVR::OnlineSVR(
         const bigint model_id,
         const t_param_set &param_set,
         const Dataset_ptr &p_dataset) :
-        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
+        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), outputs(PROPS.get_outputs()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
 {
     if (model_id) scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model_id);
     parse_params();
@@ -63,7 +63,7 @@ OnlineSVR::OnlineSVR(
         const mat_ptr &p_xtrain, const mat_ptr &p_ytrain, const mat_ptr &p_iweights, const bpt::ptime &last_value_time,
         const matrices_ptr &kernel_matrices,
         const Dataset_ptr &p_dataset) :
-        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), multiout(PROPS.get_multiout()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
+        Entity(id), model_id(model_id), p_dataset(p_dataset), param_set(param_set), outputs(PROPS.get_outputs()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())
 {
     if (model_id) scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model_id);
     parse_params();
@@ -130,9 +130,9 @@ DTYPE(OnlineSVR::step) OnlineSVR::get_step() const noexcept
     return step;
 }
 
-DTYPE(OnlineSVR::multiout) OnlineSVR::get_multiout() const noexcept
+DTYPE(OnlineSVR::outputs) OnlineSVR::get_outputs() const noexcept
 {
-    return multiout;
+    return outputs;
 }
 
 arma::uvec OnlineSVR::get_active_ixs() const

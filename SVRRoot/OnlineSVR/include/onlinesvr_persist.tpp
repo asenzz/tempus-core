@@ -26,7 +26,7 @@ OnlineSVR::serialize(A &ar, const unsigned version)
     ar & instance_weights;
     ar & chunks_score;
     ar & ixs;
-    ar & multiout;
+    ar & outputs;
     ar & max_chunk_size;
     ar & gradient;
     ar & level;

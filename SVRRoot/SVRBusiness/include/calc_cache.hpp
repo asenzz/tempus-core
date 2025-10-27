@@ -69,7 +69,7 @@ public:
 
     static std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> get_labels(
         const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
-        const bpt::time_duration &max_gap, const uint16_t level, const uint16_t multistep, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
+        const bpt::time_duration &max_gap, const uint16_t level, const uint16_t steps, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
         const bpt::time_duration &main_resolution, const uint16_t lag);
 
     static mat_ptr get_features(

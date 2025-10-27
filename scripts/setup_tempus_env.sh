@@ -8,13 +8,14 @@ if [[ -z "${SETVARS_COMPLETED}" ]]; then
   source ${ONEAPI_ROOT}/setvars.sh --include-intel-llvm intel64 lp64
 fi
 
-export NICENESS=19
+export NICENESS=0
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export ARTELYS_LICENSE=/opt/knitro/licenses/artelys_lic_8817_ASEN_2024-09-11_trial_knitro_97-65-2f-5a-81.txt
 # export CUBLAS_LOGINFO_DBG=1 CUBLAS_LOGDEST_DBG=cublas.log
 # export CUBLASLT_LOG_LEVEL=5 CUBLASLT_LOG_FILE=cublasLt.log
 export PETSC_MATH_LIB_PRECISION=double
 # export MPIEXEC=${ONEAPI_ROOT}/mpi/latest/bin/mpiexec -n 1
+# export MPIEXEC=mpiexec -n 1
 unset MPIEXEC
 
 export scriptname="$(basename $0)"
@@ -58,11 +59,11 @@ export DAEMON_CONFIG=$DAEMON_DIR/../config/daemon.config
 
 export LOGDIR=$PROJECT_ROOT/var/log
 if [ ! -d $LOGDIR ]; then mkdir -p $LOGDIR; fi
-export ONLINETEST_OUTPUT=${LOGDIR}svronline_tests.log
-export BUSINESSTEST_OUTPUT=${LOGDIR}svrbusiness_tests.log
-export BACKTEST_OUTPUT=${LOGDIR}svrbacktest.log
-export WEB_OUTPUT=${LOGDIR}svrweb.log
-export DAEMON_OUTPUT=${LOGDIR}svrdaemon.log
+export ONLINETEST_OUTPUT=${LOGDIR}/svronline_tests.log
+export BUSINESSTEST_OUTPUT=${LOGDIR}/svrbusiness_tests.log
+export BACKTEST_OUTPUT=${LOGDIR}/svrbacktest.log
+export WEB_OUTPUT=${LOGDIR}/svrweb.log
+export DAEMON_OUTPUT=${LOGDIR}/svrdaemon.log
 export TEST_DB_INIT_SCRIPTS=${DAEMON_DIR}/../../tempus-db/dbscripts/init_db.sh
 
 GR='\033[1;32m'

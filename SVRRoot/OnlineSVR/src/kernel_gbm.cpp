@@ -29,7 +29,7 @@ std::string get_lgbm_core_parameters(const uint16_t gpu_id)
     std::stringstream s;
     s << "objective=regression tree_learner=data seed=123 learning_rate=" << PROPS.get_k_learn_rate() << " num_iterations=" << PROPS.get_k_epochs()
         << " early_stopping_round=200 metric=l2 num_leaves=256 feature_fraction=0.7 bagging_fraction=0.7 bagging_freq=25 force_col_wise=true device_type=gpu num_threads=" <<
-            C_n_cpu << " " << get_lgbm_dataset_parameters() << " gpu_device_id=" << gpu_id; //  min_data_in_leaf=200
+            C_n_cpu << " " << get_lgbm_dataset_parameters() << " gpu_device_id=" << gpu_id << " num_gpu=" << common::gpu_handler<CTX_PER_GPU>::get().get_gpu_devices_count(); //  min_data_in_leaf=200
 #ifndef NDEBUG
     s << " verbosity=2 ";
 #endif
@@ -170,6 +170,7 @@ template<> void kernel_gbm<T>::d_distances(CRPTR(T) d_X, CRPTR(T) &d_Xy, const u
 {
     LOG4_THROW("Not implemented.");
 }
+
 template<> void kernel_gbm<T>::update(datamodel::OnlineSVR &svrmod, const uint32_t chunk_ix, const arma::Mat<T> &new_x, const arma::Mat<T> &new_y)
 {
     LOG4_DEBUG("Not implemented. This kernel does not support update.");

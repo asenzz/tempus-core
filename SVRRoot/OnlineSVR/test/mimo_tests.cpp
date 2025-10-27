@@ -54,13 +54,12 @@ TEST(mimo_train_predict, batch_train)
     // Throw away all data from the online_svr object, except the parameters themselves.
     svr::datamodel::OnlineSVR online_svr_(0, 0, mimo_model->get_param_set());
 
-    LOG4_DEBUG("multistep_len is " << mimo_model->get_multiout());
+    LOG4_DEBUG("Output count is " << mimo_model->get_outputs());
 
     arma::mat x_train = mimo_model->get_features();
     arma::mat y_train = mimo_model->get_labels();
 
-    LOG4_DEBUG("Learning data rows " << x_train.n_rows
-                                     << ", reference data rows " << y_train.n_rows);
+    LOG4_DEBUG("Learning data rows " << x_train.n_rows << ", reference data rows " << y_train.n_rows);
 
     std::cout << "Learning data rows are " << x_train.n_rows << ", reference data rows " << y_train.n_rows;
 
@@ -89,7 +88,7 @@ TEST(mimo_train_predict, chunk_train)
     // Throw away all data from the online_svr object, except the parameters themselves.
     svr::datamodel::OnlineSVR online_svr_(0, 0, mimo_model->get_param_set());
 
-    LOG4_DEBUG("multistep_len is " << mimo_model->get_multiout());
+    LOG4_DEBUG("Output count is " << mimo_model->get_outputs());
 
     arma::mat x_train = mimo_model->get_features();
     arma::mat y_train = mimo_model->get_labels();
@@ -140,7 +139,7 @@ TEST(mimo_train_predict, batch_train_tasks)
     for(int i = 0; i < number_of_tasks; ++i)
     {
         osvr_models[i] = std::make_shared<svr::OnlineSVR>(mimo_model->get_svr_parameters(),
-                                                          mimo_model->get_multistep_len());
+                                                          mimo_model->get_outputs());
         auto & mimo_model_ = osvr_models[i]->get_mimo_model();
         batch_train_tasks[i] = std::async(std::launch::async, (void(svr::OnlineMIMOSVR::*)(const arma::mat &,const arma::mat &, const bool, const size_t))&svr::OnlineMIMOSVR::batch_train, &(mimo_model_), x_train, y_train, false, 1);
     }
@@ -173,7 +172,7 @@ TEST(mimo_train_predict, batch_train_repeated)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_multistep_len());
+    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_outputs());
 
     arma::mat x_train = mimo_model->get_learning_matrix();
     arma::mat y_train = mimo_model->get_reference_matrix();
@@ -192,7 +191,7 @@ TEST(mimo_train_predict, batch_train_repeated)
     for(int i = 0; i < iterations; ++i)
     {
         svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(),
-                                   mimo_model->get_multistep_len());
+                                   mimo_model->get_outputs());
 
         PROFILE_INFO(mimo_model_.batch_train(x_train, y_train, false),
                           "Batch Train");
@@ -223,7 +222,7 @@ TEST(mimo_train_predict, batch_train_gr)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_multistep_len());
+    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_outputs());
 
     arma::mat x_train = mimo_model->get_learning_matrix();
     arma::mat y_train = mimo_model->get_reference_matrix();
@@ -458,7 +457,7 @@ TEST(mimo_online_train, batch_train_forget_learn)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_multistep_len());
+    svr::OnlineSVR online_svr_(mimo_model->get_svr_parameters(), mimo_model->get_outputs());
 
     arma::mat x_train = mimo_model->get_learning_matrix();
     arma::mat y_train = mimo_model->get_reference_matrix();
@@ -575,7 +574,7 @@ TEST(mimo_online_train, multiple_forget_learn)
     }
 
     // Throw away all data from the online_svr object, except the parameters themselves.
-    svr::OnlineSVR online_svr_(mimo_model->get_param_set(), mimo_model->get_multistep_len());
+    svr::OnlineSVR online_svr_(mimo_model->get_param_set(), mimo_model->get_outputs());
 
     arma::mat learning = mimo_model->get_learning_matrix();
     arma::mat reference = mimo_model->get_reference_matrix();

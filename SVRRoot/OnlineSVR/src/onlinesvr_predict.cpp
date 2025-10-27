@@ -71,7 +71,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
     const auto active_chunks = get_predict_chunks();
     const auto n_chunks = active_chunks.size();
     const auto chunk_divisor = 1. / active_chunks.size();
-    // #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers())
+    // #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers()) // TODO Fix parallelized prediction seems to give bad results, probably a bug in taskloop implementation, replace with TBB
 // #pragma omp single
     {
         const auto [start_chunk, end_chunk] = get_mpi_bounds(n_chunks);
@@ -151,7 +151,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const arma::mat &y_refe
             assert(p_params);
             arma::mat scaled_x_predict_t = x_predict_t;
             const auto chunk_sf = business::DQScalingFactorService::slice(scaling_factors, chunk_ix, gradient, step);
-            const auto p_labels_sf = business::DQScalingFactorService::find(chunk_sf, model_id, chunk_ix, gradient, step, level, false, true);
+            const auto p_labels_sf = business::DQScalingFactorService::find(scaling_factors, model_id, chunk_ix, gradient, step, level, false, true);
             business::DQScalingFactorService::scale_features_I(chunk_ix, gradient, step, p_params->get_lag_count(), chunk_sf, scaled_x_predict_t);
             arma::mat chunk_predict_K = kernel::IKernel<double>::get(*p_params)->kernel(
                 ccache(), scaled_x_predict_t, train_feature_chunks_t[chunk_ix], time, last_trained_time);

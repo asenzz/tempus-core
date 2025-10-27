@@ -230,7 +230,7 @@ antisymmetric_solver::Tv antisymmetric_solver::operator()(Tv *const sol) const
 
     const auto tmp = (double *) ALIGNED_ALLOC_(MEM_ALIGN, m * sizeof(double));
     const auto L_mean_mask = common::mean_mask(arma::mat((double *)b, m * n, false, true), PROPS.get_solve_radius() * m);
-    const auto score = datamodel::OnlineSVR::score_weights(m, 0, n, PROPS.get_weight_layers(), L_mean_mask.mem, A_, sol, tmp);
+    const auto score = datamodel::OnlineSVR::score_weights(m, n, k, PROPS.get_weight_layers(), L_mean_mask.mem, A_, sol, tmp);
     ALIGNED_FREE_(tmp);
     return score;
 }

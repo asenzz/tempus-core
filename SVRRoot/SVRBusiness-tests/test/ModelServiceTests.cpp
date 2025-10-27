@@ -57,11 +57,11 @@ TEST_F(DaoTestFixture, ModelWorkflow)
     aci.ensemble_service.save(ensemble);
 
     auto test_model = std::make_shared<datamodel::Model>(
-        bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_multistep_len(), 1, common::AppConfig::C_default_kernel_length,
+        bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_outputs(), 1, common::AppConfig::C_default_kernel_length,
         std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     datamodel::Model_ptr test_model_0 = std::make_shared<datamodel::Model>(
-        bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_multistep_len(), 1, common::AppConfig::C_default_kernel_length,
+        bigint(0), ensemble->get_id(), decon_level, 0, PROPS.get_outputs(), 1, common::AppConfig::C_default_kernel_length,
         std::deque{svr_model}, last_modified, last_modeled_value_time);
 
     ASSERT_FALSE(aci.model_service.exists(*test_model));

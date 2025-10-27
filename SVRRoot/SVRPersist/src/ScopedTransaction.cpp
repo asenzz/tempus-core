@@ -82,10 +82,11 @@ duckdb_result scoped_file_guard::exec(const std::string &query) const
     duckdb_result res;
     int dd_err, retries = 0;
     while ((dd_err = duckdb_query(con, query.c_str(), &res)) == DuckDBError && retries < PROPS.get_db_retries()) {
-        LOG4_DEBUG("Retry " << ++retries << " querying " << query << " database, last error " << dd_err);
+        LOG4_DEBUG("Retry " << ++retries << " querying " << query << " database, last error " << dd_err << "-" << duckdb_result_error_type(&res) << ", " << duckdb_result_error(&res));
         std::this_thread::sleep_for(wait);
     }
     if (dd_err != DuckDBSuccess) LOG4_THROW("Error " << dd_err << " querying " << query);
+    LOG4_DEBUG("Result columns " << duckdb_column_count(&res) << ", rows " << duckdb_row_count(&res) << ", changed rows " << duckdb_rows_changed(&res));
     return res; // Don't forget to call duckdb_destroy_result()
 }
 

@@ -17,14 +17,14 @@ bool Model::operator==(const Model &o) const
 }
 
 Model::Model(const bigint id, const bigint ensemble_id, const uint16_t decon_level, const uint16_t step,
-             const uint16_t multiout_, const uint16_t gradient_ct, const uint32_t chunk_size,
+             const uint16_t outputs_, const uint16_t gradient_ct, const uint32_t chunk_size,
              std::deque<OnlineSVR_ptr> svr_model, const bpt::ptime &last_modified,
              const bpt::ptime &last_modeled_value_time)
         : Entity(id),
           ensemble(ensemble_id),
           decon_level(decon_level),
           step(step),
-          multiout(multiout_),
+          outputs(outputs_),
           gradient_ct(gradient_ct),
           max_chunk_size(chunk_size),
           svr_models(std::move(svr_model)),
@@ -56,8 +56,8 @@ void Model::set_max_chunk_size(const uint32_t chunk_size)
 uint32_t Model::get_max_chunk_size() const
 { return max_chunk_size; }
 
-uint16_t Model::get_multiout() const
-{ return multiout; }
+uint16_t Model::get_outputs() const
+{ return outputs; }
 
 void Model::reset()
 {
@@ -224,7 +224,7 @@ std::string Model::to_string() const
       << ", ensemble ID " << ensemble.get_id()
       << ", decon level " << decon_level
       << ", gradients " << gradient_ct
-      << ", outputs " << multiout
+      << ", outputs " << outputs
       << ", chunk size " << max_chunk_size
       << ", last modified time " << last_modified
       << ", last modeled value time " << last_modeled_value_time;
