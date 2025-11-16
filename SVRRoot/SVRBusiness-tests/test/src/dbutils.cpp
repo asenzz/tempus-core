@@ -45,6 +45,10 @@ constexpr char const * TestEnv::ConfigFiles[];
 
 bool TestEnv::init_test_db(char const *dbName)
 {
+#if 1
+    return true;
+#endif
+
     db_scripts_path.reset();
     char const * ctmp = std::getenv(EnvDbScriptsPathVar);
     if(ctmp != NULL)

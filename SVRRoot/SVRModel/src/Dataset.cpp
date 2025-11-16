@@ -7,9 +7,7 @@
 #include "SVRParametersService.hpp"
 #include "ModelService.hpp"
 #include "online_emd.hpp"
-#include "spectral_transform.hpp"
 #include "fast_cvmd.hpp"
-#include "DQScalingFactorService.hpp"
 #include "calc_cache.hpp"
 #include "common/compatibility.hpp"
 
@@ -45,45 +43,46 @@ Dataset::Dataset() :
 #endif
 }
 
-Dataset::Dataset(
-        const bigint id,
-        const std::string &dataset_name,
-        const std::string &user_name,
-        const datamodel::InputQueue_ptr &p_input_queue,
-        const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
-        const Priority &priority,
-        const std::string &description,
-        const uint16_t gradients,
-        const uint32_t chunk_size,
-        const uint16_t steps,
-        const uint16_t spectrum_levels,
-        const std::string &transformation_name,
-        const bpt::time_duration &max_lookback_time_gap,
-        const std::deque<datamodel::Ensemble_ptr> &ensembles,
-        const bool is_active,
-        const std::deque<datamodel::IQScalingFactor_ptr> &iq_scaling_factors
-)
-        : Entity(id),
-          ccache(),
-          dataset_name_(dataset_name),
-          user_name_(user_name),
-          priority_(priority),
-          description_(description),
-          gradients_(gradients),
-          max_chunk_size_(chunk_size),
-          steps_(steps),
-          spectrum_levels_(spectrum_levels),
-          transformation_name_(transformation_name),
-          max_lookback_time_gap_(max_lookback_time_gap),
-          ensembles_(common::clone_shared_ptr_elements(ensembles)),
-          is_active_(is_active),
-          iq_scaling_factors_(common::clone_shared_ptr_elements(iq_scaling_factors))
+Dataset::Dataset(const bigint id,
+                 const std::string &dataset_name,
+                 const std::string &user_name,
+                 const datamodel::InputQueue_ptr &p_input_queue,
+                 const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
+                 const Priority &priority,
+                 const std::string &description,
+                 const double residual_coef,
+                 const uint16_t gradients,
+                 const uint32_t chunk_size,
+                 const uint16_t steps,
+                 const uint16_t spectrum_levels,
+                 const std::string &transformation_name,
+                 const bpt::time_duration &max_lookback_time_gap,
+                 const std::deque<datamodel::Ensemble_ptr> &ensembles,
+                 const bool is_active,
+                 const std::deque<datamodel::IQScalingFactor_ptr> &iq_scaling_factors)
+    : Entity(id)
+    , ccache()
+    , dataset_name_(dataset_name)
+    , user_name_(user_name)
+    , priority_(priority)
+    , description_(description)
+    , gradients_(gradients)
+    , max_chunk_size_(chunk_size)
+    , steps_(steps)
+    , spectrum_levels_(spectrum_levels)
+    , transformation_name_(transformation_name)
+    , max_lookback_time_gap_(max_lookback_time_gap)
+    , ensembles_(common::clone_shared_ptr_elements(ensembles))
+    , is_active_(is_active)
+    , iq_scaling_factors_(common::clone_shared_ptr_elements(iq_scaling_factors))
+    , residual_coef(residual_coef)
 {
-    if (!p_input_queue) THROW_EX_FS(std::logic_error, "Input queue cannot be null.");
+    if (!p_input_queue)
+        THROW_EX_FS(std::logic_error, "Input queue cannot be null.");
 
     input_queue_.set_obj(p_input_queue);
 
-    for (const auto &p_aux_input_queue: aux_input_queues)
+    for (const auto &p_aux_input_queue : aux_input_queues)
         aux_input_queues_.emplace_back(p_aux_input_queue);
 
     init_transform();
@@ -101,6 +100,7 @@ Dataset::Dataset(
         const std::deque<std::string> &aux_input_queues_table_names,
         const Priority &priority,
         const std::string &description,
+        const double residual_coef,
         const uint16_t gradients,
         const uint32_t chunk_size,
         const uint16_t steps,
@@ -124,7 +124,8 @@ Dataset::Dataset(
           max_lookback_time_gap_(max_lookback_time_gap),
           ensembles_(ensembles),
           is_active_(is_active),
-          iq_scaling_factors_(iq_scaling_factors)
+          iq_scaling_factors_(iq_scaling_factors),
+          residual_coef(residual_coef)
 {
     if (input_queue_table_name.empty()) THROW_EX_FS(std::logic_error, "Input queue table name cannot be empty");
 
@@ -147,6 +148,7 @@ Dataset::Dataset(Dataset const &dataset) :
                 dataset.get_aux_input_queues(),
                 dataset.priority_,
                 dataset.description_,
+                dataset.residual_coef,
                 dataset.gradients_,
                 dataset.max_chunk_size_,
                 dataset.steps_,

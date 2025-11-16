@@ -547,7 +547,7 @@ double meanabs_hiquant(const double *const v, const size_t len, const double q)
     ALIGNED_FREE_(tmp);
     return r;
 #else
-    assert(start < len && end <= len && end > 0);
+    assert(start < CAST2(start) len && end <= CAST2(end) len && end > 0);
     return arma::mean(arma::vec(arma::sort(arma::abs(arma::vec((double *)v, len, false, true)))).rows(start, end - 1));
 #endif
 }

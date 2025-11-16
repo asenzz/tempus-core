@@ -5,7 +5,6 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/bzip2.hpp>
 #include <iostream>
-#include <fstream>
 #include <LightGBM/c_api.h>
 #include "common/compatibility.hpp"
 #include "common/parallelism.hpp"
@@ -117,7 +116,7 @@ template<> void kernel_gbm<T>::init(datamodel::OnlineSVR &svrmod, const uint32_t
     DatasetHandle train_dataset;
     {
         const auto gbm_dataset_parameters = get_lgbm_dataset_parameters();
-        LGBM_ERRCHK(LGBM_DatasetCreateFromMat(manifold_features_t.mem, C_API_DTYPE_FLOAT32,n_samples_2, n_manifold_features, 1, // is_row_major = 1 (row-major order)
+        LGBM_ERRCHK(LGBM_DatasetCreateFromMat(manifold_features_t.mem, C_API_DTYPE_FLOAT32, n_samples_2, n_manifold_features, 1, // is_row_major = 1 (row-major order)
             gbm_dataset_parameters.c_str(), nullptr, &train_dataset));
     }
 

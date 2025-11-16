@@ -80,6 +80,8 @@ public:
 
 class AppConfig final : public PropertiesReader
 {
+    CONFPROP(uint32_t, tune_dataset, 0)
+
     CONFPROP(float, instance_inert, 0)
 
     CONFPROP(float, min_step, .1)

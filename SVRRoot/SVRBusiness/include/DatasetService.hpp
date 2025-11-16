@@ -1,22 +1,17 @@
 #pragma once
 
+#include "model/Dataset.hpp"
 #include "common/types.hpp"
 
 // #define TRIM_DATA
 
 namespace svr {
 namespace datamodel {
-class Dataset;
-using Dataset_ptr = std::shared_ptr<Dataset>;
-class Ensemble;
-using Ensemble_ptr = std::shared_ptr<Ensemble>;
-class Model;
-using Model_ptr = std::shared_ptr<Model>;
 class SVRParameters;
 using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
 class User;
 using User_ptr = std::shared_ptr<User>;
-class MultivalRequest;
+struct MultivalRequest;
 using MultivalRequest_ptr = std::shared_ptr<MultivalRequest>;
 class DataRow;
 using DataRow_ptr = std::shared_ptr<DataRow>;
@@ -84,7 +79,7 @@ public:
 
     void update_active_datasets(UserDatasetPairs &processed_user_dataset_pairs);
 
-    static void process(datamodel::Dataset &dataset);
+    static datamodel::t_dataset_train_data process(datamodel::Dataset &dataset);
 
     static void process_requests(const datamodel::User &user, datamodel::Dataset &dataset, const std::deque<datamodel::MultivalRequest_ptr> &requests, t_stream_results_ptr p_stream_results);
 };

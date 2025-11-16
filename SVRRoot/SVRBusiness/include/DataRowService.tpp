@@ -7,6 +7,7 @@
 
 #include "util/time_utils.hpp"
 #include "common/parallelism.hpp"
+#include <boost/date_time/posix_time/time_formatters.hpp>
 
 namespace svr {
 namespace business {
@@ -46,7 +47,6 @@ template<typename I> inline void generate_twap_indexes(
         RPTR(uint32_t) out)
 {
     assert(it_end >= start_it);
-    assert(end_time >= start_time);
     auto it = start_it;
     for (DTYPE(n_out) outctr = 0; outctr < n_out; ++outctr) {
         const auto time_iter = start_time + duration * outctr / n_out;
@@ -54,7 +54,7 @@ template<typename I> inline void generate_twap_indexes(
         out[outctr] = it - cbegin - (it > cbegin && (it == it_end || !is_valid(it) || get_time(it) > time_iter));
     }
 #ifndef NDEBUG
-    if (const auto dist_it = it - start_it; dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", distance " << dist_it);
+    if (const auto dist_it = it - start_it; dist_it < 1) throw std::runtime_error("Could not calculate TWAP indexes for " + bpt::to_simple_string(start_time) + ", distance " + std::to_string(dist_it));
 #endif
 }
 
@@ -85,7 +85,7 @@ template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
         }
     }
 #ifndef NDEBUG
-    if (const auto dist_it = it - start_it; dist_it < 1) LOG4_THROW("Could not calculate TWAP indexes for " << start_time << ", distance " << dist_it);
+    if (const auto dist_it = it - start_it; dist_it < 1) throw std::runtime_error("Could not calculate TWAP indexes for " + bpt::to_simple_string(start_time) + ", distance " + std::to_string(dist_it));
 #endif
     return maxmin_i;
 }

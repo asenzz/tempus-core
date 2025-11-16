@@ -77,13 +77,14 @@ constexpr double C_default_svrparam_svr_epsilon = 0;
 constexpr double C_default_svrparam_kernel_param1 = 0;
 constexpr double C_default_svrparam_kernel_param2 = 1;
 constexpr double C_default_svrparam_kernel_param_tau = .75;
-constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr double C_default_svrparam_adjacent_levels_ratio = 1;
 constexpr e_kernel_type C_default_svrparam_kernel_type = e_kernel_type::GBM;
 constexpr auto C_default_svrparam_kernel_type_uint = uint16_t(C_default_svrparam_kernel_type);
-#ifdef VALGRIND_BUILD
+#ifdef MINIMAL_INTEGRATION_TEST
+constexpr uint32_t C_default_svrparam_decrement_distance = 10 + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr uint32_t C_default_svrparam_lag_count = 2;
 #else
+constexpr uint32_t C_default_svrparam_decrement_distance = common::AppConfig::C_default_kernel_length + common::AppConfig::C_default_shift_limit + common::AppConfig::C_default_outlier_slack;
 constexpr uint32_t C_default_svrparam_lag_count = 80; // All parameters should have the same lag count because of kernel function limitations
 #endif
 const uint16_t C_default_svrparam_feature_quantization = std::stoul(common::C_default_feature_quantization_str);

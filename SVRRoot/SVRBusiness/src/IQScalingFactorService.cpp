@@ -118,11 +118,13 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     if (!save_factors) return;
     const auto &dataset_iqsf = dataset.get_iq_scaling_factors(input_queue);
+#ifndef INTEGRATION_TEST
     OMP_FOR(dataset_iqsf.size())
     for (const auto &p_sf: dataset_iqsf) {
         if (exists(p_sf)) (void) remove(p_sf);
         (void) save(p_sf);
     }
+#endif
 }
 
 

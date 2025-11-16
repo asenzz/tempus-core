@@ -18,7 +18,7 @@ namespace oemd {
 
 t_coefs_cache online_emd::oemd_coefs_cache;
 
-void online_emd::transform(datamodel::DeconQueue &decon_queue, const uint32_t decon_start_ix, const uint32_t test_offset, const uint32_t custom_residuals_ct,
+void online_emd::transform(datamodel::DeconQueue &decon_queue, const uint32_t decon_start_ix, const double residual_coef, const uint32_t test_offset, const uint32_t custom_residuals_ct,
                            const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution)
 {
     const uint32_t residuals_ct = custom_residuals_ct == std::numeric_limits<DTYPE(residuals_ct)>::max() ? get_residuals_length(decon_queue.get_table_name()) : custom_residuals_ct;
@@ -46,11 +46,11 @@ void online_emd::transform(datamodel::DeconQueue &decon_queue, const uint32_t de
 
     datamodel::datarow_crange in_range_test(start_decon_iter, decon_queue.end() - test_offset, decon_queue.get_data());
     if (in_range_test.distance() < ssize_t(residuals_ct)) business::DeconQueueService::mirror_tail(in_range_test, residuals_ct, tail, in_colix);
-    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, std::identity(), resolution, main_resolution);
+    const auto p_coefs = get_masks(in_range_test, tail, decon_queue.get_table_name(), in_colix, residual_coef, std::identity(), resolution, main_resolution);
 
 #else
 
-    const auto p_coefs = get_masks(in_crange, tail, decon_queue.get_table_name(), in_colix, std::identity(), resolution, main_resolution);
+    const auto p_coefs = get_masks(in_crange, tail, decon_queue.get_table_name(), in_colix, residual_coef, std::identity(), resolution, main_resolution);
 
 #endif
 
@@ -66,7 +66,7 @@ void online_emd::transform(datamodel::DeconQueue &decon_queue, const uint32_t de
             std::identity()), "OEMD inplace transform of " << in_crange.distance() + tail.size() << " values.");
 }
 
-void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const uint16_t in_colix, const uint32_t test_offset,
+void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, const uint16_t in_colix, const double residual_coef, const uint32_t test_offset,
                            const datamodel::t_iqscaler &scaler, const uint32_t custom_residuals_ct, const boost::posix_time::time_duration &main_resolution)
 {
     LOG4_DEBUG("Transforming " << input_queue.get_table_name() << " to " << decon_queue.get_table_name() << " with " << levels << " levels, input column " << in_colix <<
@@ -99,11 +99,11 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
         business::DeconQueueService::mirror_tail(in_range_test, in_range_test.distance() + tail_len + test_offset, test_tail, in_colix);
         LOG4_DEBUG("Mirror test for " << decon_queue.get_table_name() << ", range len " << in_range.distance() << " values, requested tail " << tail_len << ", test offset " << test_offset);
     }
-    const auto p_coefs = get_masks(in_range_test, test_tail, decon_queue.get_table_name(), in_colix, scaler, input_queue.get_resolution(), main_resolution);
+    const auto p_coefs = get_masks(in_range_test, test_tail, decon_queue.get_table_name(), in_colix, residual_coef, scaler, input_queue.get_resolution(), main_resolution);
 
 #else
 
-    const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name(), in_colix, scaler, input_queue.get_resolution(), main_resolution);
+    const auto p_coefs = get_masks(in_range, tail, decon_queue.get_table_name(), in_colix, residual_coef, scaler, input_queue.get_resolution(), main_resolution);
 
 #endif
 
@@ -131,11 +131,11 @@ void online_emd::transform(const datamodel::InputQueue &input_queue, datamodel::
 }
 
 t_oemd_coefficients_ptr online_emd::get_masks(
-        const datamodel::datarow_crange &input, const std::vector<double> &tail, std::string queue_name, const uint16_t in_colix,
+        const datamodel::datarow_crange &input, const std::vector<double> &tail, std::string queue_name, const uint16_t in_colix,const double residual_coef,
         const datamodel::t_iqscaler &scaler, const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution) const
 {
     queue_name = common::sanitize_db_table_name(queue_name + "_" + bpt::to_simple_string(main_resolution));
-    const oemd::oemd_coefficients_search oemd_search(levels, resolution, main_resolution / resolution);
+    const oemd::oemd_coefficients_search oemd_search(levels, residual_coef, resolution, main_resolution / resolution);
     const auto full_len = input.distance() + tail.size();
     const auto coefs_key = std::pair{levels, queue_name};
     const auto it_coefs = oemd_coefs_cache.find(coefs_key);

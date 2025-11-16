@@ -3,11 +3,19 @@
 #include "common/constants.hpp"
 #include "relations/ensemble_relation.hpp"
 #include "Entity.hpp"
-#include "model/DataRow.hpp"
-#include "model/SVRParameters.hpp"
+#include "SVRParameters.hpp"
+#include "DataRow.hpp"
 
 namespace svr {
 namespace datamodel {
+
+class DataRow;
+using DataRow_ptr = std::shared_ptr<DataRow>;
+
+using data_row_container = std::deque<DataRow_ptr>;
+
+using t_model_train_data = std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, datamodel::data_row_container_ptr>;
+
 class Model : public Entity
 {
     ensemble_relation ensemble;

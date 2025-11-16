@@ -686,22 +686,24 @@ __global__ void G_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_l
 {
     CU_STRIDED_FOR_i(ac_len) {
         double num = 0, den = 0;
-        for (uint32_t j = 0; j < x_len; ++j) {
+        for (uint32_t j = 1; j <= x_len; ++j) {
             const auto xjm = x[j] - mean;
             num += xjm * (x[(j + i) % x_len] - mean);
             den += xjm * xjm;
         }
-        atomicAdd(ac, abs(num / den));
+        num = fabs(num / den);
+        atomicAdd(ac, num);
     }
 }
 
-// Use for normalized dc offset input, TODO test
+// Use for normalized dc offset input, TODO optimize and test
 __global__ void G_fast_autocorrelation(RPTR(double) ac, CRPTRd x, const uint32_t ac_len, const uint32_t x_len, const double den)
 {
     CU_STRIDED_FOR_i(ac_len) {
         double num = 0;
-        for (DTYPE(x_len) j = 0; j < x_len; ++j) num += x[(j + i) % x_len];
-        atomicAdd(ac, abs(num / den));
+        for (DTYPE(x_len) j = 1; j <= x_len; ++j) num += x[(j + i) % x_len];
+        num = fabs(num / den);
+        atomicAdd(ac, num);
     }
 }
 
@@ -711,6 +713,7 @@ template<const bool zero_mean = false> double autocorrelation(CRPTR(double) d_la
     const auto n2 = n / 2;
     double *d_autocorrelation;
     CU_ERRCHK(cudaMallocAsync(&d_autocorrelation, sizeof(double), custream));
+    CU_ERRCHK(cudaMemsetAsync(d_autocorrelation, 0, sizeof(double), custream));
     if (zero_mean) {
         const auto den = solvers::sum(d_labels, n,  custream);
         G_fast_autocorrelation<<<CU_BLOCKS_THREADS(n2), 0, custream>>>(d_autocorrelation, d_labels, n2, n, den);
@@ -720,8 +723,8 @@ template<const bool zero_mean = false> double autocorrelation(CRPTR(double) d_la
     }
     double res;
     CU_ERRCHK(cudaMemcpyAsync(&res, d_autocorrelation, sizeof(double), cudaMemcpyDeviceToHost, custream));
-    CU_ERRCHK(cudaFreeAsync(d_autocorrelation, custream));
     CU_ERRCHK(cudaStreamSynchronize(custream));
+    CU_ERRCHK(cudaFreeAsync(d_autocorrelation, custream));
     LOG4_TRACE("Labels count " << n << ", res " << res);
     return res / n2;
 }
@@ -792,7 +795,7 @@ oemd_coefficients_search::evaluate_mask(
         if (rel_pow_w <= 0)
             rel_pow = 1;
         else {
-            rel_pow = mask_ix ? 1 / stub_sf : std::abs(std::abs(out_pow / in_pow) - 1. / (4 * levels));
+            rel_pow = mask_ix ? 1 / stub_sf : std::abs(std::abs(out_pow / in_pow) - residual_strength);
             rel_pow += 1;
         }
         if (acor_w > 0) {
@@ -855,7 +858,6 @@ oemd_coefficients_search::evaluate_mask(
                         ", mask offset " << mask_offset << ", score " << this_xcor << ", best xcor " << xcor);
                     xcor = this_xcor;
                 }
-                assert(score != 0);
             }
             CU_ERRCHK(cudaFreeAsync(d_scores, custream));
             CU_ERRCHK(cudaFreeAsync(d_features, custream));

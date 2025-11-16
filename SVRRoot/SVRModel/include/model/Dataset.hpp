@@ -5,8 +5,9 @@
 #include "fast_cvmd.hpp"
 #include "online_emd.hpp"
 #include "common/constants.hpp"
-#include "model/Entity.hpp"
-#include "model/Priority.hpp"
+#include "Entity.hpp"
+#include "Priority.hpp"
+#include "Ensemble.hpp"
 #include "relations/iq_relation.hpp"
 
 
@@ -28,6 +29,8 @@ using IQScalingFactor_ptr = std::shared_ptr<IQScalingFactor>;
 
 class Ensemble;
 using Ensemble_ptr = std::shared_ptr<Ensemble>;
+
+using t_dataset_train_data = boost::unordered_flat_map<std::string, t_ensemble_train_data>;
 
 class Dataset final : public Entity
 {
@@ -65,6 +68,8 @@ class Dataset final : public Entity
 
     virtual void on_set_id() override;
 
+    PROPERTY(double, residual_coef, 2) // Higher coefficient means weaker residuals component
+
 public:
     Dataset();
 
@@ -76,10 +81,11 @@ public:
         const std::deque<datamodel::InputQueue_ptr> &aux_input_queues,
         const Priority &priority = Priority::Normal,
         const std::string &description = "",
+        double residual_coef = common::C_default_residual_coef,
         uint16_t gradients = common::C_default_gradient_count,
         uint32_t chunk_size = common::AppConfig::C_default_kernel_length,
         uint16_t steps = common::C_default_steps,
-        uint16_t transformation_levels = common::C_default_level_count,
+        uint16_t spectrum_levels = common::C_default_level_count,
         const std::string &transformation_name = "cvmd",
         const bpt::time_duration &max_lookback_time_gap = common::C_default_features_max_time_gap,
         const std::deque<datamodel::Ensemble_ptr> &ensembles = {},
@@ -94,6 +100,7 @@ public:
         const std::deque<std::string> &aux_input_queues_table_names,
         const Priority &priority = Priority::Normal,
         const std::string &description = "",
+        double residual_coef = common::C_default_residual_coef,
         uint16_t gradients = common::C_default_gradient_count,
         uint32_t chunk_size = common::AppConfig::C_default_kernel_length,
         uint16_t steps = common::C_default_steps,

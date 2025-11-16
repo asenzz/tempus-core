@@ -455,30 +455,28 @@ void pprune::pprune_biteopt(const uint32_t n_particles, const t_pprune_cost_fun 
 
 void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &cost_f, double rhobeg, double rhoend, const arma::mat &x0)
 {
-    prima_problem_t all_problem;
-    prima_init_problem(&all_problem, D);
-    all_problem.calfun = (prima_obj_t) calfun;
-    all_problem.xl = (double *) bounds.colptr(0);
-    all_problem.xu = (double *) bounds.colptr(1);
-    prima_options_t all_prima_options;
-    prima_init_options(&all_prima_options);
-    all_prima_options.npt = std::min<DTYPE(all_prima_options.npt) >(maxfun - 1, (D + 2. + (D + 1.) * (D + 2.) / 2.) / 2.);
-    all_prima_options.iprint = PRIMA_MSG_EXIT;
-    all_prima_options.rhobeg = rhobeg;
-    all_prima_options.rhoend = rhoend;
-    all_prima_options.maxfun = maxfun;
-    all_prima_options.callback = prima_progress_callback;
-
+    const auto npt = std::min<DTYPE(prima_options_t::npt) >(maxfun - 1, (D + 2. + (D + 1.) * (D + 2.) / 2.) / 2.);
     auto p_particles = ptr<std::deque<t_calfun_data_ptr> >(n_particles);
     tbb::mutex res_l;
 #pragma omp parallel for SSIMD num_threads(n_particles) schedule(static, 1) firstprivate(n_particles, maxfun, no_elect) default(shared)
-    for (uint32_t i = 0; i < n_particles; ++i) {
-        all_prima_options.data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, this};
+    for (DTYPE(n_particles) i = 0; i < n_particles; ++i) {
+        prima_options_t prima_options;
+        prima_init_options(&prima_options);
+        prima_options.data = p_particles->at(i) = new t_calfun_data{no_elect, p_particles, cost_f, i, this};
 
-        auto problem = all_problem;
+        prima_problem_t problem;
+        prima_init_problem(&problem, D);
+        problem.calfun = (prima_obj_t) calfun;
+        problem.xl = (double *) bounds.colptr(0);
+        problem.xu = (double *) bounds.colptr(1);
         problem.x0 = (double *) x0.colptr(i);
 
-        auto prima_options = all_prima_options;
+        prima_options.npt = npt;
+        prima_options.iprint = PRIMA_MSG_EXIT;
+        prima_options.rhobeg = rhobeg;
+        prima_options.rhoend = rhoend;
+        prima_options.maxfun = maxfun;
+        prima_options.callback = prima_progress_callback;
 
         prima_result_t prima_result;
         const auto rc = prima_minimize(PRIMA_LINCOA, problem, prima_options, &prima_result);
@@ -487,8 +485,9 @@ void pprune::pprune_prima(const uint32_t n_particles, const t_pprune_cost_fun &c
             ", score " << prima_result.f <<
             ", cstrv " << prima_result.cstrv <<
             ", return code " << rc <<
-            /* ", " << prima_get_rc_string(static_cast<const prima_rc_t>(rc))  << */ ", message '" << prima_result.message << "', iterations "
-            << prima_result.nf);
+            /* ", " << prima_get_rc_string(static_cast<const prima_rc_t>(rc))  << */
+            ", message '" << prima_result.message <<
+            "', iterations " << prima_result.nf);
 
         tbb::mutex::scoped_lock lk(res_l);
         if (prima_result.f < result.best_score) {

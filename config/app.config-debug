@@ -1,37 +1,173 @@
+# SQL stored procedures directory
 SQL_PROPERTIES_DIR = ../SVRRoot/SVRPersist/postgres/
+
 #To enable Unix socket set md5 authentication in /etc/postgresql/9.5/main/pg_hba.conf for local connections
-CONNECTION_STRING = dbname=svrwave user=svrwave password=svrwave host=/var/run/postgresql
-#CONNECTION_STRING = dbname=svrwave user=svrwave password=svrwave host=localhost port=5432
-LOG_LEVEL = trace
-DAO_TYPE = postgres
-MAIN_COLUMNS_AUX = 1
-RECOMBINE_PARAMETERS = 0
-PREDICTION_HORIZON = 0.2
-MULTISTEP_LEN = 1
-NUM_QUANTISATIONS = 2
-QUANTISATION_DIVISOR = 10
-OEMD_TUNE_PARTICLES = 32
-OEMD_TUNE_ITERATIONS = 64
-OEMD_COL_ILEAVE = 2
-TUNE_SKIP = 0
+CONNECTION_STRING = dbname=svrwave user=svrwave password=svrwave host=/tmp/pg port=55432
+
+# Uncomment for TCP connection
+# CONNECTION_STRING = dbname=svrwave user=svrwave password=svrwave host=ln01 port=55432 
+
+# In-process file database
+# CONNECTION_STRING = dbfile=/projects/EEHPC-DEV-2025D09-015/share/tempus.duckdb
+
+# Number of database cursors and threads when querying for arrays
 DB_NUM_THREADS = 8
-TUNE_MAX_LAMBDA = 1
-TUNE_MAX_TAU = 1
-INTERLEAVE = 1
-PREDICT_ILEAVE = 1
-PATHS_COUNT = 2
-PREDICT_CHUNKS = 10000
-LAG_MULTIPLIER = 2
-SHIFT_LIMIT = 2
+
+# Database access type, direct postgres or async (also Postgres)
+DAO_TYPE = postgres
+
+# Log levels are trace, debug, info, warning, error
+LOG_LEVEL = trace
+
+# Prediction horizon in seconds, how far in the future to start prediction, end is the main queue resolution
+PREDICTION_HORIZON = 0.2
+
+# Number of substeps to divide every main queue time step, every step will be modelled separately [1..+inf]
+STEPS = 1
+
+# Number of feature quantisations to try while tuning feature mechanics
+NUM_QUANTISATIONS = 2
+
+# Quantisations under divisor * 2 are tested with 1 increment
+QUANTISATION_DIVISOR = 10
+
+# Online empirical mode decomposition tuning particles
+OEMD_TUNE_PARTICLES = 16
+
+# Online empirical mode decomposition tuning iterations
+OEMD_TUNE_ITERATIONS = 4
+
+# Online empirical mode decomposition column validation interleave (higher interleave speeds up tuning) [1, LAG_MULTIPLIER * lag]
+OEMD_INTERLEAVE = 40
+
+# OEMD tuning quantisation skipdiv, higher value is slower but more accurate tuning [1, NUM_QUANTISATIONS]
+OEMD_SKIPDIV = 1
+
+# OEMD Labels to features correlation weight in validation of output component score (0..inf) -1 to disable
+OEMD_XCOR_WEIG = -1
+
+# OEMD Labels sumabs autocorrelation weight in validation of output component score (0..inf) -1 to disable
+OEMD_ACOR_WEIG = 1
+
+# OEMD tuning relative power of output signal in validation score weight (0..inf) -1 to disable
+OEMD_REL_POW_W = 1
+
+# OEMD tuning output component entropy (complexity) weight in validation score (0..inf) -1 to disable
+OEMD_ENTWEIGHT = -1
+
+# OEMD tuning FIR filter frequency ceiling [0..0.5]
+OEMD_FREQ_CEIL = 0.5
+
+# OEMD masks directory absolute path or relative to the directory where the Tempus binary is executed
+OEMD_MASK_DIR = ../lib/fir_masks/
+
+# Alignment validation window used in OEMD tuning, should be (decrement_distance * 1 / stretch_limit) + shift_limit
 ALIGN_WINDOW = 1
-TUNE_PARTICLES1 = 1
-TUNE_ITERATION1 = 1
-TUNE_PARTICLES2 = 1
-TUNE_ITERATION2 = 1
-SOLVE_ITERATIONS_COEFFICIENT = 1
-SOLVE_PARTICLES = 5
+
+# Conventional kernel tuning (RBF, Path, GA, DTW) skip validating of initial samples
+TUNE_SKIP = 0
+
+# Maximum lambda hyperparameter to search for when tuning certain kernels
+TUNE_MAX_LAMBDA = 1
+
+# Maximum tau hyperparameter to search for when tuning certain kernels
+TUNE_MAX_TAU = 1
+
+# Keep same as train interleave for best results, use perfect squares eg. 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256, 289, 324, 361, and 400
+INTERLEAVE = 1
+
+# Use up to N chunks for prediction
+PREDICT_CHUNKS = 10000
+
+# Autoregeresive lag multiplier, of which lag count most similar feature dimensions are used
+LAG_MULTIPLIER = 2
+
+# Shift limit for feature tuning
+SHIFT_LIMIT = 2
+
+# Number of outliers to be removed from every chunk
+OUTLIER_SLACK = 0
+
+# Last N partial of decrement distance, or dataset length, to use as reference when looking for outliers [0..1]
+PREDICT_FOCUS = .05
+
+# KERNEL_LENGTH 18000 is the limit for a 16GB CUDA card imposed by MAGMA
 KERNEL_LENGTH = 20
-WEIGHT_COLUMNS = 2
-WEIGHT_INERTIA = 1000
+
+# Direct IRWLS preconditioner iterations number
 STABILIZE_ITERATIONS_COUNT = 4
+
+# Hyperparameters distances tuning iterations number
+TUNE_ITERATION1 = 1
+
+# Hyperparameters distances tuning particles number
+TUNE_PARTICLES1 = 1
+
+# Hyperparameters kernel tuning iterations number
+TUNE_ITERATION2 = 1
+
+# Hyperparameters kernel tuning particles number
+TUNE_PARTICLES2 = 1
+
+# Matrix solver iterations number is number of rows multiplied by this coefficient
+SOLVE_ITERATIONS_COEFFICIENT = 1
+
+# Weight solver number of parallel particles
+SOLVE_PARTICLES = 5
+
+# How many weight layer per model
+WEIGHT_LAYERS = 2
+
+# Optimization bounds multiplier for weights solver, higher means faster convergence but may reduce accuracy, while lower value requires more iterations
+LIMES = 1
+
+# The higher weight inertia is, the more tendency toword 1 chunk weights have, 0 means no inertia.
+WEIGHT_INERTIA = 1000
+
+# Partial of chunks neighbouring labels to use for solving weights [0 .. 0.5)
+# Labels are averaged across SOLVE_RADIUS * chunk kernel length which enables better generalization of the model.
+SOLVE_RADIUS = 0.1
+
+# Weight calculation sample interlacing skip count. The higher the less complex the solver is, value of 1 means no skip, if higher than KERNEL_LENGTH disables interlacing in the
+# weights solver. If WEIGHT_ILEAVE is decreased then consider decreasing SOLVE_RADIUS in order to preserve accuracy. Low WEIGHT_ILEAVE may improve forecast performance in highly
+# complex or noisy data, otherwise it seems to negatively impact accuracy.
+WEIGHT_ILEAVE = 5000
+
+# Hyperparameters tune chunks at the same time. Make sure there is enough RAM memory available.
 PARALLEL_CHUNKS = 2
+
+# Chunk indexes overlap. This increases number of chunks by 1 / (1 - CHUNK_OVERLAP).
+CHUNK_OVERLAP = 0
+
+# Non-linear optimization algorithm depth, when tuning model hyperparameters, decomposition or weights. Should be less than number of iterations.
+OPT_DEPTH = 1
+
+# Minimum number of points per HDBScan cluster when searching for outliers
+HDBS_POINTS = 10
+
+# ANN kernel head input count is the number of features multiplied by this coefficient
+NN_HEAD_COEF = 0.5
+
+# ANN kernel hidden layer count is the number of features multiplied by this coefficient
+NN_HIDE_COEF = 2
+
+# Gradient boosting decision tree or Temporal Fusion Transformer kernel number of training epochs
+K_EPOCHS = 10000
+
+# Gradient boosting decision tree or Temporal Fusion Transformer kernel learning rate
+K_LEARN_RATE = 0.001
+
+# Max kernel dimension size the GPU can handle at once eg. m=18000 for a 16GB GPU
+GPU_CHUNK = 18000
+
+# Prepare labels max starting delay of aux input data after which the sample observation is discarded. Partial of label duration.
+LABEL_DRIFT = .5
+
+# Per-level models tuned in parallel ( 3 models of 1000 samples take about 512 GB of RAM )
+PARALLEL_MODELS = 2 
+
+# Exclude residuals component when decomposing input data (highest level is not modeled, if dataset levels is more than one)
+XRESIDUAL = 1
+
+# Dataset tuning validation labels (enables tuning if set to more than 0)
+TUNE_DATASET = 256

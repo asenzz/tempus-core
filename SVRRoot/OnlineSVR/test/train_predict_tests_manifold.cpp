@@ -104,7 +104,8 @@ TEST(manifold_tune_train_predict, basic_integration)
     const auto C_test_data_len_h_str = std::to_string(C_test_data_len_h);
     constexpr uint32_t C_dataset_id = 0xDeadBeef;
     const std::string C_dataset_id_str(std::to_string(C_dataset_id));
-    constexpr char C_last_test_time[] = "2025-07-21 22:29:58";
+    // constexpr char C_last_test_time[] = "2025-07-21 22:29:58";
+    constexpr char C_last_test_time[] = "2025-01-24 22:29:58"; // Scott test
 
     try {
         const std::string query =
@@ -150,7 +151,7 @@ TEST(manifold_tune_train_predict, basic_integration)
 
     auto p_dataset = ptr<datamodel::Dataset>(
             C_dataset_id, "test_dataset", "test_user", C_test_input_table_name, std::deque{C_test_aux_input_table_name}, datamodel::Priority::Normal, "",
-            C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_steps(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
+            common::C_default_residual_coef, C_test_gradient_count, PROPS.get_kernel_length(), PROPS.get_steps(), C_test_levels, "cvmd", common::C_default_features_max_time_gap);
 
     business::EnsembleService::init_ensembles(p_dataset, false);
     const auto nl = business::EnsembleService::get_levels_limit(p_dataset->get_spectral_levels());
@@ -185,7 +186,7 @@ TEST(manifold_tune_train_predict, basic_integration)
 
                         LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params.first << ", integration test validation_window " << common::C_integration_test_validation_window);
                         const auto [p_model_features, p_model_labels, p_model_last_knowns, p_weights, p_model_times] =
-                                business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model, C_test_labels_len_h);
+                                business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model);
                         assert(p_model_labels->n_rows == C_test_labels_len_h);
                         assert(p_model_times->size() == C_test_labels_len_h);
                         const uint32_t train_start = p_model_labels->n_rows - C_test_labels_len_h;
@@ -281,12 +282,12 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto last_aux_price = ***std::prev(last_aux_it);
                 constexpr auto time_comp = [](const auto &lhs, const auto &rhs) { return lhs->get_value_time() < rhs->get_value_time(); };
 
-                const auto sign_predicted_move = std::signbit(predicted_move);
+                const auto is_bear = std::signbit(predicted_move);
                 double this_drawdown;
                 const auto [min_it, max_it] = std::minmax_element(placement_it /* start_aux_it */, last_aux_it, time_comp);
                 const auto min_price = ***min_it;
                 const auto max_price = ***max_it;
-                if (sign_predicted_move /* && !is_ask */ ) { // Sell signal
+                if (is_bear /* && !is_ask */ ) { // Sell signal
                     if (recon_predicted[i] <= placement_price && recon_predicted[i] >= min_price) {
                         ++price_hits;
                         pips_won += placement_price - recon_predicted[i];
@@ -296,7 +297,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                         pips_lost += last_aux_price - placement_price;
                     this_drawdown = std::max(0., max_price - placement_price);
                     LOG4_TRACE("Sell min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
-                } else if (!sign_predicted_move/* && is_ask */) { // Buy signal
+                } else if (!is_bear/* && is_ask */) { // Buy signal
                     if (recon_predicted[i] >= placement_price && recon_predicted[i] <= max_price) {
                         ++price_hits;
                         pips_won += recon_predicted[i] - placement_price;
@@ -307,14 +308,14 @@ TEST(manifold_tune_train_predict, basic_integration)
                     this_drawdown = std::max(0., placement_price - min_price);
                     LOG4_TRACE("Buy min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
                 }
-                if (sign_predicted_move == std::signbit(recon_actual_move)) {
+                if (is_bear == std::signbit(recon_actual_move)) {
                     LOG4_DEBUG("Direction correct at " << i);
                     ++pos_direct;
                 }
 
-                const auto sign_predicted_move_lgbm = std::signbit(predicted_move_lgbm);
+                const auto is_bear_lgbm = std::signbit(predicted_move_lgbm);
                 double this_drawdown_lgbm;
-                if (sign_predicted_move_lgbm /* && !is_ask */ ) { // Sell signal
+                if (is_bear_lgbm /* && !is_ask */ ) { // Sell signal
                     if (recon_predicted_lgbm[i] <= placement_price && recon_predicted_lgbm[i] >= min_price) {
                         ++price_hits_lgbm;
                         pips_won_lgbm += placement_price - recon_predicted_lgbm[i];
@@ -324,7 +325,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                         pips_lost_lgbm += last_aux_price - placement_price;
                     this_drawdown_lgbm = std::max(0., max_price - placement_price);
                     LOG4_TRACE("Sell LGBM min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
-                } else if (!sign_predicted_move_lgbm/* && is_ask */) { // Buy signal
+                } else if (!is_bear_lgbm/* && is_ask */) { // Buy signal
                     if (recon_predicted_lgbm[i] >= placement_price && recon_predicted_lgbm[i] <= max_price) {
                         ++price_hits_lgbm;
                         pips_won_lgbm += recon_predicted_lgbm[i] - placement_price;
@@ -335,7 +336,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                     this_drawdown_lgbm = std::max(0., placement_price - min_price);
                     LOG4_TRACE("Buy LGBM min price " << min_price << ", max price " << max_price << ", placement price " << placement_price);
                 }
-                if (sign_predicted_move_lgbm == std::signbit(recon_actual_move)) {
+                if (is_bear_lgbm == std::signbit(recon_actual_move)) {
                     LOG4_DEBUG("Direction correct at " << i);
                     ++pos_direct_lgbm;
                 }
@@ -352,8 +353,8 @@ TEST(manifold_tune_train_predict, basic_integration)
                 const auto pips_pos_lgbm = net_pips_lgbm / i_div;
                 const auto drawdown_pos = drawdown / i_div;
                 const auto drawdown_pos_lgbm = drawdown_lgbm / i_div;
-                const auto leverage = drawdown_pos > 0 ? std::max(0., pips_pos / drawdown_pos) : pips_pos;
-                const auto leverage_lgbm = drawdown_pos_lgbm > 0 ? std::max(0., pips_pos_lgbm / drawdown_pos_lgbm) : pips_pos_lgbm;
+                const auto leverage = drawdown_pos > 0 ? std::max(0., net_pips / drawdown) : pips_pos;
+                const auto leverage_lgbm = drawdown_pos_lgbm > 0 ? std::max(0., net_pips_lgbm / drawdown_lgbm) : pips_pos_lgbm;
                 const auto abs_leverage = max_drawdown > 0 ? std::max(0., net_pips / max_drawdown) : net_pips;
                 const auto abs_leverage_lgbm = max_drawdown > 0 ? std::max(0., net_pips_lgbm / max_drawdown_lgbm) : net_pips_lgbm;
                 const auto positive_preds_pc = 100. * positive_mae_ct / i_div;

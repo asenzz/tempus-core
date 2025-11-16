@@ -15,9 +15,9 @@ struct TestEnv
     std::string dao_type;
 
     static constexpr char const * EnvDbScriptsPathVar   {"TEMPUS_DB_SCRIPTS_PATH"};
-    static constexpr char const * ConfigFiles[]         {"daemon.config"};
+    static constexpr char const * AppConfigFile         {"app.config"};
+    static constexpr char const * ConfigFiles[]         {AppConfigFile};
     static constexpr char const * TestDbUserName        {"tempustest"};
-    static constexpr char const * AppConfigFile         {"daemon.config"};
 
     bool init_test_db(char const *db_name);
     bool init_test_db_98(char const *db_name);

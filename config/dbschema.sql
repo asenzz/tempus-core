@@ -140,7 +140,8 @@ CREATE TABLE public.datasets (
     is_active boolean DEFAULT false,
     gradients smallint DEFAULT 1 NOT NULL,
     max_chunk_size integer DEFAULT 4000 NOT NULL,
-    multistep smallint DEFAULT 1 NOT NULL
+    multistep smallint DEFAULT 1 NOT NULL,
+    residual_coef double precision DEFAULT 2 NOT NULL
 );
 
 

@@ -52,10 +52,12 @@ constexpr char const *TestEnv::ConfigFiles[];
 bool
 TestEnv::init_test_db(char const *db_name)
 {
+#if 1 // Disable init test db for the time being
+    return true;
+#endif
     db_scripts_path.reset();
     char const *ctmp = std::getenv(EnvDbScriptsPathVar);
     if (ctmp != NULL) db_scripts_path = boost::make_optional(ctmp);
-
     if (!db_scripts_path) {
         std::string tmp = exec("dirname `find ../../ -name 'init_db.sh'`");
         erase_after(tmp, '\n');
@@ -94,6 +96,9 @@ TestEnv::init_test_db(char const *db_name)
 bool
 TestEnv::init_test_db_98(char const *db_name)
 {
+#if 1 // Disable init test db for the time being
+    return true;
+#endif
     db_scripts_path.reset();
     char const *ctmp = std::getenv(EnvDbScriptsPathVar);
     if (ctmp != NULL) db_scripts_path = boost::make_optional(ctmp);

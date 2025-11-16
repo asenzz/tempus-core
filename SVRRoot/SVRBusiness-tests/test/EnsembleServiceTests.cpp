@@ -81,7 +81,7 @@ protected:
     void InitDataset()
     {
         testDataset = std::make_shared<svr::datamodel::Dataset>(0, datasetName, user_name, testQueue, std::deque<datamodel::InputQueue_ptr>{},
-                                                                priority, "description", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), swtLevels, swtWaveletName,
+                                                                priority, "description", common::C_default_residual_coef, 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), swtLevels, swtWaveletName,
                                                                 max_lookback_time_gap, std::deque<datamodel::Ensemble_ptr>(), is_active);
         // testDataset->set_ensemble_svr_parameters(ensembles_svr_parameters);
     }

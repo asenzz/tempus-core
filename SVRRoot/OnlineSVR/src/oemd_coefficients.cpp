@@ -60,7 +60,10 @@ t_oemd_coefficients_ptr oemd_coefficients::load(const uint16_t level_ct, const s
             }
             LOG4_DEBUG("Read " << masks[m].size() << " coefficients for mask " << m << " of " << level_ct << " levels from " << mask_full_path);
         }
-    if (except) masks.clear();
+    if (except) {
+        LOG4_DEBUG("Failed loading masks for all level, will tune masks from scratch.");
+        masks.clear();
+    }
 
     return std::make_shared<oemd_coefficients>(siftings, masks);
 }
