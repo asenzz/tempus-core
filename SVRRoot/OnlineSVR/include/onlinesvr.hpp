@@ -10,13 +10,11 @@
 #include <tuple>
 #include <tuple>
 #include <tuple>
-
 #include "common/compatibility.hpp"
 #include "common/constants.hpp"
 #include "common/defines.h"
 #include "model/DQScalingFactor.hpp"
 #include "model/SVRParameters.hpp"
-#include "cuqrsolve.cuh"
 
 namespace svr {
 namespace business {

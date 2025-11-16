@@ -119,44 +119,58 @@ template<typename kT, typename fT> cached<kT, fT>::~cached()
     cached_register::cr.unsafe_erase(this);
 }
 
-std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> calc_cache::get_labels(
-    const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
-    const uint16_t level, const uint16_t steps, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time, const bpt::time_duration &main_resolution,
-    const uint16_t lag)
+std::tuple<t_features_ptr, mat_ptr, vec_ptr, datamodel::data_row_container_ptr> calc_cache::get_training_data(
+    const uint16_t steps, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
+    const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution, const bpt::time_duration &aux_resolution,
+    const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, std::deque<datamodel::SVRParameters_ptr> &params)
 {
-    LOG4_TRACE("Getting labels for " << column_name << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " << level << ", step " << step <<
-        ", aux last values " << labels_aux.back()->to_string());
+    const auto &p = *params.front();
+    const auto level = p.get_decon_level();
+    LOG4_TRACE("Getting training data for " << p.get_input_queue_column_name() << " at " << last_modeled_value_time << " with " << main_data.distance() << " rows, level " <<
+                                            level << ", aux last values " << labels_aux.back()->to_string());
+    const auto needs_tuning = p.get_feature_mechanics().needs_tuning();
+
     const auto prepare_f = [&] {
-        auto p_labels = ptr<arma::mat>();
         auto p_last_knowns = ptr<arma::vec>();
         auto p_label_times = ptr<datamodel::data_row_container>();
-        ModelService::prepare_labels(*p_labels, *p_last_knowns, *p_label_times, main_data, labels_aux, max_gap, level, aux_queue_res, last_modeled_value_time,
-                                     main_resolution, steps, lag);
-        return std::make_tuple(p_labels, p_last_knowns, p_label_times);
+        std::vector<t_label_ix> label_ixs;
+        std::vector<uint32_t> ix_F_end;
+        ModelService::coordinates_knowns(
+                *p_last_knowns, *p_label_times, label_ixs, ix_F_end, main_data, labels_aux, max_gap, level, aux_resolution, last_modeled_value_time, resolution, p.get_lag_count());
+        auto p_features = ptr<std::deque<mat_ptr>>(steps);
+        auto p_labels = ptr<arma::mat>();
+        if (needs_tuning) {
+            PROFILE_INFO(
+                ModelService::tune_data(*p_features, *p_labels, params, *p_label_times, label_ixs, ix_F_end, aux_decon_queues, resolution, aux_resolution, steps, labels_aux),
+                "Tune training data for " << p);
+        } else {
+            PROFILE_TRACE(ModelService::prepare_labels(*p_labels, *p_label_times, labels_aux, p, label_ixs, ix_F_end, resolution, aux_resolution), "Prepare labels " << p);
+            OMP_FOR_i(steps) {
+                p_features->at(i) = ptr<arma::mat>();
+                PROFILE_TRACE(ModelService::prepare_features(*p_features->at(i), *p_label_times, aux_decon_queues, *params[i], aux_resolution, resolution),
+                              "Prepare features " << *params[i]);
+            }
+        }
+        assert(p_labels->n_rows == p_features->front()->n_rows);
+        return std::make_tuple(p_features, p_labels, p_last_knowns, p_label_times);
     };
-    const auto k = std::make_tuple(column_name, (*main_data.cbegin())->get_value_time(), main_data.distance(), level, main_resolution, aux_queue_res);
-    const auto [p_labels, p_last_knowns, p_label_times] = cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
-    return {ptr<arma::mat>(p_labels->col(step)), p_last_knowns, p_label_times};
+
+    const auto k = std::make_tuple((*main_data.cbegin())->get_value_time(), main_data.distance(), level, resolution, p.get_input_queue_column_name(),
+                                   p.get_adjacent_levels(), p.get_lag_count(), aux_decon_queues.size(), aux_resolution);
+
+    return cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
 }
 
 
-mat_ptr calc_cache::get_features(
-    const arma::mat &labels, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &params, const bpt::time_duration &aux_resolution,
-    const bpt::time_duration &main_resolution, const bpt::time_duration &max_lookback_time_gap, const datamodel::data_row_container &label_times)
+mat_ptr calc_cache::get_features(const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &param, const bpt::time_duration &aux_resolution,
+                                 const bpt::time_duration &resolution, const bpt::time_duration &max_gap, const datamodel::data_row_container &label_times)
 {
-    LOG4_TRACE("Getting features for with " << label_times.size() << " rows, parameters " << params << ", queues " << aux_decon_queues.size());
-    const auto needs_tuning = params.get_feature_mechanics().needs_tuning();
-    const auto prepare_f = [&, needs_tuning] {
+    LOG4_TRACE("Getting features for with " << label_times.size() << " rows, parameters " << param << ", queues " << aux_decon_queues.size());
+    assert(!param.get_feature_mechanics().needs_tuning());
+    const auto prepare_f = [&] {
         auto p_features = ptr<arma::mat>();
-        if (needs_tuning) {
-            PROFILE_INFO(
-                ModelService::tune_features(*p_features, labels, params, label_times, aux_decon_queues, aux_resolution, main_resolution),
-                "Tune features for " << params);
-        } else PROFILE_INFO(
-            ModelService::prepare_features(*p_features, label_times, aux_decon_queues, params, aux_resolution, main_resolution),
-            "Prepare features " << params);
-        const auto p_feature_mechanics = ptr<datamodel::t_feature_mechanics>(params.get_feature_mechanics());
-        return std::make_pair(p_features, p_feature_mechanics);
+        PROFILE_INFO(ModelService::prepare_features(*p_features, label_times, aux_decon_queues, param, aux_resolution, resolution), "Prepare features " << param);
+        return p_features;
     };
     const auto k = std::make_tuple(
         params.get_step(), params.get_input_queue_column_name(), label_times.front()->get_value_time(), label_times.back()->get_value_time(), label_times.size(),

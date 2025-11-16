@@ -27,7 +27,6 @@ class Model : public Entity
     std::deque<OnlineSVR_ptr> svr_models; // one model per gradient
     bpt::ptime last_modified = bpt::not_a_date_time; // model modified (system) time
     bpt::ptime last_modeled_value_time = bpt::min_date_time; // last input queue modeled value time
-    std::pair<SVRParameters_ptr, SVRParameters_ptr> parameters;
     PROPERTY(arma::mat, features)
     PROPERTY(arma::mat, labels)
     PROPERTY(arma::vec, last_knowns)
@@ -59,11 +58,11 @@ public:
 
     uint16_t get_outputs() const;
 
-    std::pair<SVRParameters_ptr, SVRParameters_ptr> &get_head_params();
+    SVRParameters_ptr get_head_param_ptr();
 
-    const std::pair<SVRParameters_ptr, SVRParameters_ptr> &get_head_params() const;
+    SVRParameters &get_head_param();
 
-    void set_head_params(const std::pair<SVRParameters_ptr, SVRParameters_ptr> &params);
+    const SVRParameters &get_head_param() const;
 
     void adjust_gradient_decrement(uint32_t distance) const;
 

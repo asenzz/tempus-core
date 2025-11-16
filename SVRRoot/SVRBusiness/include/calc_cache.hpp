@@ -16,8 +16,8 @@
 #include <mutex>
 #include <boost/unordered/unordered_flat_map.hpp>
 #include "model/SVRParameters.hpp"
-#include "onlinesvr.hpp"
 #include "model/InputQueue.hpp"
+#include "onlinesvr.hpp"
 
 #define BYPASS_CALC_CACHE
 
@@ -45,6 +45,7 @@ class Model;
 }
 
 namespace business {
+
 struct levels_tune_data
 {
     tbb::concurrent_unordered_map<size_t, ssize_t> started_tuners, completed_tuners;
@@ -67,17 +68,16 @@ public:
     template<typename T> arma::Mat<T> get_Ky(
         const kernel::kernel_base<T> &kernel_ftor, const arma::Mat<T> &X, const arma::Mat<T> &Xy, const bpt::ptime &time_X, const bpt::ptime &time_Xy);
 
-    static std::tuple<mat_ptr, vec_ptr, datamodel::data_row_container_ptr> get_labels(
-        const std::string &column_name, const uint16_t step, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux,
-        const bpt::time_duration &max_gap, const uint16_t level, const uint16_t steps, const bpt::time_duration &aux_queue_res, const bpt::ptime &last_modeled_value_time,
-        const bpt::time_duration &main_resolution, const uint16_t lag);
+    static std::tuple<t_features_ptr, mat_ptr, vec_ptr, datamodel::data_row_container_ptr> get_training_data(
+        uint16_t steps, const datamodel::datarow_crange &main_data, const datamodel::datarow_crange &labels_aux, const bpt::time_duration &max_gap,
+        const bpt::ptime &last_modeled_value_time, const bpt::time_duration &resolution, const bpt::time_duration &aux_resolution,
+        const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, std::deque<datamodel::SVRParameters_ptr> &params);
 
-    static mat_ptr get_features(
-        const arma::mat &labels, const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &params, const bpt::time_duration &aux_resolution,
-        const bpt::time_duration &main_resolution, const bpt::time_duration &max_lookback_time_gap, const datamodel::data_row_container &label_times);
+    static mat_ptr get_features(const std::deque<datamodel::DeconQueue_ptr> &aux_decon_queues, datamodel::SVRParameters &param, const bpt::time_duration &aux_resolution,
+                                const bpt::time_duration &resolution, const bpt::time_duration &max_gap, const datamodel::data_row_container &label_times);
 
     static mat_ptr get_weights(
-        const bigint dataset_id, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
+        bigint dataset_id, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const arma::fvec &steps,
         const bpt::time_duration &resolution_main);
 
     void clear_tune_cache(const std::string &column_name);

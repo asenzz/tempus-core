@@ -106,7 +106,7 @@ void Model::set_step(const uint16_t _step)
 /** Get pointer to an OnlineSVR model instance */
 OnlineSVR_ptr Model::get_gradient(const uint16_t i) const
 {
-    const auto svr_model_iter = std::find_if(C_default_exec_policy, svr_models.begin(), svr_models.end(), [&](const auto &p_svr_model) {
+    const auto svr_model_iter = std::find_if(C_default_exec_policy, svr_models.cbegin(), svr_models.cend(), [&](const auto &p_svr_model) {
         return p_svr_model->get_gradient_level() == i;
     });
     if (svr_model_iter != svr_models.end()) return *svr_model_iter;
@@ -114,25 +114,19 @@ OnlineSVR_ptr Model::get_gradient(const uint16_t i) const
     return nullptr;
 }
 
-std::pair<SVRParameters_ptr, SVRParameters_ptr> &Model::get_head_params()
+SVRParameters_ptr Model::get_head_param_ptr()
 {
-    return parameters;
+    return *get_gradient()->get_param_set().begin();
 }
 
-const std::pair<SVRParameters_ptr, SVRParameters_ptr> &Model::get_head_params() const
+SVRParameters &Model::get_head_param()
 {
-    return parameters;
+x    return **get_gradient()->get_param_set().begin();
 }
 
-void Model::set_head_params(const std::pair<SVRParameters_ptr, SVRParameters_ptr> &params)
+const SVRParameters &Model::get_head_param() const
 {
-    parameters = params;
-    for (const auto &p: {parameters.first, parameters.second}) {
-        p->set_decon_level(decon_level);
-        p->set_step(step);
-        p->set_grad_level(0);
-        p->set_chunk_index(0);
-    }
+    return **get_gradient()->get_param_set().cbegin();
 }
 
 void Model::adjust_gradient_decrement(const uint32_t distance) const

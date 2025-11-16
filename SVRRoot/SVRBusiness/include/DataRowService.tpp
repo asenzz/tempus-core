@@ -48,8 +48,10 @@ template<typename I> inline void generate_twap_indexes(
 {
     assert(it_end >= start_it);
     auto it = start_it;
+    auto time_iter = start_time;
+    const auto time_incr = duration / n_out;
     for (DTYPE(n_out) outctr = 0; outctr < n_out; ++outctr) {
-        const auto time_iter = start_time + duration * outctr / n_out;
+        time_iter += time_incr;
         while (it < it_end && is_valid(it) && get_time(it) < time_iter) ++it;
         out[outctr] = it - cbegin - (it > cbegin && (it == it_end || !is_valid(it) || get_time(it) > time_iter));
     }
@@ -74,8 +76,10 @@ template<typename I> inline uint32_t /* index of extrema */ generate_twap_bias(
     auto it = start_it;
     auto maxmin_v = maxmin ? std::numeric_limits<double>::max() : std::numeric_limits<double>::min();
     uint32_t maxmin_i = start_it - cbegin;
+    auto time_iter = start_time;
+    const auto time_incr = duration / n_out;
     for (DTYPE(n_out) outctr = 0; outctr < n_out; ++outctr) {
-        const auto time_iter = start_time + duration * outctr / n_out;
+        time_iter += time_incr;
         while (it < it_end && is_valid(it) && get_time(it) < time_iter) ++it;
         out[outctr] = it - cbegin - (it > cbegin && (it == it_end || !is_valid(it) || get_time(it) > time_iter));
         const auto v = get_value(cbegin + out[outctr], level);

@@ -71,8 +71,7 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
     const auto active_chunks = get_predict_chunks();
     const auto n_chunks = active_chunks.size();
     const auto chunk_divisor = 1. / active_chunks.size();
-    // #pragma omp parallel ADJ_THREADS(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers()) // TODO Fix parallelized prediction seems to give bad results, probably a bug in taskloop implementation, replace with TBB
-// #pragma omp single
+    // OMP_PAR(ixs.size() * x_predict_t.n_cols * PROPS.get_weight_layers()) // TODO I notice variation in predictions when parallelized
     {
         const auto [start_chunk, end_chunk] = get_mpi_bounds(n_chunks);
         // OMP_TASKLOOP_1()
@@ -126,6 +125,8 @@ arma::mat OnlineSVR::predict(const arma::mat &x_predict, const bpt::ptime &time)
         }
     }
 #endif
+    prediction *= (**param_set.cbegin()).get_feature_mechanics().steps(step);
+
     LOG4_TRACE("For " << time << ", predicted " << common::present(prediction));
     return prediction;
 }

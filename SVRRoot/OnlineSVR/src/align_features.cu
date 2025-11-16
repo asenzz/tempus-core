@@ -69,17 +69,17 @@ __device__ __forceinline__ double vec_dist_stretch(CRPTRd labels, CRPTRd feature
 __global__ void G_align_features(
     CRPTRd features, CRPTRd labels,
     RPTR(double) scores, RPTR(float) stretches, RPTR(uint32_t) shifts,
-    const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const double stretch_limit, const uint32_t align_validate,
+        const uint32_t n_rows, const uint32_t n_cols, const float shift_inc_mul, const float stretch_limit, const uint32_t align_validate,
     const uint32_t shift_limit, const float stretch_multiplier)
 {
     CU_STRIDED_FOR_i(n_cols) {
         scores[i] = common::C_bad_validation;
         CPTRd features_col = features + n_rows * i;
-        for (uint32_t sh = 0; sh < shift_limit; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
+        for (DTYPE(shift_limit) sh = 0; sh < shift_limit; sh += max(1, uint32_t(shift_inc_mul * sh))) { // TODO Unroll loop into an array supplied at kernel launch
             CPTRd labels_sh = labels + sh;
             const auto validate_rows = n_rows - sh;
             UNROLL()
-            for (float st = 1; st > stretch_limit; st *= stretch_multiplier) {
+            for (DTYPE(stretch_limit) st = 1; st > stretch_limit; st *= stretch_multiplier) {
                 const auto score = vec_dist_stretch(labels_sh, features_col, validate_rows, st, 1, align_validate);
                 if (score >= scores[i]) continue;
                 scores[i] = score;
@@ -90,6 +90,7 @@ __global__ void G_align_features(
     }
 }
 
+
 void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, float *const p_stretches, RPTR(uint32_t) p_shifts, const uint32_t n_rows, const uint32_t n_cols)
 {
     const auto n_rows_integration = n_rows - common::C_integration_test_validation_window;
@@ -98,7 +99,7 @@ void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, floa
 #ifdef INTEGRATION_TEST
     LOG4_DEBUG("Aligning features test offset " << common::C_integration_test_validation_window << ", rows " << n_rows << ", cols " << n_cols << ", align window " << align_window);
 #endif
-    CTX4_CUSTREAM;
+    CTX_CUSTREAM_(2);
     double *d_features;
     CU_ERRCHK(cudaMallocAsync((void **) &d_features, n_rows_integration * n_cols * sizeof(double), custream));
     copy_submat(p_features, d_features, n_rows, 0, 0, n_rows_integration, n_cols, n_rows_integration, cudaMemcpyHostToDevice, custream);
@@ -106,18 +107,21 @@ void align_features(CPTRd p_features, CPTRd labels, double *const p_scores, floa
     double *d_scores;
     CU_ERRCHK(cudaMallocAsync((void **) &d_scores, n_cols * sizeof(double), custream));
     float *d_stretches;
-    const auto cols_size_float = n_cols * sizeof(float);
-    CU_ERRCHK(cudaMallocAsync((void **) &d_stretches, cols_size_float, custream));
+    if (p_stretches) {
+        CU_ERRCHK(cudaMallocAsync((void **) &d_stretches, n_cols * sizeof(float), custream));
+    } else d_stretches = nullptr;
     uint32_t *d_shifts;
+    if (p_shifts) {
     CU_ERRCHK(cudaMallocAsync((void **) &d_shifts, n_cols * sizeof(uint32_t), custream));
+    } else d_shifts = nullptr;
     G_align_features<<<CU_BLOCKS_THREADS(n_cols), 0, custream>>>(
-        d_features, d_labels, d_scores, d_stretches, d_shifts, n_rows_integration, n_cols, 0, PROPS.get_stretch_limit(), align_window, PROPS.get_shift_limit(),
+            d_features, d_labels, d_scores, d_stretches, d_shifts, n_rows_integration, n_cols, PROPS.get_shift_multi(), PROPS.get_stretch_limit(), align_window, PROPS.get_shift_limit(),
         PROPS.get_stretch_coef());
     CU_ERRCHK(cudaFreeAsync(d_features, custream));
     CU_ERRCHK(cudaFreeAsync(d_labels, custream));
     cufreecopy(p_scores, d_scores, custream, n_cols);
-    cufreecopy(p_stretches, d_stretches, custream, n_cols);
-    cufreecopy(p_shifts, d_shifts, custream, n_cols);
+    if (p_stretches) cufreecopy(p_stretches, d_stretches, custream, n_cols);
+    if (p_shifts) cufreecopy(p_shifts, d_shifts, custream, n_cols);
     cusyndestroy(custream);
 }
 
@@ -190,15 +194,15 @@ void quantise_features(
     CPTRd decon, CPTR(t_feat_params) feat_params, const uint32_t start_row, const uint32_t n_rows_chunk, const uint32_t n_rows, const uint32_t n_feat_rows, const uint16_t level,
     const uint32_t n_cols_coef_, const uint32_t n_cols_coef, const uint16_t quantise, RPTR(double) p_features)
 {
-    CTX4_CUSTREAM;
+    CTX_CUSTREAM_(2);
     const auto end_row = start_row + n_rows_chunk - 1;
     auto d_features = cucalloc<double>(custream, n_rows_chunk * n_cols_coef_);
     const auto d_decon_F = cumallocopy(decon + n_feat_rows * level, custream, feat_params[end_row].ix_end + 1);
     const auto d_feat_params = cumallocopy(feat_params, custream, end_row + 1);
     G_quantise_features<<<CU_BLOCKS_THREADS(clamp_n(n_rows_chunk)), 0, custream>>>(
             d_decon_F, d_feat_params, n_rows_chunk, quantise, start_row, n_cols_coef_, d_features);
-    double stub_sf, stub_dc;
-    business::ScalingFactorService::cu_scale_calc_I(d_features, n_rows_chunk * n_cols_coef_, stub_sf, stub_dc, custream);
+//     double stub_sf, stub_dc;
+//    business::ScalingFactorService::cu_scale_calc_I(d_features, n_rows_chunk * n_cols_coef_, stub_sf, stub_dc, custream); // TODO Check if really needed
     CU_ERRCHK(cudaFreeAsync(d_decon_F, custream));
     CU_ERRCHK(cudaFreeAsync(d_feat_params, custream));
 #ifdef EMO_DIFF
@@ -210,19 +214,23 @@ void quantise_features(
     cusyndestroy(custream);
 }
 
-void quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs,
-                     const std::vector<uint32_t> &ix_end_F, RPTR(double) p_labels, const uint16_t steps)
+void quantise_labels(const uint32_t label_len, const std::vector<double> &in, const std::vector<t_label_ix> &label_ixs, const std::vector<uint32_t> &ix_end_F, RPTR(double) p_labels,
+                     const uint16_t steps, CRPTR(float) points, CRPTR(uint32_t) steps_ixs)
 {
-    CTX4_CUSTREAM;
+    CTX_CUSTREAM_(2);
+    assert(steps);
     const auto rows = label_ixs.size();
-    const auto n = rows * steps;
-    auto d_labels = cucalloc<double>(custream, n);
+    auto d_labels = cucalloc<double>(custream, rows * steps);
     const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
     const auto d_label_ixs = cumallocopy(label_ixs, custream);
     const auto d_in = cumallocopy(in, custream);
+    const auto d_points = steps > 1 ? cumallocopy(points, custream, steps - 1) : nullptr;
+    const auto d_steps_ixs = steps > 1 ? cumallocopy(steps_ixs, custream, steps) : nullptr;
     constexpr bool do_label_bias = C_label_bias > 0;
-    G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>(
-        d_in, d_labels, rows, d_label_ixs, d_ix_end_F, steps, label_ixs.front().n_ixs / steps);
+    if (steps == 1)
+        G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>(d_in, d_labels, rows, d_label_ixs, d_ix_end_F);
+    else
+        G_quantise_labels<do_label_bias><<<CU_BLOCKS_THREADS(rows), 0, custream>>>(d_in, d_labels, rows, d_label_ixs, d_ix_end_F, steps - 1, d_steps_ixs, d_points, steps);
 #ifndef NDEBUG
     CU_ERRCHK(cudaDeviceSynchronize());
     CU_ERRCHK(cudaPeekAtLastError());
@@ -230,7 +238,13 @@ void quantise_labels(const uint32_t label_len, const std::vector<double> &in, co
     CU_ERRCHK(cudaFreeAsync(d_in, custream));
     CU_ERRCHK(cudaFreeAsync(d_label_ixs, custream));
     CU_ERRCHK(cudaFreeAsync(d_ix_end_F, custream));
-    cufreecopy(p_labels, d_labels, custream, n);
+    if (steps > 1) {
+        CU_ERRCHK(cudaFreeAsync(d_points, custream));
+        CU_ERRCHK(cudaFreeAsync(d_steps_ixs, custream));
+    }
+    double stub_sf, stub_dc;
+    business::ScalingFactorService::cu_scale_calc_I(d_labels, rows * steps, stub_sf, stub_dc, custream); // TODO Check if really needed
+    cufreecopy(p_labels, d_labels, custream, rows);
     cusyndestroy(custream);
 }
 

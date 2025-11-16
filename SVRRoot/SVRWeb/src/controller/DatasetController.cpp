@@ -22,7 +22,7 @@ void DatasetController::show(const std::string dataset_name)
         model.priority = datamodel::to_string(p_dataset->get_priority());
         model.gradients = std::to_string(p_dataset->get_gradient_count());
         model.chunk_size = std::to_string(p_dataset->get_max_chunk_size());
-        // modoutputsout = std::to_string(p_dataset->get_steps()); // TODO should be model.steps
+        // model.steps = std::to_string(p_dataset->get_steps()); // TODO should be model.steps
         model.transformation_levels = std::to_string(p_dataset->get_spectral_levels());
         model.transformation_wavelet = p_dataset->get_transformation_name();
     }

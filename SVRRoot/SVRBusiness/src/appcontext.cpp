@@ -142,12 +142,6 @@ AppContext::AppContext(const std::string &config_path, const bool use_threadsafe
 #endif
 
     mlockall(MCL_CURRENT | MCL_FUTURE);
-/*
-#ifdef USE_IPP
-    IPP_ERRCHK(ippInit());
-#endif
-    MAG_ERRCHK(magma_init());
-*/
 }
 
 AppContext::~AppContext()

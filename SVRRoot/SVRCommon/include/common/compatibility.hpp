@@ -177,6 +177,8 @@ typedef std::shared_ptr<arma::cube> cube_ptr;
 typedef std::shared_ptr<arma::mat> mat_ptr;
 typedef std::shared_ptr<arma::vec> vec_ptr;
 typedef arma::Col<std::time_t> tvec;
+using t_features_ptr = std::shared_ptr<std::deque<mat_ptr>>;
+
 
 std::string demangle(const std::string &name);
 

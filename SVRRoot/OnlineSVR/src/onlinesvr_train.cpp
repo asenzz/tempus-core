@@ -384,7 +384,7 @@ void OnlineSVR::prepare_chunk(const SVRParameters_ptr &p)
     const auto i = p->get_chunk_index();
     train_feature_chunks_t[i] = feature_chunk_t(ixs[i]);
     instance_weights[i] = p_input_weights->rows(ixs[i]);
-    train_label_chunks[i] = p_labels->rows(ixs[i]); // % instance_weights[i];
+    train_label_chunks[i] = p_labels->rows(ixs[i]) % instance_weights[i];
     LOG4_TRACE("Before scaling chunk " << i << ", train labels " << common::present(train_label_chunks[i]) << ", train features " << common::present(train_feature_chunks_t[i]));
     DQScalingFactor_ptr p_labels_sf;
     DTYPE(scaling_factors) features_sf;
