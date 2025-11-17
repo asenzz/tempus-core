@@ -121,7 +121,7 @@ SVRParameters_ptr Model::get_head_param_ptr()
 
 SVRParameters &Model::get_head_param()
 {
-x    return **get_gradient()->get_param_set().begin();
+    return **get_gradient()->get_param_set().begin();
 }
 
 const SVRParameters &Model::get_head_param() const

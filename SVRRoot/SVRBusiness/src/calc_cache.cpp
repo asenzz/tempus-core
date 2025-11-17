@@ -173,17 +173,14 @@ mat_ptr calc_cache::get_features(const std::deque<datamodel::DeconQueue_ptr> &au
         return p_features;
     };
     const auto k = std::make_tuple(
-        params.get_step(), params.get_input_queue_column_name(), label_times.front()->get_value_time(), label_times.back()->get_value_time(), label_times.size(),
-        params.get_adjacent_levels(), params.get_lag_count(), aux_decon_queues.size(), main_resolution, aux_resolution);
-
-    const auto [p_features, p_feature_mechanics] = cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
-    if (needs_tuning) params.set_feature_mechanics(*p_feature_mechanics);
-    return p_features;
+            param.get_step(), param.get_input_queue_column_name(), label_times.front()->get_value_time(), label_times.back()->get_value_time(), label_times.size(),
+            param.get_adjacent_levels(), param.get_lag_count(), aux_decon_queues.size(), resolution, aux_resolution);
+    return cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
 }
 
 // Input weights
 mat_ptr calc_cache::get_weights(
-    const bigint dataset_id, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const uint16_t step, const uint16_t steps,
+    const bigint dataset_id, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_inputs, const arma::fvec &steps,
     const bpt::time_duration &resolution_main)
 {
     LOG4_BEGIN();
@@ -194,7 +191,7 @@ mat_ptr calc_cache::get_weights(
         APP.w_scaling_factor_service.scale(dataset_id, *p_weights);
         return p_weights;
     };
-    const auto k = std::make_tuple(aux_inputs.front()->get_table_name(), (**times.cbegin()).get_value_time(), times.size(), steps, resolution_main);
+    const auto k = std::make_tuple(aux_inputs.front()->get_table_name(), (**times.cbegin()).get_value_time(), times.size(), steps.size(), resolution_main);
     const auto p_weights = cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
 
     LOG4_END();

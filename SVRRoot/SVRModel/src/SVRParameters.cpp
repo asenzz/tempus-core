@@ -590,7 +590,7 @@ bool t_feature_mechanics::needs_tuning() const noexcept
     return quantization.empty() || quantization.has_nonfinite()
            || stretches.empty() || stretches.has_nonfinite()
            || shifts.empty() || shifts.has_nonfinite()
-           || trims.empty();
+           || steps.empty() || trims.empty();
 }
 
 std::stringstream t_feature_mechanics::save() const
