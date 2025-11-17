@@ -186,8 +186,6 @@ class AppConfig final : public PropertiesReader
 
     CONFPROP(float, chunk_overlap, .0) // 0..1, higher means more chunks
 
-    CONFPROP(float, oemd_skipdiv, 1) // (0..num quantisations], higher means more refined
-
     CONFPROP(float, oemd_xcor_weig, 1) // OEMD tuning labels to features correlation weight in validation score
 
     CONFPROP(float, oemd_acor_weig, 1) // OEMD tuning labels autocorrelation weight in validation score
@@ -223,8 +221,6 @@ private: // TODO port properties below to use the CONFPROP macro
     static constexpr char SLIDE_SKIP[] = "SLIDE_SKIP";
     static constexpr char TUNE_RUN_LIMIT[] = "TUNE_RUN_LIMIT";
     static constexpr char SELF_REQUEST[] = "SELF_REQUEST";
-    static constexpr char NUM_QUANTISATIONS[] = "NUM_QUANTISATIONS"; // Higher number of quantisations means more precision (more resource usage)
-    static constexpr char QUANTISATION_DIVISOR[] = "QUANTISATION_DIVISOR"; // Lower divisor means fine grained quantisations (more resource usage, 1 quant increment until 2 * divisor)
     static constexpr char OEMD_TUNE_PARTICLES[] = "OEMD_TUNE_PARTICLES"; // Number of particles for tuning, higher means more precision
     static constexpr char OEMD_TUNE_ITERATIONS[] = "OEMD_TUNE_ITERATIONS"; // Number of iterations for tuning, higher means more precision
     static constexpr char SOLVE_ITERATIONS_COEFFICIENT[] = "SOLVE_ITERATIONS_COEFFICIENT"; // Coefficient for iterations in solving, higher means more precision, max recommended 2
@@ -240,7 +236,7 @@ private: // TODO port properties below to use the CONFPROP macro
     const bool set_thread_affinity_, recombine_parameters_, tune_parameters_, self_request_, daemonize_;
     const boost::log::trivial::severity_level log_level_;
     const std::chrono::milliseconds loop_interval_, stream_loop_interval_;
-    const uint16_t num_quantisations_, quantisation_divisor_, oemd_tune_particles_, oemd_tune_iterations_;
+    const uint16_t oemd_tune_particles_, oemd_tune_iterations_;
 
 public:
     virtual ~AppConfig();
@@ -258,8 +254,6 @@ public:
     std::string get_oemd_masks_dir() const noexcept;
 
     ConcreteDaoType get_dao_type() const noexcept;
-
-    size_t get_default_feature_quantization() const noexcept;
 
     float get_prediction_horizon() const noexcept;
 
@@ -296,10 +290,6 @@ public:
     std::chrono::milliseconds get_stream_loop_interval() const noexcept;
 
     bool get_daemonize() const noexcept;
-
-    uint16_t get_num_quantisations() const noexcept;
-
-    uint16_t get_quantisation_divisor() const noexcept;
 
     uint16_t get_oemd_tune_particles() const noexcept;
 

@@ -66,9 +66,6 @@ class ModelService
     static arma::vec get_last_knowns(const datamodel::Ensemble &ensemble, uint16_t level, const datamodel::data_row_container &times, const bpt::time_duration &resolution);
 
 public:
-    static uint32_t get_max_quantisation();
-
-    static const std::deque<uint32_t> &get_quantisations();
 
     static uint32_t get_max_row_len();
 

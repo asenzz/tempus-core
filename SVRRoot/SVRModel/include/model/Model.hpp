@@ -14,7 +14,7 @@ using DataRow_ptr = std::shared_ptr<DataRow>;
 
 using data_row_container = std::deque<DataRow_ptr>;
 
-using t_model_train_data = std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, datamodel::data_row_container_ptr>;
+using t_model_train_data = std::tuple<t_features_ptr, mat_ptr, vec_ptr, mat_ptr, datamodel::data_row_container_ptr>;
 
 class Model : public Entity
 {
@@ -92,8 +92,6 @@ public:
 
     virtual std::string to_string() const override;
 
-    static constexpr uint16_t C_paramid_left = 0xbeef;
-    static constexpr uint16_t C_paramid_right = 0xdead;
 };
 
 using Model_ptr = std::shared_ptr<Model>;

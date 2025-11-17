@@ -42,52 +42,11 @@
 
 namespace svr {
 namespace business {
-namespace {
-std::deque<uint32_t> calc_quantisations()
-{
-    std::deque<uint32_t> r{1};
-    const auto divisor = PROPS.get_quantisation_divisor(); // Meaning, quantisations up to C_divisor * 2 are incremented by 1
-    const auto num_quantisations = PROPS.get_num_quantisations();
-    UNROLL()
-    for (DTYPE(num_quantisations) i = 0; i < num_quantisations - 1; ++i)
-        r.emplace_back(r.back() + std::max<uint32_t>(1, r.back() / divisor)); // r.emplace_back(r.back() + 1);
-    LOG4_TRACE("Calculated quantisations " << r);
-    return r;
-}
-
-}
-
-const std::deque<uint32_t> &ModelService::get_quantisations()
-{
-    static tbb::mutex mx;
-    static std::deque<uint32_t> quantisations;
-    if (quantisations.empty()) {
-        const tbb::mutex::scoped_lock lk(mx);
-        if (quantisations.empty()) quantisations = calc_quantisations();
-    }
-    return quantisations;
-}
-
-uint32_t ModelService::get_max_quantisation()
-{
-    LOG4_BEGIN();
-    static tbb::mutex mx;
-    static uint32_t max_quantisation = 0;
-    if (!max_quantisation) {
-        const tbb::mutex::scoped_lock lk(mx);
-        if (!max_quantisation) {
-            auto quantisations = calc_quantisations();
-            if (!max_quantisation) max_quantisation = *std::max_element(C_default_exec_policy, quantisations.cbegin(), quantisations.cend());
-        }
-    }
-    LOG4_TRACE("Max quantisation is " << max_quantisation);
-    return max_quantisation;
-}
 
 
 uint32_t ModelService::get_max_row_len()
 {
-    return get_max_quantisation() * (1 + PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count);
+    return PROPS.get_max_quant() * (1 + PROPS.get_lag_multiplier() * datamodel::C_default_svrparam_lag_count);
 }
 
 
@@ -562,7 +521,7 @@ void ModelService::coordinates_knowns(
     const auto label_len_1 = label_len + 1;
     const auto stripe_period = resolution_aux * coef_lag_;
     const auto first_time = aux_data.front()->get_value_time();
-    const auto max_row_duration = horizon_duration + stripe_period * get_max_quantisation();
+    const auto max_row_duration = horizon_duration + stripe_period * get_max_quant();
 #ifdef NDEBUG
     const uint32_t avail_rows = main_data.cend() - main_data.contcbegin();
     OMP_FOR_(avail_rows, ordered)
@@ -708,7 +667,7 @@ void ModelService::tune_data(
         sps.n_chunks_align = cdiv(sps.align_features_size, max_gpu_chunk_size);
         sps.chunk_len_align = cdiv(sps.coef_lag, sps.n_chunks_align);
         sps.stripe_period = resolution_aux * sps.coef_lag_;
-        sps.coef_lag_max_q = sps.coef_lag_ * get_max_quantisation();
+        sps.coef_lag_max_q = sps.coef_lag_ * PROPS.get_max_quant();
         sps.chunk_len_quantise.resize(n_queues);
         sps.in_rows.resize(n_queues);
         sps.decon.resize(n_queues);
@@ -717,7 +676,7 @@ void ModelService::tune_data(
     const auto earliest_label_horizon = label_times.front()->get_value_time() - horizon_duration;
     const auto latest_label_horizon = label_times.back()->get_value_time() - horizon_duration;
     LOG4_TRACE("Preparing level " << level << ", " << n_rows << " rows, main range from " << earliest_label_horizon << " until " << latest_label_horizon << ", " << n_queues <<
-        " queues, max quant " << get_max_quantisation());
+        " queues, max quant " << PROPS.get_max_quant());
     OMP_PAR(n_queues * n_rows * sp.front().n_levels)
     {
         OMP_TASKLOOP_1()
@@ -757,12 +716,12 @@ void ModelService::tune_data(
         bounds.set_size(steps + sp.front().n_levels_queues, 2);
         bounds.submat(0, 0, steps - 1, 0).fill(PROPS.get_min_step());
         bounds.submat(0, 1, steps - 1, 1).fill(PROPS.get_max_step());
-        bounds.submat(steps, 0, bounds.n_rows - 1, 0).fill(0);
-        bounds.submat(steps, 1, bounds.n_rows - 1, 1).fill(get_max_quantisation());
+        bounds.submat(steps, 0, bounds.n_rows - 1, 0).fill(PROPS.get_min_quant());
+        bounds.submat(steps, 1, bounds.n_rows - 1, 1).fill(PROPS.get_max_quant());
     } else {
         bounds.set_size(sp.front().n_levels_queues, 2);
-        bounds.col(0).fill(0);
-        bounds.col(1).fill(get_max_quantisation());
+        bounds.col(0).fill(PROPS.get_min_quant());
+        bounds.col(1).fill(PROPS.get_max_quant());
     }
     const optimizer::t_pprune_res res = optimizer::pprune(
             optimizer::pprune::C_default_algo, PROPS.get_tune_data_pop(), bounds, tune_data_fun, PROPS.get_tune_data_iter(), 0, 0, {}, {}, common::iter_depth(PROPS.get_tune_data_iter()));
@@ -990,7 +949,7 @@ ModelService::prepare_features(
     const uint16_t n_queues = feat_queues.size();
     arma::vec best_score(n_levels, arma::fill::value(std::numeric_limits<double>::infinity()));
     const auto stripe_period = resolution_aux * coef_lag_;
-    const auto coef_lag_max_q = coef_lag_ * get_max_quantisation();
+    const auto coef_lag_max_q = coef_lag_ * PROPS.get_max_quant();
     LOG4_TRACE("Preparing level " << param.get_decon_level() << ", " << n_rows << " rows, main range from " << earliest_label_horizon << " until " << latest_label_horizon <<
         ", lag " << lag << ", " << n_queues << " queues, " << n_levels << " levels, stripe period " << stripe_period);
 
@@ -1051,12 +1010,7 @@ datamodel::t_model_train_data ModelService::train(datamodel::Dataset &dataset, c
     datamodel::t_model_train_data res;
     if (model.get_last_modeled_value_time() == bpt::min_date_time) {
 #ifdef INTEGRATION_TEST
-        const auto p_saved_features = ptr(*p_features);
-        const auto p_saved_labels = ptr(*p_labels);
-        const auto p_saved_last_knowns = ptr(*p_last_knowns);
-        const auto p_saved_weights = ptr(*p_weights);
-        const auto p_saved_times = otr(*p_times);
-        res = std::make_tuple(p_saved_features, p_saved_labels, p_saved_last_knowns, p_saved_weights, p_saved_times);
+        res = std::make_tuple(ptr(*p_features), ptr(*p_labels), ptr(*p_last_knowns), ptr(*p_weights), otr(*p_times));
         const auto n_rows = p_labels->n_rows;
         const auto train_rows = n_rows - common::C_integration_test_validation_window;
         p_labels->shed_rows(train_rows, n_rows - 1);
@@ -1158,8 +1112,7 @@ void ModelService::predict(
     datamodel::data_row_container &out)
 {
     assert(model.get_gradients().size() > 0);
-    const auto outputs = model.get_gradients().front()->get_outputs();
-    arma::mat prediction(predict_features.p->n_rows, outputs);
+    arma::mat prediction(predict_features.p->n_rows, model.get_outputs());
     tbb::mutex predict_lock;
     const auto predict_time = predict_features.times.front()->get_value_time();
     OMP_FOR(model.get_gradient_count())
@@ -1189,8 +1142,7 @@ void ModelService::predict(
     datamodel::data_row_container &out)
 {
     assert(model.get_gradients().size() > 0);
-    const auto outputs = model.get_outputs();
-    arma::mat prediction(predict_features.p->n_rows, outputs);
+    arma::mat prediction(predict_features.p->n_rows, model.get_outputs());
     const auto predict_time = predict_features.times.front()->get_value_time();
     tbb::mutex predict_lock;
     OMP_FOR(model.get_gradient_count())

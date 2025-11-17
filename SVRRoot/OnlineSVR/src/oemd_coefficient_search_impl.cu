@@ -732,7 +732,7 @@ template<const bool zero_mean = false> double autocorrelation(CRPTR(double) d_la
 
 double
 oemd_coefficients_search::evaluate_mask(
-    const double att, const double fp, const double fs, const std::span<double> &workspace, const uint8_t siftings, const uint32_t prev_masks_len, const uint16_t mask_ix,
+    const double att, const double fp, const double fs, const uint32_t qt, const std::span<double> &workspace, const uint8_t siftings, const uint32_t prev_masks_len, const uint16_t mask_ix, const double meanabs_input,
     const std::vector<uint32_t> &times, const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const
 {
     const auto mask = lbp_fir(att, fp, fs, sample_rate);
@@ -754,10 +754,6 @@ oemd_coefficients_search::evaluate_mask(
     const uint32_t mask_offset = siftings * mask_len + prev_masks_len;
     const auto d_imf_len = workspace.size() - mask_offset;
     const auto d_imf = d_workspace + mask_offset;
-
-    double in_pow, out_pow, stub_sf, stub_dc;
-    if (mask_ix == 0 && rel_pow_w > 0)
-        business::ScalingFactorService::cu_scale_calc_I(d_imf, d_imf_len, in_pow, stub_dc, custream);
 
     double *d_tmp;
     CU_ERRCHK(cudaMallocAsync((void **) &d_tmp, workspace.size() * sizeof(double), custream));
@@ -795,7 +791,7 @@ oemd_coefficients_search::evaluate_mask(
         if (rel_pow_w <= 0)
             rel_pow = 1;
         else {
-            rel_pow = mask_ix ? 1 / stub_sf : std::abs(std::abs(out_pow / in_pow) - residual_strength);
+            rel_pow = mask_ix ? 1 / stub_sf : std::abs(std::abs(out_pow / meanabs_input) - residual_strength);
             rel_pow += 1;
         }
         if (acor_w > 0) {
@@ -1079,11 +1075,13 @@ oemd_coefficients_search::run(
             for (uint16_t i = 0; i < m; ++i) prev_masks_len += masks[i].size() * siftings[i];
             assert(workspace.size() > prev_masks_len);
             const auto level = levels - m - 1;
-
+            double meanabs_input, dc_input;
+            arma::vec scaled_in(workspace.data() + prev_masks_len, workspace.size() - prev_masks_len, true, true);
+            business::ScalingFactorService::scale_calc_I(scaled_in, scaled_in.size(), meanabs_input, dc_input, custream);
             // TODO Move pprune instantiation to a cpp file to combat unithreading bug in KNitro
-            LOG4_DEBUG("Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", max quantisation " << business::ModelService::get_max_quantisation()
-			    << ", label ixs " << label_ixs.size() << ", latest label last feature ix " << feat_params.back().ix_end << ", max row len " << max_row_len << ", prev masks len " << prev_masks_len);
-            const auto loss_function = [&, siftings, m, prev_masks_len]
+            LOG4_DEBUG("Optimizing " << siftings[m] << " siftings, " << workspace.size() << " workspace len, level " << level << ", meanabs input " << meanabs_input <<
+                ", min quantisation " << PROPS.get_min_quant() << ", max quantisation " << PROPS.get_max_quant() << ", label ixs " << label_ixs.size() << ", latest label last feature ix " <<
+            const auto loss_function = [&, siftings, m, prev_masks_len, meanabs_input]
 #ifdef USE_FIREFLY
                     (const std::vector<double> &x) {
                 return
@@ -1091,7 +1089,7 @@ oemd_coefficients_search::run(
             (const double *x, double *const f) {
                 *f =
 #endif
-                        evaluate_mask(x[0], x[1], x[2], workspace, siftings[m], prev_masks_len, m, times_i, label_ixs, feat_params);
+                        evaluate_mask(x[0], x[1], x[2], x[3], workspace, siftings[m], prev_masks_len, m, meanabs_input, times_i, label_ixs, feat_params);
             };
             /*
             arma::vec x0(3, ARMA_DEFAULT_FILL);
@@ -1099,13 +1097,18 @@ oemd_coefficients_search::run(
             x0[1] = .5 * PROPS.get_oemd_freq_ceil(); // common::constrain(dominant_frequency(workspace_window, .95, custream), 1. / workspace_len, 1.);
             x0[2] = .01;
             */
-            arma::mat bounds(3, 2, ARMA_DEFAULT_FILL);
-            bounds(0, 0) = 1e-1; // Min gain
-            bounds(0, 1) = 1; // Max gain
-            bounds(1, 0) = PROPS.get_oemd_freq_ceil() / (workspace.size() - prev_masks_len); // Min pass frequency
-            bounds(1, 1) = PROPS.get_oemd_freq_ceil(); // Max pass frequency
-            bounds(2, 0) = 5e-4; // Min frequency transition band
-            bounds(2, 1) = PROPS.get_oemd_freq_ceil(); // Max frequency transition band
+            const arma::mat bounds = [prev_masks_len, &workspace] {
+                arma::mat r(4, 2, ARMA_DEFAULT_FILL);
+                r(0, 0) = 1e-1; // Min gain
+                r(0, 1) = 1; // Max gain
+                r(1, 0) = PROPS.get_oemd_freq_ceil() / (workspace.size() - prev_masks_len); // Min pass frequency
+                r(1, 1) = PROPS.get_oemd_freq_ceil(); // Max pass frequency
+                r(2, 0) = 5e-4; // Min frequency transition band
+                r(2, 1) = PROPS.get_oemd_freq_ceil(); // Max frequency transition band
+                r(3, 0) = PROPS.get_min_quant();
+                r(4, 1) = PROPS.get_max_quant();
+                return r;
+            } ();
 #ifdef USE_FIREFLY
             double score;
             std::tie(score, h_mask) = optimizer::firefly(

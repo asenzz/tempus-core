@@ -101,7 +101,7 @@ void IQScalingFactorService::prepare(datamodel::Dataset &dataset, const datamode
 
     const auto p_main_input_queue = dataset.get_input_queue();
     const auto resolution_ratio = p_main_input_queue->get_resolution() / input_queue.get_resolution();
-    const uint32_t calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * ModelService::get_max_quantisation() * PROPS.get_lag_multiplier() + dataset.get_max_decrement() * resolution_ratio;
+    const uint32_t calc_len = dataset.get_max_possible_residuals_length() + dataset.get_max_lag_count() * PROPS.get_max_quant() * PROPS.get_lag_multiplier() + dataset.get_max_decrement() * resolution_ratio;
 #ifdef INTEGRATION_TEST
     const auto last_label_time = (**(p_main_input_queue->get_data().rbegin() + common::C_integration_test_validation_window)).get_value_time() + p_main_input_queue->get_resolution();
     const uint32_t test_offset = resolution_ratio > 1 ? business::lower_bound(input_queue.get_data(), last_label_time) - input_queue.cbegin() :

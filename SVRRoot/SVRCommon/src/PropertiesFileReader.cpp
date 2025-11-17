@@ -55,11 +55,6 @@ boost::log::trivial::severity_level AppConfig::set_global_log_level(const uint8_
     return log_threshold;
 }
 
-size_t AppConfig::get_default_feature_quantization() const noexcept
-{
-    return feature_quantization_;
-}
-
 float AppConfig::get_prediction_horizon() const noexcept
 {
     return prediction_horizon_;
@@ -166,15 +161,6 @@ bool AppConfig::get_daemonize() const noexcept
     return daemonize_;
 }
 
-uint16_t AppConfig::get_num_quantisations() const noexcept
-{
-    return num_quantisations_;
-}
-
-uint16_t AppConfig::get_quantisation_divisor() const noexcept
-{
-    return quantisation_divisor_;
-}
 
 float AppConfig::get_solve_iterations_coefficient() const noexcept
 {
@@ -283,7 +269,6 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
         slide_count_(get_property<DTYPE(slide_count_) >(app_config_file, SLIDE_COUNT, C_default_slide_count_str)),
         slide_skip_(get_property<DTYPE(slide_skip_) >(app_config_file, SLIDE_SKIP, C_default_slide_skip_str)),
         tune_run_limit_(get_property<DTYPE(tune_run_limit_) >(app_config_file, TUNE_RUN_LIMIT, C_default_tune_run_limit_str)),
-        feature_quantization_(get_property<DTYPE(feature_quantization_) >(app_config_file, FEATURE_QUANTIZATION, C_default_feature_quantization_str)),
         steps(get_property<DTYPE(steps) >(app_config_file, STEPS, C_default_steps_str)),
         outputs(get_property<DTYPE(outputs) >(app_config_file, OUTPUTS, C_default_outputs_str)),
         online_learn_iter_limit_(get_property<DTYPE(online_learn_iter_limit_) >(app_config_file, ONLINE_LEARN_ITER_LIMIT, C_default_online_iter_limit_str)),
@@ -305,8 +290,6 @@ AppConfig::AppConfig(const std::string &app_config_file, const char delimiter) :
         log_level_(set_global_log_level(get_property<std::string>(app_config_file, LOG_LEVEL_KEY, C_default_log_level))),
         loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, LOOP_INTERVAL, C_default_loop_interval_ms))),
         stream_loop_interval_(std::chrono::milliseconds(get_property<long>(app_config_file, STREAM_LOOP_INTERVAL, C_default_stream_loop_interval_ms))),
-        num_quantisations_(get_property<DTYPE(num_quantisations_) >(app_config_file, NUM_QUANTISATIONS, C_default_num_quantisations)),
-        quantisation_divisor_(get_property<DTYPE(quantisation_divisor_) >(app_config_file, QUANTISATION_DIVISOR, C_default_quantisation_divisor)),
         oemd_tune_particles_(get_property<DTYPE(oemd_tune_particles_) >(app_config_file, OEMD_TUNE_PARTICLES, C_default_oemd_tune_particles)),
         oemd_tune_iterations_(get_property<DTYPE(oemd_tune_iterations_) >(app_config_file, OEMD_TUNE_ITERATIONS, C_default_oemd_tune_iterations))
 {
