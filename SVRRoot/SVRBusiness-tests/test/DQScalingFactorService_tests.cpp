@@ -24,7 +24,7 @@ TEST_F(DaoTestFixture, DQScalingFactorWorkflow)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(
-         0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
+         0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", common::C_default_residual_coef, 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);
@@ -69,7 +69,7 @@ TEST_F(DaoTestFixture, DQScalingFactorScalingUnscaling)
     aci.input_queue_service.save(iq);
 
  datamodel::Dataset_ptr ds = std::make_shared<svr::datamodel::Dataset>(0, "EmmaWatsonTestDataset", user1->get_user_name(), iq, std::deque<datamodel::InputQueue_ptr>{},
-                                                                       svr::datamodel::Priority::Normal, "", 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
+                                                                       svr::datamodel::Priority::Normal, "", common::C_default_residual_coef, 1, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), 4, "sym7");
     ds->set_is_active(true);
 
     aci.dataset_service.save(ds);

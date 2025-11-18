@@ -9,8 +9,7 @@
 #include "common/compatibility.hpp"
 #include "common/types.hpp"
 #include "model/DataRow.hpp"
-
-// #define PRINTOUT_PER_LEVEL_VALUES
+#include "model/Model.hpp"
 
 namespace svr {
 namespace dao {
@@ -23,7 +22,7 @@ struct t_level_predict_features;
 class SVRParameters;
 using SVRParameters_ptr = std::shared_ptr<SVRParameters>;
 
-class t_feature_mechanics;
+struct t_feature_mechanics;
 
 class Dataset;
 using Dataset_ptr = std::shared_ptr<Dataset>;
@@ -42,6 +41,7 @@ using InputQueue_ptr = std::shared_ptr<InputQueue>;
 
 class OnlineSVR;
 using OnlineSVR_ptr = std::shared_ptr<OnlineSVR>;
+
 }
 
 namespace business {
@@ -99,7 +99,7 @@ public:
     static void prepare_weights(arma::mat &weights, const datamodel::data_row_container &times, const std::deque<datamodel::InputQueue_ptr> &aux_decon_queues, uint16_t steps,
                                 const bpt::time_duration &resolution_main);
 
-    static std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, datamodel::data_row_container_ptr>
+    static datamodel::t_model_train_data
     get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, uint32_t dataset_rows = 0);
 
     static void predict(const datamodel::Ensemble &ensemble, datamodel::Model &model, const datamodel::t_level_predict_features &predict_features, const bpt::time_duration &resolution,
@@ -129,7 +129,7 @@ public:
         const bpt::time_duration &max_gap,
         const bpt::ptime &feat_time);
 
-    static void train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
+    static datamodel::t_model_train_data train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model);
 
     static void train_batch(datamodel::Model &model, const mat_ptr &p_features, const mat_ptr &p_labels, const mat_ptr &p_weights, const bpt::ptime &last_value_time);
 

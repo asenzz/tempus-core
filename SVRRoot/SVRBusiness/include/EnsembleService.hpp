@@ -7,10 +7,7 @@
 #include "model/InputQueue.hpp"
 #include "DatasetService.hpp"
 #include "model/Dataset.hpp"
-#include "model/SVRParameters.hpp"
 #include "model/Ensemble.hpp"
-#include "model/Model.hpp"
-#include "model/User.hpp"
 
 namespace svr {
 namespace dao { class EnsembleDAO; }
@@ -18,13 +15,10 @@ namespace dao { class EnsembleDAO; }
 namespace datamodel {
 class Model;
 
-class Ensemble;
-
 class Dataset;
 
 class DeconQueue;
 
-using Ensemble_ptr = std::shared_ptr<Ensemble>;
 using Dataset_ptr = std::shared_ptr<Dataset>;
 using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
 }
@@ -75,7 +69,7 @@ public:
 
     static uint16_t get_levels_limit(const uint16_t spectral_levels);
 
-    static void train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
+    static datamodel::t_ensemble_train_data train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble);
 
     static datamodel::DeconQueue_ptr predict(const datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::t_predict_features &features);
 

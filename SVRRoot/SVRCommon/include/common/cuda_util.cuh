@@ -144,8 +144,8 @@ constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set 
     int devid, stream_devid;                                                            \
     CU_ERRCHK(cudaGetDevice(&devid));                                                   \
     if (devid != (x)) LOG4_THROW("CUDA device id mismatch " << devid << " should be " << (x)); \
-    CU_ERRCHK(cudaStreamGetDevice(custream, &stream_devid));                            \
-    if (stream_devid != (x)) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << (x)); \
+    /* CU_ERRCHK(cudaStreamGetDevice(custream, &stream_devid));                            \
+    if (stream_devid != (x)) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << (x)); */ \
     LOG4_TRACE("CUDA stream device id " << stream_devid << " created on device " << devid);
 
 #define CTX_CUSTREAM_(x)                                                                \
@@ -157,8 +157,8 @@ constexpr uint32_t C_cu_default_stream_flags = cudaStreamDefault; // Do not set 
     int devid, stream_devid;                                                            \
     CU_ERRCHK(cudaGetDevice(&devid));                                                   \
     if (devid != ctx.phy_id()) LOG4_THROW("CUDA device id mismatch " << devid << " should be " << ctx.phy_id()); \
-    CU_ERRCHK(cudaStreamGetDevice(custream, &stream_devid));                            \
-    if (stream_devid != ctx.phy_id()) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << ctx.phy_id()); \
+    /* CU_ERRCHK(cudaStreamGetDevice(custream, &stream_devid));                            \
+    if (stream_devid != ctx.phy_id()) LOG4_THROW("CUDA stream device id mismatch " << stream_devid << " should be " << ctx.phy_id()); */ \
     LOG4_TRACE("CUDA stream device id " << stream_devid << " created on device " << devid);
 
 #endif

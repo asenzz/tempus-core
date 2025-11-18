@@ -3,23 +3,23 @@
 //
 #include <vector>
 #include <cmath>
+#include <complex>
+#include <filesystem>
+#include <iomanip>
 //#include <osqp.h>
 #include "ModelService.hpp"
 #include "appcontext.hpp"
 #include "oemd_coefficient_search.hpp"
 #include "oemd_coefficients.hpp"
-#include "util/math_utils.hpp"
 #include "util/time_utils.hpp"
-#include <complex>
-#include <filesystem>
-#include <iomanip>
 
 namespace svr {
 namespace oemd {
 
-oemd_coefficients_search::oemd_coefficients_search(const uint16_t levels, const bpt::time_duration &resolution, const uint32_t label_len) :
+oemd_coefficients_search::oemd_coefficients_search(const uint16_t levels, const double residual_coef, const bpt::time_duration &resolution, const uint32_t label_len) :
         resolution(resolution),
         sample_rate(onesec / resolution),
+        residual_strength(1 / (residual_coef * levels)),
         levels(levels),
         max_row_len(business::ModelService::get_max_row_len()), // Not a constexpr because business::ModelService::t_quantisations::get_max_quantisation() is initialized after this class
         label_len(label_len),

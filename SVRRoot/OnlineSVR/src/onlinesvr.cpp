@@ -5,14 +5,13 @@
 #undef ARMA_USE_LAPACK
 
 #include <armadillo>
-#include <cmath>
 #include <deque>
-#include <execution>
 #include <magma_v2.h>
 #include <memory>
-#include <sys/mman.h>
+#ifdef USE_IPP
+#include <ipp/ippcore.h>
+#endif
 #include "common/compatibility.hpp"
-#include "common/gpu_handler.hpp"
 #include "appcontext.hpp"
 #include "SVRParametersService.hpp"
 #include "DQScalingFactorService.hpp"
@@ -23,7 +22,6 @@
 #include "model/SVRParameters.hpp"
 #include "util/math_utils.hpp"
 #include "kernel_factory.hpp"
-#include "pprune.hpp"
 
 #ifdef EXPERIMENTAL_FEATURES
 #include <osqp/osqp.h>
@@ -32,6 +30,28 @@
 
 namespace svr {
 namespace datamodel {
+
+class onlinesvr_lib_init {
+    public:
+    onlinesvr_lib_init()
+    {
+#ifdef USE_IPP
+        IPP_ERRCHK(ippInit());
+#endif
+        MAG_ERRCHK(magma_init());
+    }
+
+    ~onlinesvr_lib_init()
+    {
+#ifdef USE_MPI
+        MPI_Finalize();
+#endif
+    }
+};
+
+const auto __lib_init = []() {
+    return onlinesvr_lib_init();
+}();
 
 
 OnlineSVR::OnlineSVR() : Entity(0), outputs(PROPS.get_outputs()), max_chunk_size(PROPS.get_kernel_length()), chunk_offlap(1 - PROPS.get_chunk_overlap())

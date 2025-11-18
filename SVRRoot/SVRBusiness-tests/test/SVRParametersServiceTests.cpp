@@ -36,7 +36,7 @@ TEST_F(DaoTestFixture, SVRParametersWorkflow)
 
         auto ds = std::make_shared<svr::datamodel::Dataset>(0, "DeconQueueTestDataset", user1->get_user_name(),
                                                                               iq, std::deque<datamodel::InputQueue_ptr>{}, svr::datamodel::Priority::Normal, "", 1,
-                                                                              common::AppConfig::C_default_kernel_length, PROPS.get_steps(), decon_levels, "sym7");
+                                                                              common::C_default_residual_coef, common::AppConfig::C_default_kernel_length, PROPS.get_steps(), decon_levels, "sym7");
 
         // ASSERT_EQ(ds->get_ensemble_svr_parameters().size(), 0UL);
 

@@ -1,17 +1,13 @@
 #include "EnsembleService.hpp"
-#include "util/time_utils.hpp"
-#include "util/PerformanceUtils.hpp"
 #include "appcontext.hpp"
 #include "model/Ensemble.hpp"
 #include "model/Dataset.hpp"
+#include "model/Model.hpp"
 #include "DAO/EnsembleDAO.hpp"
 #include "DeconQueueService.hpp"
 #include "ModelService.hpp"
 #include "InputQueueService.hpp"
-#include "SVRParametersService.hpp"
-#include "common/thread_pool.hpp"
 #include "onlinesvr.hpp"
-#include "DataRowService.hpp"
 
 namespace svr {
 namespace business {
@@ -29,7 +25,7 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
-        ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params().first, aux_res, main_res);
+        PROFIL3(ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params().first, aux_res, main_res));
         const tbb::mutex::scoped_lock lk(res_l);
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
     }
@@ -70,7 +66,7 @@ void EnsembleService::load(const datamodel::Dataset_ptr &p_dataset, datamodel::E
         return;
     }
 
-    APP.model_service.init_models(p_dataset, ensemble);
+    PROFIL3(APP.model_service.init_models(p_dataset, ensemble));
     if (load_decon_data) load_decon(ensemble);
 }
 
@@ -79,13 +75,20 @@ uint16_t EnsembleService::get_levels_limit(const uint16_t spectral_levels)
     return spectral_levels - (PROPS.get_xresidual() && spectral_levels > 1);
 }
 
-void EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
+datamodel::t_ensemble_train_data EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
 {
+    datamodel::t_ensemble_train_data ensemble_train_data;
     const auto level_lim = get_levels_limit(dataset.get_spectral_levels());
+    tbb::mutex mx;
     OMP_FOR(std::min<unsigned>(PROPS.get_parallel_models(), ensemble.get_model_ct()))
-    for (auto p_model: ensemble.get_models()) 
-       if (p_model->get_decon_level() < level_lim) 
-           ModelService::train(dataset, ensemble, *p_model);
+    for (const auto &p_model: ensemble.get_models())
+        if (p_model->get_decon_level() < level_lim) {
+            datamodel::t_model_train_data model_data;
+            PROFIL3(model_data = ModelService::train(dataset, ensemble, *p_model));
+            const tbb::mutex::scoped_lock lk(mx);
+            ensemble_train_data[{p_model->get_decon_level(), p_model->get_step()}] = model_data;
+        }
+    return ensemble_train_data;
 }
 
 datamodel::DeconQueue_ptr EnsembleService::predict_noexcept(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::data_row_container &times) noexcept
@@ -109,7 +112,7 @@ datamodel::DeconQueue_ptr EnsembleService::predict(const datamodel::Dataset &dat
     OMP_FOR(ensemble.get_model_ct())
     for (auto &p_model: ensemble.get_models())
        if (p_model->get_decon_level() < level_lim) 
-            ModelService::predict(ensemble, *p_model, features.at(std::tuple{p_model->get_decon_level(), p_model->get_step()}), main_res, insert_mx, *p_aux_decon);
+            PROFIL3(ModelService::predict(ensemble, *p_model, features.at(std::tuple{p_model->get_decon_level(), p_model->get_step()}), main_res, insert_mx, *p_aux_decon));
 
     return p_aux_decon;
 }
@@ -298,7 +301,7 @@ void EnsembleService::init_ensembles(datamodel::Dataset_ptr &p_dataset, const bo
         }
         auto p_ensemble = *ens_iter;
 #endif
-        APP.model_service.init_models(p_dataset, *p_ensemble);
+        PROFIL3(APP.model_service.init_models(p_dataset, *p_ensemble));
     }
 
     LOG4_END();

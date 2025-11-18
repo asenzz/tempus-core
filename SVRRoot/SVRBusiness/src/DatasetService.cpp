@@ -230,7 +230,7 @@ void DatasetService::update_active_datasets(UserDatasetPairs &processed_user_dat
 }
 
 
-void DatasetService::process(datamodel::Dataset &dataset)
+datamodel::t_dataset_train_data DatasetService::process(datamodel::Dataset &dataset)
 {
     LOG4_BEGIN();
     dataset.get_calc_cache().clear();
@@ -239,13 +239,21 @@ void DatasetService::process(datamodel::Dataset &dataset)
 #ifdef NO_ONLINE_TRAINING
     if (dataset.get_ensembles().size()
         && dataset.get_ensemble()->get_models().size()
-        && dataset.get_ensemble()->get_model(0, 0)->get_last_modeled_value_time() > bpt::min_date_time) return;
+        && dataset.get_ensemble()->get_model(0, 0)->get_last_modeled_value_time() > bpt::min_date_time) return {};
 #endif
 
+    datamodel::t_dataset_train_data dataset_train_data;
+    tbb::mutex mx;
 #pragma omp parallel for schedule(static, 1) ADJ_THREADS_MIN(PROPS.get_paral_ensembles(), dataset.get_ensembles().size())
-    for (auto &p_ensemble: dataset.get_ensembles())
-        PROFILE_INFO(EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
+    for (auto &p_ensemble: dataset.get_ensembles()) {
+        datamodel::t_ensemble_train_data ensemble_train_data;
+        PROFILE_INFO(ensemble_train_data = EnsembleService::train(dataset, *p_ensemble), "Ensemble " << p_ensemble->get_column_name() << " train");
+        const tbb::mutex::scoped_lock lk(mx);
+        dataset_train_data[p_ensemble->get_column_name()] = ensemble_train_data;
+    }
     LOG4_END();
+
+    return dataset_train_data;
 }
 
 // By specification, a multival request's time period to predict is [start_predict_time, end_predict_time) i.e. right-hand exclusive.

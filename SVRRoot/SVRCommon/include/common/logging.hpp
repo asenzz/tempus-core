@@ -134,24 +134,29 @@ extern const logging l__;
 
 #ifdef NDEBUG
 
-#define PROFILE_LEVEL(LEVEL, X, M_NAME)                                              \
+#define PROFILE_LEVEL(LEVEL, X, M_NAME)                                     \
 {                                                                           \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time();      \
-    try { (X); } catch (const std::exception &ex__) { LOG4_ERROR("Caught exception " << ex__.what() << ", while executing "#X); throw ex__; } \
+    (X); \
     LOG4_##LEVEL("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__));  \
 }
 
 #else
 
-#define PROFILE_LEVEL(LEVEL, X, M_NAME)                                             \
+#define PROFILE_LEVEL(LEVEL, X, M_NAME)                                     \
 {                                                                           \
     const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time();      \
-    try { (X); } catch (const std::exception &ex__) { LOG4_ERROR("Caught exception " << ex__.what() << ", while executing "#X); throw ex__; } \
+    (X); \
     LOG4_##LEVEL("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__) << ", process memory RSS " <<    \
         svr::common::memory_manager::get_proc_rss() << " MB"); \
 }
 
 #endif
+
+#define PROFILE_LEVEL_(LEVEL, X, M_NAME)                                 \
+    const bpt::ptime START_TIME__ = bpt::microsec_clock::local_time();   \
+    (X); \
+    LOG4_##LEVEL("Execution time of " << M_NAME << " is " << (bpt::microsec_clock::local_time() - START_TIME__));
 
 #define PROFILE_TRACE(X, M_NAME) PROFILE_LEVEL(TRACE, X, M_NAME)
 #define PROFILE_INFO(X, M_NAME) PROFILE_LEVEL(INFO, X, M_NAME)

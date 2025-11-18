@@ -35,7 +35,7 @@ class online_emd final : public spectral_transform {
 public:
     explicit online_emd(uint16_t levels, double stretch_coef = oemd_coefficients::C_oemd_stretch_coef);
 
-    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_crange &input, const std::vector<double> &tail, std::string queue_name, uint16_t in_colix_,
+    t_oemd_coefficients_ptr get_masks(const datamodel::datarow_crange &input, const std::vector<double> &tail, std::string queue_name, uint16_t in_colix_, double residual_coef,
                                       const datamodel::t_iqscaler &scaler, const boost::posix_time::time_duration &resolution,
                                       const boost::posix_time::time_duration &main_resolution) const;
 
@@ -43,10 +43,10 @@ public:
                    const size_t padding /* = 0 */) override
     {}; // Dummy
 
-    void transform(datamodel::DeconQueue &decon_queue, uint32_t decon_start_ix, uint32_t test_offset, uint32_t custom_residuals_ct,
+    void transform(datamodel::DeconQueue &decon_queue, uint32_t decon_start_ix, double residual_coef, uint32_t test_offset, uint32_t custom_residuals_ct,
                    const boost::posix_time::time_duration &resolution, const boost::posix_time::time_duration &main_resolution);
 
-    void transform(const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, uint16_t in_colix, uint32_t test_offset,
+    void transform(const datamodel::InputQueue &input_queue, datamodel::DeconQueue &decon_queue, uint16_t in_colix, double residual_coef, uint32_t test_offset,
                    const datamodel::t_iqscaler &scaler, uint32_t custom_residuals_ct, const boost::posix_time::time_duration &main_resolution);
 
     void inverse_transform(const std::vector<double> &decon, std::vector<double> &recon, const size_t padding /* = 0 */) const override;

@@ -169,9 +169,9 @@ DeconQueueService::deconstruct(
 #endif
 #ifndef VMD_ONLY
 #if defined(EMD_ONLY)
-    PROFILE_INFO(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, test_offset, scaler, residuals, main_resolution), "OEMD transform");
+    PROFILE_INFO(dataset.get_oemd_transformer().transform(input_queue, decon_queue, input_column_index, dataset.get_residual_coef(), test_offset, scaler, residuals, main_resolution), "OEMD transform");
 #else
-    PROFILE_INFO(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, test_offset, residuals, resolution), "OEMD fat transform");
+    PROFILE_INFO(dataset.get_oemd_transformer().transform(decon_queue, pre_decon_size, dataset.get_residual_coef(), test_offset, residuals, resolution), "OEMD fat transform");
 #endif
 #endif
 

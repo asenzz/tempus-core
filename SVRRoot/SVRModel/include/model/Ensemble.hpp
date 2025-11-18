@@ -1,13 +1,19 @@
 #pragma once
 
 #include <boost/unordered/unordered_flat_map.hpp>
-#include "util/PerformanceUtils.hpp"
-#include "model/Entity.hpp"
-#include "model/Model.hpp"
-#include "model/DeconQueue.hpp"
+#include "Entity.hpp"
+#include "DataRow.hpp"
+#include "Model.hpp"
 
 namespace svr {
 namespace datamodel {
+
+class DeconQueue;
+using DeconQueue_ptr = std::shared_ptr<DeconQueue>;
+
+class Model;
+using Model_ptr = std::shared_ptr<Model>;
+
 struct t_level_predict_features
 {
     data_row_container times;
@@ -23,6 +29,8 @@ struct t_training_data
     boost::unordered_flat_map<size_t /* level */, vec_ptr> last_knowns;
     bpt::ptime last_row_time = bpt::not_a_date_time;
 };
+
+using t_ensemble_train_data = boost::unordered_flat_map<std::pair<uint16_t, std::uint16_t>, t_model_train_data, common::hash_pair>;
 
 class Ensemble final : public Entity
 {

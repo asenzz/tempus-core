@@ -11,7 +11,9 @@
 #include <tuple>
 #include <utility>
 #include <boost/date_time/posix_time/ptime.hpp>
-#include <model/Ensemble.hpp>
+#include "model/DataRow.hpp"
+#include "model/SVRParameters.hpp"
+#include "model/Ensemble.hpp"
 #include "DeconQueueService.hpp"
 #ifdef INTEGRATION_TEST
 #include <LightGBM/c_api.h>
@@ -31,9 +33,6 @@
 #include "common/logging.hpp"
 #include "common/parallelism.hpp"
 #include "DAO/ModelDAO.hpp"
-#include "model/DataRow.hpp"
-#include "model/Model.hpp"
-#include "model/SVRParameters.hpp"
 #include "util/math_utils.hpp"
 #include "util/string_utils.hpp"
 #include "util/time_utils.hpp"
@@ -328,13 +327,11 @@ void ModelService::configure(const datamodel::Dataset_ptr &p_dataset, const data
         produce_parameters(*p_dataset, ensemble, model, paramset, datamodel::Model::C_paramid_right, datamodel::Model::C_paramid_right)
     });
 
-    const uint16_t default_model_num_chunks = datamodel::OnlineSVR::get_num_chunks(
-        paramset.empty() ? datamodel::C_default_svrparam_decrement_distance : (**paramset.cbegin()).get_svr_decremental_distance(), model.get_max_chunk_size());
-
+    constexpr uint16_t default_model_num_chunks = 1;
     datamodel::dq_scaling_factor_container_t all_model_scaling_factors;
     if (model.get_id()) all_model_scaling_factors = APP.dq_scaling_factor_service.find_all_by_model_id(model.get_id());
 #pragma omp parallel ADJ_THREADS(p_dataset->get_gradient_count() * default_model_num_chunks * p_dataset->get_spectral_levels())
-#pragma omp single
+#pragma omp single nowait
     {
         tbb::mutex gradients_l;
         OMP_TASKLOOP_1(firstprivate(default_model_num_chunks))
@@ -497,7 +494,7 @@ void ModelService::prepare_weights(
     LOG4_END();
 }
 
-std::tuple<mat_ptr, mat_ptr, vec_ptr, mat_ptr, datamodel::data_row_container_ptr>
+datamodel::t_model_train_data
 ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const datamodel::Model &model, uint32_t dataset_rows)
 {
     LOG4_BEGIN();
@@ -507,6 +504,9 @@ ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::En
     const auto &labels_aux = *ensemble.get_label_aux_decon();
     auto p_params = model.get_head_params().first;
     if (!dataset_rows) dataset_rows = p_params->get_svr_decremental_distance();
+#ifdef INTEGRATION_TEST
+    dataset_rows += common::C_integration_test_validation_window;
+#endif
     const auto main_resolution = dataset.get_input_queue()->get_resolution();
     const auto aux_resolution = dataset.get_aux_input_queues().empty() ? main_resolution : dataset.get_aux_input_queue()->get_resolution();
     const datamodel::datarow_crange labels_range{
@@ -927,32 +927,51 @@ ModelService::prepare_features(
 }
 
 
-void
-ModelService::train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model)
+datamodel::t_model_train_data ModelService::train(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, datamodel::Model &model)
 {
-    const auto [p_features, p_labels, p_last_knowns, p_weights, p_times] = get_training_data(dataset, ensemble, model);
+    auto [p_features, p_labels, p_last_knowns, p_weights, p_times] = get_training_data(dataset, ensemble, model);
     const auto last_value_time = p_times->back()->get_value_time();
     if (model.get_last_modeled_value_time() >= last_value_time) {
         LOG4_DEBUG("No new data to train model " << model << ", last modeled time " << model.get_last_modeled_value_time() << ", last value time " << last_value_time);
-        return;
+        return {};
     }
     if (last_value_time < model.get_last_modeled_value_time()) {
         LOG4_ERROR("Data is older " << last_value_time << " than last modeled time " << model.get_last_modeled_value_time());
-        return;
+        return {};
     }
-    if (model.get_last_modeled_value_time() == bpt::min_date_time)
+    datamodel::t_model_train_data res;
+    if (model.get_last_modeled_value_time() == bpt::min_date_time) {
+#ifdef INTEGRATION_TEST
+        const auto p_saved_features = ptr(*p_features);
+        const auto p_saved_labels = ptr(*p_labels);
+        const auto p_saved_last_knowns = ptr(*p_last_knowns);
+        const auto p_saved_weights = ptr(*p_weights);
+        const auto p_saved_times = otr(*p_times);
+        res = std::make_tuple(p_saved_features, p_saved_labels, p_saved_last_knowns, p_saved_weights, p_saved_times);
+        const auto n_rows = p_labels->n_rows;
+        const auto train_rows = n_rows - common::C_integration_test_validation_window;
+        p_labels->shed_rows(train_rows, n_rows - 1);
+        p_features->shed_rows(train_rows, n_rows - 1);
+        p_last_knowns->shed_rows(train_rows, n_rows - 1);
+        p_weights->shed_rows(train_rows, n_rows - 1);
+        p_times->erase(p_times->begin() + train_rows, p_times->end());
+#else
+        res = std::make_tuple(p_features, p_labels, p_last_knowns, p_weights, p_times);
+#endif
         train_batch(model, p_features, p_labels, p_weights, last_value_time);
-    else
+    } else {
         train_online(model, *p_features, *p_labels, *p_weights, last_value_time);
+        res = std::make_tuple(p_features, p_labels, p_last_knowns, p_weights, p_times);
+    }
     model.set_last_modeled_value_time(last_value_time);
     model.set_last_modified(bpt::second_clock::local_time());
     LOG4_INFO("Finished training model " << model);
+    return res;
 }
 
 
 void
-ModelService::train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::mat &weights,
-                           const bpt::ptime &last_value_time)
+ModelService::train_online(datamodel::Model &model, const arma::mat &features, const arma::mat &labels, const arma::mat &weights, const bpt::ptime &last_value_time)
 {
     arma::mat residuals, learn_labels = labels;
     UNROLL()

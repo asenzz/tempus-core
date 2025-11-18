@@ -28,7 +28,7 @@ class oemd_coefficients_search {
     constexpr static uint8_t steps = 1; // Leave at 1 for now
 
     const bpt::time_duration resolution;
-    const double sample_rate;
+    const double sample_rate, residual_strength = 2;
     const uint8_t levels;
 
     static std::tuple<double, double, double, double> sift_the_mask(
@@ -66,7 +66,7 @@ public:
     const uint32_t label_len;
     const uint32_t fir_validation_window;
 
-    explicit oemd_coefficients_search(uint16_t levels, const bpt::time_duration &resolution, uint32_t label_len);
+    explicit oemd_coefficients_search(uint16_t levels, double residual_coef, const bpt::time_duration &resolution, uint32_t label_len);
 
     double evaluate_mask(double att, double fp, double fs, const std::span<double> &workspace, uint8_t siftings, uint32_t prev_masks_len,
                          uint16_t mask_ix, const std::vector<uint32_t> &times, const std::vector<t_label_ix> &label_ixs, const std::vector<t_feat_params> &feat_params) const;

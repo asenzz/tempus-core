@@ -2,9 +2,6 @@
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
-#ifdef USE_IPP
-#include <ipp/ippcore.h>
-#endif
 #include <sys/mman.h>
 #include "appcontext.hpp"
 #include "common.hpp"
@@ -145,10 +142,12 @@ AppContext::AppContext(const std::string &config_path, const bool use_threadsafe
 #endif
 
     mlockall(MCL_CURRENT | MCL_FUTURE);
+/*
 #ifdef USE_IPP
     IPP_ERRCHK(ippInit());
 #endif
     MAG_ERRCHK(magma_init());
+*/
 }
 
 AppContext::~AppContext()

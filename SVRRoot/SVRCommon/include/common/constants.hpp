@@ -35,7 +35,7 @@ constexpr char C_mql_date_time_format[] = "%Y.%m.%d %H:%M:%S";
 
 #ifdef INTEGRATION_TEST
 
-#ifdef VALGRIND_BUILD
+#ifdef MINIMAL_INTEGRATION_TEST
 constexpr uint16_t C_integration_test_validation_window = 2;
 #else
 const auto C_integration_test_validation_window = [] {
@@ -109,6 +109,7 @@ const uint16_t C_default_steps = std::stoi(C_default_steps_str);
 const uint16_t C_default_outputs = std::stoi(C_default_outputs_str);
 constexpr uint16_t C_default_gradient_count = 1;
 constexpr uint16_t C_default_level_count = 1;
+constexpr double C_default_residual_coef = 2;
 
 constexpr uint16_t C_default_hardware_concurrency = 16;
 const boost::posix_time::time_duration C_default_features_max_time_gap = boost::posix_time::hours(60);

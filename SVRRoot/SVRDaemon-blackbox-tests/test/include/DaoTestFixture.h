@@ -16,10 +16,8 @@ public:
         if (HasFatalFailure())
         {
             aci.destroy_instance();
-
             char const *dbname = tdb.TestDbUserName;
             tdb.init_test_db(dbname);
-
             svr::context::AppContext::init_instance(TestEnv::AppConfigFile);
         }
     }

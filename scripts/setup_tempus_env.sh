@@ -59,9 +59,7 @@ export DAEMON_CONFIG=$DAEMON_DIR/../config/daemon.config
 
 export LOGDIR=$PROJECT_ROOT/var/log
 if [ ! -d $LOGDIR ]; then mkdir -p $LOGDIR; fi
-export ONLINETEST_OUTPUT=${LOGDIR}/svronline_tests.log
-export BUSINESSTEST_OUTPUT=${LOGDIR}/svrbusiness_tests.log
-export BACKTEST_OUTPUT=${LOGDIR}/svrbacktest.log
+export TEST_OUTPUT=${LOGDIR}/${BIN,,}.log
 export WEB_OUTPUT=${LOGDIR}/svrweb.log
 export DAEMON_OUTPUT=${LOGDIR}/svrdaemon.log
 export TEST_DB_INIT_SCRIPTS=${DAEMON_DIR}/../../tempus-db/dbscripts/init_db.sh
