@@ -192,11 +192,7 @@ mat_ptr calc_cache::get_weights(
         return p_weights;
     };
     const auto k = std::make_tuple(aux_inputs.front()->get_table_name(), (**times.cbegin()).get_value_time(), times.size(), steps.size(), resolution_main);
-    const auto p_weights = cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
-
-    LOG4_END();
-
-    return ptr<arma::mat>(p_weights->col(step));
+    return cached<DTYPE(k), DTYPE(prepare_f) >::get()(k, prepare_f);
 }
 
 [[maybe_unused]] void calc_cache::clear_tune_cache(const std::string &column_name)

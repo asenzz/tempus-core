@@ -478,7 +478,7 @@ void ModelService::prepare_weights(
             const auto &t = times[i];
             for (const auto &q: aux_inputs)
                 OMP_TASKLOOP_1()
-                for (uint16_t s = 0; s < steps.size(); ++s) {
+                for (uint32_t s = 0; s < steps.size(); ++s) {
                     const auto s_start = t->get_value_time() + (s ? label_duration * cumsteps[s - 1] : bpt::seconds(0));
                     for (auto it = lower_bound(std::as_const(q->get_data()), s_start); it != q->cend() && (*it)->get_value_time() < s_start + label_duration * cumsteps[s]; ++it)
                         weights(i, s) += (**it).get_tick_volume();
@@ -491,7 +491,7 @@ void ModelService::prepare_weights(
 }
 
 datamodel::t_model_train_data
-ModelService::get_training_data(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble, const uint16_t level, uint32_t dataset_rows)
+ModelService::get_training_data(datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const uint16_t level, uint32_t dataset_rows)
 {
     LOG4_BEGIN();
 
@@ -518,13 +518,12 @@ ModelService::get_training_data(datamodel::Dataset &dataset, datamodel::Ensemble
             ensemble.get_aux_decon_queues(), params);
     OMP_FOR_i(steps) {
         auto model = ensemble.get_model(level, i);
-
         const auto param_set = model->get_gradient()->get_param_set();
         for (auto &p: param_set) // Set all chunks in the model'i root gradient to the same feature mechanics
             if (p->get_feature_mechanics().needs_tuning())
                 p->set_feature_mechanics(front(param_set)->get_feature_mechanics());
     }
-    const auto p_weights = calc_cache::get_weights(dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), ensemble.get_model(level)->get_gradient()->get_params().get_feature_mechanics().steps, resolution);
+    const auto p_weights = calc_cache::get_weights(dataset.get_id(), *p_label_times, dataset.get_aux_input_queues(), ensemble.get_model(level, 0)->get_gradient()->get_params().get_feature_mechanics().steps, resolution);
     assert(p_labels->n_rows == p_weights->n_rows);
 
     return {p_features, p_labels, p_last_knowns, p_weights, p_label_times};
@@ -813,7 +812,7 @@ double ModelService::align_data(
         step_ixs = nullptr;
         points = nullptr;
     }
-    labels.set_size(label_ixs.size(), 1);
+    labels.set_size(label_ixs.size(), steps);
     PROFILE_TRACE(quantise_labels(label_len, labels_aux_in, label_ixs, ix_F_end, labels.memptr(), steps, points, step_ixs), "Quantise labels");
     if (steps > 1) {
         free(points);
@@ -962,7 +961,7 @@ void ModelService::prepare_labels(
     LOG4_TRACE("Preparing level " << level << ", labels " << label_times.size());
     std::vector<double> labels_aux_in(aux_label_data.distance());
     OMP_FOR_i(aux_label_data.distance()) labels_aux_in[i] = aux_label_data[i]->at(level);
-
+    if (out_labels.n_rows != label_ixs.size() || out_labels.n_cols != steps) out_labels.set_size(label_ixs.size(), steps);
     PROFIL3(quantise_labels(label_len, labels_aux_in, label_ixs, ix_F_end, out_labels.memptr(), steps, points, step_ixs));
 }
 
@@ -1051,7 +1050,8 @@ datamodel::t_model_train_data ModelService::train(datamodel::Dataset &dataset, c
     datamodel::t_model_train_data res;
     if (model.get_last_modeled_value_time() == bpt::min_date_time) {
 #ifdef INTEGRATION_TEST
-        const auto p_saved_features = ptr(*p_features);
+        t_features_ptr p_saved_features = ptr<std::deque<mat_ptr>>(p_features->size());
+        for (uint16_t i = 0; i < p_features->size(); ++i) p_saved_features->at(i) = ptr(*p_features->at(i));
         const auto p_saved_labels = ptr(*p_labels);
         const auto p_saved_last_knowns = ptr(*p_last_knowns);
         const auto p_saved_weights = ptr(*p_weights);
@@ -1060,7 +1060,7 @@ datamodel::t_model_train_data ModelService::train(datamodel::Dataset &dataset, c
         const auto n_rows = p_labels->n_rows;
         const auto train_rows = n_rows - common::C_integration_test_validation_window;
         p_labels->shed_rows(train_rows, n_rows - 1);
-        p_features->shed_rows(train_rows, n_rows - 1);
+        for (auto &p_f: *p_features) p_f->shed_rows(train_rows, n_rows - 1);
         p_last_knowns->shed_rows(train_rows, n_rows - 1);
         p_weights->shed_rows(train_rows, n_rows - 1);
         p_times->erase(p_times->begin() + train_rows, p_times->end());

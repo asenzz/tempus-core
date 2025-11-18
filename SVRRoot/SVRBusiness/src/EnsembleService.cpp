@@ -25,7 +25,7 @@ EnsembleService::prepare_prediction_data(datamodel::Dataset &dataset, const data
     OMP_FOR(ensemble.get_models().size())
     for (const auto &p_model: ensemble.get_models()) {
         auto p_features = ptr<arma::mat>();
-        PROFIL3(ModelService::prepare_features(*p_features, times, aux_decons, *p_model->get_head_params().first, aux_res, main_res));
+        PROFIL3(ModelService::prepare_features(*p_features, times, aux_decons, p_model->get_head_param(), aux_res, main_res));
         const tbb::mutex::scoped_lock lk(res_l);
         res.emplace(std::tuple{p_model->get_decon_level(), p_model->get_step()}, datamodel::t_level_predict_features{times, p_features});
     }
@@ -75,13 +75,14 @@ uint16_t EnsembleService::get_levels_limit(const uint16_t spectral_levels)
     return spectral_levels - (PROPS.get_xresidual() && spectral_levels > 1);
 }
 
-datamodel::t_ensemble_train_data EnsembleService::train(datamodel::Dataset &dataset, datamodel::Ensemble &ensemble)
+datamodel::t_ensemble_train_data EnsembleService::train(datamodel::Dataset &dataset,
+                                                        datamodel::Ensemble &ensemble)
 {
     datamodel::t_ensemble_train_data ensemble_train_data;
     const auto level_lim = get_levels_limit(dataset.get_spectral_levels());
     tbb::mutex mx;
     OMP_FOR(std::min<unsigned>(PROPS.get_parallel_models(), ensemble.get_model_ct()))
-    for (const auto &p_model: ensemble.get_models())
+    for (const auto &p_model : ensemble.get_models())
         if (p_model->get_decon_level() < level_lim) {
             datamodel::t_model_train_data model_data;
             PROFIL3(model_data = ModelService::train(dataset, ensemble, *p_model));

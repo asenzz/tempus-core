@@ -7,6 +7,7 @@
 #include "pprune.hpp"
 #include "kernel_factory.hpp"
 #include "matrix_solver.hpp"
+#include "cuqrsolve.cuh"
 
 namespace svr {
 namespace datamodel {

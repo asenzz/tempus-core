@@ -121,7 +121,7 @@ public:
             const std::vector<uint32_t> &ix_F_end, const std::vector<double> &labels_aux_in, uint32_t label_len, arma::mat &labels, datamodel::t_feature_mechanics **p_fm);
 
     static datamodel::t_model_train_data get_training_data(
-            datamodel::Dataset &dataset, datamodel::Ensemble &ensemble, const uint16_t level, uint32_t dataset_rows = 0);
+            datamodel::Dataset &dataset, const datamodel::Ensemble &ensemble, const uint16_t level, uint32_t dataset_rows = 0);
 
     static void predict(const datamodel::Ensemble &ensemble, datamodel::Model &model, const datamodel::t_level_predict_features &predict_features, const bpt::time_duration &resolution,
                         tbb::mutex &insmx, datamodel::data_row_container &output_data);

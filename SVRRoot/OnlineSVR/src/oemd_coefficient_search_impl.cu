@@ -787,8 +787,7 @@ oemd_coefficients_search::evaluate_mask(
         OMP_FOR_i(validate_rows) ix_end_F[i] = feat_params_trimmed[i].ix_end;
         const auto d_ix_end_F = cumallocopy(ix_end_F, custream);
         RELEASE_CONT(ix_end_F);
-        G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(
-            d_imf, d_labels, validate_rows, d_label_ixs, d_ix_end_F, steps, label_ixs.front().n_ixs / steps);
+        G_quantise_labels<false><<<CU_BLOCKS_THREADS(validate_rows), 0, custream>>>(d_imf, d_labels, validate_rows, d_label_ixs, d_ix_end_F);
         CU_ERRCHK(cudaFreeAsync((void *) d_label_ixs, custream));
         CU_ERRCHK(cudaFreeAsync((void *) d_ix_end_F, custream));
         business::ScalingFactorService::cu_scale_calc_I(d_labels, validate_rows, stub_sf, stub_dc, custream);

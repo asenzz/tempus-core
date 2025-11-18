@@ -180,21 +180,20 @@ TEST(manifold_tune_train_predict, basic_integration)
                     if (l != p_dataset->get_trans_levix()) {
                         auto p_model = p_ensemble->get_model(l, s);
                         if (!p_model) LOG4_THROW("Model not found!");
-                        const auto p_head_params = p_model->get_head_params();
-                        p_head_params.first->set_svr_decremental_distance(C_test_decrement);
-                        p_head_params.second->set_svr_decremental_distance(C_test_decrement);
+                        auto head_params = p_model->get_head_param();
+                        head_params.set_svr_decremental_distance(C_test_decrement);
 
-                        LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params.first << ", integration test validation_window " << common::C_integration_test_validation_window);
+                        LOG4_DEBUG("Preparing model " << *p_model << " parameters " << head_params << ", integration test validation_window " << common::C_integration_test_validation_window);
                         const auto [p_model_features, p_model_labels, p_model_last_knowns, p_weights, p_model_times] =
-                                business::ModelService::get_training_data(*p_dataset, *p_ensemble, *p_model);
+                                business::ModelService::get_training_data(*p_dataset, *p_ensemble, l);
                         assert(p_model_labels->n_rows == C_test_labels_len_h);
                         assert(p_model_times->size() == C_test_labels_len_h);
                         const uint32_t train_start = p_model_labels->n_rows - C_test_labels_len_h;
                         const uint32_t train_end = p_model_labels->n_rows - common::C_integration_test_validation_window - 1;
-                        LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_labels_len_h);
+                        LOG4_DEBUG("All features size " << arma::size(*p_model_features->at(s)) << ", test length " << C_test_labels_len_h);
                         const auto last_value_time = p_model_times->at(train_end)->get_value_time();
                         business::ModelService::train_batch(*p_model,
-                                                            otr<arma::mat>(p_model_features->rows(train_start, train_end)),
+                                                            otr<arma::mat>(p_model_features->at(s)->rows(train_start, train_end)),
                                                             otr<arma::mat>(p_model_labels->rows(train_start, train_end)),
                                                             otr<arma::mat>(p_weights->rows(train_start, train_end)),
                                                             last_value_time);
@@ -204,7 +203,7 @@ TEST(manifold_tune_train_predict, basic_integration)
                         const auto [predict_mae_level, predict_mape_level, predicted, predicted_lgbm, actual, mape_lk, last_knowns] =
                                 business::ModelService::validate(
                                         p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
-                                        *p_model_features, *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
+                                        *p_model_features->at(s), *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
                                         p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
                         const tbb::mutex::scoped_lock lk(recon_mx);
                         if (times.empty()) times = *p_model_times;

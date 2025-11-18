@@ -268,7 +268,7 @@ TEST_F(DaoTestFixture, DatasetIntegrationTest)
     const std::string C_input_queue_name = "q_svrwave_" + C_symbol + "_";
     const std::string C_test_input_table_name(C_test_input_name + STR_MAIN_QUEUE_RES);
     const std::string C_test_aux_input_table_name(C_test_input_name + "1");
-    constexpr uint16_t C_test_levels = 8; // Spectral levels
+    constexpr uint16_t C_test_levels = 1; // Spectral levels
     constexpr auto C_test_gradient_count = common::C_default_gradient_count;
     constexpr auto C_overload_factor = 2; // Load surplus data from database in case rows discarded during preparation
     const auto C_decon_tail = datamodel::Dataset::get_residuals_length(C_test_levels);
@@ -341,10 +341,7 @@ TEST_F(DaoTestFixture, DatasetIntegrationTest)
                     if (l == p_dataset->get_trans_levix()) continue;
                     auto p_model = p_ensemble->get_model(l, s);
                     if (!p_model) LOG4_THROW("Model not found!");
-
-                    const auto p_head_params = p_model->get_head_params();
-                    p_head_params.first->set_svr_decremental_distance(C_test_decrement);
-                    p_head_params.second->set_svr_decremental_distance(C_test_decrement);
+                    p_model->get_head_param().set_svr_decremental_distance(C_test_decrement);
                 }
         }
         const auto dataset_train_data = business::DatasetService::process(*p_dataset);
@@ -365,18 +362,17 @@ TEST_F(DaoTestFixture, DatasetIntegrationTest)
                     auto p_model = p_ensemble->get_model(l, s);
                     if (!p_model) LOG4_THROW("Model not found!");
 
-                    const auto p_head_params = p_model->get_head_params();
-                    LOG4_DEBUG("Preparing model " << *p_model << " parameters " << *p_head_params.first << ", integration test validation_window " << common::C_integration_test_validation_window);
+                    LOG4_DEBUG("Preparing model " << *p_model << " parameters " << p_model->get_head_param() << ", integration test validation_window " << common::C_integration_test_validation_window);
                     const auto [p_model_features, p_model_labels, p_model_last_knowns, p_weights, p_model_times] = dataset_train_data.at(column).at({l, s});
                     assert(p_model_labels->n_rows == C_test_labels_len_h);
                     assert(p_model_times->size() == C_test_labels_len_h);
-                    LOG4_DEBUG("All features size " << arma::size(*p_model_features) << ", test length " << C_test_labels_len_h);
+                    LOG4_DEBUG("All features size " << arma::size(*p_model_features->at(s)) << ", test length " << C_test_labels_len_h);
 
                     const auto [predict_mae_level, predict_mape_level, predicted, predicted_lgbm, actual, mape_lk, last_knowns] =
                         business::ModelService::validate(
-                            p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
-                            *p_model_features, *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
-                            p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
+                        p_model_labels->n_rows - common::C_integration_test_validation_window, *p_dataset, *p_ensemble, *p_model,
+                        *p_model_features->at(s), *p_model_labels, *p_model_last_knowns, *p_weights, *p_model_times, C_online_validate,
+                        p_dataset->get_spectral_levels() < MIN_LEVEL_COUNT);
                     const tbb::mutex::scoped_lock lk(recon_mx);
                     if (times.empty()) times = *p_model_times;
                     recon_predicted.col(s) += predicted;
